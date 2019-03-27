@@ -12,6 +12,8 @@
 
 > *A novel organizational design aiming primarily to more effectively coordinate resources for issuing development grants for Ethereum.* [The Moloch DAO: The Collapsing Firm](https://medium.com/@simondlr/the-moloch-dao-collapsing-the-firm-2a800b3aa2e7), SimonDLR
 
+> SHORT SUMMARY OF HOW MOLOCH WORKS (borrow from SIMONDLR and WHITEPAPER?)
+
 ### More Reading
 > * [`MolochVentures/moloch`](https://github.com/MolochVentures/moloch), [whitepaper](https://github.com/MolochVentures/Whitepaper)
 
@@ -21,15 +23,27 @@
 * **[Meditations on Moloch](https://slatestarcodex.com/2014/07/30/meditations-on-moloch/)**
 
 ## Why Build DAOs with Substrate <a name = "y"></a>
-> write this after the code is written; use the other blog post as well...
+> opening sentence to invite the reader in...
 
 * **use Substrate when you want to build a community around your incentive mechanism**
 
-* Rust is just safer than Solidity and doesn't come with all of the annoying quirks of working with the EVM
-    * [Towards a Brighter Future for Smart Contracts](https://slatestarcodex.com/2014/07/30/meditations-on-moloch/) by Jack Fransham
-    * [Why Write Smart Contracts in Rust](https://slatestarcodex.com/2014/07/30/meditations-on-moloch/) by Jack Fransham
+* Smart contract platforms are generally useful for leveraging composability and network effects (ie interacting with external smart contracts and requiring continuous external calls)
+* However, DAOs are pretty much self-contained; they operate independently and do not require external interaction outside of the defined smart contract suite 
+* This smart contract suite can actually be abstracted into the module-style organization used to code with Substrate...moreover, it is actually better to do this than to deploy on smart contract platforms
 
-* For these reasons, I believe that Substrate is the best platform for building standalone incentive mechanisms including but not limited to quadratic signalling mechanisms, liberal radicalism, and 
+*Upgradability*
+* increased flexibility wrt upgrades mitigates the damage of attacks like TheDAO
+* also allows the DAO to improve its governance in the future, incorporate privacy-enhancing protocols, etc.
+**Siloing Economic Interactions**
+* interacting with the DAO on Substrate does not carry the risk of incurring high fees when another application/DAO experiences high demand (like how Cryptokitties `=>` state bloat `=>` high fees)
+    * this implies a smaller attack surface for economic security (as long as the developer careful with the balance of resources and costs)
+**Rust >> Solidity**
+* Rust is safer and more well vetted than Solidity; doesn't come with all of the annoying quirks of working with the EVM
+    * [Towards a Brighter Future for Smart Contracts]() by Jack Fransham
+    * [Why Write Smart Contracts in Rust]() by Jack Fransham
+
+* Some concluding sentence that encourages developers building economic mechanisms to experiment with Substrate
+    * Radical Markets specifically (Liberal Radicalism, Quadratic Signalling)
 
 ### More Reading
 * [A brief summary of everything Substrate and Polkadot](https://www.parity.io/a-brief-summary-of-everything-substrate-polkadot/)

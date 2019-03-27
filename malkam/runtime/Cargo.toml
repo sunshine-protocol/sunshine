@@ -1,8 +1,8 @@
 [package]
-authors = ['Parity Technologies <admin@parity.io>']
-edition = '2018'
-name = 'node-template-runtime'
-version = '0.9.0'
+authors = ['Amar Singh <amar@parity.io>']
+edition = '2019'
+name = 'malkam'
+version = '0.1.0'
 
 [features]
 default = ['std']
