@@ -4,6 +4,7 @@
 
 /// IMPORTANT:
 /// TEST TIMING ATTACKS ON ACCEPTANCE AND RAGE QUITTING
+/// RIGOROUS TESTING AGAINST OVERFLOW/UNDERFLOW FOR SHARE REQUEST AND OTHER PARAMETERS
 
 /// Abstract into test.rs for cleanliness
 /// Might need to use a mock.rs for setup
