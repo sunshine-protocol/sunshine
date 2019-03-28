@@ -41,11 +41,13 @@ pub trait Trait: system::Trait {
 /// Use this to increase the readability for Proposal State Transitions
 /// (maintainability/readability as a criteria)
 /// (common state machine pattern)
+#[derive(Clone, Copy, PartialEq, Eq, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 pub enum PropState {
 	Voting,				// undergoing voting (and not yet aborted)
 	Aborted,			// aborted during the voting period
 	Processable, 		// grace period (can be processed at this time)
-	Executed,			// successfully processed and executed
+	Executed,			// successfully processed and executed (remove from ProposalsQueue)
 }
 
 /// FROM `TREASURY`
@@ -128,20 +130,43 @@ decl_module! {
 			T::Currency::reserve(&who, Self::proposal_bond_minimum())
 				.map_err(|_| "proposer's balance too low")?;
 
+			//add applicant
+			<Applicants<T>::insert(&applicant, count);
+
+			// set start time to monitor voting period and grace period for this proposal
+			let startTime = <system::Module<T>>::block_number();
+			
 			// add proposal (TODO: TEST CORRECT INDEXING HERE)
 			let count = Self::proposal_count(); // how does this actually work? Must config correctly!
 			<ProposalCount<T>>::put(count + 1);
-			<Applicants<T>::insert(&applicant, count);
-			let startTime = <system::Module<T>>::block_number();
+
+			// add yes vote from member who sponsored proposal (and initiate the voting)
+			<VotersFor<T>>::mutate(count, |voters| voters.push(who.clone()));
+			<VoteOf<T>>::insert(&(count, who), true);
+			// protect against rage quitting from proposer
+			<HighestYesIndex<T>>::mutate(who.clone(), count);
+			
+			// Voted event
+			// makes me think of the fact that I didnt even keep track of how many shares had been added ughhhhh
+			Self::deposit_event(Raw_Event::)
+
+			// setting threshold based on outstanding shares (should update this part of the mechanism in the future)
+			let threshold = Self::set_threshold(<TotalShares<T>>::get()); // 50% (rounds up if shares % 2 == 1)
+
 			// one concern I have is if I can just put Voting as propState like this or if I need some prior variable assignment
-			<Proposals<T>>::insert(count, Proposal { who, applicant, shares, tokenTribute, startTime, Voting });
+			<Proposals<T>>::insert(count, Proposal { who, applicant, shares, tokenTribute, startTime, PropState::Voting, threshold });
 
 			Self::deposit_event(RawEvent::Proposed(count));
 		}
 
 		// enable the member who made a proposal to abort
 		// think long and hard about timing attacks
-		fn abort() {
+		fn abort(origin, proposal: ProposalIndex) {
+			let who = ensure_signed(origin)?;
+			ensure!(Self::is_member(&who), "proposer is not a member of Malkam DAO");
+
+			// OPEN QUESTION: is there a cost to aborting?
+
 		}
 
 		fn vote(origin, proposal: ProposalIndex, approve: bool) {
@@ -157,15 +182,19 @@ decl_module! {
 			ensure!(<Proposals<T>::get(proposal).state == abort, "The proposal has been aborted");
 
 			// check that the member has not yet voted
-			ensure(!<Malkam<T>>::voter_id(proposal).iter().any(|x| &x == &who), "member has already voted on the proposal");
+			ensure(!<VoteOf<T>>::exists(proposal, who), "voter has already submitted a vote on this proposal");
 
 			if approve {
+				// add to yes votes total
+				<VotersFor<T>>::mutate(count, |voters| voters.push(who.clone()));
+				<VoteOf<T>>::insert(&(count, who), true);
+				<
 
 			} else {
 
 			}
 			// (1) change the highestIndex for member to prevent preemptive ragequitting
-			// (2) set maximum total shares for yes vote (to bound dilution for yes voters)?
+			// (NOT DONE BECAUSE IM UNSURE IF NECESSARY) set maximum total shares for yes vote (to bound dilution for yes voters)?
 			// (3) add to yes votes total (according to number of shares)
 			// (4) add to voter_id map from ProposalIndex `=>` Vec<AccountId>
 
@@ -211,6 +240,7 @@ decl_module! {
 }
 
 /// some taken from `council/seats.rs` (useful for keeping track of members)
+/// CONCERN: when to wrap codomain in `Option` and checking how that affects things...
 decl_storage! {
 	trait Store for Module<T: Trait> as Malkam {
 		/// CONFIG (like the constructor values)
@@ -231,11 +261,14 @@ decl_storage! {
 		ProposalCount get(proposal_count): ProposalIndex;
 
 		/// VOTING
-		// to protect against rage quitting
+		// to protect against rage quitting (only works if the proposals are processed in order...)
 		HighestYesIndex get(highest_yes_index): map T::AccountId => Option<ProposalIndex>;
 		// map: proposalIndex => Voters that have voted
 		VoterId get(voter_id): map ProposalIndex => Vec<AccountId>;
-
+		// map: proposalIndex => yesVoters
+		VotersFor get(voters_for): map ProposalIndex => Vec<AccountId>;
+		// get the vote of a specific voter (simplify testing for existence of vote via `VoteOf::exists`)
+		VoteOf get(vote_of): map (ProposalIndex, AccountId) => bool;
 
 		// pub ProposalOf get(proposal_of): map T::Hash => Option<T::Proposal>;
 		// pub ProposalVoters get(proposal_voters): map T::Hash => Vec<T::AccountId>;
@@ -265,6 +298,26 @@ impl<T: Trait> Module<T> {
 
 	pub fn can_quit(who: &T::AccountId) -> bool {
 		/// use mapping: members => highestIndexYesVote
+		<HighestYesIndex<T>>::
+		// now that I think about it; highestIndexYesVote only matters if the proposals are forcably processed in order
+		// and I think this places a constraint on the entire system
+
+		// my implementation may need to change a lot here...
+		// basically my current thoughts are that I need to ensure that all YesVotes from a candidate are not in the voting stage
+		// but also that none of them are in the grace period
+		// so they have all been processed (accepted or rejected) in order to rage quit
+	}
+
+	// overly simplified way to set required threshold when proposal is first made
+	pub fn set_threshold(shares: u32) -> u32 {
+		// use `democracy/vote_threshold` to implement more complex voting threshold
+		// this is just 50% of outstanding shares (round up if number of shares is odd)
+		if shares % 2 == 0 {
+			return shares.checked_div(2)
+		} else {
+			let new_shares = shares + 1u32;
+			return shares.checked_div(2)
+		}
 	}
 }
 
