@@ -1,4 +1,5 @@
-# Malkam DAO
+# Molochameleon DAO
+> *moloch moloch moloch molochameleon!*
 
 **Malkam** is the cheeky cousin of **[Moloch](https://github.com/MolochVentures/moloch)**. At its current stage, Malkam is a sample project to demonstrate DAO development on Substrate. 
 
@@ -7,28 +8,25 @@
 
 ## Build DAOs with Substrate <a name = "y"></a>
 
-Substrate is marketed as the *blockchain framework for innovators*. But what can or should you build with Substrate? Here, I'll make the argument that you should **build with Substrate when you want to build a community around your decentralized application/mechanism**.
+By providing a modular and extensible toolbox for building high-performance blockchains, Substrate is *perfect* for implementing decentralized autonomous organizations (DAOs)!
 
-The [Cryptokitties](https://github.com/shawntabrizi/substrate-collectables-workshop) and [TCR](https://github.com/parity-samples/substrate-tcr) tutorials helped us become acclimated to development in the context of the Substrate Runtime Module Library. By demonstrating useful patterns in practice, these tutorials help developers struggling to **overcome the steep learning curve that comes with coding in Rust**.
+The runtime logic is encoded in [Rust](https://www.parity.io/why-rust/) and compiled down to a [WASM binary blob](https://medium.com/polkadot-network/wasm-on-the-blockchain-the-lesser-evil-da8d7c6ef6bd)that is stored on-chain. This architecture facilitates upgrades according to the consensus protocol chosen by developers. Because the consensus logic is included in the runtime, it can also be upgraded (*metagovernance* capabilities). This flexibility allows Substrate DAppchains to evolve and easily incorporate modern research into the runtime logic.
 
-Still, some people may not be convinced that overcoming this learning curve is worth it. It is true 
+Substrate is admittedly overkill for independent timestamps, simple token transfers, and other basic blockchain use cases. However, where Substrate really shines is helping developers build high performance mechanisms for decentralized coordination. A good rule of thumb is to **use Substrate when you want to build a community around your mechanism**.
 
-* **use Substrate when you want to build a community around your incentive mechanism**
-
-* Smart contract platforms are generally useful for leveraging composability and network effects (ie interacting with external smart contracts and requiring continuous external calls)
-* However, DAOs are pretty much self-contained; they operate independently and do not require external interaction outside of the defined smart contract suite 
-* This smart contract suite can actually be abstracted into the module-style organization used to code with Substrate...moreover, it is actually better to do this than to deploy on smart contract platforms
-
-*Upgradability*
+**Upgradability**
 * increased flexibility wrt upgrades mitigates the damage of attacks like TheDAO
 * also allows the DAO to improve its governance in the future, incorporate privacy-enhancing protocols, etc.
+
 **Siloing Economic Interactions**
 * interacting with the DAO on Substrate does not carry the risk of incurring high fees when another application/DAO experiences high demand (like how Cryptokitties `=>` state bloat `=>` high fees)
     * this implies a smaller attack surface for economic security (as long as the developer careful with the balance of resources and costs)
-**Rust >> Solidity**
-* Rust is safer and more well vetted than Solidity; doesn't come with all of the annoying quirks of working with the EVM
+
+**Rust is better than Solidity**
+* Rust is **safer** and more well vetted than Solidity; doesn't come with all of the annoying quirks of working with the EVM
     * [Towards a Brighter Future for Smart Contracts]() by Jack Fransham
     * [Why Write Smart Contracts in Rust]() by Jack Fransham
+* Rust's language ecosystem is growing independently of Solidity, thereby enabling Substrate projects to benefit from these network e
 
 * Some concluding sentence that encourages developers building economic mechanisms to experiment with Substrate
     * Radical Markets specifically (Liberal Radicalism, Quadratic Signalling)
