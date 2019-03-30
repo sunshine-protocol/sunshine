@@ -27,6 +27,48 @@ pub struct Proposal<AccountId, Balance, BlockNumber: Parameter> {
 	tokenTribute: Balance, 			// tokenTribute
 }
 
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
+#[derive(Encode, Decode, Clone, PartialEq, Eq)]
+struct Pool<AccountId> {
+	account: AccountId,
+}
+
+impl Pool { // does this require special trait
+	pub fn withdraw(receiver: T::AccountId) {
+		// necessary checks are done in `rageQuit` function
+
+		// balance-based logic
+		// uint256 amount = approvedToken.balanceOf(address(this)).mul(shares).div(totalShares);
+        // emit Withdrawal(receiver, amount);
+        // return approvedToken.transfer(receiver, amount);
+
+	}
+}
+
+decl_event!(
+	/// An event in this module.
+	pub enum Event<T> 
+	where
+		<T as system::Trait>::AccountId 
+	{
+		Summoned(T::AccountId),
+		/// A new proposal has been submitted 
+		Proposed(ProposalIndex),
+		// for aborting a proposal while it is being voted on (AccountId is applicant AccountId)
+		Aborted(ProposalIndex, AccountId),
+		/// A proposal has been voted on by given account (approve, yes_votes, no_votes)
+		Voted(ProposalIndex, bool, u32, u32),
+		/// A proposal was approved by the required threshold.
+		Approved(ProposalIndex),
+		/// A proposal was not approved by the required threshold.
+		Rejected(ProposalIndex),
+		/// The proposal was processed (executed); `bool` is true if returned without error
+		Processed(ProposalIndex, bool),
+		// The member `ragequit` the DAO
+		Ragequit(AccountId),
+	}
+);
+
 decl_storage! {
 	trait Store for Module<T: Trait> as Malkam {
 		/// CONFIG (like the constructor values)
@@ -68,10 +110,6 @@ decl_storage! {
 		TotalSharesRequested get(total_shares_requested): u32; 
 	}
 }
-
-
-
-
 
 
 /// Abstract into test.rs for cleanliness

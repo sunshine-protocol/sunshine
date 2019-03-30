@@ -1,7 +1,7 @@
 [package]
 authors = ['Amar Singh <amar@parity.io>']
 edition = '2019'
-name = 'malkam'
+name = 'molochameleon'
 version = '0.1.0'
 
 [features]

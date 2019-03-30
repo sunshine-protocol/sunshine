@@ -1,34 +1,39 @@
 # Molochameleon DAO
-> *moloch moloch moloch molochameleon!*
+> *[moloch moloch moloch molochameleon](https://www.youtube.com/watch?v=JmcA9LIIXWw)*
 
-**Malkam** is the cheeky cousin of **[Moloch](https://github.com/MolochVentures/moloch)**. At its current stage, Malkam is a sample project to demonstrate DAO development on Substrate. 
+**Molochameleon** is a minimally viable DAO on Substrate inspired by **[Moloch](https://github.com/MolochVentures/moloch)**. 
+
+**This code is untested and should NOT be used in production**
+
+Molochameleon in its current iteration serves to demonstrate patterns common to governance mechanisms built with Substrate. 
 
 * [Build DAOs with Substrate?](#y)
 * [What is Moloch?](#moloch)
 
 ## Build DAOs with Substrate <a name = "y"></a>
 
-By providing a modular and extensible toolbox for building high-performance blockchains, Substrate is *perfect* for implementing decentralized autonomous organizations (DAOs)!
+Substrate is perfect for implementing decentralized autonomous organizations (DAOs)!
 
 The runtime logic is encoded in [Rust](https://www.parity.io/why-rust/) and compiled down to a [WASM binary blob](https://medium.com/polkadot-network/wasm-on-the-blockchain-the-lesser-evil-da8d7c6ef6bd)that is stored on-chain. This architecture facilitates upgrades according to the consensus protocol chosen by developers. Because the consensus logic is included in the runtime, it can also be upgraded (*metagovernance* capabilities). This flexibility allows Substrate DAppchains to evolve and easily incorporate modern research into the runtime logic.
 
-Substrate is admittedly overkill for independent timestamps, simple token transfers, and other basic blockchain use cases. However, where Substrate really shines is helping developers build high performance mechanisms for decentralized coordination. A good rule of thumb is to **use Substrate when you want to build a community around your mechanism**.
+Substrate is admittedly overkill for timestamps, simple token transfers, and other basic blockchain use cases. However, where Substrate really shines is helping developers build high performance mechanisms for decentralized coordination. A good rule of thumb is to **use Substrate when you want to build a community around your mechanism**.
 
 **Upgradability**
 * increased flexibility wrt upgrades mitigates the damage of attacks like TheDAO
 * also allows the DAO to improve its governance in the future, incorporate privacy-enhancing protocols, etc.
 
-**Siloing Economic Interactions**
+**Shared Security w/o Cost Spillovers**
 * interacting with the DAO on Substrate does not carry the risk of incurring high fees when another application/DAO experiences high demand (like how Cryptokitties `=>` state bloat `=>` high fees)
     * this implies a smaller attack surface for economic security (as long as the developer careful with the balance of resources and costs)
+* Polkadot will enable deployment in shared security context
 
-**Rust is better than Solidity**
+**Rust >>> Solidity**
 * Rust is **safer** and more well vetted than Solidity; doesn't come with all of the annoying quirks of working with the EVM
     * [Towards a Brighter Future for Smart Contracts]() by Jack Fransham
     * [Why Write Smart Contracts in Rust]() by Jack Fransham
-* Rust's language ecosystem is growing independently of Solidity, thereby enabling Substrate projects to benefit from these network e
+* Rust's language ecosystem is growing independently of Solidity, thereby enabling Substrate projects to benefit from its tooling, libraries, and the network effects of its community
 
-* Some concluding sentence that encourages developers building economic mechanisms to experiment with Substrate
+* Some concluding sentence that encourages developers building economic mechanisms to experiment with Substrate (gets all three of these points in a single sentence)
     * Radical Markets specifically (Liberal Radicalism, Quadratic Signalling)
 
 ### More Reading
