@@ -111,7 +111,6 @@ decl_storage! {
 	}
 }
 
-
 /// Abstract into test.rs for cleanliness
 /// Might need to use a mock.rs for setup
 #[cfg(test)]

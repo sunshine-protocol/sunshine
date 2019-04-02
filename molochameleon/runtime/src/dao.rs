@@ -1,6 +1,4 @@
-// These are needed because of the `Proposal` struct ¯\_(ツ)_/¯ 
 #![cfg_attr(not(feature = "std"), no_std)]
-
 #[cfg(feature = "std")]
 use primitives::traits::{Zero, As, Bounded}; // don't really use these (could use Hash)
 use parity_codec::{Encode, Decode};
@@ -33,7 +31,7 @@ pub trait Trait: system::Trait {
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 }
 
-// To emulate a PriorityQueue with a map kept in `decl_storage`
+// To implement a PriorityQueue with the map <Proposals<T>> kept in `decl_storage`
 type ProposalIndex = u32;
 /// A proposal to lock up tokens in exchange for shares
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
@@ -51,6 +49,8 @@ pub struct Proposal<AccountId, Balance, BlockNumber: Parameter> {
 	aborted: bool,					// of aborted, true
 	tokenTribute: Balance, 			// tokenTribute
 }
+// what are the costs of using a separate enum to manage state transitions {processed, passed, aborted}
+// decided against it because seems redundant with stuff in `decl_event`, but they do provide separate functionality
 
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 #[derive(Encode, Decode, Clone, PartialEq, Eq)]
