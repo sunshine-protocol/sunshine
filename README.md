@@ -1,14 +1,14 @@
 # Molochameleon DAO
 > *[moloch moloch moloch molochameleon](https://www.youtube.com/watch?v=JmcA9LIIXWw)*
 
-**Molochameleon** is a minimal, flexible DAO on Substrate inspired by **[Moloch](https://github.com/MolochVentures/moloch)**. 
+**Molochameleon** is a minimal, flexible DAO on Substrate inspired by **[Moloch](https://github.com/MolochVentures/moloch)**.  Check [`molochameleon/runtime/src/dao.rs`](./molochameleon/runtime/src/dao.rs) for the current implementation which is under some construction.
 
 **WARNING: this code is untested and should NOT be used in production**
 
 This project serves to demonstrate patterns common to governance mechanisms built with Substrate. In the future, it might act as a sustainable, decentralized fundraising mechanism for the Polkadot ecosystem, but there's a lot of work to be done between now and then.
 
-* [Build DAOs with Substrate?](#y)
-* [What is Moloch?](#moloch)
+* [Build DAOs with Substrate](#y)
+* [Moloch Introduction](#moloch)
 * [More Reading](./RESEARCH.md)
 
 ## Build DAOs with Substrate <a name = "y"></a>
@@ -60,7 +60,7 @@ Specifically, I think it would be cool to build
 
 If you're still not convinced and would like more details, feel free to check out the articles listed below, [the official documentation](https://docs.substrate.dev/), and the [github](https://github.com/paritytech/substrate/).
 * [A brief summary of everything Substrate and Polkadot](https://www.parity.io/a-brief-summary-of-everything-substrate-polkadot/)
-* [What is Parity Substrate](https://www.parity.io/what-is-substrate/) by Jack Fransham
+* [What is Parity Substrate](https://www.parity.io/what-is-substrate/)
 * [Substrate in a nutshell](https://www.parity.io/substrate-in-a-nutshell/)
 
 ## What is Moloch? <a name = "moloch"></a>
@@ -79,4 +79,4 @@ To apply for shares, applicants require sponsorship from existing members. The s
 
 In summary, [`MolochVentures/moloch`](https://github.com/MolochVentures/moloch) is a minimally viable DAO coded in Solidity, and launched on Ethereum. It is designed to solve the tragedy of the commons problem represented by Ethereum's current model for funding open source infrastructure. If successful, this model or some variation of it may also be useful for funding ongoing infrastructure demand for other blockchain platforms.
 
-* [MORE READING](./RESEARCH.md)
+**[MORE READING](./RESEARCH.md)**
