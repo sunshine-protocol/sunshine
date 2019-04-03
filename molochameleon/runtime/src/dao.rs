@@ -9,7 +9,9 @@ use support::dispatch::Result;
 use system::ensure_signed;
 use rstd::ops::{Add, Mul, Div, Rem};
 
-pub trait Trait: system::Trait {
+// for system imports use syntax like...
+// et hash_of_zero = <T as system::Trait>::Hashing::hash_of(&0);
+pub trait Trait: balances::Trait {
 	// the staking balance (primarily for bonding applications)
 	type Currency: Currency<Self::AccountId>;
 
@@ -19,17 +21,13 @@ pub trait Trait: system::Trait {
 
 	// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
+	// should this be `<..<Self as balance::Trait>::Event>;` ?
 }
 
-// To implement a PriorityQueue with the map <Proposals<T>> kept in `decl_storage`
-type ProposalIndex = u32;
 /// A proposal to lock up tokens in exchange for shares
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 #[derive(Encode, Decode, Clone, PartialEq, Eq)]
 pub struct Proposal<AccountId, Balance, Hash, BlockNumber: Parameter> {
-	uid: Hash,						// unique identifier
-	// consider adding an IPFS Hash with <Proposal Details>; like git commit number or something could even work
-	// or make the uid this number optionally?
 	proposer: AccountId,			// proposer AccountId
 	applicant: AccountId,			// applicant AccountId
 	shares: u32, 					// number of requested shares
@@ -69,11 +67,11 @@ decl_event!(
 	where
 		<T as system::Trait>::AccountId 
 	{
-		Proposed(ProposalIndex, T::AccountId, T::AccountId),
-		Aborted(ProposalIndex, T::AccountId, T::AccountId), // (index, proposer, applicant), but invoked by proposer
-		Voted(ProposalIndex, bool, u32, u32),
+		Proposed(T::Hash, T::AccountId, T::AccountId),
+		Aborted(T::Hash, T::AccountId, T::AccountId), // (index, proposer, applicant), but invoked by proposer
+		Voted(T::Hash, bool, u32, u32),
 		// true if the proposal was processed successfully
-		Processed(ProposalIndex, bool);
+		Processed(T::Hash, bool);
 		Withdrawal(AccountId, BalanceOf), // successful "ragequit"
 	}
 );
@@ -86,8 +84,8 @@ decl_module! {
 			let who = ensure_signed(origin)?;
 			ensure!(Self::is_member(&who), "proposer is not a member of Module Module");
 
-			// check that too many shares aren't requsted (< max set in config)
-			ensure!(shares <= Self::max_shares(), "too many shares requested");
+			// check that too many shares aren't requsted ( 100% is a high upper bound)
+			ensure!(shares <= Self::total_shares(), "too many shares requested");
 
 			// check that applicant doesn't have a pending application
 			ensure!(!<Applicants>::exists(&applicant), "applicant has pending application");
@@ -100,47 +98,60 @@ decl_module! {
 			T::Currency::reserve(&applicant, tokenTribute)
 				.map_err(|_| "applicant's balance too low")?;
 
-			//add applicant
-			<Applicants<T>::insert(&applicant, count);
-			
-			// add proposal
-			let count = Self::proposal_count();
-			<ProposalCount<T>>::put(count + 1);
+			let startTime = <system::Module<T>>::block_number();
 
-			// add yes vote from member who sponsored proposal (and initiate the voting)
-			<VotersFor<T>>::mutate(count, |voters| voters.push(who.clone()));
-			// supporting map for `remove_proposal`
-			<ProposalsFor<T>>::mutate(who.clone(), |props| props.push(count));
-			// set that this account has voted
-			<VoterId<T>>::mutate(count, |voters| voters.push(who.clone()));
-			// set this for maintainability of other functions
-			<VoteOf<T>>::insert(&(count, who), true);
-			// protect against rage quitting from proposer
-			<HighestYesIndex<T>>::mutate(who.clone(), count);
-			
+			//add applicant
+			<Applicants<T>::insert(&applicant, hash);
+
 			let yesVotes = <MemberShares<T>>:get(&who);
 			let noVotes = 0u32;
 			let maxVotes = <TotalShares<T>::get();
-			let startTime = <system::Module<T>>::block_number();
 			<TotalSharesRequested<T>>::get() += shares; // check syntax
 
-			// set graceTime to None because it doesn't start until the vote is processed correctly
-			<Proposals<T>>::insert(count, Proposal { who, applicant, shares, startTime, None, yesVotes, noVotes, maxVotes, false, false, tokenTribute });
+			let proposal = Proposal {
+				who.clone(), 
+				applicant, 
+				shares, 
+				startTime, 
+				None, 
+				yesVotes, 
+				noVotes, 
+				maxVotes, 
+				false, 
+				false, 
+				tokenTribute,
+			};
 
-			Self::deposit_event(RawEvent::Proposed(count));
-			Self::deposit_event(Raw_Event::Voted(count, true, yesVotes, noVotes));
+			// add proposal hash
+			// CHECK proper encoding syntax using Parity-Codec
+			let hash = T::Hashing::hash_of(proposal.encode());
+			// check the uniqueness of this hash
+			ensure!(!<Proposals<T>>::exists(hash), "This uid is already taken, try again");
+
+			<Proposals<T>>::insert(hash, proposal);
+
+			// add yes vote from member who sponsored proposal (and initiate the voting)
+			<VotersFor<T>>::mutate(hash, |voters| voters.push(who.clone()));
+			// supporting map for `remove_proposal`
+			<ProposalsFor<T>>::mutate(who.clone(), |props| props.push(hash));
+			// set that this account has voted
+			<VoterId<T>>::mutate(hash, |voters| voters.push(who.clone()));
+			// set this for maintainability of other functions
+			<VoteOf<T>>::insert(&(hash, who), true);
+
+			Self::deposit_event(RawEvent::Proposed(hash));
+			Self::deposit_event(RawEvent::Voted(hash, true, yesVotes, noVotes));
 		}
 		
 		/// Allow revocation of the proposal without penalty within the abortWindow
-		fn abort(origin, index: ProposalIndex) -> Result {
+		fn abort(origin, hash: Hash) -> Result {
 			let who = ensure_signed(origin)?;
 			ensure!(Self::is_member(&who), "proposer is not a member of Module Module");
 
 			// check if proposal exists
-			ensure!(<Proposals<T>>::exists(index), "proposal does not exist");
-			ensure!(index < <Molochameleon<T>>::proposal_count(), "proposal does not exist");
+			ensure!(<Proposals<T>>::exists(hash), "proposal does not exist");
 
-			let proposal = <Proposals<T>>::get(index);
+			let proposal = <Proposals<T>>::get(hash);
 
 			// check that the abort is within the window
 			ensure!(proposal.startTime + <Molochameleon<T>::AbortWindow() >= <system::Module<T>>::block_number(), "it is past the abort window");
@@ -153,38 +164,34 @@ decl_module! {
 
 			proposal.aborted = true;
 
-			Self::remove_proposal(index)?;
+			Self::remove_proposal(hash)?;
 
-			Self::deposit_event(RawEvent::Aborted(index, proposal.proposer, proposal.applicant));
+			Self::deposit_event(RawEvent::Aborted(hash, proposal.proposer, proposal.applicant));
 
 			Ok(())
 		}
 
-		fn vote(origin, index: ProposalIndex, approve: bool) {
+		fn vote(origin, hash: Hash, approve: bool) {
 			let who = ensure_signed(origin)?;
 			ensure!(Self::is_member(&who), "proposer is not a member of Module Module");
 			
-			ensure!(<Proposals<T>>::exists(index), "proposal does not exist");
-			ensure!(index < <Molochameleon<T>>::proposal_count(), "proposal does not exist");
+			ensure!(<Proposals<T>>::exists(hash), "proposal does not exist");
 
 			// load proposal
-			let proposal = <Proposals<T>>::get(index);
+			let proposal = <Proposals<T>>::get(hash);
 
 			ensure!((proposal.startTime + <Molochameleon<T>>::voting_period() >= <system::Module<T>>::block_number()) && !proposal.passed, "The voting period has passed with yes: {} no: {}", proposal.yesVotes, proposal.noVotes);
 
 			// check that member has not yet voted
-			ensure(!<VoteOf<T>>::exists(index, who.clone()), "voter has already submitted a vote on this proposal");
+			ensure(!<VoteOf<T>>::exists(hash, who.clone()), "voter has already submitted a vote on this proposal");
 
 			// FIX unncessary conditional path
 			if approve {
-				<VotersFor<T>>::mutate(index, |voters| voters.push(who.clone()));
-				<ProposalsFor<T>>::insert(who.clone(), |props| props.push(index));
-				<VoterId<T>>::mutate(index, |voters| voters.push(who.clone()));
-				<VoteOf<T>>::insert(&(index, who), true);
+				<VotersFor<T>>::mutate(hash, |voters| voters.push(who.clone()));
+				<ProposalsFor<T>>::insert(who.clone(), |props| props.push(hash));
+				<VoterId<T>>::mutate(hash, |voters| voters.push(who.clone()));
+				<VoteOf<T>>::insert(&(hash, who), true);
 
-				if index > <HighestYesIndex<T>>::get() {
-					<HighestYesIndex<T>>::mutate(who.clone(), index);
-				}
 				// to bound dilution for yes votes
 				if <TotalShares<T>>::get() > proposal.maxVotes {
 					proposal.maxVotes = <TotalShares<T>>::get();
@@ -203,17 +210,15 @@ decl_module! {
 				proposal.passed = true;
 			}
 
-			Self::deposit_event(RawEvent::Voted(ProposalIndex, approve, proposal.yesVotes, proposal.noVotes));
+			Self::deposit_event(RawEvent::Voted(hash, approve, proposal.yesVotes, proposal.noVotes));
 		}
 
-		fn process(index: ProposalIndex) -> Result {
+		fn process(hash: Hash) -> Result {
 			let who = ensure_signed(origin)?;
 			ensure!(Self::is_member(&who), "proposer is not a member of the DAO");
-			ensure!(<Proposals<T>>::exists(index), "proposal does not exist");
-			// maybe redundant, but bound checking with ProposalQ
-			ensure!(proposalIndex < <Molochameleon<T>>::proposal_count(), "proposal does not exist");
+			ensure!(<Proposals<T>>::exists(hash), "proposal does not exist");
 
-			let proposal = <Proposals<T>>::get(index);
+			let proposal = <Proposals<T>>::get(hash);
 
 			// if dilution bound not satisfied, wait until there are more shares before passing
 			ensure!(<TotalShares<T>>::get().checked_mul(<DilutionBound<T>>::get()) > proposal.maxVotes, "Dilution bound not satisfied; wait until more shares to pass vote");
@@ -231,11 +236,11 @@ decl_module! {
 					T::Currency::unreserve(&proposal.applicant,
 					proposal.tokenTribute);
 
-					Self::remove_proposal(index);
+					Self::remove_proposal(hash);
 
 					let late_time = <system::Module<T>>::block_number - proposal.graceStart + <GracePeriod<T>>::get();
 
-					Self::deposit_event(RawEvent::RemoveStale(index, late_time));
+					Self::deposit_event(RawEvent::RemoveStale(hash, late_time));
 				},
 				(grace_period && status) => {
 
@@ -273,9 +278,9 @@ decl_module! {
 				}
 			}
 			
-			Self::remove_proposal(index); // clean up
+			Self::remove_proposal(hash); // clean up
 		
-			Self::deposit_event(RawEvent::Processed(index, status));
+			Self::deposit_event(RawEvent::Processed(hash, status));
 
 			Ok(()) // do I need this here
 		}
@@ -309,23 +314,19 @@ decl_storage! {
 
 		/// TRACKING PROPOSALS
 		// Proposals that have been made (equivalent to `ProposalQueue`)
-		Proposals get(proposals): map ProposalIndex => Option<Proposal<T::AccountId, BalanceOf<T>>>;
+		Proposals get(proposals): map Hash => Option<Proposal<T::AccountId, BalanceOf<T>>>;
 		// Active Applicants (to prevent multiple applications at once)
-		Applicants get(applicants): map T::AccountId => Option<ProposalIndex>; // may need to change to &T::AccountId
-		// Number of proposals that have been made.
-		ProposalCount get(proposal_count): ProposalIndex;
+		Applicants get(applicants): map T::AccountId => Option<Hash>; // may need to change to &T::AccountId
 
 		/// VOTING
-		// to protect against rage quitting (only works if the proposals are processed in order...)
-		HighestYesIndex get(highest_yes_index): map T::AccountId => Option<ProposalIndex>;
-		// map: proposalIndex => Voters that have voted (prevent duplicate votes from the same member)
-		VoterId get(voter_id): map ProposalIndex => Vec<AccountId>;
-		// map: proposalIndex => yesVoters (these voters are locked in from ragequitting during the grace period)
-		VotersFor get(voters_for): map ProposalIndex => Vec<AccountId>;
+		// map: proposalHash => Voters that have voted (prevent duplicate votes from the same member)
+		VoterId get(voter_id): map Hash => Vec<AccountId>;
+		// map: proposalHash => yesVoters (these voters are locked in from ragequitting during the grace period)
+		VotersFor get(voters_for): map Hash => Vec<AccountId>;
 		// inverse of the function above for `remove_proposal` function
-		ProposalsFor get(proposals_for): map AccountId => Vec<ProposalIndex>;
+		ProposalsFor get(proposals_for): map AccountId => Vec<Hash>;
 		// get the vote of a specific voter (simplify testing for existence of vote via `VoteOf::exists`)
-		VoteOf get(vote_of): map (ProposalIndex, AccountId) => bool;
+		VoteOf get(vote_of): map (Hash, AccountId) => bool;
 
 		/// Module MEMBERSHIP - permanent state (always relevant, changes only at the finalisation of voting)
 		ActiveMembers get(active_members) config(): Vec<T::AccountId>; // the current Module members
@@ -361,34 +362,23 @@ impl<T: Trait> Module<T> {
 		Ok(())
 	}
 
-	// Clean up of core maps involving proposals and applicant
-	fn remove_proposal(index: ProposalIndex) -> Result {
-		ensure!(<Proposals<T>>::exists(index), "the given proposal does not exist");
-
-		let proposal = <Proposals<T>>::get(index)?;
-		// ORDER IS EXTREMELY IMPORTANT
-		<Proposals<T>>::remove(index).ok_or("No proposal at that index")?;
+	// Clean up storage maps involving proposals
+	fn remove_proposal(hash: Hash) -> Result {
+		ensure!(<Proposals<T>>::exists(hash), "the given proposal does not exist");
+		let proposal = <Proposals<T>>::get(hash);
+		<Proposals<T>>::remove(hash);
 		<Applicants<T>>::remove(proposal.applicant);
-		<ProposalCount<T>>::mutate(|count| count -= 1);
 
-		let voters = <VotersFor<T>>::get(index);
-		// USE ITERATOR INSTEAD OF FOR LOOP
-		for voter in voters {
-			// remove index from PropsFor
-			<ProposalsFor<T>>::mutate(&voter, |indexs| indexs.iter().filter(|ind| ind != index).collect());
-			// set new HighestYesIndex
-			<HighestYesIndex<T>>::mutate(&voter, <ProposalsFor<T>>::get(voter).iter().max());
-			<VoteOf<T>>::remove(&(index, voter));
-		}
+		let voters = <VotersFor<T>>::get(hash).iter().map(|voter| {
+			<ProposalsFor<T>>::mutate(&voter, |hashes| hashes.iter().filter(|hush| hush != hash).collect());
+			voter
+		});
 
-		<VoterId<T>>::remove(index);
-		<VoterFor<T>>::remove(index);
+		<VoterId<T>>::remove(hash);
+		<VoterFor<T>>::remove(hash);
 		// reduce outstanding share request amount
-		<TotalSharesRequested<T>>::set(|count| count -= proposal.shares);
-
-		<Applicants<T>>::remove(proposal.applicant);
+		<TotalSharesRequested<T>>::set(|total| total -= proposal.shares);
 
 		Ok(())
 	} 
-	// could alternatively have a trait called Proposal that implements a custom Drop() with similar logic but this method's logic only makes sense in the context of Module<T>
 }
