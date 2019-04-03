@@ -1,5 +1,4 @@
-# Molochameleon DAO
-> *[moloch moloch moloch molochameleon](https://www.youtube.com/watch?v=JmcA9LIIXWw)*
+# MoloChameleon DAO 🐸☕️
 
 **Molochameleon** is a minimal, flexible DAO on Substrate inspired by **[Moloch](https://github.com/MolochVentures/moloch)**.  Check [`molochameleon/runtime/src/dao.rs`](./molochameleon/runtime/src/dao.rs) for the current implementation which is under some construction.
 

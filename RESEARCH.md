@@ -1,7 +1,7 @@
 # Research Reading List
 
 * [Moloch](#moloch)
-* [DAO Projects and GovernanceResearch](#dao)
+* [Governance Research](#dao)
 * [Projects](#proj)
 * [Highlights](#high)
 
@@ -13,6 +13,9 @@
 * **[Meditations on Moloch](https://slatestarcodex.com/2014/07/30/meditations-on-moloch/)  by Scott Alexander (7/30/2014)**
 
 ## Governance <a name = "gov"></a>
+
+* [coinfund/governance-model](https://github.com/coinfund/governance-model) - relative value model for governance tokens
+* [Decentralized Digital Democracy](https://github.com/lrettig/paper) by `lrettig` (lane)
 
 * [The Future of Organizations](http://blog.aragon.one/the-future-of-organizations/) by Jorge Izquierdo and Ramo Recuero
 * [Decentralized organizations are the future: why I'm joining Aragon](https://medium.com/@stefanobernardi/decentralized-organizations-are-the-future-why-im-joining-aragon-52ddd339ed2e)

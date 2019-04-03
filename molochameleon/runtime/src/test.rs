@@ -1,10 +1,9 @@
 /// tests for this module
 
-/// DO THIS LAST
-
-/// IMPORTANT:
-/// TEST TIMING ATTACKS ON ACCEPTANCE AND RAGE QUITTING
-/// RIGOROUS TESTING AGAINST OVERFLOW/UNDERFLOW FOR SHARE REQUEST AND OTHER PARAMETERS
+/// switch to hash function and store it natively (rather than the proposalIndex approach)...prepare writing about the decision and the modules that use it
+/// using Balance vs BalanceOf vs Currency vs LockableCurrency...use this tool as wisely as possible
+/// fix Result types in function headers and error handling
+/// check if syntax for function calls is correct
 
 /// TEMP FOR CODING WITHOUT DUAL MONITOR :(
 
@@ -18,12 +17,12 @@ pub struct Proposal<AccountId, Balance, BlockNumber: Parameter> {
 	applicant: AccountId,			// applicant AccountId
 	shares: u32, 					// number of requested shares
 	startTime: BlockNumber,			// when the voting period starts
+	graceStart: Option<BlockNumber>, // when the grace period starts (None if not started)
 	yesVotes: u32,					// number of shares that voted yes
 	noVotes: u32,					// number of shares that voted no
-	maxVotes: u32,					// used to check the number of shares necessary to pass
+	maxVotes: u32,					// used to check the number of shares necessary to pass		
+	passed: bool					// if passed, true
 	processed: bool,				// if processed, true
-	passed: bool,					// if passed, true
-	aborted: bool,					// of aborted, true
 	tokenTribute: Balance, 			// tokenTribute
 }
 
@@ -62,15 +61,15 @@ decl_event!(
 		Approved(ProposalIndex),
 		/// A proposal was not approved by the required threshold.
 		Rejected(ProposalIndex),
-		/// The proposal was processed (executed); `bool` is true if returned without error
-		Processed(ProposalIndex, bool),
+		/// The proposal was processed (executed)
+		Processed(ProposalIndex),
 		// The member `ragequit` the DAO
-		Ragequit(AccountId),
+		RageQuit(AccountId),
 	}
 );
 
 decl_storage! {
-	trait Store for Module<T: Trait> as Malkam {
+	trait Store for Module<T: Trait> as Molochameleon {
 		/// CONFIG (like the constructor values)
 		PeriodDuration get(period_duration) config(): u32, 			// relevant for parameterization of voting periods
 		VotingPeriod get(voting_period) config(): T::BlockNumber = T::BlockNumber::sa(7); // convert from block numbers to days (currently just 7 days)
@@ -79,7 +78,6 @@ decl_storage! {
 		// Amount of funds that must be put at stake (by a member) for making a proposal. (0.1 ETH in MolochDAO)
 		ProposalBond get(proposal_bond) config(): u32;		// could make this T::Balance
 		DilutionBound get(dilution_bound) config(): u32;
-		ProcessingReward get(processing_reward) config(): u32;	// could also make this T::Balance or BalanceOf<T>
 
 		/// TRACKING PROPOSALS
 		// Proposals that have been made (equivalent to `ProposalQueue`)
@@ -93,9 +91,11 @@ decl_storage! {
 		// to protect against rage quitting (only works if the proposals are processed in order...)
 		HighestYesIndex get(highest_yes_index): map T::AccountId => Option<ProposalIndex>;
 		// map: proposalIndex => Voters that have voted (prevent duplicate votes from the same member)
-		VoterId get(voter_id): map ProposalIndex => Vec<AccountId>;
+		VoterId get(voter_id): map ProposalIndex => Vec<T::AccountId>;
 		// map: proposalIndex => yesVoters (these voters are locked in from ragequitting during the grace period)
-		VotersFor get(voters_for): map ProposalIndex => Vec<AccountId>;
+		VotersFor get(voters_for): map ProposalIndex => Vec<T::AccountId>;
+		// inverse of the function above for `remove_proposal` function
+		ProposalsFor get(proposals_for): map AccountId => Vec<ProposalIndex>;
 		// get the vote of a specific voter (simplify testing for existence of vote via `VoteOf::exists`)
 		VoteOf get(vote_of): map (ProposalIndex, AccountId) => bool;
 		
