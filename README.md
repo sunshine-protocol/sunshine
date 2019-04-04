@@ -9,7 +9,7 @@
 
 **WARNING: this code is untested and should NOT be used in production**
 
-This project serves to demonstrate patterns common to governance mechanisms built with Substrate. In the future, it might act as a sustainable, decentralized fundraising mechanism for the Polkadot ecosystem, but there's a lot of work to be done before then.
+This project serves to demonstrate patterns common to governance mechanisms built with Substrate. In the future, it might act as a sustainable fund coordination mechanism for the Polkadot ecosystem, but there's a lot of work to be done before then.
 
 ## Build DAOs with Substrate <a name = "y"></a>
 
@@ -76,7 +76,5 @@ Members of the Moloch DAO own a native asset referred to as `shares`. Shares are
 To apply for shares, applicants require sponsorship from existing members. The sponsor of an application bonds some capital (0.1 ETH) to submit an application on behalf of aspiring members. Applicants must also offer capital in exchange for a specified number of shares that are requested from issuance.
 
 *But how do members fund development?* It's not super obvious, but members can approve a proposal that doesn't lock up additional capital but instead provides proof of some ecosystem contribution. Once approved, the applicant can burn the shares to access a proportional share of the capital locked up by the DAO. The capital withdrawal represents the applicant's grant.
-
-In summary, [`MolochVentures/moloch`](https://github.com/MolochVentures/moloch) is a minimally viable DAO coded in Solidity, and launched on Ethereum. It is designed to solve the tragedy of the commons problem represented by Ethereum's current model for funding open source infrastructure. If successful, this model or some variation of it may also be useful for funding ongoing infrastructure demand for other blockchain platforms.
 
 **[MORE READING](./RESEARCH.md)**

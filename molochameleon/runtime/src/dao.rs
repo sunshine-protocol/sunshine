@@ -9,14 +9,11 @@ use support::dispatch::Result;
 use system::ensure_signed;
 use rstd::ops::{Add, Mul, Div, Rem};
 
-// for system imports use syntax like...
-// et hash_of_zero = <T as system::Trait>::Hashing::hash_of(&0);
 pub trait Trait: balances::Trait {
 	// the staking balance (primarily for bonding applications)
 	type Currency: Currency<Self::AccountId>;
 
 	// can you make transfers and reserve balances with just the `Currency` type above?
-	// if so, take next type out
 	type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
 
 	// The overarching event type.
@@ -28,38 +25,24 @@ pub trait Trait: balances::Trait {
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 #[derive(Encode, Decode, Clone, PartialEq, Eq)]
 pub struct Proposal<AccountId, Balance, Hash, BlockNumber: Parameter> {
-	proposer: AccountId,			// proposer AccountId
-	applicant: AccountId,			// applicant AccountId
-	shares: u32, 					// number of requested shares
-	startTime: BlockNumber,			// when the voting period starts
+	proposer: AccountId,			 // proposer AccountId
+	applicant: AccountId,			 // applicant AccountId
+	shares: u32, 					 // number of requested shares
+	startTime: BlockNumber,			 // when the voting period starts
 	graceStart: Option<BlockNumber>, // when the grace period starts (None if not started)
-	yesVotes: u32,					// number of shares that voted yes
-	noVotes: u32,					// number of shares that voted no
-	maxVotes: u32,					// used to check the number of shares necessary to pass
-	processed: bool,				// if processed, true
-	passed: bool,					// if passed, true
-	tokenTribute: Option<Balance>, 	// tokenTribute; optional
+	yesVotes: u32,					 // number of shares that voted yes
+	noVotes: u32,					 // number of shares that voted no
+	maxVotes: u32,					 // used to check the number of shares necessary to pass
+	processed: bool,				 // if processed, true
+	passed: bool,					 // if passed, true
+	tokenTribute: Option<Balance>, 	 // tokenTribute; optional
 }
 
-// Wrapper around the central pool which is owned by no one, but has a withdrawal function that follows the protocol
+// Wrapper around the central pool which is owned by no one, but has a permissioned withdrawal function
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 #[derive(Encode, Decode, Clone, PartialEq, Eq)]
 struct Pool<AccountId> {
-	// take advantage of the Currency traits for optimal implementation
 	account: AccountId,
-}
-
-impl Pool {
-	pub fn withdraw(&self, receiver: T::AccountId, sharedBurned: u32) -> Result { // checks made in `RageQuit` as well
-
-		// CHECK: Can we do these calculations w/o the `BalanceOf` type with just `Currency<T>`? If so, how?
-		let amount = BalanceOf(&self.account).mul(sharedBurned).div(<TotalShares<T>>::get());
-		<BalanceOf<T>>::make_transfer(&self.account, &receiver, amount)?;
-
-		Self::deposit_event(RawEvent::Withdrawal(receiver, amount));
-
-		Ok(())
-	}
 }
 
 decl_event!(
@@ -67,12 +50,11 @@ decl_event!(
 	where
 		<T as system::Trait>::AccountId 
 	{
-		Proposed(T::Hash, T::AccountId, T::AccountId),
-		Aborted(T::Hash, T::AccountId, T::AccountId), // (index, proposer, applicant), but invoked by proposer
-		Voted(T::Hash, bool, u32, u32),
-		// true if the proposal was processed successfully
-		Processed(T::Hash, bool);
-		Withdrawal(AccountId, BalanceOf), // successful "ragequit"
+		Proposed(T::Hash, T::AccountId, T::AccountId),	// (proposal, proposer, applicant)
+		Aborted(T::Hash, T::AccountId, T::AccountId),  // (proposal, proposer, applicant)
+		Voted(T::Hash, bool, u32, u32),				  // (proposal, vote, yesVotes, noVotes)
+		Processed(T::Hash, bool); 					 // true if the proposal was processed successfully
+		Withdrawal(AccountId, BalanceOf), 			// => successful "ragequit"
 	}
 );
 
@@ -106,10 +88,10 @@ decl_module! {
 			let yesVotes = <MemberShares<T>>:get(&who);
 			let noVotes = 0u32;
 			let maxVotes = <TotalShares<T>::get();
-			<TotalSharesRequested<T>>::get() += shares; // check syntax
+			<TotalSharesRequested<T>>::mutate(|total| total += shares);
 
 			let proposal = Proposal {
-				who.clone(), 
+				who, 
 				applicant, 
 				shares, 
 				startTime, 
@@ -123,19 +105,18 @@ decl_module! {
 			};
 
 			// add proposal hash
-			// CHECK proper encoding syntax using Parity-Codec
-			let hash = T::Hashing::hash_of(proposal.encode());
-			// check the uniqueness of this hash
-			ensure!(!<Proposals<T>>::exists(hash), "This uid is already taken, try again");
+			let hash = T::Hashing::hash_of(proposal.encode()); // CHECK proper encoding syntax using Parity-Codec
+			// verify uniqueness of this hash
+			ensure!(!<Proposals<T>>::exists(hash), "Hash collision X(");
 
 			<Proposals<T>>::insert(hash, proposal);
 
 			// add yes vote from member who sponsored proposal (and initiate the voting)
-			<VotersFor<T>>::mutate(hash, |voters| voters.push(who.clone()));
+			<VotersFor<T>>::mutate(hash, |voters| voters.push(&who));
 			// supporting map for `remove_proposal`
-			<ProposalsFor<T>>::mutate(who.clone(), |props| props.push(hash));
+			<ProposalsFor<T>>::mutate(&who, |props| props.push(hash));
 			// set that this account has voted
-			<VoterId<T>>::mutate(hash, |voters| voters.push(who.clone()));
+			<VoterId<T>>::mutate(hash, |voters| voters.push(&who));
 			// set this for maintainability of other functions
 			<VoteOf<T>>::insert(&(hash, who), true);
 
@@ -154,11 +135,14 @@ decl_module! {
 			let proposal = <Proposals<T>>::get(hash);
 
 			// check that the abort is within the window
-			ensure!(proposal.startTime + <Molochameleon<T>::AbortWindow() >= <system::Module<T>>::block_number(), "it is past the abort window");
+			ensure!(
+				proposal.startTime + <Molochameleon<T>::AbortWindow() >= <system::Module<T>>::block_number(), 
+				"it is past the abort window"
+			);
 
 			// return the proposalBond back to the proposer because they aborted
 			T::Currency::unreserve(&proposal.proposer, Self::proposal_bond());
-			// and the applicant's tokenTribute to the applicant
+			// and the tokenTribute to the applicant
 			T::Currency::unreserve(&proposal.applicant,
 			proposal.tokenTribute);
 
@@ -180,16 +164,20 @@ decl_module! {
 			// load proposal
 			let proposal = <Proposals<T>>::get(hash);
 
-			ensure!((proposal.startTime + <Molochameleon<T>>::voting_period() >= <system::Module<T>>::block_number()) && !proposal.passed, "The voting period has passed with yes: {} no: {}", proposal.yesVotes, proposal.noVotes);
+			ensure!(
+				(proposal.startTime + <VotingPeriod<T>>::get() >= <system::Module<T>>::block_number()) 
+				&& !proposal.passed, 
+				"The voting period has passed with yes: {} no: {}", proposal.yesVotes, proposal.noVotes
+			);
 
 			// check that member has not yet voted
-			ensure(!<VoteOf<T>>::exists(hash, who.clone()), "voter has already submitted a vote on this proposal");
+			ensure(!<VoteOf<T>>::exists(hash, &who), "voter has already submitted a vote on this proposal");
 
 			// FIX unncessary conditional path
 			if approve {
-				<VotersFor<T>>::mutate(hash, |voters| voters.push(who.clone()));
-				<ProposalsFor<T>>::insert(who.clone(), |props| props.push(hash));
-				<VoterId<T>>::mutate(hash, |voters| voters.push(who.clone()));
+				<VotersFor<T>>::mutate(hash, |voters| voters.push(&who));
+				<ProposalsFor<T>>::insert(&who, |props| props.push(hash));
+				<VoterId<T>>::mutate(hash, |voters| voters.push(&who));
 				<VoteOf<T>>::insert(&(hash, who), true);
 
 				// to bound dilution for yes votes
@@ -202,11 +190,9 @@ decl_module! {
 				proposal.noVotes += <MemberShares<T>>:get(&who);
 			}
 
-			/// IF PROPOSAL PASSES, SWITCH TO GRACE PERIOD
+			///  if proposal passes, switch to the grace period (during which nonsupporters can exit)
 			if proposal.majority_passed() {
-				// start the graceStart
 				proposal.graceStart = <system::Module<T>>::block_number();
-
 				proposal.passed = true;
 			}
 
@@ -221,9 +207,14 @@ decl_module! {
 			let proposal = <Proposals<T>>::get(hash);
 
 			// if dilution bound not satisfied, wait until there are more shares before passing
-			ensure!(<TotalShares<T>>::get().checked_mul(<DilutionBound<T>>::get()) > proposal.maxVotes, "Dilution bound not satisfied; wait until more shares to pass vote");
+			ensure!(
+				<TotalShares<T>>::get().checked_mul(<DilutionBound<T>>::get()) > proposal.maxVotes, 
+				"Dilution bound not satisfied; wait until more shares to pass vote"
+			);
 			
-			let grace_period = (proposal.graceStart <= <system::Module<T>>::block_number() < proposal.graceStart + <GracePeriod<T>>::get());
+			let grace_period = (
+				proposal.graceStart <= <system::Module<T>>::block_number() < proposal.graceStart + <GracePeriod<T>>::get()
+			);
 			let status = proposal.passed;
 
 			match {
@@ -250,9 +241,9 @@ decl_module! {
 					T::Currency::unreserve(&proposal.applicant,
 					proposal.tokenTribute);
 
-					//HARDCODED PROCESSING REWARD (make this logic more obvious in docs; could set in config but adds logic for computing fees...added to todo)
+					// HARDCODED PROCESSING REWARD (todo: make more flexible)
 					// transaction fee for proposer and processer comes from tokenTribute
-					let txfee = proposal.tokenTribute * 0.05; // check if this works (do I need a checked_mul for underflow for u32)
+					let txfee = proposal.tokenTribute * 0.05; // check if this works (underflow risk?)
 					<BalanceOf<T>>::make_transfer(&proposal.applicant, &who, txfee);
 					<BalanceOf<T>>::make_transfer(&proposal.proposer, &who, txfee);
 
@@ -278,11 +269,11 @@ decl_module! {
 				}
 			}
 			
-			Self::remove_proposal(hash); // clean up
+			Self::remove_proposal(hash);
 		
 			Self::deposit_event(RawEvent::Processed(hash, status));
 
-			Ok(()) // do I need this here
+			Ok()
 		}
 
 		fn rage_quit(sharesToBurn: u32) -> Result {
@@ -293,11 +284,15 @@ decl_module! {
 			ensure!(shares >= sharesToBurn, "insufficient shares");
 
 			// check that all proposals have passed
-			ensure!(<ProposalsFor<T>>::get(who.clone()).iter().all(|prop| prop.passed && (<system::Module<T>>::block_number() <= prop.graceStart + <Molochameleon<T>>::grace_period()), "All proposals have not passed or exited the grace period");
+			ensure!(<ProposalsFor<T>>::get(&who).iter()
+					.all(|prop| prop.passed && 
+						(<system::Module<T>>::block_number() <= prop.graceStart + <Molochameleon<T>>::grace_period()),
+						"All proposals have not passed or exited the grace period"
+					);
 
 			<PoolAddress<T>>::get().withdraw(&who, sharesToBurn);
 
-			Ok(())
+			Ok()
 		}Î
 	}
 }
@@ -343,7 +338,7 @@ decl_storage! {
 	}
 }
 
-impl Proposal {
+impl<AccountId, Balance, Hash, BlockNumber: Parameter> Proposal<AccountId, Balance, Hash, BlockNumber: Parameter> {
 	// more than half shares voted yes
 	pub fn majority_passed(&self) -> bool {
 		// do I need the `checked_div` flag?
@@ -355,10 +350,25 @@ impl Proposal {
 	}
 }
 
+impl<AccountId> Pool<AccountId> {
+	pub fn withdraw(&self, receiver: AccountId, sharedBurned: u32) -> Result { 
+		// Checks on identity made in `rage_quit`, the only place in which this is called
+
+		// CHECK: Can we do these calculations w/o the `BalanceOf` type with just `Currency<T>`? If so, how?
+		let amount = BalanceOf(&self.account).mul(sharedBurned).div(<TotalShares<T>>::get());
+		<BalanceOf<T>>::make_transfer(&self.account, &receiver, amount)?;
+
+		Self::deposit_event(RawEvent::Withdrawal(receiver, amount));
+
+		Ok()
+	}
+}
+
 impl<T: Trait> Module<T> {
 	pub fn is_member(who: &T::AccountId) -> Result {
 		<Module<T>>::active_members().iter()
 			.any(|&(ref a, _)| a == who)?;
+
 		Ok(())
 	}
 
