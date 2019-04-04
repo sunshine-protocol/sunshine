@@ -51,10 +51,10 @@ decl_event!(
 		<T as system::Trait>::AccountId 
 	{
 		Proposed(T::Hash, T::AccountId, T::AccountId),	// (proposal, proposer, applicant)
-		Aborted(T::Hash, T::AccountId, T::AccountId),  // (proposal, proposer, applicant)
-		Voted(T::Hash, bool, u32, u32),				  // (proposal, vote, yesVotes, noVotes)
-		Processed(T::Hash, bool); 					 // true if the proposal was processed successfully
-		Withdrawal(AccountId, BalanceOf), 			// => successful "ragequit"
+		Aborted(T::Hash, T::AccountId, T::AccountId),	// (proposal, proposer, applicant)
+		Voted(T::Hash, bool, u32, u32),		// (proposal, vote, yesVotes, noVotes)
+		Processed(T::Hash, bool);		// true if the proposal was processed successfully
+		Withdrawal(AccountId, BalanceOf),		// => successful "ragequit"
 	}
 );
 
@@ -300,7 +300,7 @@ decl_module! {
 decl_storage! {
 	trait Store for Module<T: Trait> as Module {
 		// relevant for parameterization of voting periods
-		VotingPeriod get(voting_period) config(): T::BlockNumber = T::BlockNumber::sa(7); // convert from block numbers to days (currently just 7 days)
+		VotingPeriod get(voting_period) config(): T::BlockNumber = T::BlockNumber::sa(7); // TODO parameterize 7 days
 		GracePeriod get(grace_period) config(): T::BlockNumber = T::BlockNumber::sa(7); // ""  
 		AbortWindow get(abort_window) config(): T::BlockNumber = T::BlockNumber::sa(1); // "" 1 day
 		// Amount of funds that must be put at stake (by a member) for making a proposal. (0.1 ETH in MolochModule)
