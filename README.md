@@ -1,5 +1,8 @@
 # MoloChameleon DAO 🐸☕️
 
+
+<img src="./molochameleon/img/logo.jpg" alt="logo" width="200"/>
+
 **MoloChameleon** is a minimal, flexible DAO on Substrate inspired by **[Moloch](https://github.com/MolochVentures/moloch)**.  Check [`molochameleon/runtime/src/dao.rs`](./molochameleon/runtime/src/dao.rs) for the current implementation which is under some construction.
 
 **WARNING: this code is untested and should NOT be used in production**
@@ -47,7 +50,7 @@ Substrate's value proposition arises from the composition of these benefits.
 
 As an example, consider the proposal process implemented by the [Ethereum-based MolochDAO implementation](https://github.com/MolochVentures/moloch). This implementation is probably close to optimized in the context of Solidity, but it actually suffers from head-of-line blocking for proposals. More specifically, a proposal must wait for a previous proposal to be processed before it can be approved. Moreover, there are defined limits on how many proposals can be processed in a given time period. An optimized implementation of the proposal process probably looks something like [Rhododendron](https://github.com/paritytech/rhododendron). By leveraging asynchronous primitives in Rust, we can increase the throughput capacity of the proposal process. More details will be shared soon, but this optimization is pretty high on *my priority queue*.
 
-### Call for Cryptoeconomic Innovation on Substrate
+### *Radical* Substrate
 
 Hopefully I've convinced you that Substrate is worth checking out. Personally, I'm very excited to help realize robust implementation of mechanisms inspired by [Radical Markets](http://radicalmarkets.com/) and the other fascinating projects shaping Cryptoeconomics as a discipline.
 
