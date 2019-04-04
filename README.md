@@ -1,6 +1,7 @@
 # MoloChameleon DAO 🐸☕️
 
-| [Build DAOs with Substrate](#y) | [Moloch Introduction](#moloch) | [RESEARH](./RESEARCH.md) | ------------- | ------------- | ------------- |
+| [Build DAOs with Substrate](#y) | [Moloch Introduction](#moloch) | [RESEARH](./RESEARCH.md) 
+| ------------- | ------------- | ------------- |
 
 <img src="./molochameleon/img/newlogo.png" align="left" alt="newlogo" width="350" height="225"/>
 
