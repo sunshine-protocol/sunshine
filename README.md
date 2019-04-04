@@ -1,6 +1,6 @@
 # MoloChameleon DAO 🐸☕️
 
-<img src="./molochameleon/img/newlogo.png" align="left" alt="newlogo" width="500" height="250"/>
+<img src="./molochameleon/img/newlogo.png" align="left" alt="newlogo" width="400" height="250"/>
 
 **MoloChameleon** is a minimal, flexible DAO on Substrate inspired by **[Moloch](https://github.com/MolochVentures/moloch)**.  Check [`molochameleon/runtime/src/dao.rs`](./molochameleon/runtime/src/dao.rs) for the current implementation which is under some construction.
 
