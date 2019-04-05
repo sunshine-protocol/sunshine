@@ -51,16 +51,56 @@ impl Trait for Test {
 }
 
 // consider setting up ExtBuilder using https://github.com/paritytech/substrate/blob/master/srml/staking/src/mock.rs
-
-fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
-    system::GenesisConfig::<Test>::default().build_storage().unwrap().0.into()
+pub struct ExtBuilder {
+    voting_period: u32,  // check T::BlockNumber type again
+    grace_period: u32,   // ""
+    abort_window: u32,   // ""
+    proposal_bond: u32,
+    dilution_bound: u32,
 }
-
-#[test]
-fn it_works_for_default_value() {
-    with_externalities(&mut new_test_ext(), || {
-        assert_ok!(true, "this will never print");
-    });
+impl Default for ExtBuilder {
+	fn default() -> Self {
+		Self {
+			voting_period: 7,
+			grace_period: 7,
+			abort_window: 2,
+			proposal_bond: 1,
+            dilution_bound: 3,
+		}
+	}
+}
+impl ExtBuilder {
+    pub fn voting_period(mut self, voting_period: u32) -> Self {
+		self.voting_period = voting_period;
+		self
+	}
+    pub fn grace_period(mut self, grace_period: u32) -> Self {
+		self.grace_period = grace_period;
+		self
+	}
+    pub fn abort_window(mut self, abort_window: u32) -> Self {
+		self.abort_window = abort_window;
+		self
+	}
+    pub fn proposal_bond(mut self, proposal_bond: u32) -> Self {
+		self.proposal_bond = proposal_bond;
+		self
+	}
+    pub fn dilution_bound(mut self, dilution_bound: u32) -> Self {
+		self.dilution_bound = dilution_bound;
+		self
+	}
+    pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
+		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
+		t.extend(GenesisConfig::<Test> {
+			voting_period: self.voting_period,
+			grace_period: self.grace_period,
+			abort_window: self.abort_window,
+			proposal_bond: self.proposal_bond,
+			dilution_bound: self.dilution_bound,
+		}.build_storage().unwrap().0);
+		t.into()
+	}
 }
 
 pub type System = system::Module<Test>;

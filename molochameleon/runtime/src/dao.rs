@@ -309,7 +309,6 @@ decl_storage! {
 		VotingPeriod get(voting_period) config(): T::BlockNumber = T::BlockNumber::sa(7); // TODO parameterize 7 days
 		GracePeriod get(grace_period) config(): T::BlockNumber = T::BlockNumber::sa(7); // ""  
 		AbortWindow get(abort_window) config(): T::BlockNumber = T::BlockNumber::sa(1); // "" 1 day
-		// Amount of funds that must be put at stake (by a member) for making a proposal. (0.1 ETH in MolochModule)
 		ProposalBond get(proposal_bond) config(): u32;		// could make this T::Balance
 		DilutionBound get(dilution_bound) config(): u32;
 
