@@ -4,6 +4,10 @@ edition = '2019'
 name = 'molochameleon'
 version = '0.1.0'
 
+[dev-dependencies]
+substrate-primitives = { path = "../../core/primitives" }
+balances = { package = "srml-balances", path = "../balances" }
+
 [features]
 default = ['std']
 std = [

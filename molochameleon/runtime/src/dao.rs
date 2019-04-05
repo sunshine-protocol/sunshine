@@ -1,3 +1,6 @@
+// Copyright 2019 Amar Singh
+// This file is part of MoloChameleon, licensed with the MIT License
+
 #![cfg_attr(not(feature = "std"), no_std)]
 #[cfg(feature = "std")]
 use primitives::traits::{Hash, Zero, As, Bounded};
@@ -9,22 +12,21 @@ use support::dispatch::Result;
 use system::ensure_signed;
 use rstd::ops::{Add, Mul, Div, Rem};
 
-pub trait Trait: balances::Trait {
+pub trait Trait: system::Trait {
 	// the staking balance (primarily for bonding applications)
 	type Currency: Currency<Self::AccountId>;
 
-	// can you make transfers and reserve balances with just the `Currency` type above?
+	// for making permissioned transfers
 	type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
 
-	// The overarching event type.
+	// overarching event type
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
-	// should this be `<..<Self as balance::Trait>::Event>;` ?
 }
 
 /// A proposal to lock up tokens in exchange for shares
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 #[derive(Encode, Decode, Clone, PartialEq, Eq)]
-pub struct Proposal<AccountId, Balance, Hash, BlockNumber: Parameter> {
+pub struct Proposal<AccountId, BalanceOf, Hash, BlockNumber: Parameter> {
 	proposer: AccountId,			 // proposer AccountId
 	applicant: AccountId,			 // applicant AccountId
 	shares: u32, 					 // number of requested shares
@@ -35,7 +37,7 @@ pub struct Proposal<AccountId, Balance, Hash, BlockNumber: Parameter> {
 	maxVotes: u32,					 // used to check the number of shares necessary to pass
 	processed: bool,				 // if processed, true
 	passed: bool,					 // if passed, true
-	tokenTribute: Option<Balance>, 	 // tokenTribute; optional
+	tokenTribute: BalanceOf, 	 	 // tokenTribute; optional (set to 0 if no tokenTribute)
 }
 
 // Wrapper around the central pool which is owned by no one, but has a permissioned withdrawal function
@@ -62,7 +64,7 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn deposit_event<T>() = default;
 
-		fn propose(origin, applicant: AccountId, shares: u32, tokenTribute: BalanceOf) {
+		fn propose(origin, applicant: AccountId, shares: u32, tokenTribute: BalanceOf) -> Result<(), Error> {
 			let who = ensure_signed(origin)?;
 			ensure!(Self::is_member(&who), "proposer is not a member of Module Module");
 
@@ -122,10 +124,12 @@ decl_module! {
 
 			Self::deposit_event(RawEvent::Proposed(hash));
 			Self::deposit_event(RawEvent::Voted(hash, true, yesVotes, noVotes));
+
+			Ok(())
 		}
 		
 		/// Allow revocation of the proposal without penalty within the abortWindow
-		fn abort(origin, hash: Hash) -> Result {
+		fn abort(origin, hash: Hash) -> Result<(), Error> {
 			let who = ensure_signed(origin)?;
 			ensure!(Self::is_member(&who), "proposer is not a member of Module Module");
 
@@ -197,9 +201,11 @@ decl_module! {
 			}
 
 			Self::deposit_event(RawEvent::Voted(hash, approve, proposal.yesVotes, proposal.noVotes));
+
+			Ok(())
 		}
 
-		fn process(hash: Hash) -> Result {
+		fn process(hash: Hash) -> Result<(), Error> {
 			let who = ensure_signed(origin)?;
 			ensure!(Self::is_member(&who), "proposer is not a member of the DAO");
 			ensure!(<Proposals<T>>::exists(hash), "proposal does not exist");
@@ -273,10 +279,10 @@ decl_module! {
 		
 			Self::deposit_event(RawEvent::Processed(hash, status));
 
-			Ok()
+			Ok(())
 		}
 
-		fn rage_quit(sharesToBurn: u32) -> Result {
+		fn rage_quit(sharesToBurn: u32) -> Result<(), Error> {
 			let who = ensure_signed(origin)?;
 			ensure!(Self::is_member(&who), "proposer is not a member of the DAO");
 
@@ -292,7 +298,7 @@ decl_module! {
 
 			<PoolAddress<T>>::get().withdraw(&who, sharesToBurn);
 
-			Ok()
+			Ok(())
 		}Î
 	}
 }
@@ -338,7 +344,7 @@ decl_storage! {
 	}
 }
 
-impl<AccountId, Balance, Hash, BlockNumber: Parameter> Proposal<AccountId, Balance, Hash, BlockNumber: Parameter> {
+impl<AccountId, BalanceOf, Hash, BlockNumber: Parameter> Proposal<AccountId, BalanceOf, Hash, BlockNumber: Parameter> {
 	// more than half shares voted yes
 	pub fn majority_passed(&self) -> bool {
 		// do I need the `checked_div` flag?
@@ -351,7 +357,7 @@ impl<AccountId, Balance, Hash, BlockNumber: Parameter> Proposal<AccountId, Balan
 }
 
 impl<AccountId> Pool<AccountId> {
-	pub fn withdraw(&self, receiver: AccountId, sharedBurned: u32) -> Result { 
+	pub fn withdraw(&self, receiver: AccountId, sharedBurned: u32) -> Result<(), Error> { 
 		// Checks on identity made in `rage_quit`, the only place in which this is called
 
 		// CHECK: Can we do these calculations w/o the `BalanceOf` type with just `Currency<T>`? If so, how?
@@ -360,12 +366,12 @@ impl<AccountId> Pool<AccountId> {
 
 		Self::deposit_event(RawEvent::Withdrawal(receiver, amount));
 
-		Ok()
+		Ok(())
 	}
 }
 
 impl<T: Trait> Module<T> {
-	pub fn is_member(who: &T::AccountId) -> Result {
+	pub fn is_member(who: &T::AccountId) -> Result<(), Error> {
 		<Module<T>>::active_members().iter()
 			.any(|&(ref a, _)| a == who)?;
 
@@ -373,7 +379,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	// Clean up storage maps involving proposals
-	fn remove_proposal(hash: Hash) -> Result {
+	fn remove_proposal(hash: Hash) -> Result<(), Error> {
 		ensure!(<Proposals<T>>::exists(hash), "the given proposal does not exist");
 		let proposal = <Proposals<T>>::get(hash);
 		<Proposals<T>>::remove(hash);
