@@ -3,7 +3,7 @@
 #[cfg(test)]
 
 use super::*;
-use mock::{Dao, System, Test}; // left out ExtBuilder (for now?)
+use mock::{Dao, System, Test, ExtBuilder}; // left out ExtBuilder (for now?)
 use runtime_io::with_externalities;
 use srml_support::{
 	assert_noop, assert_ok, assert_err,
