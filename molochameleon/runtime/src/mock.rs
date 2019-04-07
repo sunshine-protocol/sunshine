@@ -33,10 +33,9 @@ impl system::Trait for Test {
     type Log = DigestItem;
 }
 
-// may not need, but I am using `balances`
 impl balances::Trait for Test {
 	type Balance = u64;
-	type OnFreeBalanceZero = Staking;
+	type OnFreeBalanceZero = ();
 	type OnNewAccount = ();
 	type Event = ();
 	type TransactionPayment = ();

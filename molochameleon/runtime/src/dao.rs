@@ -3,14 +3,19 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #[cfg(feature = "std")]
-use primitives::traits::{Hash, Zero, As, Bounded};
+use runtime_primitives::traits::{Zero, As, Bounded}; // redefined Hash type below to make Rust compiler happy
 use parity_codec::{Encode, Decode};
 use support::{StorageValue, StorageMap, Parameter, Dispatchable, IsSubType, EnumerableStorageMap};
 use support::{decl_module, decl_storage, decl_event, ensure};
-use support::traits::{Currency, OnUnbalanced, WithdrawReason, LockIdentifier}; // left out LockableCurrency
+use support::traits::{Currency}; // left out LockableCurrency, OnUnbalanced, WithdrawReason, LockIdentifier
 use support::dispatch::Result;
 use system::ensure_signed;
-use rstd::ops::{Add, Mul, Div, Rem};
+use rstd::ops::{Mul, Div}; // Add, Rem 
+use rstd::fmt::Error; 		// The Error type (discover better error handling in the context of Substrate)
+use serde_derive::{Serialize, Deserialize};
+
+/// A hash of some data used by the chain.
+pub type Hash = primitives::H256;
 
 pub trait Trait: system::Trait {
 	// the staking balance (primarily for bonding applications)
@@ -52,11 +57,11 @@ decl_event!(
 	where
 		<T as system::Trait>::AccountId 
 	{
-		Proposed(T::Hash, T::AccountId, T::AccountId),	// (proposal, proposer, applicant)
-		Aborted(T::Hash, T::AccountId, T::AccountId),	// (proposal, proposer, applicant)
-		Voted(T::Hash, bool, u32, u32),		// (proposal, vote, yesVotes, noVotes)
-		Processed(T::Hash, bool);		// true if the proposal was processed successfully
-		Withdrawal(AccountId, BalanceOf),		// => successful "ragequit"
+		Proposed(Hash, AccountId, AccountId),	// (proposal, proposer, applicant)
+		Aborted(Hash, AccountId, AccountId),	// (proposal, proposer, applicant)
+		Voted(Hash, bool, u32, u32),		// (proposal, vote, yesVotes, noVotes)
+		Processed(Hash, bool),		// true if the proposal was processed successfully
+		Withdrawal(AccountId, u64),		// => successful "ragequit" (AccountId, Balances)
 	}
 );
 
@@ -66,7 +71,7 @@ decl_module! {
 
 		fn propose(origin, applicant: AccountId, shares: u32, tokenTribute: BalanceOf) -> Result<(), Error> {
 			let who = ensure_signed(origin)?;
-			ensure!(Self::is_member(&who), "proposer is not a member of Module Module");
+			ensure!(Self::is_member(&who), "proposer is not a member of Dao");
 
 			// check that too many shares aren't requsted ( 100% is a high upper bound)
 			ensure!(shares <= Self::total_shares(), "too many shares requested");
@@ -131,7 +136,7 @@ decl_module! {
 		/// Allow revocation of the proposal without penalty within the abortWindow
 		fn abort(origin, hash: Hash) -> Result<(), Error> {
 			let who = ensure_signed(origin)?;
-			ensure!(Self::is_member(&who), "proposer is not a member of Module Module");
+			ensure!(Self::is_member(&who), "proposer is not a member of Dao");
 
 			// check if proposal exists
 			ensure!(<Proposals<T>>::exists(hash), "proposal does not exist");
@@ -161,7 +166,7 @@ decl_module! {
 
 		fn vote(origin, hash: Hash, approve: bool) {
 			let who = ensure_signed(origin)?;
-			ensure!(Self::is_member(&who), "proposer is not a member of Module Module");
+			ensure!(Self::is_member(&who), "proposer is not a member of Dao");
 			
 			ensure!(<Proposals<T>>::exists(hash), "proposal does not exist");
 
@@ -314,28 +319,27 @@ decl_storage! {
 
 		/// TRACKING PROPOSALS
 		// Proposals that have been made (equivalent to `ProposalQueue`)
-		Proposals get(proposals): map Hash => Option<Proposal<T::AccountId, BalanceOf<T>>>;
+		Proposals get(proposals): map Hash => Option<Proposal<T::AccountId, u64>>;
 		// Active Applicants (to prevent multiple applications at once)
 		Applicants get(applicants): map T::AccountId => Option<Hash>; // may need to change to &T::AccountId
 
 		/// VOTING
 		// map: proposalHash => Voters that have voted (prevent duplicate votes from the same member)
-		VoterId get(voter_id): map Hash => Vec<AccountId>;
+		VoterId get(voter_id): map Hash => Vec<T::AccountId>;
 		// map: proposalHash => yesVoters (these voters are locked in from ragequitting during the grace period)
-		VotersFor get(voters_for): map Hash => Vec<AccountId>;
+		VotersFor get(voters_for): map Hash => Vec<T::AccountId>;
 		// inverse of the function above for `remove_proposal` function
-		ProposalsFor get(proposals_for): map AccountId => Vec<Hash>;
+		ProposalsFor get(proposals_for): map T::AccountId => Vec<Hash>;
 		// get the vote of a specific voter (simplify testing for existence of vote via `VoteOf::exists`)
-		VoteOf get(vote_of): map (Hash, AccountId) => bool;
+		VoteOf get(vote_of): map (Hash, T::AccountId) => bool;
 
-		/// Module MEMBERSHIP - permanent state (always relevant, changes only at the finalisation of voting)
-		ActiveMembers get(active_members) config(): Vec<T::AccountId>; // the current Module members
-		MemberShares get(member_shares): map T::AccountId => u32; // shares of the current Module members
-		PoolAddress get(pool_address): config(): Pool<T::AccountId>;
+		/// Dao MEMBERSHIP - permanent state (always relevant, changes only at the finalisation of voting)
+		ActiveMembers get(active_members) config(): Vec<T::AccountId>; // the current Dao members
+		MemberShares get(member_shares): map T::AccountId => u32; // shares of the current Dao members
 
 		/// INTERNAL ACCOUNTING
 		// Address for the pool
-		PoolAdress get(pool_address) config(): Pool<AccountId>;
+		PoolAdress get(pool_address) config(): Pool<T::AccountId>;
 		// Number of shares across all members
 		TotalShares get(total_shares) config(): u32; 
 		// total shares that have been requested in unprocessed proposals
@@ -343,7 +347,7 @@ decl_storage! {
 	}
 }
 
-impl<AccountId, BalanceOf, Hash, BlockNumber: Parameter> Proposal<AccountId, BalanceOf, Hash, BlockNumber: Parameter> {
+impl<AccountId, BalanceOf, Hash, BlockNumber> Proposal<AccountId, BalanceOf, Hash, BlockNumber> {
 	// more than half shares voted yes
 	pub fn majority_passed(&self) -> bool {
 		// do I need the `checked_div` flag?
@@ -390,7 +394,7 @@ impl<T: Trait> Module<T> {
 		});
 
 		<VoterId<T>>::remove(hash);
-		<VoterFor<T>>::remove(hash);
+		<VotersFor<T>>::remove(hash);
 		// reduce outstanding share request amount
 		<TotalSharesRequested<T>>::set(|total| total -= proposal.shares);
 

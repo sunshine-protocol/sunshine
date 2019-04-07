@@ -1,12 +1,8 @@
 [package]
 authors = ['Amar Singh <amar@parity.io>']
-edition = '2019'
+edition = '2018'
 name = 'molochameleon'
 version = '0.1.0'
-
-[dev-dependencies]
-substrate-primitives = { path = "../../core/primitives" }
-balances = { package = "srml-balances", path = "../balances" }
 
 [features]
 default = ['std']

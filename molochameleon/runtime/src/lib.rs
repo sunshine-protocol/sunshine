@@ -1,5 +1,7 @@
 // Copyright 2019 Amar Singh
 // This file is part of MoloChameleon, licensed with the MIT License
+#![feature(generic_associated_types)]
+#![feature(associated_type_defaults)]
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 // `construct_runtime!` does a lot of recursion and requires us to increase the limit to 256.
@@ -173,8 +175,8 @@ impl sudo::Trait for Runtime {
 	type Proposal = Call;
 }
 
-/// Used for the module template in `./template.rs`
-impl template::Trait for Runtime { 
+/// Used for the dao template in `./dao.rs`
+impl dao::Trait for Runtime { 
 	type Event = Event;
 }
 
