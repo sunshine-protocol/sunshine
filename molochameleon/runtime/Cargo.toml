@@ -4,6 +4,9 @@ edition = '2018'
 name = 'molochameleon'
 version = '0.1.0'
 
+[dependencies]
+futures = "0.1.25" # swap out when 0.1.5.0 is added (PR open now)
+
 [features]
 default = ['std']
 std = [
@@ -27,7 +30,14 @@ std = [
     'serde',
     'safe-mix/std',
     'consensus-aura/std',
+    'democracy/std',
 ]
+[dependencies.democracy]
+default_features = false
+git = 'https://github.com/paritytech/substrate.git'
+package = 'srml-democracy'
+rev = '82744fbb6f4d677f2edfe9d88737c237622c97a4'
+
 [dependencies.aura]
 default_features = false
 git = 'https://github.com/paritytech/substrate.git'

@@ -657,6 +657,7 @@ dependencies = [
 name = "molochameleon"
 version = "0.1.0"
 dependencies = [
+ "futures 0.1.26 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-codec 3.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "safe-mix 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.90 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -668,6 +669,7 @@ dependencies = [
  "srml-aura 0.1.0 (git+https://github.com/paritytech/substrate.git?rev=82744fbb6f4d677f2edfe9d88737c237622c97a4)",
  "srml-balances 0.1.0 (git+https://github.com/paritytech/substrate.git?rev=82744fbb6f4d677f2edfe9d88737c237622c97a4)",
  "srml-consensus 0.1.0 (git+https://github.com/paritytech/substrate.git?rev=82744fbb6f4d677f2edfe9d88737c237622c97a4)",
+ "srml-democracy 0.1.0 (git+https://github.com/paritytech/substrate.git?rev=82744fbb6f4d677f2edfe9d88737c237622c97a4)",
  "srml-executive 0.1.0 (git+https://github.com/paritytech/substrate.git?rev=82744fbb6f4d677f2edfe9d88737c237622c97a4)",
  "srml-fees 0.1.0 (git+https://github.com/paritytech/substrate.git?rev=82744fbb6f4d677f2edfe9d88737c237622c97a4)",
  "srml-indices 0.1.0 (git+https://github.com/paritytech/substrate.git?rev=82744fbb6f4d677f2edfe9d88737c237622c97a4)",
@@ -1345,6 +1347,23 @@ dependencies = [
  "srml-system 0.1.0 (git+https://github.com/paritytech/substrate.git?rev=82744fbb6f4d677f2edfe9d88737c237622c97a4)",
  "substrate-inherents 0.1.0 (git+https://github.com/paritytech/substrate.git?rev=82744fbb6f4d677f2edfe9d88737c237622c97a4)",
  "substrate-primitives 0.1.0 (git+https://github.com/paritytech/substrate.git?rev=82744fbb6f4d677f2edfe9d88737c237622c97a4)",
+]
+
+[[package]]
+name = "srml-democracy"
+version = "0.1.0"
+source = "git+https://github.com/paritytech/substrate.git?rev=82744fbb6f4d677f2edfe9d88737c237622c97a4#82744fbb6f4d677f2edfe9d88737c237622c97a4"
+dependencies = [
+ "hex-literal 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "safe-mix 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.90 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_derive 1.0.90 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-io 0.1.0 (git+https://github.com/paritytech/substrate.git?rev=82744fbb6f4d677f2edfe9d88737c237622c97a4)",
+ "sr-primitives 0.1.0 (git+https://github.com/paritytech/substrate.git?rev=82744fbb6f4d677f2edfe9d88737c237622c97a4)",
+ "sr-std 0.1.0 (git+https://github.com/paritytech/substrate.git?rev=82744fbb6f4d677f2edfe9d88737c237622c97a4)",
+ "srml-support 0.1.0 (git+https://github.com/paritytech/substrate.git?rev=82744fbb6f4d677f2edfe9d88737c237622c97a4)",
+ "srml-system 0.1.0 (git+https://github.com/paritytech/substrate.git?rev=82744fbb6f4d677f2edfe9d88737c237622c97a4)",
 ]
 
 [[package]]
@@ -2290,6 +2309,7 @@ dependencies = [
 "checksum srml-aura 0.1.0 (git+https://github.com/paritytech/substrate.git?rev=82744fbb6f4d677f2edfe9d88737c237622c97a4)" = "<none>"
 "checksum srml-balances 0.1.0 (git+https://github.com/paritytech/substrate.git?rev=82744fbb6f4d677f2edfe9d88737c237622c97a4)" = "<none>"
 "checksum srml-consensus 0.1.0 (git+https://github.com/paritytech/substrate.git?rev=82744fbb6f4d677f2edfe9d88737c237622c97a4)" = "<none>"
+"checksum srml-democracy 0.1.0 (git+https://github.com/paritytech/substrate.git?rev=82744fbb6f4d677f2edfe9d88737c237622c97a4)" = "<none>"
 "checksum srml-executive 0.1.0 (git+https://github.com/paritytech/substrate.git?rev=82744fbb6f4d677f2edfe9d88737c237622c97a4)" = "<none>"
 "checksum srml-fees 0.1.0 (git+https://github.com/paritytech/substrate.git?rev=82744fbb6f4d677f2edfe9d88737c237622c97a4)" = "<none>"
 "checksum srml-indices 0.1.0 (git+https://github.com/paritytech/substrate.git?rev=82744fbb6f4d677f2edfe9d88737c237622c97a4)" = "<none>"

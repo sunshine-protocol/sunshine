@@ -7,22 +7,21 @@ use runtime_primitives::traits::{Zero, As, Bounded}; // redefined Hash type belo
 use parity_codec::{Encode, Decode};
 use support::{StorageValue, StorageMap, Parameter, Dispatchable, IsSubType, EnumerableStorageMap};
 use support::{decl_module, decl_storage, decl_event, ensure};
-use support::traits::{Currency}; // left out LockableCurrency, OnUnbalanced, WithdrawReason, LockIdentifier
+use support::traits::{Currency}; 					// left out LockableCurrency, OnUnbalanced, WithdrawReason, LockIdentifier
 use support::dispatch::Result;
 use system::ensure_signed;
-use rstd::ops::{Mul, Div}; // Add, Rem 
-use rstd::fmt::Error; 		// The Error type (discover better error handling in the context of Substrate)
+use rstd::ops::{Mul, Div}; 							// Add, Rem 
+use rstd::fmt::Error; 								// The Error type (discover better error handling in the context of Substrate)
 use serde_derive::{Serialize, Deserialize};
 
-/// A hash of some data used by the chain.
-pub type Hash = primitives::H256;
+/// just getting the compiler to work with me on these types (Hash, AccountId)
+type Hash = primitives::H256;
+type AccountId = u64;
+type BalanceOf<T> = <<T as democracy::Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
 
 pub trait Trait: system::Trait {
 	// the staking balance (primarily for bonding applications)
 	type Currency: Currency<Self::AccountId>;
-
-	// for making permissioned transfers
-	type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
 
 	// overarching event type
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
@@ -69,7 +68,7 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn deposit_event<T>() = default;
 
-		fn propose(origin, applicant: AccountId, shares: u32, tokenTribute: BalanceOf) -> Result<(), Error> {
+		fn propose(origin, applicant: AccountId, shares: u32, tokenTribute: BalanceOf) -> Result {
 			let who = ensure_signed(origin)?;
 			ensure!(Self::is_member(&who), "proposer is not a member of Dao");
 
@@ -89,13 +88,11 @@ decl_module! {
 
 			let startTime = <system::Module<T>>::block_number();
 
-			//add applicant
-			<Applicants<T>::insert(&applicant, hash);
-
-			let yesVotes = <MemberShares<T>>:get(&who);
+			let yesVotes = <MemberShares<T>>::get(&who);
 			let noVotes = 0u32;
-			let maxVotes = <TotalShares<T>::get();
-			<TotalSharesRequested<T>>::mutate(|total| total += shares);
+			let maxVotes = Self::total_shares();
+			Self::total_shares.set(maxVotes + shares);
+			let future_state = false;			// overcome compiler error: expected identifier, found keyword `false`
 
 			let proposal = Proposal {
 				who, 
@@ -106,8 +103,8 @@ decl_module! {
 				yesVotes, 
 				noVotes, 
 				maxVotes, 
-				false, 
-				false, 
+				future_state, 
+				future_state, 
 				tokenTribute,
 			};
 
@@ -117,6 +114,8 @@ decl_module! {
 			ensure!(!<Proposals<T>>::exists(hash), "Hash collision X(");
 
 			<Proposals<T>>::insert(hash, proposal);
+			//add applicant
+			<Applicants<T>>::insert(&applicant, hash);
 
 			// add yes vote from member who sponsored proposal (and initiate the voting)
 			<VotersFor<T>>::mutate(hash, |voters| voters.push(&who));
@@ -134,7 +133,7 @@ decl_module! {
 		}
 		
 		/// Allow revocation of the proposal without penalty within the abortWindow
-		fn abort(origin, hash: Hash) -> Result<(), Error> {
+		fn abort(origin, hash: Hash) -> Result {
 			let who = ensure_signed(origin)?;
 			ensure!(Self::is_member(&who), "proposer is not a member of Dao");
 
@@ -145,7 +144,7 @@ decl_module! {
 
 			// check that the abort is within the window
 			ensure!(
-				proposal.startTime + <Molochameleon<T>::AbortWindow() >= <system::Module<T>>::block_number(), 
+				proposal.startTime + Self::abort_window() >= <system::Module<T>>::block_number(),
 				"it is past the abort window"
 			);
 
@@ -176,11 +175,11 @@ decl_module! {
 			ensure!(
 				(proposal.startTime + <VotingPeriod<T>>::get() >= <system::Module<T>>::block_number()) 
 				&& !proposal.passed, 
-				"The voting period has passed with yes: {} no: {}", proposal.yesVotes, proposal.noVotes
+				format!("The voting period has passed with yes: {} no: {}", proposal.yesVotes, proposal.noVotes)
 			);
 
 			// check that member has not yet voted
-			ensure(!<VoteOf<T>>::exists(hash, &who), "voter has already submitted a vote on this proposal");
+			ensure!(<VoteOf<T>>::exists(hash, &who), "voter has already submitted a vote on this proposal");
 
 			// FIX unncessary conditional path
 			if approve {
@@ -193,13 +192,13 @@ decl_module! {
 				if <TotalShares<T>>::get() > proposal.maxVotes {
 					proposal.maxVotes = <TotalShares<T>>::get();
 				}
-				proposal.yesVotes += <MemberShares<T>>:get(&who);
+				proposal.yesVotes += Self::member_shares(&who);
 
 			} else {
-				proposal.noVotes += <MemberShares<T>>:get(&who);
+				proposal.noVotes += Self::member_shares(&who);
 			}
 
-			///  if proposal passes, switch to the grace period (during which nonsupporters can exit)
+			// proposal passes => switch to the grace period (during which nonsupporters (who have no pending proposals) can exit)
 			if proposal.majority_passed() {
 				proposal.graceStart = <system::Module<T>>::block_number();
 				proposal.passed = true;
@@ -210,7 +209,7 @@ decl_module! {
 			Ok(())
 		}
 
-		fn process(hash: Hash) -> Result<(), Error> {
+		fn process(origin, hash: Hash) -> Result {
 			let who = ensure_signed(origin)?;
 			ensure!(Self::is_member(&who), "proposer is not a member of the DAO");
 			ensure!(<Proposals<T>>::exists(hash), "proposal does not exist");
@@ -224,60 +223,56 @@ decl_module! {
 			);
 			
 			let grace_period = (
-				proposal.graceStart <= <system::Module<T>>::block_number() < proposal.graceStart + <GracePeriod<T>>::get()
+				(proposal.graceStart <= <system::Module<T>>::block_number()) 
+				&& (<system::Module<T>>::block_number() < proposal.graceStart + <GracePeriod<T>>::get())
 			);
 			let status = proposal.passed;
 
-			match {
-				(!grace_period && status) => {
-					// transfer the proposalBond back to the proposer
-					T::Currency::unreserve(&proposal.proposer, Self::proposal_bond());
-					// transfer 50% of the proposal bond to the processer
-					T::Currency::transfer(&proposal.proposer, &who, Self::proposal_bond().checked_mul(0.5));
-					// return the applicant's tokenTribute
-					T::Currency::unreserve(&proposal.applicant,
-					proposal.tokenTribute);
+			if (!grace_period && status) {
+				// transfer the proposalBond back to the proposer
+				T::Currency::unreserve(&proposal.proposer, Self::proposal_bond());
+				// transfer 50% of the proposal bond to the processer
+				T::Currency::transfer(&proposal.proposer, &who, Self::proposal_bond().checked_mul(0.5));
+				// return the applicant's tokenTribute
+				T::Currency::unreserve(&proposal.applicant,
+				proposal.tokenTribute);
 
-					Self::remove_proposal(hash);
+				Self::remove_proposal(hash);
 
-					let late_time = <system::Module<T>>::block_number - proposal.graceStart + <GracePeriod<T>>::get();
+				let late_time = <system::Module<T>>::block_number - proposal.graceStart + <GracePeriod<T>>::get();
 
-					Self::deposit_event(RawEvent::RemoveStale(hash, late_time));
-				},
-				(grace_period && status) => {
+				Self::deposit_event(RawEvent::RemoveStale(hash, late_time));
+			} else if (grace_period && status) {
+				// transfer the proposalBond back to the proposer because they aborted
+				T::Currency::unreserve(&proposal.proposer, Self::proposal_bond());
+				// and the applicant's tokenTribute
+				T::Currency::unreserve(&proposal.applicant,
+				proposal.tokenTribute);
 
-					// transfer the proposalBond back to the proposer because they aborted
-					T::Currency::unreserve(&proposal.proposer, Self::proposal_bond());
-					// and the applicant's tokenTribute
-					T::Currency::unreserve(&proposal.applicant,
-					proposal.tokenTribute);
+				// HARDCODED PROCESSING REWARD (todo: make more flexible)
+				// transaction fee for proposer and processer comes from tokenTribute
+				let txfee = proposal.tokenTribute * 0.05; // check if this works (underflow risk?)
+				<BalanceOf<T>>::make_transfer(&proposal.applicant, &who, txfee);
+				<BalanceOf<T>>::make_transfer(&proposal.proposer, &who, txfee);
 
-					// HARDCODED PROCESSING REWARD (todo: make more flexible)
-					// transaction fee for proposer and processer comes from tokenTribute
-					let txfee = proposal.tokenTribute * 0.05; // check if this works (underflow risk?)
-					<BalanceOf<T>>::make_transfer(&proposal.applicant, &who, txfee);
-					<BalanceOf<T>>::make_transfer(&proposal.proposer, &who, txfee);
+				let netTribute = proposal.tokenTribute * 0.9;
 
-					let netTribute = proposal.tokenTribute * 0.9;
+				// transfer tokenTribute to Pool
+				let poolAddr = Self::pool_address();
+				<BalanceOf<T>>::make_transfer(&proposal.applicant, &poolAddr, netTribute);
 
-					// transfer tokenTribute to Pool
-					let poolAddr = <Molochameleon<T>>::pool_address();
-					<BalanceOf<T>>::make_transfer(&proposal.applicant, &poolAddr, netTribute);
+				// mint new shares
+				<TotalShares<T>>::set(|total| total += proposal.shares);
 
-					// mint new shares
-					<TotalShares<T>>::set(|total| total += proposal.shares);
-
-					// if applicant is already a member, add to their existing shares
-					if proposal.applicant.is_member() {
-						<MemberShares<T>>::mutate(proposal.applicant, |shares| shares += proposal.shares);
-					} else {
-						// if applicant is a new member, create a new record for them
-						<MemberShares<T>>::insert(proposal.applicant, proposal.shares);
-					}
+				// if applicant is already a member, add to their existing shares
+				if proposal.applicant.is_member() {
+					<MemberShares<T>>::mutate(proposal.applicant, |shares| shares += proposal.shares);
+				} else {
+					// if applicant is a new member, create a new record for them
+					<MemberShares<T>>::insert(proposal.applicant, proposal.shares);
 				}
-				_ => {
-					Err("The proposal did not pass")
-				}
+			} else {
+				Err("The proposal did not pass")
 			}
 			
 			Self::remove_proposal(hash);
@@ -287,7 +282,7 @@ decl_module! {
 			Ok(())
 		}
 
-		fn rage_quit(sharesToBurn: u32) -> Result<(), Error> {
+		fn rage_quit(origin, sharesToBurn: u32) -> Result {
 			let who = ensure_signed(origin)?;
 			ensure!(Self::is_member(&who), "proposer is not a member of the DAO");
 
@@ -297,19 +292,20 @@ decl_module! {
 			// check that all proposals have passed
 			ensure!(<ProposalsFor<T>>::get(&who).iter()
 					.all(|prop| prop.passed && 
-						(<system::Module<T>>::block_number() <= prop.graceStart + <Molochameleon<T>>::grace_period()),
+						(<system::Module<T>>::block_number() <= prop.graceStart + Self::grace_period()),
 						"All proposals have not passed or exited the grace period"
-					);
+					)
+			);
 
-			<PoolAddress<T>>::get().withdraw(&who, sharesToBurn);
+			Self::pool_address().withdraw(&who, sharesToBurn);
 
 			Ok(())
-		}Î
+		}
 	}
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait> as Module {
+	trait Store for Module<T: Trait> as Dao {
 		// relevant for parameterization of voting periods
 		VotingPeriod get(voting_period) config(): T::BlockNumber = T::BlockNumber::sa(7); // TODO parameterize 7 days
 		GracePeriod get(grace_period) config(): T::BlockNumber = T::BlockNumber::sa(7); // ""  
@@ -319,7 +315,7 @@ decl_storage! {
 
 		/// TRACKING PROPOSALS
 		// Proposals that have been made (equivalent to `ProposalQueue`)
-		Proposals get(proposals): map Hash => Option<Proposal<T::AccountId, u64>>;
+		Proposals get(proposals): map Hash => Proposal<T::AccountId, BalanceOf, T::Hash, T::BlockNumber>;
 		// Active Applicants (to prevent multiple applications at once)
 		Applicants get(applicants): map T::AccountId => Option<Hash>; // may need to change to &T::AccountId
 
@@ -360,12 +356,12 @@ impl<AccountId, BalanceOf, Hash, BlockNumber> Proposal<AccountId, BalanceOf, Has
 }
 
 impl<AccountId> Pool<AccountId> {
-	pub fn withdraw(&self, receiver: AccountId, sharedBurned: u32) -> Result<(), Error> { 
+	pub fn withdraw(&self, receiver: AccountId, sharedBurned: u32) -> Result { 
 		// Checks on identity made in `rage_quit`, the only place in which this is called
 
 		// CHECK: Can we do these calculations w/o the `BalanceOf` type with just `Currency<T>`? If so, how?
-		let amount = BalanceOf(&self.account).mul(sharedBurned).div(<TotalShares<T>>::get());
-		<BalanceOf<T>>::make_transfer(&self.account, &receiver, amount)?;
+		let amount = BalanceOf(&self.account).mul(sharedBurned).div(Self::total_shares());
+		BalanceOf::make_transfer(&self.account, &receiver, amount)?;
 
 		Self::deposit_event(RawEvent::Withdrawal(receiver, amount));
 
@@ -374,15 +370,15 @@ impl<AccountId> Pool<AccountId> {
 }
 
 impl<T: Trait> Module<T> {
-	pub fn is_member(who: &T::AccountId) -> Result<(), Error> {
-		<Module<T>>::active_members().iter()
+	pub fn is_member(who: &T::AccountId) -> Result {
+		Self::active_members().iter()
 			.any(|&(ref a, _)| a == who)?;
 
 		Ok(())
 	}
 
 	// Clean up storage maps involving proposals
-	fn remove_proposal(hash: Hash) -> Result<(), Error> {
+	fn remove_proposal(hash: Hash) -> Result {
 		ensure!(<Proposals<T>>::exists(hash), "the given proposal does not exist");
 		let proposal = <Proposals<T>>::get(hash);
 		<Proposals<T>>::remove(hash);
