@@ -3,15 +3,14 @@
 #[cfg(test)]
 
 use super::*;
-use mock::{Dao, System, Test, ExtBuilder}; // left out ExtBuilder (for now?)
 use runtime_io::with_externalities;
 use srml_support::{
-	assert_noop, assert_ok, assert_err,
+	assert_noop, assert_ok, assert_err, assert_eq_uvec,
 	traits::{LockableCurrency, LockIdentifier, WithdrawReason, WithdrawReasons,
 	Currency, MakePayment, ReservableCurrency} // don't need all these...
 };
+use mock::{Dao, System, Test, ExtBuilder};
 
-#[test]
 // NEED
 // test successful execution or each function emits the correct event
 //
@@ -21,12 +20,21 @@ use srml_support::{
 // test that abort doesn't work outside the window -- same for all windows (vote -> Voting; rageQuit -> Grace
 //
 // also check that rageQuit -> Grace doesn't work if there is a pending yesVote
-//
+#[test]
+
+
+
+
 //
 // ADD CODE && TDD
 // test that the processer is not the proposer
 // test that reward parameterizations don't foster an attack vector
 // test nomination (allow for delegation-based voting similarly to scale representational participation)
-
+//
+//
+// EXISTING BUGS
+// -- iterator adaptor `all` invocation
+// -- use of BalanceOf (use the staking module)
+//
 // WANT
 // fuzzing

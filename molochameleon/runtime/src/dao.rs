@@ -52,15 +52,13 @@ struct Pool<AccountId> {
 }
 
 decl_event!(
-	pub enum Event<T> 
-	where
-		<T as system::Trait>::AccountId 
+	pub enum Event<T> where Balance = BalanceOf<T>, <T as system::Trait>::AccountId 
 	{
-		Proposed(Hash, AccountId, AccountId),	// (proposal, proposer, applicant)
-		Aborted(Hash, AccountId, AccountId),	// (proposal, proposer, applicant)
+		Proposed(Hash, Balance, AccountId, AccountId),	// (proposal, tokenTribute, proposer, applicant)
+		Aborted(Hash, Balance, AccountId, AccountId),	// (proposal, proposer, applicant)
 		Voted(Hash, bool, u32, u32),		// (proposal, vote, yesVotes, noVotes)
-		Processed(Hash, bool),		// true if the proposal was processed successfully
-		Withdrawal(AccountId, u64),		// => successful "ragequit" (AccountId, Balances)
+		Processed(Hash, Balance, AccountId, bool),		// (proposal, tokenTribute, NewMember, executed_correctly)
+		Withdrawal(AccountId, Balance),		// => successful "ragequit" (AccountId, Balances)
 	}
 );
 
@@ -306,10 +304,18 @@ decl_module! {
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Dao {
-		// relevant for parameterization of voting periods
-		VotingPeriod get(voting_period) config(): T::BlockNumber = T::BlockNumber::sa(7); // TODO parameterize 7 days
-		GracePeriod get(grace_period) config(): T::BlockNumber = T::BlockNumber::sa(7); // ""  
-		AbortWindow get(abort_window) config(): T::BlockNumber = T::BlockNumber::sa(1); // "" 1 day
+
+		// the ideal number of DAO members
+		pub MemberCount get(member_count) config(): u32;
+		// The length of a voting period in sessions
+		pub VotingPeriod get(voting_period) config(): T::BlockNumber = T::BlockNumber::sa(500);
+		AbortWindow get(abort_window) config(): T::BlockNumber = T::BlockNumber::sa(200);
+		// The length of a grace period in sessions
+		pub GracePeriod get(grace_period) config(): T::BlockNumber = T::BlockNumber::sa(1000);
+		/// The current era index.
+		pub CurrentEra get(current_era) config(): T::BlockNumber;
+
+		// why do we have the dilution bound?
 		ProposalBond get(proposal_bond) config(): u32;		// could make this T::Balance
 		DilutionBound get(dilution_bound) config(): u32;
 

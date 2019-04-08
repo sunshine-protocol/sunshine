@@ -12,6 +12,9 @@ use runtime_primitives::{
 };
 use crate::{GenesisConfig, Module, Trait}
 
+/// The AccountId alias in this test module.
+pub type AccountIdType = u64;
+
 impl_outer_origin! {
     pub enum Origin for Test {}
 }
@@ -26,8 +29,8 @@ impl system::Trait for Test {
     type Hash = H256;
     type Hashing = BlakeTwo256;
     type Digest = Digest;
-    type AccountId = u64;
-    type Lookup = IdentityLookup<u64>;
+    type AccountId = AccountIdType;
+    type Lookup = IdentityLookup<Self::AccountId>;
     type Header = Header;
     type Event = ();
     type Log = DigestItem;
@@ -35,7 +38,7 @@ impl system::Trait for Test {
 
 impl balances::Trait for Test {
 	type Balance = u64;
-	type OnFreeBalanceZero = ();
+	type OnFreeBalanceZero = Dao;
 	type OnNewAccount = ();
 	type Event = ();
 	type TransactionPayment = ();
@@ -44,9 +47,12 @@ impl balances::Trait for Test {
 }
 
 impl Trait for Test {
-    type Currency = balances::Module<Test>;
+    type Currency = balances::Module<Self>;
     type BalanceOf = balances::Module<Test>; // different?
     type Event = ();
+	// type OnRewardMinted = ();
+	// type Slash = ();
+	// type Reward = ();
 }
 
 // consider setting up ExtBuilder using https://github.com/paritytech/substrate/blob/master/srml/staking/src/mock.rs
@@ -103,4 +109,7 @@ impl ExtBuilder {
 }
 
 pub type System = system::Module<Test>;
+pub type Balances = balances::Module<Test>;
 pub type Dao = Module<Test>;
+// should we be using `Session`
+// or `Timestamp`?
