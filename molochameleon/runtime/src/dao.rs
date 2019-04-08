@@ -26,33 +26,16 @@ pub trait Trait: system::Trait + session::Trait {
 
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
 
-/// DAO Member
-#[derive(PartialEq, Eq, Clone, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug))]
-pub struct Member<AccountId> {
-	// the AccountId that signs for this member's actions
-	account: AccountId,
-	// the number of shares for this member
-	shares: u32
-}
-
 // Wrapper around AccountId with permissioned withdrawal function (for ragequit)
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 #[derive(Encode, Decode, Clone, PartialEq, Eq)]
-struct Pool<AccountId, Balance, BlockNumber: HasCompact> {
+struct Pool<AccountId, Balance> {
 	// The account for which the total balance is locked
 	pub account: AccountId,
 	// Total Shares
 	pub shares: u32,
 	// Total Balance
 	pub funds: Balance,
-	// The total amount of balances locked up
-	#[codec(compact)]
-	pub total: Balance,
-	// The members of the pool
-	pub member: Vec<Member<AccountId>>,
-	// pending proposals
-	pub proposal: Vec<Proposal<Hash, AccountId, Balance, BlockNumber>,
 }
 
 /// Used as a hash in the main Proposal struct
