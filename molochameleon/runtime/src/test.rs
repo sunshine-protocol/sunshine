@@ -10,7 +10,6 @@ use srml_support::{
 	Currency, MakePayment, ReservableCurrency} // don't need all these...
 };
 use mock::{Dao, System, Test, ExtBuilder};
-
 // NEED
 // test successful execution or each function emits the correct event
 //
@@ -21,9 +20,10 @@ use mock::{Dao, System, Test, ExtBuilder};
 //
 // also check that rageQuit -> Grace doesn't work if there is a pending yesVote
 #[test]
-
-
-
+fn test_proper_encoding() {
+	// basically I want to check if the hash function in propose is working correctly
+	// so instantiate an arbitrary `Base` struct and then hash it using the same syntax
+}
 
 //
 // ADD CODE && TDD
@@ -38,3 +38,15 @@ use mock::{Dao, System, Test, ExtBuilder};
 //
 // WANT
 // fuzzing
+
+/// For Coding w/o Dual Screen
+decl_event!(
+	pub enum Event<T> where Balance = BalanceOf<T>, <T as system::Trait>::AccountId 
+	{
+		Proposed(Hash, Balance, AccountId, AccountId),	// (proposal, tokenTribute, proposer, applicant)
+		Aborted(Hash, Balance, AccountId, AccountId),	// (proposal, proposer, applicant)
+		Voted(Hash, bool, u32, u32),		// (proposal, vote, yesVotes, noVotes)
+		Processed(Hash, Balance, AccountId, bool),		// (proposal, tokenTribute, NewMember, executed_correctly)
+		Withdrawal(AccountId, shares, Balance),		// => successful "ragequit" (member, shares, Balances)
+	}
+);

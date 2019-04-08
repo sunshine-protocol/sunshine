@@ -4,34 +4,73 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #[cfg(feature = "std")]
 use runtime_primitives::traits::{Zero, As, Bounded}; // redefined Hash type below to make Rust compiler happy
-use parity_codec::{Encode, Decode};
-use support::{StorageValue, StorageMap, Parameter, Dispatchable, IsSubType, EnumerableStorageMap};
+use parity_codec::{HasCompact, Encode, Decode};
+use support::{StorageValue, StorageMap, Parameter, Dispatchable, IsSubType, EnumerableStorageMap, dispatch::Result};
 use support::{decl_module, decl_storage, decl_event, ensure};
-use support::traits::{Currency}; 					// left out LockableCurrency, OnUnbalanced, WithdrawReason, LockIdentifier
-use support::dispatch::Result;
+use support::traits::{Currency, LockableCurrency}; 					// left out OnUnbalanced, WithdrawReason, LockIdentifier
 use system::ensure_signed;
-use rstd::ops::{Mul, Div}; 							// Add, Rem 
-use rstd::fmt::Error; 								// The Error type (discover better error handling in the context of Substrate)
+use rstd::ops::{Mul, Div}; // Add, Rem
 use serde_derive::{Serialize, Deserialize};
 
-/// just getting the compiler to work with me on these types (Hash, AccountId)
+/// type aliasing for compilation
 type Hash = primitives::H256;
 type AccountId = u64;
-type BalanceOf<T> = <<T as democracy::Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
 
-pub trait Trait: system::Trait {
-	// the staking balance (primarily for bonding applications)
-	type Currency: Currency<Self::AccountId>;
+pub trait Trait: system::Trait + session::Trait {
+	// the staking balance
+	type Currency: LockableCurrency<Self::AccountId, Moment=Self::BlockNumber>;
 
 	// overarching event type
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 }
 
+type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
+
+/// DAO Member
+#[derive(PartialEq, Eq, Clone, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub struct Member<AccountId> {
+	// the AccountId that signs for this member's actions
+	account: AccountId,
+	// the number of shares for this member
+	shares: u32
+}
+
+// Wrapper around AccountId with permissioned withdrawal function (for ragequit)
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
+#[derive(Encode, Decode, Clone, PartialEq, Eq)]
+struct Pool<AccountId, Balance, BlockNumber: HasCompact> {
+	// The account for which the total balance is locked
+	pub account: AccountId,
+	// Total Shares
+	pub shares: u32,
+	// Total Balance
+	pub funds: Balance,
+	// The total amount of balances locked up
+	#[codec(compact)]
+	pub total: Balance,
+	// The members of the pool
+	pub member: Vec<Member<AccountId>>,
+	// pending proposals
+	pub proposal: Vec<Proposal<Hash, AccountId, Balance, BlockNumber>,
+}
+
+/// Used as a hash in the main Proposal struct
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
+#[derive(Encode, Decode, Clone, PartialEq, Eq)]
+pub struct Base<AccountId, Balance> {
+	proposer: AccountId,
+	applicant: AccountId,
+	sharesRequested: u32,
+	tokenTribute: Balance,
+}
+
 /// A proposal to lock up tokens in exchange for shares
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 #[derive(Encode, Decode, Clone, PartialEq, Eq)]
-pub struct Proposal<AccountId, BalanceOf, Hash, BlockNumber: Parameter> {
-	proposer: AccountId,			 // proposer AccountId
+pub struct Proposal<Hash, AccountId, Balance, BlockNumber> {
+	base_hash: Hash,				 // hash of the proposal
+	proposer: AccountId,			 // proposer AccountId (must be a member)
 	applicant: AccountId,			 // applicant AccountId
 	shares: u32, 					 // number of requested shares
 	startTime: BlockNumber,			 // when the voting period starts
@@ -41,14 +80,7 @@ pub struct Proposal<AccountId, BalanceOf, Hash, BlockNumber: Parameter> {
 	maxVotes: u32,					 // used to check the number of shares necessary to pass
 	processed: bool,				 // if processed, true
 	passed: bool,					 // if passed, true
-	tokenTribute: BalanceOf, 	 	 // tokenTribute; optional (set to 0 if no tokenTribute)
-}
-
-// Wrapper around the central pool which is owned by no one, but has a permissioned withdrawal function
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
-#[derive(Encode, Decode, Clone, PartialEq, Eq)]
-struct Pool<AccountId> {
-	account: AccountId,
+	tokenTribute: Balance, 	 	 	 // tokenTribute; optional (set to 0 if no tokenTribute)
 }
 
 decl_event!(
@@ -58,7 +90,7 @@ decl_event!(
 		Aborted(Hash, Balance, AccountId, AccountId),	// (proposal, proposer, applicant)
 		Voted(Hash, bool, u32, u32),		// (proposal, vote, yesVotes, noVotes)
 		Processed(Hash, Balance, AccountId, bool),		// (proposal, tokenTribute, NewMember, executed_correctly)
-		Withdrawal(AccountId, Balance),		// => successful "ragequit" (AccountId, Balances)
+		Withdrawal(AccountId, shares, Balance),		// => successful "ragequit" (member, shares, Balances)
 	}
 );
 
@@ -66,7 +98,7 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn deposit_event<T>() = default;
 
-		fn propose(origin, applicant: AccountId, shares: u32, tokenTribute: BalanceOf) -> Result {
+		fn propose(origin, applicant: AccountId, shares: u32, tokenTribute: Balance) -> Result<Proposal {
 			let who = ensure_signed(origin)?;
 			ensure!(Self::is_member(&who), "proposer is not a member of Dao");
 
@@ -82,34 +114,39 @@ decl_module! {
 
 			// reserve applicant's tokenTribute for proposal
 			T::Currency::reserve(&applicant, tokenTribute)
-				.map_err(|_| "applicant's balance too low")?;
-
-			let startTime = <system::Module<T>>::block_number();
+				.map_err(|_| "balance of applicant is too low")?;
 
 			let yesVotes = <MemberShares<T>>::get(&who);
 			let noVotes = 0u32;
 			let maxVotes = Self::total_shares();
 			Self::total_shares.set(maxVotes + shares);
-			let future_state = false;			// overcome compiler error: expected identifier, found keyword `false`
 
-			let proposal = Proposal {
-				who, 
-				applicant, 
-				shares, 
-				startTime, 
-				None, 
-				yesVotes, 
-				noVotes, 
-				maxVotes, 
-				future_state, 
-				future_state, 
-				tokenTribute,
+			let base = Base {
+				proposer: &who,
+				applicant: &applicant,
+				shares: shares,
+				tokenTribute: tokenTribute,
 			};
 
 			// add proposal hash
-			let hash = T::Hashing::hash_of(proposal.encode()); // CHECK proper encoding syntax using Parity-Codec
+			let hash = T::Hashing::hash_of(base.encode());
 			// verify uniqueness of this hash
-			ensure!(!<Proposals<T>>::exists(hash), "Hash collision X(");
+			ensure!(!<Proposals<T>>::exists(hash), "Hash collision ;-(");
+
+			let proposal = Proposal {
+				base_hash: hash,
+				proposer: &who,
+				applicant: &applicant,
+				shares: shares,
+				startTime: <system::Module<T>>::block_number(),
+				graceStart: None,
+				yesVotes: yesVotes,
+				noVotes: noVotes,
+				maxVotes: maxVotes,
+				processed: false,
+				passed: false,
+				tokenTribute: tokenTribute,
+			}
 
 			<Proposals<T>>::insert(hash, proposal);
 			//add applicant
@@ -124,7 +161,7 @@ decl_module! {
 			// set this for maintainability of other functions
 			<VoteOf<T>>::insert(&(hash, who), true);
 
-			Self::deposit_event(RawEvent::Proposed(hash));
+			Self::deposit_event(RawEvent::Proposed(hash, tokenTribute, &who, &applicant));
 			Self::deposit_event(RawEvent::Voted(hash, true, yesVotes, noVotes));
 
 			Ok(())
@@ -139,6 +176,8 @@ decl_module! {
 			ensure!(<Proposals<T>>::exists(hash), "proposal does not exist");
 
 			let proposal = <Proposals<T>>::get(hash);
+
+			ensure!(proposal.proposer == &who, "Only the proposer can abort");
 
 			// check that the abort is within the window
 			ensure!(
@@ -156,7 +195,7 @@ decl_module! {
 
 			Self::remove_proposal(hash)?;
 
-			Self::deposit_event(RawEvent::Aborted(hash, proposal.proposer, proposal.applicant));
+			Self::deposit_event(RawEvent::Aborted(hash, proposal.tokenTribute, proposal.proposer, proposal.applicant));
 
 			Ok(())
 		}
@@ -316,7 +355,7 @@ decl_storage! {
 		pub CurrentEra get(current_era) config(): T::BlockNumber;
 
 		// why do we have the dilution bound?
-		ProposalBond get(proposal_bond) config(): u32;		// could make this T::Balance
+		ProposalBond get(proposal_bond) config(): Balance;		// could make this T::Balance
 		DilutionBound get(dilution_bound) config(): u32;
 
 		/// TRACKING PROPOSALS
@@ -324,6 +363,8 @@ decl_storage! {
 		Proposals get(proposals): map Hash => Proposal<T::AccountId, BalanceOf, T::Hash, T::BlockNumber>;
 		// Active Applicants (to prevent multiple applications at once)
 		Applicants get(applicants): map T::AccountId => Option<Hash>; // may need to change to &T::AccountId
+		/// To nuke the proposalqueue and forcing a new era
+		pub Nuke get(nuke): Option<()>;
 
 		/// VOTING
 		// map: proposalHash => Voters that have voted (prevent duplicate votes from the same member)
@@ -361,7 +402,10 @@ impl<AccountId, BalanceOf, Hash, BlockNumber> Proposal<AccountId, BalanceOf, Has
 	}
 }
 
-impl<AccountId> Pool<AccountId> {
+impl<AccountId,
+	Balance: HasCompact + Copy + Saturating,
+	BlockNumber: HasCompact + PartialOrd
+> Pool<AccountId, Balance, BlockNumber> {
 	pub fn withdraw(&self, receiver: AccountId, sharedBurned: u32) -> Result { 
 		// Checks on identity made in `rage_quit`, the only place in which this is called
 
