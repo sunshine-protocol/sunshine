@@ -79,6 +79,50 @@ decl_event!(
 	}
 );
 
+decl_storage! {
+	trait Store for Module<T: Trait> as Dao {
+		// The length of a voting period in sessions
+		pub VotingPeriod get(voting_period) config(): T::BlockNumber = T::BlockNumber::sa(500);
+		// the time after the voting period starts during which the proposer can abort
+		AbortWindow get(abort_window) config(): T::BlockNumber = T::BlockNumber::sa(200);
+		// The length of a grace period in sessions
+		pub GracePeriod get(grace_period) config(): T::BlockNumber = T::BlockNumber::sa(1000);
+		/// The current era index.
+		pub CurrentEra get(current_era) config(): T::BlockNumber;
+
+		ProposalBond get(proposal_bond) config(): BalanceOf<T>;
+		DilutionBound get(dilution_bound) config(): u32;
+
+		/// TRACKING PROPOSALS
+		// Proposals that have been made (impl of `ProposalQueue`)
+		Proposals get(proposals): map Hash => Proposal<T::AccountId, BalanceOf<T>, T::Hash, T::BlockNumber>;
+		// Active Applicants (to prevent multiple applications at once)
+		Applicants get(applicants): map T::AccountId => Hash; // may need to change to &T::AccountId
+
+		/// VOTING
+		// map: proposalHash => Voters that have voted (prevent duplicate votes from the same member)
+		VoterId get(voter_id): map Hash => Vec<T::AccountId>;
+		// map: proposalHash => yesVoters (these voters are locked in from ragequitting during the grace period)
+		VotersFor get(voters_for): map Hash => Vec<T::AccountId>;
+		// inverse of the function above for `remove_proposal` function
+		ProposalsFor get(proposals_for): map T::AccountId => Vec<Hash>;
+		// get the vote of a specific voter (simplify testing for existence of vote via `VoteOf::exists`)
+		VoteOf get(vote_of): map (Hash, T::AccountId) => bool;
+
+		/// Dao MEMBERSHIP - permanent state (always relevant, changes only at the finalisation of voting)
+		ActiveMembers get(active_members) config(): Vec<T::AccountId>; // the current Dao members
+		MemberShares get(member_shares): map T::AccountId => u32; // shares of the current Dao members
+
+		/// INTERNAL ACCOUNTING
+		// Address for the pool
+		PoolAdress get(pool_address) config(): Pool<T::AccountId, BalanceOf<T>>;
+		// Number of shares across all members
+		TotalShares get(total_shares) config(): u32; 
+		// total shares that have been requested in unprocessed proposals
+		TotalSharesRequested get(total_shares_requested): u32; 
+	}
+}
+
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn deposit_event<T>() = default;
@@ -325,50 +369,6 @@ decl_module! {
 	}
 }
 
-decl_storage! {
-	trait Store for Module<T: Trait> as Dao {
-		// The length of a voting period in sessions
-		pub VotingPeriod get(voting_period) config(): T::BlockNumber = T::BlockNumber::sa(500);
-		// the time after the voting period starts during which the proposer can abort
-		AbortWindow get(abort_window) config(): T::BlockNumber = T::BlockNumber::sa(200);
-		// The length of a grace period in sessions
-		pub GracePeriod get(grace_period) config(): T::BlockNumber = T::BlockNumber::sa(1000);
-		/// The current era index.
-		pub CurrentEra get(current_era) config(): T::BlockNumber;
-
-		ProposalBond get(proposal_bond) config(): BalanceOf<T>;
-		DilutionBound get(dilution_bound) config(): u32;
-
-		/// TRACKING PROPOSALS
-		// Proposals that have been made (impl of `ProposalQueue`)
-		Proposals get(proposals): map Hash => Proposal<T::AccountId, BalanceOf<T>, T::Hash, T::BlockNumber>;
-		// Active Applicants (to prevent multiple applications at once)
-		Applicants get(applicants): map T::AccountId => Hash; // may need to change to &T::AccountId
-
-		/// VOTING
-		// map: proposalHash => Voters that have voted (prevent duplicate votes from the same member)
-		VoterId get(voter_id): map Hash => Vec<T::AccountId>;
-		// map: proposalHash => yesVoters (these voters are locked in from ragequitting during the grace period)
-		VotersFor get(voters_for): map Hash => Vec<T::AccountId>;
-		// inverse of the function above for `remove_proposal` function
-		ProposalsFor get(proposals_for): map T::AccountId => Vec<Hash>;
-		// get the vote of a specific voter (simplify testing for existence of vote via `VoteOf::exists`)
-		VoteOf get(vote_of): map (Hash, T::AccountId) => bool;
-
-		/// Dao MEMBERSHIP - permanent state (always relevant, changes only at the finalisation of voting)
-		ActiveMembers get(active_members) config(): Vec<T::AccountId>; // the current Dao members
-		MemberShares get(member_shares): map T::AccountId => u32; // shares of the current Dao members
-
-		/// INTERNAL ACCOUNTING
-		// Address for the pool
-		PoolAdress get(pool_address) config(): Pool<T::AccountId, BalanceOf<T>>;
-		// Number of shares across all members
-		TotalShares get(total_shares) config(): u32; 
-		// total shares that have been requested in unprocessed proposals
-		TotalSharesRequested get(total_shares_requested): u32; 
-	}
-}
-
 impl<AccountId, Balance, Hash, BlockNumber> Proposal<AccountId, Balance, Hash, BlockNumber> {
 	// more than half shares voted yes
 	pub fn majority_passed(&self) -> bool {
@@ -400,7 +400,6 @@ impl<T: Trait> Module<T> {
 	pub fn is_member(who: &T::AccountId) -> Result {
 		Self::active_members().iter()
 			.any(|&(ref a, _)| a == who)?;
-
 		Ok(())
 	}
 

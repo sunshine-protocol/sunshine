@@ -6,8 +6,7 @@ use super::*;
 use runtime_io::with_externalities;
 use srml_support::{
 	assert_noop, assert_ok, assert_err, assert_eq_uvec,
-	traits::{LockableCurrency, LockIdentifier, WithdrawReason, WithdrawReasons,
-	Currency, MakePayment, ReservableCurrency} // don't need all these...
+	traits::{Currency, LockableCurrency, ReservableCurrency} // don't need all these...
 };
 use mock::{Dao, System, Test, ExtBuilder};
 // NEED
