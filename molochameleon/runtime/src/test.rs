@@ -38,15 +38,3 @@ fn test_proper_encoding() {
 //
 // WANT
 // fuzzing
-
-/// For Coding w/o Dual Screen
-decl_event!(
-	pub enum Event<T> where Balance = BalanceOf<T>, <T as system::Trait>::AccountId 
-	{
-		Proposed(Hash, Balance, AccountId, AccountId),	// (proposal, tokenTribute, proposer, applicant)
-		Aborted(Hash, Balance, AccountId, AccountId),	// (proposal, proposer, applicant)
-		Voted(Hash, bool, u32, u32),		// (proposal, vote, yesVotes, noVotes)
-		Processed(Hash, Balance, AccountId, bool),		// (proposal, tokenTribute, NewMember, executed_correctly)
-		Withdrawal(AccountId, shares, Balance),		// => successful "ragequit" (member, shares, Balances)
-	}
-);

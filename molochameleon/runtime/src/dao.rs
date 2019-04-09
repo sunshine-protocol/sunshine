@@ -11,12 +11,13 @@ use support::traits::{Currency, LockableCurrency}; 					// left out OnUnbalanced
 use system::ensure_signed;
 use rstd::ops::{Mul, Div}; // Add, Rem
 use serde_derive::{Serialize, Deserialize};
+use balances;
 
 /// type aliasing for compilation
 type Hash = primitives::H256;
 type AccountId = u64;
 
-pub trait Trait: system::Trait + session::Trait {
+pub trait Trait: system::Trait {
 	// the staking balance
 	type Currency: LockableCurrency<Self::AccountId, Moment=Self::BlockNumber>;
 
@@ -24,6 +25,7 @@ pub trait Trait: system::Trait + session::Trait {
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 }
 
+// Sometimes I use this and sometimes I don't ¯\_(ツ)_/¯
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
 
 // Wrapper around AccountId with permissioned withdrawal function (for ragequit)
@@ -73,7 +75,7 @@ decl_event!(
 		Aborted(Hash, Balance, AccountId, AccountId),	// (proposal, proposer, applicant)
 		Voted(Hash, bool, u32, u32),		// (proposal, vote, yesVotes, noVotes)
 		Processed(Hash, Balance, AccountId, bool),		// (proposal, tokenTribute, NewMember, executed_correctly)
-		Withdrawal(AccountId, shares, Balance),		// => successful "ragequit" (member, shares, Balances)
+		Withdrawal(AccountId, u32, Balance),		// => successful "ragequit" (member, shares, Balances)
 	}
 );
 
@@ -81,7 +83,7 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn deposit_event<T>() = default;
 
-		fn propose(origin, applicant: AccountId, shares: u32, tokenTribute: Balance) -> Result<Proposal {
+		fn propose(origin, applicant: AccountId, shares: u32, tokenTribute: BalanceOf<T>) -> Result {
 			let who = ensure_signed(origin)?;
 			ensure!(Self::is_member(&who), "proposer is not a member of Dao");
 
@@ -93,7 +95,7 @@ decl_module! {
 
 			// reserve member's bond for proposal
 			T::Currency::reserve(&who, Self::proposal_bond())
-				.map_err(|_| "proposer's balance too low")?;
+				.map_err(|_| "balance of proposer is too low")?;
 
 			// reserve applicant's tokenTribute for proposal
 			T::Currency::reserve(&applicant, tokenTribute)
@@ -116,7 +118,7 @@ decl_module! {
 			// verify uniqueness of this hash
 			ensure!(!<Proposals<T>>::exists(hash), "Hash collision ;-(");
 
-			let proposal = Proposal {
+			let prop = Proposal {
 				base_hash: hash,
 				proposer: &who,
 				applicant: &applicant,
@@ -131,7 +133,7 @@ decl_module! {
 				tokenTribute: tokenTribute,
 			}
 
-			<Proposals<T>>::insert(hash, proposal);
+			<Proposals<T>>::insert(hash, prop);
 			//add applicant
 			<Applicants<T>>::insert(&applicant, hash);
 
@@ -271,18 +273,18 @@ decl_module! {
 
 				// HARDCODED PROCESSING REWARD (todo: make more flexible)
 				// transaction fee for proposer and processer comes from tokenTribute
-				let txfee = proposal.tokenTribute * 0.05; // check if this works (underflow risk?)
-				<BalanceOf<T>>::make_transfer(&proposal.applicant, &who, txfee);
-				<BalanceOf<T>>::make_transfer(&proposal.proposer, &who, txfee);
+				let txfee = proposal.tokenTribute.checked_mul(0.05); // check if this works (underflow risk?)
+				let _ = T::Currency::make_transfer(&proposal.applicant, &who, txfee);
+				let _ = T::Currency::make_transfer(&proposal.applicant, &proposal.proposer, txfee);
 
 				let netTribute = proposal.tokenTribute * 0.9;
 
 				// transfer tokenTribute to Pool
 				let poolAddr = Self::pool_address();
-				<BalanceOf<T>>::make_transfer(&proposal.applicant, &poolAddr, netTribute);
+				let _ = T::Currency::make_transfer(&proposal.applicant, &poolAddr, netTribute);
 
 				// mint new shares
-				<TotalShares<T>>::set(|total| total += proposal.shares);
+				Self::total_shares.mutate(|total| total += proposal.shares);
 
 				// if applicant is already a member, add to their existing shares
 				if proposal.applicant.is_member() {
@@ -312,9 +314,8 @@ decl_module! {
 			// check that all proposals have passed
 			ensure!(<ProposalsFor<T>>::get(&who).iter()
 					.all(|prop| prop.passed && 
-						(<system::Module<T>>::block_number() <= prop.graceStart + Self::grace_period()),
-						"All proposals have not passed or exited the grace period"
-					)
+						(<system::Module<T>>::block_number() <= prop.graceStart + Self::grace_period())
+					), "All proposals have not passed or exited the grace period"
 			);
 
 			Self::pool_address().withdraw(&who, sharesToBurn);
@@ -326,28 +327,23 @@ decl_module! {
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Dao {
-
-		// the ideal number of DAO members
-		pub MemberCount get(member_count) config(): u32;
 		// The length of a voting period in sessions
 		pub VotingPeriod get(voting_period) config(): T::BlockNumber = T::BlockNumber::sa(500);
+		// the time after the voting period starts during which the proposer can abort
 		AbortWindow get(abort_window) config(): T::BlockNumber = T::BlockNumber::sa(200);
 		// The length of a grace period in sessions
 		pub GracePeriod get(grace_period) config(): T::BlockNumber = T::BlockNumber::sa(1000);
 		/// The current era index.
 		pub CurrentEra get(current_era) config(): T::BlockNumber;
 
-		// why do we have the dilution bound?
-		ProposalBond get(proposal_bond) config(): Balance;		// could make this T::Balance
+		ProposalBond get(proposal_bond) config(): BalanceOf<T>;
 		DilutionBound get(dilution_bound) config(): u32;
 
 		/// TRACKING PROPOSALS
-		// Proposals that have been made (equivalent to `ProposalQueue`)
-		Proposals get(proposals): map Hash => Proposal<T::AccountId, BalanceOf, T::Hash, T::BlockNumber>;
+		// Proposals that have been made (impl of `ProposalQueue`)
+		Proposals get(proposals): map Hash => Proposal<T::AccountId, BalanceOf<T>, T::Hash, T::BlockNumber>;
 		// Active Applicants (to prevent multiple applications at once)
-		Applicants get(applicants): map T::AccountId => Option<Hash>; // may need to change to &T::AccountId
-		/// To nuke the proposalqueue and forcing a new era
-		pub Nuke get(nuke): Option<()>;
+		Applicants get(applicants): map T::AccountId => Hash; // may need to change to &T::AccountId
 
 		/// VOTING
 		// map: proposalHash => Voters that have voted (prevent duplicate votes from the same member)
@@ -365,7 +361,7 @@ decl_storage! {
 
 		/// INTERNAL ACCOUNTING
 		// Address for the pool
-		PoolAdress get(pool_address) config(): Pool<T::AccountId>;
+		PoolAdress get(pool_address) config(): Pool<T::AccountId, BalanceOf<T>>;
 		// Number of shares across all members
 		TotalShares get(total_shares) config(): u32; 
 		// total shares that have been requested in unprocessed proposals
@@ -373,7 +369,7 @@ decl_storage! {
 	}
 }
 
-impl<AccountId, BalanceOf, Hash, BlockNumber> Proposal<AccountId, BalanceOf, Hash, BlockNumber> {
+impl<AccountId, Balance, Hash, BlockNumber> Proposal<AccountId, Balance, Hash, BlockNumber> {
 	// more than half shares voted yes
 	pub fn majority_passed(&self) -> bool {
 		// do I need the `checked_div` flag?
@@ -386,15 +382,13 @@ impl<AccountId, BalanceOf, Hash, BlockNumber> Proposal<AccountId, BalanceOf, Has
 }
 
 impl<AccountId,
-	Balance: HasCompact + Copy + Saturating,
-	BlockNumber: HasCompact + PartialOrd
-> Pool<AccountId, Balance, BlockNumber> {
+	Balance: HasCompact + Copy
+> Pool<AccountId, Balance> {
 	pub fn withdraw(&self, receiver: AccountId, sharedBurned: u32) -> Result { 
-		// Checks on identity made in `rage_quit`, the only place in which this is called
+		// Checks on identity made in `rage_quit` (the only place in which this is called)
 
-		// CHECK: Can we do these calculations w/o the `BalanceOf` type with just `Currency<T>`? If so, how?
-		let amount = BalanceOf(&self.account).mul(sharedBurned).div(Self::total_shares());
-		BalanceOf::make_transfer(&self.account, &receiver, amount)?;
+		let amount = Currency::free_balance(&self.account).checked_mul(sharedBurned).checked_div(Self::total_shares());
+		let _ = Currency::make_transfer(&self.account, &receiver, amount)?;
 
 		Self::deposit_event(RawEvent::Withdrawal(receiver, amount));
 

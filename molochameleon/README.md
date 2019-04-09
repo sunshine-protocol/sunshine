@@ -13,7 +13,7 @@ There are a few issues to encourage outside contribution, but it might be better
 
 ### Ongoing Thoughts
 
-Since the infamous DAO hack, Dao implementations as well off-chain scaling mechanisms (ie Plasma) have prioritized instant withdrawals (and for good reason). At the same time, if a member of the DAO sponsors or votes in support of a proposal, they ought to be locked into any resulting governance changes at least long enough for those that disagreed to leave the DAO. 
+Since the infamous DAO hack, Dao implementations as well as off-chain scaling mechanisms (ie Plasma) have prioritized instant withdrawals (and for good reason). At the same time, if a member of the DAO sponsors or votes in support of a proposal, they ought to be locked into any resulting governance changes at least long enough for those that disagreed to leave the DAO. 
 
 However, this process breaks down if we don't limit processing to one proposal at a time. This is clearly shown with an example:
 
