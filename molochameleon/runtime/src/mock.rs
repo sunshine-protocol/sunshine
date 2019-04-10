@@ -19,7 +19,8 @@ impl_outer_origin! {
     pub enum Origin for Test {}
 }
 
-#[derive(Clone, Eq, PartialEq)]
+// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
+#[derive(Clone, Eq, PartialEq, Debug)]
 pub struct Test;
 
 impl system::Trait for Test {
@@ -55,26 +56,38 @@ impl Trait for Test {
 	// type Reward = ();
 }
 
-// consider setting up ExtBuilder using https://github.com/paritytech/substrate/blob/master/srml/staking/src/mock.rs
+// following conventions of https://github.com/paritytech/substrate/blob/master/srml/staking/src/mock.rs
 pub struct ExtBuilder {
-    voting_period: u32,  // check T::BlockNumber type again
-    grace_period: u32,   // ""
-    abort_window: u32,   // ""
+	existential_deposit: u64,
+    voting_period: u32,
+    grace_period: u32,
+    abort_window: u32,
     proposal_bond: u32,
     dilution_bound: u32,
+	member_count: u32,
+	pool_address: u32,
 }
 impl Default for ExtBuilder {
 	fn default() -> Self {
 		Self {
+			existential_deposit: 0,
 			voting_period: 7,
 			grace_period: 7,
 			abort_window: 2,
-			proposal_bond: 1,
+			proposal_bond: 5,
             dilution_bound: 3,
+			member_count: 5,
+			total_shares: 20,
+			pool_address: 69,
+			pool_balance: 48,
 		}
 	}
 }
 impl ExtBuilder {
+	pub fn existential_deposit(mut self, existential_deposit: u64) -> Self {
+		self.existential_deposit = existential_deposit;
+		self
+	}
     pub fn voting_period(mut self, voting_period: u32) -> Self {
 		self.voting_period = voting_period;
 		self
@@ -95,15 +108,62 @@ impl ExtBuilder {
 		self.dilution_bound = dilution_bound;
 		self
 	}
-    pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
-		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
-		t.extend(GenesisConfig::<Test> {
-			voting_period: self.voting_period,
-			grace_period: self.grace_period,
-			abort_window: self.abort_window,
-			proposal_bond: self.proposal_bond,
-			dilution_bound: self.dilution_bound,
-		}.build_storage().unwrap().0);
+	pub fn member_count(mut self, member_count: u32) -> Self {
+		self.member_count = member_count;
+		self
+	}
+	pub fn total_shares(mut self, total_shares: u32) -> Self {
+		self.total_shares = total_shares;
+		self
+	}
+	pub fn pool_address(mut self, pool_address: )
+    pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> { // why is the trait bound Blake2Hasher here?
+		let (mut t, mut c) = system::GenesisConfig::<Test>::default().build_storage().unwrap();
+		let _ = balances::GenesisConfig::<Test>{
+			balances: vec![ // not related to share count; used for proposal bonds only!
+				(6, 10),		// member
+				(7, 20),		// member
+				(9, 10),		// member
+				(10, 3),		// member
+				(12, 7),		// member
+				(23, 50),		// proposer
+				(24, 100),		// proposer
+				(32, 17),		// proposer
+				(33, 25),		// proposer
+				(34, 44),		// proposer
+				(69, 48),		// pool (pool_address, pool_funds)
+			],
+			transaction_base_fee: 0,
+			transaction_byte_fee: 0,
+			existential_deposit: self.existential_deposit,
+			transfer_fee: 0,
+			creation_fee: 0,
+			vesting: vec![],
+		}.assimilate_storage(&mut t, &mut c);
+		let _ = GenesisConfig::<Test>{
+			voting_period: self.voting_period;
+			grace_period: self.grace_period;
+			abort_window: self.abort_window;
+			proposal_bond: self.proposal_bond;
+			dilution_bound: self.dilution_bound;
+			members: vec![
+				(6, 4),
+				(7, 6),
+				(9, 2),
+				(10, 2),
+				(12, 6),
+			],
+			applicants: vec![
+				(23, 8, 50),
+				(24, 15, 100),
+				(32, 10, 0),
+				(33, 6, 20),
+				(34, 8, 0),
+			]
+			member_count: self.member_count,
+			pool_address: self.pool_address,
+			pool_funds: self.pool_funds,
+		}.assimilate_storage(&mut t, &mut c);
 		t.into()
 	}
 }
@@ -111,5 +171,3 @@ impl ExtBuilder {
 pub type System = system::Module<Test>;
 pub type Balances = balances::Module<Test>;
 pub type Dao = Module<Test>;
-// should we be using `Session`
-// or `Timestamp`?

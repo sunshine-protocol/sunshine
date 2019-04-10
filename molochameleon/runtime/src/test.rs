@@ -9,6 +9,21 @@ use srml_support::{
 	traits::{Currency, LockableCurrency, ReservableCurrency} // don't need all these...
 };
 use mock::{Dao, System, Test, ExtBuilder};
+
+// basic setup
+#[test]
+fn basic_setup_works() {
+	// verify initial conditions of mock.rs
+	with_externalities(&mut ExtBuilder::default()
+		.build(),
+	|| {
+
+	}
+	// instantiate three members at the DAO's initialization
+
+	// check the correct initialization of required maps
+}
+
 // NEED
 // test successful execution or each function emits the correct event
 //
@@ -16,24 +31,23 @@ use mock::{Dao, System, Test, ExtBuilder};
 //
 // test that abort works within the window -- same for all windows (vote -> Voting; rageQuit -> Grace)
 // test that abort doesn't work outside the window -- same for all windows (vote -> Voting; rageQuit -> Grace
-//
-// also check that rageQuit -> Grace doesn't work if there is a pending yesVote
-#[test]
-fn test_proper_encoding() {
-	// basically I want to check if the hash function in propose is working correctly
-	// so instantiate an arbitrary `Base` struct and then hash it using the same syntax
-}
 
-//
+// CHECK that all Pool fields are updated appropriately (haven't done this yet)
+// (1) proposal is processed => balance is increased by tokenTribute; shares increase by shares
+// (2) member ragequits => balance is decreased by set amount; shares decrease by number of member shares
+
+// CHECK rageQuit -> Grace doesn't work if there is a pending yesVote
+
+// CHECK that dependent maps are updated at the correct state transitions
+
 // ADD CODE && TDD
 // test that the processer is not the proposer
-// test that reward parameterizations don't foster an attack vector
-// test nomination (allow for delegation-based voting similarly to scale representational participation)
-//
+// test that reward parameterizations are not an attack vector
 //
 // EXISTING BUGS
-// -- iterator adaptor `all` invocation
-// -- use of BalanceOf (use the staking module)
+// -- use of `BalanceOf` (use the staking module); the encoding within `decl_storage` is particularly annoying
+// -- `<Proposals<T>>` is not updated correctly
+// -- economic security
 //
 // WANT
 // fuzzing

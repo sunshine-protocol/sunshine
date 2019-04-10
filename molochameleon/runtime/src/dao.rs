@@ -14,7 +14,7 @@ use serde_derive::{Serialize, Deserialize};
 use balances;
 
 /// type aliasing for compilation
-type Hash = primitives::H256;
+// type Hash = primitives::H256; // decided to just use `Vec<u8>` from Codec::encode
 type AccountId = u64;
 
 pub trait Trait: system::Trait {
@@ -25,7 +25,7 @@ pub trait Trait: system::Trait {
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 }
 
-// Sometimes I use this and sometimes I don't ¯\_(ツ)_/¯
+// Sometimes I use this and sometimes I just use T::Currency ¯\_(ツ)_/¯
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
 
 // Wrapper around AccountId with permissioned withdrawal function (for ragequit)
@@ -71,10 +71,10 @@ pub struct Proposal<Hash, AccountId, Balance, BlockNumber> {
 decl_event!(
 	pub enum Event<T> where Balance = BalanceOf<T>, <T as system::Trait>::AccountId 
 	{
-		Proposed(Hash, Balance, AccountId, AccountId),	// (proposal, tokenTribute, proposer, applicant)
-		Aborted(Hash, Balance, AccountId, AccountId),	// (proposal, proposer, applicant)
+		Proposed(Vec<u8>, Balance, AccountId, AccountId),	// (proposal, tokenTribute, proposer, applicant)
+		Aborted(Vec<u8>, Balance, AccountId, AccountId),	// (proposal, proposer, applicant)
 		Voted(Hash, bool, u32, u32),		// (proposal, vote, yesVotes, noVotes)
-		Processed(Hash, Balance, AccountId, bool),		// (proposal, tokenTribute, NewMember, executed_correctly)
+		Processed(Vec<u8>, Balance, AccountId, bool),		// (proposal, tokenTribute, NewMember, executed_correctly)
 		Withdrawal(AccountId, u32, Balance),		// => successful "ragequit" (member, shares, Balances)
 	}
 );
@@ -84,42 +84,48 @@ decl_storage! {
 		// The length of a voting period in sessions
 		pub VotingPeriod get(voting_period) config(): T::BlockNumber = T::BlockNumber::sa(500);
 		// the time after the voting period starts during which the proposer can abort
-		AbortWindow get(abort_window) config(): T::BlockNumber = T::BlockNumber::sa(200);
+		pub AbortWindow get(abort_window) config(): T::BlockNumber = T::BlockNumber::sa(200);
 		// The length of a grace period in sessions
 		pub GracePeriod get(grace_period) config(): T::BlockNumber = T::BlockNumber::sa(1000);
 		/// The current era index.
 		pub CurrentEra get(current_era) config(): T::BlockNumber;
 
-		ProposalBond get(proposal_bond) config(): BalanceOf<T>;
-		DilutionBound get(dilution_bound) config(): u32;
+		pub ProposalBond get(proposal_bond) config(): BalanceOf<T>;
+		pub DilutionBound get(dilution_bound) config(): u32;
 
 		/// TRACKING PROPOSALS
 		// Proposals that have been made (impl of `ProposalQueue`)
-		Proposals get(proposals): map Hash => Proposal<T::AccountId, BalanceOf<T>, T::Hash, T::BlockNumber>;
+		pub Proposals get(proposals): map Vec<u8> => Proposal<T::AccountId, BalanceOf<T>, T::Hash, T::BlockNumber>;
 		// Active Applicants (to prevent multiple applications at once)
-		Applicants get(applicants): map T::AccountId => Hash; // may need to change to &T::AccountId
+		pub Applicants get(applicants): map T::AccountId => Vec<u8>; // may need to change to &T::AccountId
 
 		/// VOTING
 		// map: proposalHash => Voters that have voted (prevent duplicate votes from the same member)
-		VoterId get(voter_id): map Hash => Vec<T::AccountId>;
+		pub VoterId get(voter_id): map Vec<u8> => Vec<T::AccountId>;
 		// map: proposalHash => yesVoters (these voters are locked in from ragequitting during the grace period)
-		VotersFor get(voters_for): map Hash => Vec<T::AccountId>;
+		pub VotersFor get(voters_for): map Vec<u8> => Vec<T::AccountId>;
 		// inverse of the function above for `remove_proposal` function
-		ProposalsFor get(proposals_for): map T::AccountId => Vec<Hash>;
+		pub ProposalsFor get(proposals_for): map T::AccountId => Vec<Vec<u8>>;
 		// get the vote of a specific voter (simplify testing for existence of vote via `VoteOf::exists`)
-		VoteOf get(vote_of): map (Hash, T::AccountId) => bool;
+		pub VoteOf get(vote_of): map (Vec<u8>, T::AccountId) => bool;
 
 		/// Dao MEMBERSHIP - permanent state (always relevant, changes only at the finalisation of voting)
-		ActiveMembers get(active_members) config(): Vec<T::AccountId>; // the current Dao members
-		MemberShares get(member_shares): map T::AccountId => u32; // shares of the current Dao members
+		pub MemberCount get(member_count) config(): u32; // the number of current DAO members
+		pub ActiveMembers get(active_members) config(): Vec<T::AccountId>; // the current Dao members
+		pub MemberShares get(member_shares): map T::AccountId => u32; // shares of the current Dao members
 
 		/// INTERNAL ACCOUNTING
+		// add total stake?
 		// Address for the pool
-		PoolAdress get(pool_address) config(): Pool<T::AccountId, BalanceOf<T>>;
+		pub PoolAdress get(pool_address) config(): Pool<T::AccountId, BalanceOf<T>>;
 		// Number of shares across all members
-		TotalShares get(total_shares) config(): u32; 
+		pub TotalShares get(total_shares) config(): u32; 
 		// total shares that have been requested in unprocessed proposals
-		TotalSharesRequested get(total_shares_requested): u32; 
+		pub TotalSharesRequested get(total_shares_requested): u32; 
+	}
+	add_extra_genesis { // see `mock.rs::ExtBuilder::build` for usage
+		config(members): Vec<T::AccountId, u32>; // (accountid, sharesOwned)
+		config(applicants): Vec<T::AccountId, u32, BalanceOf<T>>; // (accountId, sharesRequested, tokenTribute)
 	}
 }
 
@@ -158,9 +164,9 @@ decl_module! {
 			};
 
 			// add proposal hash
-			let hash = T::Hashing::hash_of(base.encode());
+			let hash = base.encode(); // the output of Codec::encode does the job
 			// verify uniqueness of this hash
-			ensure!(!<Proposals<T>>::exists(hash), "Hash collision ;-(");
+			ensure!(!<Proposals<T>>::exists(hash), "Key collision ;-(");
 
 			let prop = Proposal {
 				base_hash: hash,
@@ -197,7 +203,7 @@ decl_module! {
 		}
 		
 		/// Allow revocation of the proposal without penalty within the abortWindow
-		fn abort(origin, hash: Hash) -> Result {
+		fn abort(origin, hash: Vec<u8>) -> Result {
 			let who = ensure_signed(origin)?;
 			ensure!(Self::is_member(&who), "proposer is not a member of Dao");
 
@@ -229,7 +235,7 @@ decl_module! {
 			Ok(())
 		}
 
-		fn vote(origin, hash: Hash, approve: bool) {
+		fn vote(origin, hash: Vec<u8>, approve: bool) {
 			let who = ensure_signed(origin)?;
 			ensure!(Self::is_member(&who), "proposer is not a member of Dao");
 			
@@ -275,7 +281,7 @@ decl_module! {
 			Ok(())
 		}
 
-		fn process(origin, hash: Hash) -> Result {
+		fn process(origin, hash: Vec<u8>) -> Result {
 			let who = ensure_signed(origin)?;
 			ensure!(Self::is_member(&who), "proposer is not a member of the DAO");
 			ensure!(<Proposals<T>>::exists(hash), "proposal does not exist");
@@ -404,7 +410,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	// Clean up storage maps involving proposals
-	fn remove_proposal(hash: Hash) -> Result {
+	pub fn remove_proposal(hash: Vec<u8>) -> Result {
 		ensure!(<Proposals<T>>::exists(hash), "the given proposal does not exist");
 		let proposal = <Proposals<T>>::get(hash);
 		<Proposals<T>>::remove(hash);
