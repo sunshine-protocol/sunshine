@@ -31,30 +31,28 @@ type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::Ac
 // Wrapper around AccountId with permissioned withdrawal function (for ragequit)
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 #[derive(Encode, Decode, Clone, PartialEq, Eq)]
-pub struct Pool<AccountId, BalanceOf<T>> {
+pub struct Pool<AccountId> {
 	// The account for which the total balance is locked
-	account: AccountId,
+	account: AccountId, 	// can use Currency to check total stake
 	// Total Shares
 	shares: u32,
-	// Total Balance
-	funds: BalanceOf<T>,
 }
 
 /// Encoded and used as a UID for each Proposal
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 #[derive(Encode, Decode, Clone, PartialEq, Eq)]
-struct Base<AccountId, BalanceOf<T>> {
+struct Base<AccountId, Balance> {
 	proposer: AccountId,
 	applicant: AccountId,
 	sharesRequested: u32,
-	tokenTribute: BalanceOf<T>,
+	tokenTribute: Balance,
 }
 
 /// A proposal to lock up tokens in exchange for shares
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 #[derive(Encode, Decode, Clone, PartialEq, Eq)]
-pub struct Proposal<Hash, AccountId, Balance, BlockNumber> {
-	base_hash: Hash,				 // hash of the proposal
+pub struct Proposal<AccountId, Balance, BlockNumber> {
+	base_hash: Vec<u8>,				 // hash of the proposal
 	proposer: AccountId,			 // proposer AccountId (must be a member)
 	applicant: AccountId,			 // applicant AccountId
 	shares: u32, 					 // number of requested shares
@@ -73,7 +71,8 @@ decl_event!(
 	{
 		Proposed(Vec<u8>, Balance, AccountId, AccountId),	// (proposal, tokenTribute, proposer, applicant)
 		Aborted(Vec<u8>, Balance, AccountId, AccountId),	// (proposal, proposer, applicant)
-		Voted(Hash, bool, u32, u32),		// (proposal, vote, yesVotes, noVotes)
+		Voted(Vec<u8>, bool, u32, u32),		// (proposal, vote, yesVotes, noVotes)
+		RemoveStale(Vec<u8>, u64),				// (hash, however_much_time_it_was_late_by)
 		Processed(Vec<u8>, Balance, AccountId, bool),		// (proposal, tokenTribute, NewMember, executed_correctly)
 		Withdrawal(AccountId, u32, Balance),		// => successful "ragequit" (member, shares, Balances)
 	}
@@ -110,7 +109,7 @@ decl_storage! {
 		pub VoteOf get(vote_of): map (Vec<u8>, T::AccountId) => bool;
 
 		/// Dao MEMBERSHIP - permanent state (always relevant, changes only at the finalisation of voting)
-		pub MemberCount get(member_count) config(): u32; // the number of current DAO members
+		pub MemberCount get(member_count) config(): mut u32; // the number of current DAO members
 		pub ActiveMembers get(active_members) config(): Vec<T::AccountId>; // the current Dao members
 		pub MemberShares get(member_shares): map T::AccountId => u32; // shares of the current Dao members
 
@@ -118,17 +117,17 @@ decl_storage! {
 		// The DAO Pool
 		pub DaoPool get(dao_pool) config(): Pool<AccountId, BalanceOf<T>>;
 		// Number of shares across all members
-		pub TotalShares get(total_shares) config(): u32; 
+		pub TotalShares get(total_shares) config(): mut u32; 
 		// total shares that have been requested in unprocessed proposals
-		pub TotalSharesRequested get(total_shares_requested): u32; 
+		pub TotalSharesRequested get(total_shares_requested): mut u32; 
 	}
 	/// Bootstrap from Centralization -> Nudge Towards Decentralized Arc
 	add_extra_genesis { // see `mock.rs::ExtBuilder::build` for usage
 		config(members): Vec<T::AccountId, u32>; // (accountid, sharesOwned)
 		config(applicants): Vec<T::AccountId, u32, BalanceOf<T>>; // (accountId, sharesRequested, tokenTribute)
-		config(pool): (T::AccountId, BalanceOf<T>); // do I need this?
-		// set the member shares equal to the pool
-		// construct some intial member linked to the Pool?
+		config(pool): (T::AccountId, u32); // do I need this?
+		// set the \sum{member_shares} equal to the pool total
+		// could create a sponsorship mapping b/t applicants and members?
 	}
 }
 
@@ -168,6 +167,7 @@ decl_module! {
 			<VoterId<T>>::mutate(prop.base_hash, |voters| voters.push(&who));
 			// set this for maintainability of other functions
 			<VoteOf<T>>::insert(&(prop.base_hash, who), true);
+			<TotalSharesRequested<T>>::mutate(|count| count += prop.shares);
 
 			Self::deposit_event(RawEvent::Proposed(prop.base_hash, tokenTribute, &who, &applicant));
 			Self::deposit_event(RawEvent::Voted(prop.base_hash, true, prop.yesVotes, prop.noVotes));
@@ -274,6 +274,8 @@ decl_module! {
 			let pass = proposal.passed;
 
 			if (!grace_period && pass) {
+
+				/// BAD FEE STRUCTURE o_O
 				// transfer the proposalBond back to the proposer
 				T::Currency::unreserve(&proposal.proposer, Self::proposal_bond());
 				// transfer 50% of the proposal bond to the processer
@@ -284,12 +286,12 @@ decl_module! {
 
 				Self::remove_proposal(hash);
 
-				let late_time = <system::Module<T>>::block_number - proposal.graceStart + <GracePeriod<T>>::get();
+				let late_time = <system::Module<T>>::block_number - (proposal.graceStart + <GracePeriod<T>>::get());
 
-				Self::deposit_event(RawEvent::RemoveStale(hash, late_time));
+				Self::deposit_event(RawEvent::RemoveStale(hash,  late_time));
 			} else if (grace_period && pass) {
 				/// Note: if the proposal passes, the grace_period is started 
-				/// (see `voted` logic in `proposal.majority_passed` if block)
+				/// (see `fn voted` logic, specifically `if proposal.majority_passed() {}`)
 				/// Therefore, this block only executes if the grace_period has proceeded, 
 				/// but the proposal hasn't been processed!
 
@@ -317,10 +319,12 @@ decl_module! {
 				// if applicant is already a member, add to their existing shares
 				if proposal.applicant.is_member() {
 					<MemberShares<T>>::mutate(proposal.applicant, |shares| shares += proposal.shares);
-
 				} else {
 					// if applicant is a new member, create a new record for them
 					<MemberShares<T>>::insert(proposal.applicant, proposal.shares);
+					<ActiveMembers<T>>::mutate(|mems| mems.push(proposal.applicant));
+					<MemberCount<T>>::mutate(|count| count += 1);
+					pool.shares += proposal.shares;
 				}
 			} else {
 				Err("The proposal did not pass")
@@ -341,6 +345,8 @@ decl_module! {
 			ensure!(shares >= sharesToBurn, "insufficient shares");
 
 			// check that all proposals have passed
+			//
+			// this would be in `poll` (for async)
 			ensure!(<ProposalsFor<T>>::get(&who).iter()
 					.all(|prop| prop.passed && 
 						(<system::Module<T>>::block_number() <= prop.graceStart + Self::grace_period())
@@ -349,12 +355,17 @@ decl_module! {
 
 			Self::dao_pool().withdraw(&who, sharesToBurn);
 
+			// update DAO Membership Maps
+			<MemberCount<T>>::set(|count| count -= 1);
+			<ActiveMembers<T>>::mutate(|mems| mems.retain(|&x| x != &who));
+			<MemberShares<T>>::remove(&who);
+
 			Ok(())
 		}
 	}
 }
 
-impl<AccountId, Balance, Hash, BlockNumber> Default for Proposal<AccountId, Balance, Hash, BlockNumber> {
+impl<AccountId, Balance, BlockNumber> Default for Proposal<AccountId, Balance, BlockNumber> {
 	fn default() -> Self {
 		Proposal {
 			base_hash: 0,		// should be set manually
@@ -365,7 +376,7 @@ impl<AccountId, Balance, Hash, BlockNumber> Default for Proposal<AccountId, Bala
 			graceStart: None,	// can be set manually
 			yesVotes: 0,		// ""
 			noVotes: 0,			// ""
-			maxVotes: maxVotes,	// should be set manually
+			maxVotes: 0,		// should be set manually
 			processed: false,	// can be set manually
 			passed: false,		// ""
 			tokenTribute: 0,	// should be set manually
@@ -373,16 +384,16 @@ impl<AccountId, Balance, Hash, BlockNumber> Default for Proposal<AccountId, Bala
 	}
 }
 
-impl<AccountId, BalanceOf<T>, Hash, BlockNumber> Proposal<AccountId, BalanceOf<T>, Hash, BlockNumber> {
-	pub fn new(proposer: AccountId, applicant: AccountId, shares: u32, tokenTribute: BalanceOf<T>) -> Self {
+impl<AccountId, Balance, BlockNumber> Proposal<AccountId, Balance, BlockNumber> {
+	pub fn new(proposer: AccountId, applicant: AccountId, shares: u32, tokenTribute: Balance) -> Self {
 		let base = Base {
 			proposer: &proposer,
 			applicant: &applicant,
 			shares: shares,
 			tokenTribute: tokenTribute
-		}
+		};
 
-		let base_hash = base.encode();
+		let hash = base.encode();
 		// ensure that a proposal
 		ensure!(!<Proposals<T>>::exists(base_hash), "Key collision ;-(");
 
@@ -415,14 +426,14 @@ impl<AccountId, BalanceOf<T>, Hash, BlockNumber> Proposal<AccountId, BalanceOf<T
 	}
 }
 
-impl<AccountId,
-	Balance: HasCompact + Copy
-> Pool<AccountId, Balance> {
+impl<AccountId> Pool<AccountId> {
 	pub fn withdraw(&self, receiver: AccountId, sharedBurned: u32) -> Result { 
 		// Checks on identity made in `rage_quit` (the only place in which this is called)
 
 		let amount = Currency::free_balance(&self.account).checked_mul(sharedBurned).checked_div(Self::total_shares());
 		let _ = Currency::make_transfer(&self.account, &receiver, amount)?;
+
+		self.shares -= sharedBurned;
 
 		Self::deposit_event(RawEvent::Withdrawal(receiver, amount));
 
