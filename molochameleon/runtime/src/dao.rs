@@ -122,13 +122,18 @@ decl_storage! {
 		pub TotalSharesRequested get(total_shares_requested): mut u32; 
 	}
 	/// Bootstrap from Centralization -> Nudge Towards Decentralized Arc
-	add_extra_genesis { // see `mock.rs::ExtBuilder::build` for usage
-		config(members): Vec<T::AccountId, u32>; // (accountid, sharesOwned)
-		config(applicants): Vec<T::AccountId, u32, BalanceOf<T>>; // (accountId, sharesRequested, tokenTribute)
-		config(pool): (T::AccountId, u32); // do I need this?
-		// set the \sum{member_shares} equal to the pool total
-		// could create a sponsorship mapping b/t applicants and members?
-	}
+	// add_extra_genesis { // see `mock.rs::ExtBuilder::build` for usage
+	// 	config(members): Vec<T::AccountId, u32>; // (accountid, sharesOwned)
+	// 	config(applicants): Vec<T::AccountId, u32, BalanceOf<T>>; // (accountId, sharesRequested, tokenTribute)
+	// 	config(pool): (T::AccountId, u32);
+	// 	build(|storage: &mut primitives::StorageOverlay, _: &mut primitives::ChildrenStorageOverlay, config: &GenesisConfig<T>| {
+	// 		with_storage(storage, || {
+	// 			for &(ref account, ref shares) in &config.members {
+	// 				// for &(ref &config.pool
+	// 			}
+	// 		})
+	// 	});
+	// }
 }
 
 decl_module! {
@@ -143,31 +148,32 @@ decl_module! {
 			ensure!(shares <= Self::total_shares(), "too many shares requested");
 
 			// check that applicant doesn't have a pending application
-			ensure!(!<Applicants>::exists(&applicant), "applicant has pending application");
+			ensure!(!(Self::applicants::exists(&applicant)), "applicant has pending application");
 
 			// reserve member's bond for proposal
 			T::Currency::reserve(&who, Self::proposal_bond())
 				.map_err(|_| "balance of proposer is too low")?;
-
 			// reserve applicant's tokenTribute for proposal
 			T::Currency::reserve(&applicant, tokenTribute)
 				.map_err(|_| "balance of applicant is too low")?;
+			
+			let time = <system::Module<T>>::block_number;
 
-			let prop = Proposal::new(&who, &applicant, shares, tokenTribute);
+			let prop = Proposal::new(&who, &applicant, shares, tokenTribute, time);
 
-			<Proposals<T>>::insert(prop.base_hash, prop);
+			Self::proposals::insert(prop.base_hash, prop);
 			//add applicant
-			<Applicants<T>>::insert(&applicant, prop.base_hash);
+			Self::applicants::insert(&applicant, prop.base_hash);
 
 			// add yes vote from member who sponsored proposal (and initiate the voting)
-			<VotersFor<T>>::mutate(prop.base_hash, |voters| voters.push(&who));
+			Self::voters_for::mutate(prop.base_hash, |voters| voters.push(&who));
 			// supporting map for `remove_proposal`
-			<ProposalsFor<T>>::mutate(&who, |props| props.push(prop.base_hash));
+			Self::proposals::mutate(&who, |props| props.push(prop.base_hash));
 			// set that this account has voted
-			<VoterId<T>>::mutate(prop.base_hash, |voters| voters.push(&who));
+			Self::voter_id::mutate(prop.base_hash, |voters| voters.push(&who));
 			// set this for maintainability of other functions
-			<VoteOf<T>>::insert(&(prop.base_hash, who), true);
-			<TotalSharesRequested<T>>::mutate(|count| count += prop.shares);
+			Self::vote_of::insert(&(prop.base_hash, who), true);
+			Self::total_shares_requested::mutate(|count| count + prop.shares);
 
 			Self::deposit_event(RawEvent::Proposed(prop.base_hash, tokenTribute, &who, &applicant));
 			Self::deposit_event(RawEvent::Voted(prop.base_hash, true, prop.yesVotes, prop.noVotes));
@@ -181,9 +187,9 @@ decl_module! {
 			ensure!(Self::is_member(&who), "proposer is not a member of Dao");
 
 			// check if proposal exists
-			ensure!(<Proposals<T>>::exists(hash), "proposal does not exist");
+			ensure!(Self::proposals::exists(hash), "proposal does not exist");
 
-			let proposal = <Proposals<T>>::get(hash);
+			let proposal = Self::proposals::get(hash);
 
 			ensure!(proposal.proposer == &who, "Only the proposer can abort");
 
@@ -212,30 +218,30 @@ decl_module! {
 			let who = ensure_signed(origin)?;
 			ensure!(Self::is_member(&who), "proposer is not a member of Dao");
 			
-			ensure!(<Proposals<T>>::exists(hash), "proposal does not exist");
+			ensure!(Self::proposals::exists(hash), "proposal does not exist");
 
 			// load proposal
-			let proposal = <Proposals<T>>::get(hash);
+			let proposal = Self::proposals::get(hash);
 
 			ensure!(
-				(proposal.startTime + <VotingPeriod<T>>::get() >= <system::Module<T>>::block_number()) 
+				(proposal.startTime + Self::voting_period::get() >= <system::Module<T>>::block_number()) 
 				&& !proposal.passed, 
 				format!("The voting period has passed with yes: {} no: {}", proposal.yesVotes, proposal.noVotes)
 			);
 
 			// check that member has not yet voted
-			ensure!(<VoteOf<T>>::exists(hash, &who), "voter has already submitted a vote on this proposal");
+			ensure!(Self::vote_of::exists(hash, &who), "voter has already submitted a vote on this proposal");
 
 			// FIX unncessary conditional path
 			if approve {
-				<VotersFor<T>>::mutate(hash, |voters| voters.push(&who));
-				<ProposalsFor<T>>::insert(&who, |props| props.push(hash));
-				<VoterId<T>>::mutate(hash, |voters| voters.push(&who));
-				<VoteOf<T>>::insert(&(hash, who), true);
+				Self::voters_for::mutate(hash, |voters| voters.push(&who));
+				Self::proposals_for::insert(&who, |props| props.push(hash));
+				Self::voter_id::mutate(hash, |voters| voters.push(&who));
+				Self::vote_of::insert(&(hash, who), true);
 
 				// to bound dilution for yes votes
-				if <TotalShares<T>>::get() > proposal.maxVotes {
-					proposal.maxVotes = <TotalShares<T>>::get();
+				if Self::total_shares::get() > proposal.maxVotes {
+					proposal.maxVotes = Self::total_shares::get();
 				}
 				proposal.yesVotes += Self::member_shares(&who);
 
@@ -257,19 +263,19 @@ decl_module! {
 		fn process(origin, hash: Vec<u8>) -> Result {
 			let who = ensure_signed(origin)?;
 			ensure!(Self::is_member(&who), "proposer is not a member of the DAO");
-			ensure!(<Proposals<T>>::exists(hash), "proposal does not exist");
+			ensure!(Self::proposals::exists(hash), "proposal does not exist");
 
-			let proposal = <Proposals<T>>::get(hash);
+			let proposal = Self::proposals::get(hash);
 
 			// if dilution bound not satisfied, wait until there are more shares before passing
 			ensure!(
-				<TotalShares<T>>::get().checked_mul(<DilutionBound<T>>::get()) > proposal.maxVotes, 
+				Self::total_shares::get().checked_mul(Self::dilution_bound::get()) > proposal.maxVotes, 
 				"Dilution bound not satisfied; wait until more shares to pass vote"
 			);
 			
 			let grace_period = (
 				(proposal.graceStart <= <system::Module<T>>::block_number()) 
-				&& (<system::Module<T>>::block_number() < proposal.graceStart + <GracePeriod<T>>::get())
+				&& (<system::Module<T>>::block_number() < proposal.graceStart + Self::grace_period::get())
 			);
 			let pass = proposal.passed;
 
@@ -286,7 +292,7 @@ decl_module! {
 
 				Self::remove_proposal(hash);
 
-				let late_time = <system::Module<T>>::block_number - (proposal.graceStart + <GracePeriod<T>>::get());
+				let late_time = <system::Module<T>>::block_number - (proposal.graceStart + Self::grace_period::get());
 
 				Self::deposit_event(RawEvent::RemoveStale(hash,  late_time));
 			} else if (grace_period && pass) {
@@ -318,12 +324,12 @@ decl_module! {
 
 				// if applicant is already a member, add to their existing shares
 				if proposal.applicant.is_member() {
-					<MemberShares<T>>::mutate(proposal.applicant, |shares| shares += proposal.shares);
+					Self::member_shares::mutate(proposal.applicant, |shares| shares += proposal.shares);
 				} else {
 					// if applicant is a new member, create a new record for them
-					<MemberShares<T>>::insert(proposal.applicant, proposal.shares);
-					<ActiveMembers<T>>::mutate(|mems| mems.push(proposal.applicant));
-					<MemberCount<T>>::mutate(|count| count += 1);
+					Self::member_shares::insert(proposal.applicant, proposal.shares);
+					Self::active_members::mutate(|mems| mems.push(proposal.applicant));
+					Self::member_count::mutate(|count| count + 1);
 					pool.shares += proposal.shares;
 				}
 			} else {
@@ -341,13 +347,13 @@ decl_module! {
 			let who = ensure_signed(origin)?;
 			ensure!(Self::is_member(&who), "proposer is not a member of the DAO");
 
-			let shares = <MemberShares<T>>::get(&who);
+			let shares = Self::member_shares::get(&who);
 			ensure!(shares >= sharesToBurn, "insufficient shares");
 
 			// check that all proposals have passed
 			//
 			// this would be in `poll` (for async)
-			ensure!(<ProposalsFor<T>>::get(&who).iter()
+			ensure!(Self::proposals_for::get(&who).iter()
 					.all(|prop| prop.passed && 
 						(<system::Module<T>>::block_number() <= prop.graceStart + Self::grace_period())
 					), "All proposals have not passed or exited the grace period"
@@ -356,9 +362,9 @@ decl_module! {
 			Self::dao_pool().withdraw(&who, sharesToBurn);
 
 			// update DAO Membership Maps
-			<MemberCount<T>>::set(|count| count -= 1);
-			<ActiveMembers<T>>::mutate(|mems| mems.retain(|&x| x != &who));
-			<MemberShares<T>>::remove(&who);
+			Self::member_count::set(|count| count - 1);
+			Self::active_members::mutate(|mems| mems.retain(|&x| x != &who));
+			Self::member_shares::remove(&who);
 
 			Ok(())
 		}
@@ -385,7 +391,7 @@ impl<AccountId, Balance, BlockNumber> Default for Proposal<AccountId, Balance, B
 }
 
 impl<AccountId, Balance, BlockNumber> Proposal<AccountId, Balance, BlockNumber> {
-	pub fn new(proposer: AccountId, applicant: AccountId, shares: u32, tokenTribute: Balance) -> Self {
+	pub fn new(proposer: AccountId, applicant: AccountId, shares: u32, tokenTribute: Balance, time: BlockNumber) -> Self {
 		let base = Base {
 			proposer: &proposer,
 			applicant: &applicant,
@@ -395,18 +401,18 @@ impl<AccountId, Balance, BlockNumber> Proposal<AccountId, Balance, BlockNumber> 
 
 		let hash = base.encode();
 		// ensure that a proposal
-		ensure!(!<Proposals<T>>::exists(base_hash), "Key collision ;-(");
+		ensure!(!(Self::proposals::exists(hash)), "Key collision ;-(");
 
-		let yesVotes = <MemberShares<T>>::get(&who);
+		let yesVotes = Self::member_shares::get(&proposer);
 		let maxVotes = Self::total_shares();
-		<Dao<T>>::total_shares.set(maxVotes + shares);
+		Self::total_shares::mutate(|count| count + shares);
 
 		Proposal {
 			base_hash: hash,
-			proposer: &who,
+			proposer: &proposer,
 			applicant: &applicant,
 			shares: shares,
-			startTime: <system::Module<T>>::block_number(),
+			startTime: time,
 			yesVotes: yesVotes,
 			maxVotes: maxVotes,
 			tokenTribute: tokenTribute,
@@ -450,20 +456,20 @@ impl<T: Trait> Module<T> {
 
 	// Clean up storage maps involving proposals
 	pub fn remove_proposal(hash: Vec<u8>) -> Result {
-		ensure!(<Proposals<T>>::exists(hash), "the given proposal does not exist");
-		let proposal = <Proposals<T>>::get(hash);
-		<Proposals<T>>::remove(hash);
-		<Applicants<T>>::remove(proposal.applicant);
+		ensure!(Self::proposals::exists(hash), "the given proposal does not exist");
+		let proposal = Self::proposals::get(hash);
+		Self::proposals::remove(hash);
+		Self::applicants::remove(proposal.applicant);
 
-		let voters = <VotersFor<T>>::get(hash).iter().map(|voter| {
-			<ProposalsFor<T>>::mutate(&voter, |hashes| hashes.iter().filter(|hush| hush != hash).collect());
+		let voters = Self::voters_for::get(hash).iter().map(|voter| {
+			Self::proposals_for::mutate(&voter, |hashes| hashes.iter().filter(|hush| hush != hash).collect());
 			voter
 		});
 
-		<VoterId<T>>::remove(hash);
-		<VotersFor<T>>::remove(hash);
+		Self::voter_id::remove(hash);
+		Self::voters_for::remove(hash);
 		// reduce outstanding share request amount
-		<TotalSharesRequested<T>>::set(|total| total -= proposal.shares);
+		Self::total_shares_requested::set(|total| total -= proposal.shares);
 
 		Ok(())
 	} 

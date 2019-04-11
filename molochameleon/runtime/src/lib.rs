@@ -180,7 +180,7 @@ impl sudo::Trait for Runtime {
 }
 
 /// Used for the dao template in `./dao.rs`
-impl dao::Trait for Runtime { 
+impl dao::Trait for Runtime {
 	type Event = Event;
 }
 

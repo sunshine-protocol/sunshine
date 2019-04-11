@@ -159,7 +159,8 @@ impl ExtBuilder {
 				(32, 10, 0),
 				(33, 6, 20),
 				(34, 8, 0),
-			]
+			],
+			pool: (69, 48),
 			member_count: self.member_count,
 			pool_address: self.pool_address,
 			pool_funds: self.pool_funds,

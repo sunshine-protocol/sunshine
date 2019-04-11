@@ -41,6 +41,10 @@ fn basic_setup_works() {
 // (1) proposal is processed => balance is increased by tokenTribute; shares increase by shares
 // (2) member ragequits => balance is decreased by set amount; shares decrease by number of member shares
 
+/// CONVERSION
+// test conversion between `BalanceOf<T>` and `Balance`
+// 
+
 // CHECK rageQuit -> Grace doesn't work if there is a pending yesVote
 
 // CHECK that dependent maps are updated at the correct state transitions
@@ -56,3 +60,4 @@ fn basic_setup_works() {
 //
 // WANT
 // fuzzing
+// tool for checking that no panics can occur after changes to storage (like concolic execution)
