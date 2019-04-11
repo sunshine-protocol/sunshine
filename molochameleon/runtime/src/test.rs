@@ -6,22 +6,27 @@ use super::*;
 use runtime_io::with_externalities;
 use srml_support::{
 	assert_noop, assert_ok, assert_err, assert_eq_uvec,
-	traits::{Currency, LockableCurrency, ReservableCurrency} // don't need all these...
+	traits::{Currency, LockableCurrency, ReservableCurrency} // remove unused imports...
 };
 use mock::{Dao, System, Test, ExtBuilder};
 
-// basic setup
+// genesis config
 #[test]
-fn basic_setup_works() {
+fn genesis_config_works() {
 	// verify initial conditions of mock.rs
 	with_externalities(&mut ExtBuilder::default()
-		.build(),
-	|| {
+		.build(), || {
+		unimplimented!();
 
 	}
 	// instantiate three members at the DAO's initialization
 
 	// check the correct initialization of required maps
+}
+
+#[test]
+fn basic_setup_works() {
+	unimplimented!();
 }
 
 // NEED

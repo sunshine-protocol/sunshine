@@ -14,6 +14,9 @@
 
 ## Governance <a name = "gov"></a>
 
+* [Bribery Resistant Voting Schemes for Smart Contracts](https://ethresear.ch/t/bribery-resistant-voting-schemes-for-smart-contracts/3354)
+* [On-Chain Vote Buying and the Rise of Dark DAOs](http://hackingdistributed.com/2018/07/02/on-chain-vote-buying/)
+
 * [coinfund/governance-model](https://github.com/coinfund/governance-model) - relative value model for governance tokens
 * [Decentralized Digital Democracy](https://github.com/lrettig/paper) by `lrettig` (lane)
 

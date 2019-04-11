@@ -14,8 +14,8 @@ use serde_derive::{Serialize, Deserialize};
 use balances;
 
 /// type aliasing for compilation
-// type Hash = primitives::H256; // decided to just use `Vec<u8>` from Codec::encode
 type AccountId = u64;
+// type Hash = primitives::H256; // EDIT: decided to just use `Vec<u8>` from Codec::encode
 
 pub trait Trait: system::Trait {
 	// the staking balance
@@ -31,23 +31,23 @@ type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::Ac
 // Wrapper around AccountId with permissioned withdrawal function (for ragequit)
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 #[derive(Encode, Decode, Clone, PartialEq, Eq)]
-struct Pool<AccountId, Balance> {
+pub struct Pool<AccountId, BalanceOf<T>> {
 	// The account for which the total balance is locked
-	pub account: AccountId,
+	account: AccountId,
 	// Total Shares
-	pub shares: u32,
+	shares: u32,
 	// Total Balance
-	pub funds: Balance,
+	funds: BalanceOf<T>,
 }
 
-/// Used as a hash in the main Proposal struct
+/// Encoded and used as a UID for each Proposal
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 #[derive(Encode, Decode, Clone, PartialEq, Eq)]
-pub struct Base<AccountId, Balance> {
+struct Base<AccountId, BalanceOf<T>> {
 	proposer: AccountId,
 	applicant: AccountId,
 	sharesRequested: u32,
-	tokenTribute: Balance,
+	tokenTribute: BalanceOf<T>,
 }
 
 /// A proposal to lock up tokens in exchange for shares
@@ -63,8 +63,8 @@ pub struct Proposal<Hash, AccountId, Balance, BlockNumber> {
 	yesVotes: u32,					 // number of shares that voted yes
 	noVotes: u32,					 // number of shares that voted no
 	maxVotes: u32,					 // used to check the number of shares necessary to pass
-	processed: bool,				 // if processed, true
 	passed: bool,					 // if passed, true
+	processed: bool,				 // if processed, true
 	tokenTribute: Balance, 	 	 	 // tokenTribute; optional (set to 0 if no tokenTribute)
 }
 
@@ -102,7 +102,7 @@ decl_storage! {
 		/// VOTING
 		// map: proposalHash => Voters that have voted (prevent duplicate votes from the same member)
 		pub VoterId get(voter_id): map Vec<u8> => Vec<T::AccountId>;
-		// map: proposalHash => yesVoters (these voters are locked in from ragequitting during the grace period)
+		// map: proposalHash => voters_who_voted_yes (these voters are locked in from ragequitting during the grace period)
 		pub VotersFor get(voters_for): map Vec<u8> => Vec<T::AccountId>;
 		// inverse of the function above for `remove_proposal` function
 		pub ProposalsFor get(proposals_for): map T::AccountId => Vec<Vec<u8>>;
@@ -115,17 +115,20 @@ decl_storage! {
 		pub MemberShares get(member_shares): map T::AccountId => u32; // shares of the current Dao members
 
 		/// INTERNAL ACCOUNTING
-		// add total stake?
-		// Address for the pool
-		pub PoolAdress get(pool_address) config(): Pool<T::AccountId, BalanceOf<T>>;
+		// The DAO Pool
+		pub DaoPool get(dao_pool) config(): Pool<AccountId, BalanceOf<T>>;
 		// Number of shares across all members
 		pub TotalShares get(total_shares) config(): u32; 
 		// total shares that have been requested in unprocessed proposals
 		pub TotalSharesRequested get(total_shares_requested): u32; 
 	}
+	/// Bootstrap from Centralization -> Nudge Towards Decentralized Arc
 	add_extra_genesis { // see `mock.rs::ExtBuilder::build` for usage
 		config(members): Vec<T::AccountId, u32>; // (accountid, sharesOwned)
 		config(applicants): Vec<T::AccountId, u32, BalanceOf<T>>; // (accountId, sharesRequested, tokenTribute)
+		config(pool): (T::AccountId, BalanceOf<T>); // do I need this?
+		// set the member shares equal to the pool
+		// construct some intial member linked to the Pool?
 	}
 }
 
@@ -151,53 +154,23 @@ decl_module! {
 			T::Currency::reserve(&applicant, tokenTribute)
 				.map_err(|_| "balance of applicant is too low")?;
 
-			let yesVotes = <MemberShares<T>>::get(&who);
-			let noVotes = 0u32;
-			let maxVotes = Self::total_shares();
-			Self::total_shares.set(maxVotes + shares);
+			let prop = Proposal::new(&who, &applicant, shares, tokenTribute);
 
-			let base = Base {
-				proposer: &who,
-				applicant: &applicant,
-				shares: shares,
-				tokenTribute: tokenTribute,
-			};
-
-			// add proposal hash
-			let hash = base.encode(); // the output of Codec::encode does the job
-			// verify uniqueness of this hash
-			ensure!(!<Proposals<T>>::exists(hash), "Key collision ;-(");
-
-			let prop = Proposal {
-				base_hash: hash,
-				proposer: &who,
-				applicant: &applicant,
-				shares: shares,
-				startTime: <system::Module<T>>::block_number(),
-				graceStart: None,
-				yesVotes: yesVotes,
-				noVotes: noVotes,
-				maxVotes: maxVotes,
-				processed: false,
-				passed: false,
-				tokenTribute: tokenTribute,
-			}
-
-			<Proposals<T>>::insert(hash, prop);
+			<Proposals<T>>::insert(prop.base_hash, prop);
 			//add applicant
-			<Applicants<T>>::insert(&applicant, hash);
+			<Applicants<T>>::insert(&applicant, prop.base_hash);
 
 			// add yes vote from member who sponsored proposal (and initiate the voting)
-			<VotersFor<T>>::mutate(hash, |voters| voters.push(&who));
+			<VotersFor<T>>::mutate(prop.base_hash, |voters| voters.push(&who));
 			// supporting map for `remove_proposal`
-			<ProposalsFor<T>>::mutate(&who, |props| props.push(hash));
+			<ProposalsFor<T>>::mutate(&who, |props| props.push(prop.base_hash));
 			// set that this account has voted
-			<VoterId<T>>::mutate(hash, |voters| voters.push(&who));
+			<VoterId<T>>::mutate(prop.base_hash, |voters| voters.push(&who));
 			// set this for maintainability of other functions
-			<VoteOf<T>>::insert(&(hash, who), true);
+			<VoteOf<T>>::insert(&(prop.base_hash, who), true);
 
-			Self::deposit_event(RawEvent::Proposed(hash, tokenTribute, &who, &applicant));
-			Self::deposit_event(RawEvent::Voted(hash, true, yesVotes, noVotes));
+			Self::deposit_event(RawEvent::Proposed(prop.base_hash, tokenTribute, &who, &applicant));
+			Self::deposit_event(RawEvent::Voted(prop.base_hash, true, prop.yesVotes, prop.noVotes));
 
 			Ok(())
 		}
@@ -235,7 +208,7 @@ decl_module! {
 			Ok(())
 		}
 
-		fn vote(origin, hash: Vec<u8>, approve: bool) {
+		fn vote(origin, hash: Vec<u8>, approve: bool) -> Result {
 			let who = ensure_signed(origin)?;
 			ensure!(Self::is_member(&who), "proposer is not a member of Dao");
 			
@@ -298,9 +271,9 @@ decl_module! {
 				(proposal.graceStart <= <system::Module<T>>::block_number()) 
 				&& (<system::Module<T>>::block_number() < proposal.graceStart + <GracePeriod<T>>::get())
 			);
-			let status = proposal.passed;
+			let pass = proposal.passed;
 
-			if (!grace_period && status) {
+			if (!grace_period && pass) {
 				// transfer the proposalBond back to the proposer
 				T::Currency::unreserve(&proposal.proposer, Self::proposal_bond());
 				// transfer 50% of the proposal bond to the processer
@@ -314,7 +287,12 @@ decl_module! {
 				let late_time = <system::Module<T>>::block_number - proposal.graceStart + <GracePeriod<T>>::get();
 
 				Self::deposit_event(RawEvent::RemoveStale(hash, late_time));
-			} else if (grace_period && status) {
+			} else if (grace_period && pass) {
+				/// Note: if the proposal passes, the grace_period is started 
+				/// (see `voted` logic in `proposal.majority_passed` if block)
+				/// Therefore, this block only executes if the grace_period has proceeded, 
+				/// but the proposal hasn't been processed!
+
 				// transfer the proposalBond back to the proposer because they aborted
 				T::Currency::unreserve(&proposal.proposer, Self::proposal_bond());
 				// and the applicant's tokenTribute
@@ -330,8 +308,8 @@ decl_module! {
 				let netTribute = proposal.tokenTribute * 0.9;
 
 				// transfer tokenTribute to Pool
-				let poolAddr = Self::pool_address();
-				let _ = T::Currency::make_transfer(&proposal.applicant, &poolAddr, netTribute);
+				let pool = Self::dao_pool();
+				let _ = T::Currency::make_transfer(&proposal.applicant, &pool.account, netTribute);
 
 				// mint new shares
 				Self::total_shares.mutate(|total| total += proposal.shares);
@@ -339,6 +317,7 @@ decl_module! {
 				// if applicant is already a member, add to their existing shares
 				if proposal.applicant.is_member() {
 					<MemberShares<T>>::mutate(proposal.applicant, |shares| shares += proposal.shares);
+
 				} else {
 					// if applicant is a new member, create a new record for them
 					<MemberShares<T>>::insert(proposal.applicant, proposal.shares);
@@ -349,7 +328,7 @@ decl_module! {
 			
 			Self::remove_proposal(hash);
 		
-			Self::deposit_event(RawEvent::Processed(hash, status));
+			Self::deposit_event(RawEvent::Processed(hash, proposal.tokenTribute, proposal.applicant, proposal.passed));
 
 			Ok(())
 		}
@@ -368,14 +347,63 @@ decl_module! {
 					), "All proposals have not passed or exited the grace period"
 			);
 
-			Self::pool_address().withdraw(&who, sharesToBurn);
+			Self::dao_pool().withdraw(&who, sharesToBurn);
 
 			Ok(())
 		}
 	}
 }
 
-impl<AccountId, Balance, Hash, BlockNumber> Proposal<AccountId, Balance, Hash, BlockNumber> {
+impl<AccountId, Balance, Hash, BlockNumber> Default for Proposal<AccountId, Balance, Hash, BlockNumber> {
+	fn default() -> Self {
+		Proposal {
+			base_hash: 0,		// should be set manually
+			proposer: 1,		// ""
+			applicant: 2,		// ""
+			shares: 10,			// ""
+			startTime: 11,		// ""
+			graceStart: None,	// can be set manually
+			yesVotes: 0,		// ""
+			noVotes: 0,			// ""
+			maxVotes: maxVotes,	// should be set manually
+			processed: false,	// can be set manually
+			passed: false,		// ""
+			tokenTribute: 0,	// should be set manually
+		}
+	}
+}
+
+impl<AccountId, BalanceOf<T>, Hash, BlockNumber> Proposal<AccountId, BalanceOf<T>, Hash, BlockNumber> {
+	pub fn new(proposer: AccountId, applicant: AccountId, shares: u32, tokenTribute: BalanceOf<T>) -> Self {
+		let base = Base {
+			proposer: &proposer,
+			applicant: &applicant,
+			shares: shares,
+			tokenTribute: tokenTribute
+		}
+
+		let base_hash = base.encode();
+		// ensure that a proposal
+		ensure!(!<Proposals<T>>::exists(base_hash), "Key collision ;-(");
+
+		let yesVotes = <MemberShares<T>>::get(&who);
+		let maxVotes = Self::total_shares();
+		<Dao<T>>::total_shares.set(maxVotes + shares);
+
+		Proposal {
+			base_hash: hash,
+			proposer: &who,
+			applicant: &applicant,
+			shares: shares,
+			startTime: <system::Module<T>>::block_number(),
+			yesVotes: yesVotes,
+			maxVotes: maxVotes,
+			tokenTribute: tokenTribute,
+			..Default::default()
+		}
+
+	}
+
 	// more than half shares voted yes
 	pub fn majority_passed(&self) -> bool {
 		// do I need the `checked_div` flag?
