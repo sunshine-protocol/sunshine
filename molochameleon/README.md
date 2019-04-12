@@ -1,4 +1,4 @@
-# MoloChameleon DAO 🐸☕️
+# SunshineDAO
 
 The DAO logic is implemented in [`runtime/src/dao.rs`](./runtime/src/dao.rs). At the moment, the implementation is undergoing heavy refactoring in response to testing.
 

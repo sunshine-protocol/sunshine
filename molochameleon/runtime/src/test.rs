@@ -16,7 +16,7 @@ fn genesis_config_works() {
 	// verify initial conditions of mock.rs
 	with_externalities(&mut ExtBuilder::default()
 		.build(), || {
-		unimplimented!();
+		//
 
 	}
 	// instantiate three members at the DAO's initialization

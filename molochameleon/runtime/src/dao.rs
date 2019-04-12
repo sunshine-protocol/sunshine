@@ -3,19 +3,16 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #[cfg(feature = "std")]
-use runtime_primitives::traits::{Zero, As, Bounded}; // redefined Hash type below to make Rust compiler happy
-use parity_codec::{HasCompact, Encode, Decode};
-use support::{StorageValue, StorageMap, Parameter, Dispatchable, IsSubType, EnumerableStorageMap, dispatch::Result};
+// use runtime_primitives::traits::{Zero, As, Bounded};
+use parity_codec::{Encode, Decode, HasCompact}; // HasCompact
+use support::{StorageValue, StorageMap, Parameter, Dispatchable, IsSubType, EnumerableStorageMap, dispatch::Result}; // Parameter, IsSubType, EnumerableStorageMap
 use support::{decl_module, decl_storage, decl_event, ensure};
 use support::traits::{Currency, LockableCurrency}; 					// left out OnUnbalanced, WithdrawReason, LockIdentifier
 use system::ensure_signed;
-use rstd::ops::{Mul, Div}; // Add, Rem
 use serde_derive::{Serialize, Deserialize};
-use balances;
 
 /// type aliasing for compilation
 type AccountId = u64;
-// type Hash = primitives::H256; // EDIT: decided to just use `Vec<u8>` from Codec::encode
 
 pub trait Trait: system::Trait {
 	// the staking balance
@@ -87,14 +84,14 @@ decl_storage! {
 		// The length of a grace period in sessions
 		pub GracePeriod get(grace_period) config(): T::BlockNumber = T::BlockNumber::sa(1000);
 		/// The current era index.
-		pub CurrentEra get(current_era) config(): T::BlockNumber;
+		// pub CurrentEra get(current_era) config(): T::BlockNumber;
 
 		pub ProposalBond get(proposal_bond) config(): BalanceOf<T>;
 		pub DilutionBound get(dilution_bound) config(): u32;
 
 		/// TRACKING PROPOSALS
 		// Proposals that have been made (impl of `ProposalQueue`)
-		pub Proposals get(proposals): map Vec<u8> => Proposal<T::AccountId, BalanceOf<T>, T::Hash, T::BlockNumber>;
+		pub Proposals get(proposals): map Vec<u8> => Proposal<T::AccountId, BalanceOf<T>, T::BlockNumber>;
 		// Active Applicants (to prevent multiple applications at once)
 		pub Applicants get(applicants): map T::AccountId => Vec<u8>; // may need to change to &T::AccountId
 
@@ -109,31 +106,34 @@ decl_storage! {
 		pub VoteOf get(vote_of): map (Vec<u8>, T::AccountId) => bool;
 
 		/// Dao MEMBERSHIP - permanent state (always relevant, changes only at the finalisation of voting)
-		pub MemberCount get(member_count) config(): mut u32; // the number of current DAO members
+		pub MemberCount get(member_count) config(): u32; // the number of current DAO members
 		pub ActiveMembers get(active_members) config(): Vec<T::AccountId>; // the current Dao members
 		pub MemberShares get(member_shares): map T::AccountId => u32; // shares of the current Dao members
 
 		/// INTERNAL ACCOUNTING
 		// The DAO Pool
-		pub DaoPool get(dao_pool) config(): Pool<AccountId, BalanceOf<T>>;
+		pub DaoPool get(dao_pool) config(): Pool<AccountId>;
 		// Number of shares across all members
-		pub TotalShares get(total_shares) config(): mut u32; 
+		pub TotalShares get(total_shares) config(): u32; 
 		// total shares that have been requested in unprocessed proposals
-		pub TotalSharesRequested get(total_shares_requested): mut u32; 
+		pub TotalSharesRequested get(total_shares_requested): u32; 
 	}
-	/// Bootstrap from Centralization -> Nudge Towards Decentralized Arc
-	// add_extra_genesis { // see `mock.rs::ExtBuilder::build` for usage
-	// 	config(members): Vec<T::AccountId, u32>; // (accountid, sharesOwned)
-	// 	config(applicants): Vec<T::AccountId, u32, BalanceOf<T>>; // (accountId, sharesRequested, tokenTribute)
-	// 	config(pool): (T::AccountId, u32);
-	// 	build(|storage: &mut primitives::StorageOverlay, _: &mut primitives::ChildrenStorageOverlay, config: &GenesisConfig<T>| {
-	// 		with_storage(storage, || {
-	// 			for &(ref account, ref shares) in &config.members {
-	// 				// for &(ref &config.pool
-	// 			}
-	// 		})
-	// 	});
-	// }
+	// Bootstrap from Centralization -> Nudge Towards Decentralized Arc
+	add_extra_genesis { // see `mock.rs::ExtBuilder::build` for usage
+		config(members): Vec<T::AccountId, u32>; // (accountid, sharesOwned)
+		config(applicants): Vec<T::AccountId, u32, BalanceOf<T>>; // (accountId, sharesRequested, tokenTribute)
+		config(pool): (T::AccountId, u32);
+		// check that \sum{member_shares} == pool.shares
+		build(|storage: &mut primitives::StorageOverlay, _: &mut primitives::ChildrenStorageOverlay, config: &GenesisConfig<T>| {
+			with_storage(storage, || {
+				let mut check = 0u32;
+				for &(ref account, ref shares) in &config.members {
+					check += shares;
+				}
+				assert_eq!(&config.pool.1, check);
+			});
+		});
+	}
 }
 
 decl_module! {

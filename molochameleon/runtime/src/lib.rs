@@ -182,6 +182,7 @@ impl sudo::Trait for Runtime {
 /// Used for the dao template in `./dao.rs`
 impl dao::Trait for Runtime {
 	type Event = Event;
+	// type Currency = u64; // TODO: figure out the correct type alias
 }
 
 construct_runtime!(
