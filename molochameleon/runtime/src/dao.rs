@@ -3,7 +3,8 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #[cfg(feature = "std")]
-// use runtime_primitives::traits::{Zero, As, Bounded};
+use runtime_io::{with_storage};
+use runtime_primitives::{StorageOverlay, ChildrenStorageOverlay}; // traits::{Zero, As, Bounded}
 use parity_codec::{Encode, Decode, HasCompact}; // HasCompact
 use support::{StorageValue, StorageMap, Parameter, Dispatchable, IsSubType, EnumerableStorageMap, dispatch::Result}; // Parameter, IsSubType, EnumerableStorageMap
 use support::{decl_module, decl_storage, decl_event, ensure};
@@ -124,7 +125,7 @@ decl_storage! {
 		config(applicants): Vec<T::AccountId, u32, BalanceOf<T>>; // (accountId, sharesRequested, tokenTribute)
 		config(pool): (T::AccountId, u32);
 		// check that \sum{member_shares} == pool.shares
-		build(|storage: &mut primitives::StorageOverlay, _: &mut primitives::ChildrenStorageOverlay, config: &GenesisConfig<T>| {
+		build(|storage: &mut runtime_primitives::StorageOverlay, _: &mut runtime_primitives::ChildrenStorageOverlay, config: &GenesisConfig<T>| {
 			with_storage(storage, || {
 				let mut check = 0u32;
 				for &(ref account, ref shares) in &config.members {
