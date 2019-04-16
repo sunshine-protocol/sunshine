@@ -14,6 +14,8 @@
 
 ## Governance <a name = "gov"></a>
 
+* [Cryptonetwork Governance as Capital](https://www.placeholder.vc/blog/2019/2/19/cryptonetwork-governance-as-capital)
+
 * [Bribery Resistant Voting Schemes for Smart Contracts](https://ethresear.ch/t/bribery-resistant-voting-schemes-for-smart-contracts/3354)
 * [On-Chain Vote Buying and the Rise of Dark DAOs](http://hackingdistributed.com/2018/07/02/on-chain-vote-buying/)
 
