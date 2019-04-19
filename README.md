@@ -2,10 +2,8 @@
 
 | [Build DAOs with Substrate](#y) | [Introduction to Moloch](#moloch) | [More Reading](./RESEARCH.md) 
 | ------------- | ------------- | ------------- |
-<!-- 
-<img src="./molochameleon/img/newlogo.png" align="left" alt="newlogo" width="350" height="225"/> -->
 
-**Sunshine** is a fund coordination DAO on Substrate inspired by **[Moloch](https://github.com/MolochVentures/moloch)**.  Check [`molochameleon/runtime/src/dao.rs`](./molochameleon/runtime/src/dao.rs) for the current implementation which is under some construction.
+**Sunshine** is a fund coordination DAO on Substrate inspired by **[Moloch](https://github.com/MolochVentures/moloch)**.  Check [`runtime/src/dao.rs`](./runtime/src/dao.rs) for the current implementation which is under some construction.
 
 **WARNING: this code is untested and should NOT be used in production**
 
