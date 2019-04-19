@@ -42,8 +42,8 @@
 
 ## Projects <a name = "proj"></a>
 
-* Radical Markets
 * Aragon
+* Radical Markets
 * Colony
 * DAOstack
 * Edgeware

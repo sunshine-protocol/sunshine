@@ -8,7 +8,7 @@ use runtime_primitives::{StorageOverlay, ChildrenStorageOverlay}; // traits::{Ze
 use parity_codec::{Encode, Decode, HasCompact}; // HasCompact
 use support::{StorageValue, StorageMap, Parameter, Dispatchable, IsSubType, EnumerableStorageMap, dispatch::Result}; // Parameter, IsSubType, EnumerableStorageMap
 use support::{decl_module, decl_storage, decl_event, ensure};
-use support::traits::{Currency, LockableCurrency}; 					// left out OnUnbalanced, WithdrawReason, LockIdentifier
+use support::traits::{Currency, LockableCurrency}; 			// left out OnUnbalanced, WithdrawReason, LockIdentifier
 use system::ensure_signed;
 use serde_derive::{Serialize, Deserialize};
 
@@ -26,13 +26,15 @@ pub trait Trait: system::Trait {
 // Sometimes I use this and sometimes I just use T::Currency ¯\_(ツ)_/¯
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
 
-// Wrapper around AccountId with permissioned withdrawal function (for ragequit)
+/// Wrapper around AccountId with permissioned withdrawal function (for ragequit)
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 #[derive(Encode, Decode, Clone, PartialEq, Eq)]
 pub struct Pool<AccountId> {
-	// The account for which the total balance is locked
-	account: AccountId, 	// can use Currency to check total stake
-	// Total Shares
+	// The account for which the total funds are locked
+	main: AccountId,
+	// Insurance pool for aligning incentives in a closed system
+	insurance: AccountId,
+	// Total Shares Issued
 	shares: u32,
 }
 
@@ -47,8 +49,6 @@ struct Base<AccountId, Balance> {
 }
 
 /// A proposal to lock up tokens in exchange for shares
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
-#[derive(Encode, Decode, Clone, PartialEq, Eq)]
 pub struct Proposal<AccountId, Balance, BlockNumber> {
 	base_hash: Vec<u8>,				 // hash of the proposal
 	proposer: AccountId,			 // proposer AccountId (must be a member)
@@ -69,10 +69,10 @@ decl_event!(
 	{
 		Proposed(Vec<u8>, Balance, AccountId, AccountId),	// (proposal, tokenTribute, proposer, applicant)
 		Aborted(Vec<u8>, Balance, AccountId, AccountId),	// (proposal, proposer, applicant)
-		Voted(Vec<u8>, bool, u32, u32),		// (proposal, vote, yesVotes, noVotes)
-		RemoveStale(Vec<u8>, u64),				// (hash, however_much_time_it_was_late_by)
+		Voted(Vec<u8>, bool, u32, u32),						// (proposal, vote, yesVotes, noVotes)
+		RemoveStale(Vec<u8>, u64),							// (hash, however_much_time_it_was_late_by)
 		Processed(Vec<u8>, Balance, AccountId, bool),		// (proposal, tokenTribute, NewMember, executed_correctly)
-		Withdrawal(AccountId, u32, Balance),		// => successful "ragequit" (member, shares, Balances)
+		Withdrawal(AccountId, u32, Balance),				// => successful "ragequit" (member, shares, Balances)
 	}
 );
 
@@ -84,10 +84,8 @@ decl_storage! {
 		pub AbortWindow get(abort_window) config(): T::BlockNumber = T::BlockNumber::sa(200);
 		// The length of a grace period in sessions
 		pub GracePeriod get(grace_period) config(): T::BlockNumber = T::BlockNumber::sa(1000);
-		/// The current era index.
-		// pub CurrentEra get(current_era) config(): T::BlockNumber;
-
-		pub ProposalBond get(proposal_bond) config(): BalanceOf<T>;
+		pub ProposalFee get(proposal_fee) config(): BalanceOf<T>; // applicant's bond
+		pub ProposalBond get(proposal_bond) config(): BalanceOf<T>; // proposer's bond
 		pub DilutionBound get(dilution_bound) config(): u32;
 
 		/// TRACKING PROPOSALS
@@ -129,7 +127,8 @@ decl_storage! {
 			with_storage(storage, || {
 				let mut check = 0u32;
 				for &(ref account, ref shares) in &config.members {
-					check += shares;
+					let temp = check;
+					check = temp + shares;
 				}
 				assert_eq!(&config.pool.1, check);
 			});
@@ -150,6 +149,9 @@ decl_module! {
 
 			// check that applicant doesn't have a pending application
 			ensure!(!(Self::applicants::exists(&applicant)), "applicant has pending application");
+
+			// check that the TokenTribute covers at least the `ProposalFee`
+			ensure!(Self::proposal_fee() >= tokenTribute, "The token tribute does not cover the applicant's required bond");
 
 			// reserve member's bond for proposal
 			T::Currency::reserve(&who, Self::proposal_bond())
@@ -233,7 +235,7 @@ decl_module! {
 			// check that member has not yet voted
 			ensure!(Self::vote_of::exists(hash, &who), "voter has already submitted a vote on this proposal");
 
-			// FIX unncessary conditional path
+			// unncessary conditional path?
 			if approve {
 				Self::voters_for::mutate(hash, |voters| voters.push(&who));
 				Self::proposals_for::insert(&who, |props| props.push(hash));
@@ -295,7 +297,7 @@ decl_module! {
 
 				let late_time = <system::Module<T>>::block_number - (proposal.graceStart + Self::grace_period::get());
 
-				Self::deposit_event(RawEvent::RemoveStale(hash,  late_time));
+				Self::deposit_event(RawEvent::RemoveStale(hash, late_time));
 			} else if (grace_period && pass) {
 				/// Note: if the proposal passes, the grace_period is started 
 				/// (see `fn voted` logic, specifically `if proposal.majority_passed() {}`)
@@ -318,7 +320,7 @@ decl_module! {
 
 				// transfer tokenTribute to Pool
 				let pool = Self::dao_pool();
-				let _ = T::Currency::make_transfer(&proposal.applicant, &pool.account, netTribute);
+				let _ = T::Currency::make_transfer(&proposal.applicant, &pool.main, netTribute);
 
 				// mint new shares
 				Self::total_shares.mutate(|total| total += proposal.shares);
@@ -334,7 +336,8 @@ decl_module! {
 					pool.shares += proposal.shares;
 				}
 			} else {
-				Err("The proposal did not pass")
+				// TODO: add proper incentives structure
+				let _ = Currency::make_transfer(&who, &self.insurance, amount)?;
 			}
 			
 			Self::remove_proposal(hash);
@@ -376,17 +379,17 @@ impl<AccountId, Balance, BlockNumber> Default for Proposal<AccountId, Balance, B
 	fn default() -> Self {
 		Proposal {
 			base_hash: 0,		// should be set manually
-			proposer: 1,		// ""
-			applicant: 2,		// ""
-			shares: 10,			// ""
-			startTime: 11,		// ""
-			graceStart: None,	// can be set manually
-			yesVotes: 0,		// ""
-			noVotes: 0,			// ""
-			maxVotes: 0,		// should be set manually
-			processed: false,	// can be set manually
-			passed: false,		// ""
-			tokenTribute: 0,	// should be set manually
+			proposer: 1,		// should ""
+			applicant: 2,		// should ""
+			shares: 10,			// should ""
+			startTime: 11,		// should ""
+			graceStart: None,	// can	  ""
+			yesVotes: 0,		// can	  ""
+			noVotes: 0,			// can	  ""
+			maxVotes: 0,		// should ""
+			processed: false,	// can 	  ""
+			passed: false,		// can 	  ""
+			tokenTribute: 0,	// should ""
 		}
 	}
 }
@@ -401,8 +404,8 @@ impl<AccountId, Balance, BlockNumber> Proposal<AccountId, Balance, BlockNumber> 
 		};
 
 		let hash = base.encode();
-		// ensure that a proposal
-		ensure!(!(Self::proposals::exists(hash)), "Key collision ;-(");
+		// ensure a proposal with the same UID encoding doesn't exist
+		ensure!(!(Self::proposals::exists(hash)), "Key collision ;(");
 
 		let yesVotes = Self::member_shares::get(&proposer);
 		let maxVotes = Self::total_shares();
@@ -422,6 +425,8 @@ impl<AccountId, Balance, BlockNumber> Proposal<AccountId, Balance, BlockNumber> 
 
 	}
 
+
+	// TODO (abstract voting algorithms into their own file)
 	// more than half shares voted yes
 	pub fn majority_passed(&self) -> bool {
 		// do I need the `checked_div` flag?
@@ -431,20 +436,32 @@ impl<AccountId, Balance, BlockNumber> Proposal<AccountId, Balance, BlockNumber> 
 			return (self.yesVotes > (self.maxVotes.checked_add(1).checked_div(2)))
 		};
 	}
+	// ADD multiple voting algorithms so the DAO can choose which one to use
+	// - QV (based on shares for each voters)
+	// - AQP (based on shares and turnout)
+	// - increased weight to voters who haven't voted for a while (like an AQP extension)
 }
 
 impl<AccountId> Pool<AccountId> {
 	pub fn withdraw(&self, receiver: AccountId, sharedBurned: u32) -> Result { 
 		// Checks on identity made in `rage_quit` (the only place in which this is called)
 
-		let amount = Currency::free_balance(&self.account).checked_mul(sharedBurned).checked_div(Self::total_shares());
-		let _ = Currency::make_transfer(&self.account, &receiver, amount)?;
+		let amount = Currency::free_balance(&self.main).checked_mul(sharedBurned).checked_div(Self::total_shares());
+		let _ = Currency::make_transfer(&self.main, &receiver, amount)?;
 
 		self.shares -= sharedBurned;
 
 		Self::deposit_event(RawEvent::Withdrawal(receiver, amount));
 
 		Ok(())
+	}
+
+	// TODO
+	pub fn punish(&self, proposer: AccountId, ) {
+		// take bond from proposer + add to insurance
+
+		// take bond from applicant + add to insurance
+		unimplemented!();
 	}
 }
 
@@ -455,7 +472,7 @@ impl<T: Trait> Module<T> {
 		Ok(())
 	}
 
-	// Clean up storage maps involving proposals
+	/// Clean up storage maps involving proposal
 	pub fn remove_proposal(hash: Vec<u8>) -> Result {
 		ensure!(Self::proposals::exists(hash), "the given proposal does not exist");
 		let proposal = Self::proposals::get(hash);
