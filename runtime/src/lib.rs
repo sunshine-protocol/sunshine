@@ -52,6 +52,8 @@ pub type BlockNumber = u64;
 pub type Nonce = u64;
 
 pub mod dao;
+mod voting;
+mod metagov;
 
 // restructure this file to make clear the relationship between pools and proposals
 
