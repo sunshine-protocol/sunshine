@@ -102,6 +102,10 @@ impl ExtBuilder {
 		self.abort_window = abort_window;
 		self
 	}
+	pub fn proposal_fee(mut self, proposal_fee: u32) -> Self {
+		self.proposal_fee = proposal_fee;
+		self
+	}
     pub fn proposal_bond(mut self, proposal_bond: u32) -> Self {
 		self.proposal_bond = proposal_bond;
 		self
@@ -146,6 +150,7 @@ impl ExtBuilder {
 			voting_period: self.voting_period;
 			grace_period: self.grace_period;
 			abort_window: self.abort_window;
+			proposal_fee: self.proposal_fee;
 			proposal_bond: self.proposal_bond;
 			dilution_bound: self.dilution_bound;
 			members: vec![

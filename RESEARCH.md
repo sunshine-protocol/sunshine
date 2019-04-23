@@ -19,6 +19,8 @@
 * [Introducing Aragon: Unstoppable Organizations](https://medium.com/aragondec/introducing-aragon-unstoppable-companies-58c1fd2d00ce)
 * [The path to mainstream decentralized organizations](https://medium.com/aragondec/the-path-to-mainstream-decentralized-organizations-d95a89d3cac4) by Jorge Izquierdo
 
+* [Open Source Funding Coordination Problem](https://docs.google.com/presentation/d/1LsxqC_aRp9fVbqsTF6fKF1JcaRQFWPz2M2lgZwkcU70/edit#slide=id.g5676e801cb_1_62) by Ewocki of Gitcoin
+
 ### Incentive Alignment Models/Frameworks
 * [Cryptonetwork Governance as Capital](https://www.placeholder.vc/blog/2019/2/19/cryptonetwork-governance-as-capital)
 * [coinfund/governance-model](https://github.com/coinfund/governance-model)

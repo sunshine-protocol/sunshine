@@ -32,9 +32,9 @@ type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::Ac
 pub struct Pool<AccountId> {
 	// The account for which the total funds are locked
 	main: AccountId,
-	// Insurance pool for aligning incentives in a closed system
-	insurance: AccountId,
-	// Total Shares Issued
+	// // Insurance pool for aligning incentives in a closed system
+	// insurance: AccountId,
+	// Total Shares Issue
 	shares: u32,
 }
 
@@ -235,7 +235,7 @@ decl_module! {
 			// check that member has not yet voted
 			ensure!(Self::vote_of::exists(hash, &who), "voter has already submitted a vote on this proposal");
 
-			// unncessary conditional path?
+			// note conditional path
 			if approve {
 				Self::voters_for::mutate(hash, |voters| voters.push(&who));
 				Self::proposals_for::insert(&who, |props| props.push(hash));
@@ -284,16 +284,16 @@ decl_module! {
 
 			if (!grace_period && pass) {
 
-				/// BAD FEE STRUCTURE o_O
+				/// if the proposal passes after it is stale or time expires,
+				/// the bonds are forfeited and redistributed to the processer
 				// transfer the proposalBond back to the proposer
 				T::Currency::unreserve(&proposal.proposer, Self::proposal_bond());
-				// transfer 50% of the proposal bond to the processer
-				T::Currency::transfer(&proposal.proposer, &who, Self::proposal_bond().checked_mul(0.5));
+				// transfer proposer's proposal bond to the processer
+				T::Currency::transfer(&proposal.proposer, &who, Self::proposal_bond());
 				// return the applicant's tokenTribute
-				T::Currency::unreserve(&proposal.applicant,
-				proposal.tokenTribute);
-
-				Self::remove_proposal(hash);
+				T::Currency::unreserve(&proposal.applicant, proposal.tokenTribute);
+				// transfer applicant's proposal fee to the processer
+				T::Currency::transfer(&proposal.applicant, &who, Self::proposal_fee());
 
 				let late_time = <system::Module<T>>::block_number - (proposal.graceStart + Self::grace_period::get());
 
@@ -302,21 +302,19 @@ decl_module! {
 				/// Note: if the proposal passes, the grace_period is started 
 				/// (see `fn voted` logic, specifically `if proposal.majority_passed() {}`)
 				/// Therefore, this block only executes if the grace_period has proceeded, 
-				/// but the proposal hasn't been processed!
+				/// but the proposal hasn't been processed QED
 
-				// transfer the proposalBond back to the proposer because they aborted
+				// transfer the proposalBond back to the proposer
 				T::Currency::unreserve(&proposal.proposer, Self::proposal_bond());
 				// and the applicant's tokenTribute
-				T::Currency::unreserve(&proposal.applicant,
-				proposal.tokenTribute);
+				T::Currency::unreserve(&proposal.applicant, proposal.tokenTribute);
 
-				// HARDCODED PROCESSING REWARD (todo: make more flexible)
-				// transaction fee for proposer and processer comes from tokenTribute
-				let txfee = proposal.tokenTribute.checked_mul(0.05); // check if this works (underflow risk?)
+				// split the proposal fee between the proposer and the processer
+				let txfee = Self::proposal_fee().checked_mul(0.5);
 				let _ = T::Currency::make_transfer(&proposal.applicant, &who, txfee);
 				let _ = T::Currency::make_transfer(&proposal.applicant, &proposal.proposer, txfee);
 
-				let netTribute = proposal.tokenTribute * 0.9;
+				let netTribute = proposal.tokenTribute - Self::proposal_fee();
 
 				// transfer tokenTribute to Pool
 				let pool = Self::dao_pool();
@@ -336,8 +334,17 @@ decl_module! {
 					pool.shares += proposal.shares;
 				}
 			} else {
-				// TODO: add proper incentives structure
-				let _ = Currency::make_transfer(&who, &self.insurance, amount)?;
+				/// proposal did not pass
+				/// send all bonds to the processer
+				// transfer the proposalBond back to the proposer
+				T::Currency::unreserve(&proposal.proposer, Self::proposal_bond());
+				// transfer proposer's proposal bond to the processer
+				T::Currency::transfer(&proposal.proposer, &who, Self::proposal_bond());
+				// return the applicant's tokenTribute
+				T::Currency::unreserve(&proposal.applicant, proposal.tokenTribute);
+				// transfer applicant's proposal fee to the processer
+				T::Currency::transfer(&proposal.applicant, &who, Self::proposal_fee());
+				
 			}
 			
 			Self::remove_proposal(hash);
@@ -454,14 +461,6 @@ impl<AccountId> Pool<AccountId> {
 		Self::deposit_event(RawEvent::Withdrawal(receiver, amount));
 
 		Ok(())
-	}
-
-	// TODO
-	pub fn punish(&self, proposer: AccountId, ) {
-		// take bond from proposer + add to insurance
-
-		// take bond from applicant + add to insurance
-		unimplemented!();
 	}
 }
 
