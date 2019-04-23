@@ -4,7 +4,8 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #[cfg(feature = "std")]
 use runtime_io::{with_storage};
-use runtime_primitives::{StorageOverlay, ChildrenStorageOverlay}; // traits::{Zero, As, Bounded}
+use runtime_primitives::{StorageOverlay, ChildrenStorageOverlay};
+use runtime_primitives::traits::{As, Zero, BlakeTwo256, Hash};
 use parity_codec::{Encode, Decode, HasCompact}; // HasCompact
 use support::{StorageValue, StorageMap, Parameter, Dispatchable, IsSubType, EnumerableStorageMap, dispatch::Result}; // Parameter, IsSubType, EnumerableStorageMap
 use support::{decl_module, decl_storage, decl_event, ensure};
@@ -32,8 +33,6 @@ type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::Ac
 pub struct Pool<AccountId> {
 	// The account for which the total funds are locked
 	main: AccountId,
-	// // Insurance pool for aligning incentives in a closed system
-	// insurance: AccountId,
 	// Total Shares Issue
 	shares: u32,
 }
@@ -49,6 +48,8 @@ struct Base<AccountId, Balance> {
 }
 
 /// A proposal to lock up tokens in exchange for shares
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
+#[derive(Encode, Decode, Clone, PartialEq, Eq)]
 pub struct Proposal<AccountId, Balance, BlockNumber> {
 	base_hash: Vec<u8>,				 // hash of the proposal
 	proposer: AccountId,			 // proposer AccountId (must be a member)
@@ -205,8 +206,7 @@ decl_module! {
 			// return the proposalBond back to the proposer because they aborted
 			T::Currency::unreserve(&proposal.proposer, Self::proposal_bond());
 			// and the tokenTribute to the applicant
-			T::Currency::unreserve(&proposal.applicant,
-			proposal.tokenTribute);
+			T::Currency::unreserve(&proposal.applicant, proposal.tokenTribute);
 
 			proposal.aborted = true;
 
@@ -235,7 +235,6 @@ decl_module! {
 			// check that member has not yet voted
 			ensure!(Self::vote_of::exists(hash, &who), "voter has already submitted a vote on this proposal");
 
-			// note conditional path
 			if approve {
 				Self::voters_for::mutate(hash, |voters| voters.push(&who));
 				Self::proposals_for::insert(&who, |props| props.push(hash));
@@ -283,13 +282,14 @@ decl_module! {
 			let pass = proposal.passed;
 
 			if (!grace_period && pass) {
-
 				/// if the proposal passes after it is stale or time expires,
 				/// the bonds are forfeited and redistributed to the processer
+
 				// transfer the proposalBond back to the proposer
 				T::Currency::unreserve(&proposal.proposer, Self::proposal_bond());
 				// transfer proposer's proposal bond to the processer
 				T::Currency::transfer(&proposal.proposer, &who, Self::proposal_bond());
+
 				// return the applicant's tokenTribute
 				T::Currency::unreserve(&proposal.applicant, proposal.tokenTribute);
 				// transfer applicant's proposal fee to the processer
@@ -334,6 +334,7 @@ decl_module! {
 					pool.shares += proposal.shares;
 				}
 			} else {
+				/// This branch should actually never execute (it would imply not passed <=> not in grace period)
 				/// proposal did not pass
 				/// send all bonds to the processer
 				// transfer the proposalBond back to the proposer
@@ -354,23 +355,41 @@ decl_module! {
 			Ok(())
 		}
 
-		fn rage_quit(origin, sharesToBurn: u32) -> Result {
+		// add ability to burn some shares, not all shares
+		// --> add function input field `sharesToBurn: u32`
+		fn rage_quit(origin) -> Result {
 			let who = ensure_signed(origin)?;
 			ensure!(Self::is_member(&who), "proposer is not a member of the DAO");
 
 			let shares = Self::member_shares::get(&who);
-			ensure!(shares >= sharesToBurn, "insufficient shares");
+			// ensure!(shares >= sharesToBurn, "insufficient shares"); // add back when sharesToBurn functionality re-added
 
 			// check that all proposals have passed
 			//
 			// this would be in `poll` (for async)
 			ensure!(Self::proposals_for::get(&who).iter()
-					.all(|prop| prop.passed && 
-						(<system::Module<T>>::block_number() <= prop.graceStart + Self::grace_period())
+					.all(|prop| {
+						let proposal = Self::proposals(&prop);	
+						proposal.passed && 
+						(<system::Module<T>>::block_number() <= proposal.graceStart + Self::grace_period())
+					}
 					), "All proposals have not passed or exited the grace period"
 			);
 
-			Self::dao_pool().withdraw(&who, sharesToBurn);
+			// abstract this into its own function, it is not comprehensive enough yet
+			// need to also check if any of the proposals have not passed
+
+			// easier to read version (for demo purposes)
+			// let all_passed = true;
+			// for hash in proposals_for::get(&who).iter() {
+			// 	let proposal = Self::proposals(&hash);
+			// 	if !(proposal.passed || (<system::Module<T>>::block_number() <= proposal.graceStart + Self::grace_period())) {
+			// 		all_passed = false;
+			// 	}
+			// }
+			// ensure!(all_passed, "All proposals have not passed or exited the grace period");
+
+			Self::dao_pool().withdraw(&who, shares);
 
 			// update DAO Membership Maps
 			Self::member_count::set(|count| count - 1);
@@ -451,7 +470,7 @@ impl<AccountId, Balance, BlockNumber> Proposal<AccountId, Balance, BlockNumber> 
 
 impl<AccountId> Pool<AccountId> {
 	pub fn withdraw(&self, receiver: AccountId, sharedBurned: u32) -> Result { 
-		// Checks on identity made in `rage_quit` (the only place in which this is called)
+		// Checks made in `rage_quit` (the only place where this is called)
 
 		let amount = Currency::free_balance(&self.main).checked_mul(sharedBurned).checked_div(Self::total_shares());
 		let _ = Currency::make_transfer(&self.main, &receiver, amount)?;
