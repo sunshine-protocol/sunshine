@@ -240,7 +240,7 @@ decl_module! {
 
 			if approve {
 				Self::voters_for::mutate(hash, |voters| voters.push(&who));
-				Self::proposals_for::insert(&who, |props| props.push(hash));
+				Self::proposals_for::mutate(&who, |props| props.push(hash));
 				Self::voter_id::mutate(hash, |voters| voters.push(&who));
 				Self::vote_of::insert(&(hash, who), true);
 
