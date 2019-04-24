@@ -152,7 +152,8 @@ decl_module! {
 			ensure!(!(Self::applicants::exists(&applicant)), "applicant has pending application");
 
 			// check that the TokenTribute covers at least the `ProposalFee`
-			ensure!(Self::proposal_fee() >= tokenTribute, "The token tribute does not cover the applicant's required bond");
+			ensure!(Self::proposal_fee() >= tokenTribute, 
+			"The token tribute does not cover the applicant's required bond");
 
 			// reserve member's bond for proposal
 			T::Currency::reserve(&who, Self::proposal_bond())
@@ -171,6 +172,8 @@ decl_module! {
 
 			// add yes vote from member who sponsored proposal (and initiate the voting)
 			Self::voters_for::mutate(prop.base_hash, |voters| voters.push(&who));
+			// add proposals for 
+			Self::proposals_for::mutate(&who, |props| props.push(prop.base_hash))
 			// supporting map for `remove_proposal`
 			Self::proposals::mutate(&who, |props| props.push(prop.base_hash));
 			// set that this account has voted
@@ -364,30 +367,8 @@ decl_module! {
 			let shares = Self::member_shares::get(&who);
 			// ensure!(shares >= sharesToBurn, "insufficient shares"); // add back when sharesToBurn functionality re-added
 
-			// check that all proposals have passed
-			//
-			// this would be in `poll` (for async)
-			ensure!(Self::proposals_for::get(&who).iter()
-					.all(|prop| {
-						let proposal = Self::proposals(&prop);	
-						proposal.passed && 
-						(<system::Module<T>>::block_number() <= proposal.graceStart + Self::grace_period())
-					}
-					), "All proposals have not passed or exited the grace period"
-			);
-
-			// abstract this into its own function, it is not comprehensive enough yet
-			// need to also check if any of the proposals have not passed
-
-			// easier to read version (for demo purposes)
-			// let all_passed = true;
-			// for hash in proposals_for::get(&who).iter() {
-			// 	let proposal = Self::proposals(&hash);
-			// 	if !(proposal.passed || (<system::Module<T>>::block_number() <= proposal.graceStart + Self::grace_period())) {
-			// 		all_passed = false;
-			// 	}
-			// }
-			// ensure!(all_passed, "All proposals have not passed or exited the grace period");
+			// the above check is logically equivalent (because )
+			ensure!(Self::proposals_for(&who).is_empty(), "All supported proposals have not been executed");
 
 			Self::dao_pool().withdraw(&who, shares);
 
@@ -451,9 +432,6 @@ impl<AccountId, Balance, BlockNumber> Proposal<AccountId, Balance, BlockNumber> 
 
 	}
 
-
-	// TODO (abstract voting algorithms into their own file)
-	// more than half shares voted yes
 	pub fn majority_passed(&self) -> bool {
 		// do I need the `checked_div` flag?
 		if self.maxVotes % 2 == 0 { 
@@ -462,10 +440,6 @@ impl<AccountId, Balance, BlockNumber> Proposal<AccountId, Balance, BlockNumber> 
 			return (self.yesVotes > (self.maxVotes.checked_add(1).checked_div(2)))
 		};
 	}
-	// ADD multiple voting algorithms so the DAO can choose which one to use
-	// - QV (based on shares for each voters)
-	// - AQP (based on shares and turnout)
-	// - increased weight to voters who haven't voted for a while (like an AQP extension)
 }
 
 impl<AccountId> Pool<AccountId> {
