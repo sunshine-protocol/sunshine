@@ -20,6 +20,10 @@ pub trait Trait: system::Trait {
 	// the staking balance
 	type Currency: LockableCurrency<Self::AccountId, Moment=Self::BlockNumber>;
 
+	// following democracy's conventions
+	type Proposal: Parameter + Dispatchable<Origin=Self::Origin> + IsSubType<Module<Self>>;
+	// consider chaining the metagovernance trait depending on how I organize these patterns
+
 	// overarching event type
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 }
