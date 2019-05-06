@@ -18,12 +18,5 @@ trait Metagov {
         // return G;
     }
 
-	// Define Voting on Parameterizations
-	// @input a list of functions as well as 
-	// @input corresponding parameters that can be voted on
-	// AND
-	// @input a list of the voting algorithms for voting on each parameter (take some enum variant)
-	// --> make it simple enough to say {pick_one, this_one} instead of a yes, no, for every one
-	// ----> optional parameters with `PhantomData<T>` 
-	// --> define the set of voters (maybe as associated items)
+	// Reset `Referendum` trait in ./voting.rs
 }
