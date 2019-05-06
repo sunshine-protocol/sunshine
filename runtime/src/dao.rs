@@ -328,7 +328,7 @@ decl_module! {
 
 				// if applicant is already a member, add to their existing shares
 				if proposal.applicant.is_member() {
-					Self::member_shares::mutate(proposal.applicant, |shares| shares += proposal.shares);
+					Self::member_shares::mutate(proposal.applicant, |shares| shares + proposal.shares);
 				} else {
 					// if applicant is a new member, create a new record for them
 					Self::member_shares::insert(proposal.applicant, proposal.shares);

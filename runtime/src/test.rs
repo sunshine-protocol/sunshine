@@ -24,10 +24,8 @@ fn genesis_config_works() {
 	// check the correct initialization of required maps
 }
 
-#[test]
-fn basic_setup_works() {
-	unimplimented!();
-}
+// TODO
+// model-based testing (proptest and quickcheck)
 
 // NEED
 // test successful execution or each function emits the correct event
@@ -36,19 +34,18 @@ fn basic_setup_works() {
 //
 // test that abort works within the window -- same for all windows (vote -> Voting; rageQuit -> Grace)
 // test that abort doesn't work outside the window -- same for all windows (vote -> Voting; rageQuit -> Grace
-
+//
 // CHECK that all Pool fields are updated appropriately (haven't done this yet)
 // (1) proposal is processed => balance is increased by tokenTribute; shares increase by shares
 // (2) member ragequits => balance is decreased by set amount; shares decrease by number of member shares
-
+//
 /// CONVERSION
 // test conversion between `BalanceOf<T>` and `Balance`
-// 
-
+//
 // CHECK rageQuit -> Grace doesn't work if there is a pending yesVote
-
+//
 // CHECK that dependent maps are updated at the correct state transitions
-
+//
 // ADD CODE && TDD
 // test that the processer is not the proposer
 // test that reward parameterizations are not an attack vector
@@ -56,7 +53,7 @@ fn basic_setup_works() {
 // EXISTING BUGS
 // -- use of `BalanceOf` (use the staking module); the encoding within `decl_storage` is particularly annoying
 // -- `<Proposals<T>>` is not updated correctly
-// -- economic security
+// -- economic security (collusion risk is not covered)
 //
 // WANT
 // fuzzing
