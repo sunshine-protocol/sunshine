@@ -1,6 +1,6 @@
 # Incentives
 
-* `SubstrateCookbook` section on incentives
+* [this](https://substrate.recipes/advanced/incentive.html) section on incentives
 
 
 ## Incentivizing Voting

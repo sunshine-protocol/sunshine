@@ -1,6 +1,8 @@
 // Copyright 2019 Amar Singh
 // This file is part of Sunshine, licensed with the MIT License
 
+// model with TLA+
+
 // high performance Rust required with this one
 trait Metagov {
 	// `Asynchronize`
