@@ -16,7 +16,7 @@
 * so we rely on strict time slots for voting...
 
 **Grace Event Loop**
-* each ragequit can be processed as intiating a separate event loop
+* each ragequit can be processed as initiating a separate event loop
 * no pending supported proposals is verified (lock-in)
 * dilution safety is verified
 * better ways of dealing with both of these involve "blocking" until the conditions are satisfied to execute the request rather than immediately panicking
