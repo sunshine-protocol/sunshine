@@ -37,6 +37,13 @@
 * [Against On-Chain Governance (Vlad)](https://medium.com/@Vlad_Zamfir/against-on-chain-governance-a4ceacd040ca)
 * [Vlad and Gav go head-to-head on blockchain governance](https://www.zeroknowledge.fm/52)
 
+#### Multicandidate Voting Literature
+*[Handbook of Computational Social Choice](http://procaccia.info/papers/comsoc.pdf)*
+
+* [Condorcet](https://en.wikipedia.org/wiki/Condorcet_method) identifies “majority cycles”, wherein the collective preference can violate “rational” preferences that are strictly ordered.
+* [Arrow’s Theorem](https://en.wikipedia.org/wiki/Arrow%27s_impossibility_theorem) shows that voting systems with mild, reasonable assumptions are hard to formulate: they collapse into dictatorships.
+* [Gibbard-Sutterthwaite Theorem](https://en.wikipedia.org/wiki/Gibbard%E2%80%93Satterthwaite_theorem) shows that nondictatorships may create individual incentives to misrepresent preferences.
+
 ### History
 * [A Call for a Temporary Moratorium on “The DAO”](https://docs.google.com/document/d/10kTyCmGPhvZy94F7VWyS-dQ4lsBacR2dUgGTtV98C40/edit#heading=h.exdzp88avpn4)
 * [The Story of the DAO — Its History and Consequences](https://medium.com/swlh/the-story-of-the-dao-its-history-and-consequences-71e6a8a551ee)
@@ -47,18 +54,16 @@
 
 ## Projects <a name = "proj"></a>
 
-* **Aragon**
-    * [Introducing AragonOS say hi to modular and extendable organizations](https://medium.com/aragondec/introducing-aragonos-say-hi-to-modular-and-extendable-organizations-8555af1076f3)
-
+* **[Aragon](https://www.youtube.com/watch?v=AqjIWmiAidw)**
+* Radical Markets
 * Colony
-* **DAOstack**
-    * PolkaDAO
+* DAOstack (which powers PolkaDAO)
 * Edgeware
 * Melonport
+
+### Application-Specific
 * [Pando github -- distributed VCS powered by IPFS, Ethereum, and AragonOS](https://github.com/pandonetwork/pando)
 * [Gnosis: Introducing the dxDAO](https://blog.gnosis.pm/introducing-the-dxdao-27ec4301eced) - community-governed DAO with total control over the Gnosis trading protocol (opens April 4th)
-
-* **Radical Markets**
 
 ## Highlights <a name = "high"></a>
 
