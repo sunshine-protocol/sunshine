@@ -1,18 +1,11 @@
 # Research Reading List
 
-* [Moloch](#moloch)
 * [The Future of Organizations](#dao)
+* [Moloch](#moloch)
 * [Projects](#proj)
 * [Highlights](#high)
 
-## Moloch <a name = "moloch"></a>
-
-* [Whitepaper](https://github.com/MolochVentures/Whitepaper)
-* [Moloch DAO - User Experience Analysis](https://medium.com/@stellarmagnet/moloch-dao-user-experience-analysis-644a0356955) by Yalda Mousavinia (1/20/19)
-* [Inside Moloch: A new DAO aims to fix Ethereum](https://decryptmedia.com/5206/fixing-ethereum) by Ben Munster (2/15/19)
-* **[Meditations on Moloch](https://slatestarcodex.com/2014/07/30/meditations-on-moloch/)  by Scott Alexander (7/30/2014)**
-
-## Research <a name = "dao"></a>
+## The Future of Organizations <a name = "dao"></a>
 
 * [The Future of Organizations](http://blog.aragon.one/the-future-of-organizations/) by Jorge Izquierdo and Ramo Recuero
 * [Decentralized organizations are the future: why I'm joining Aragon](https://medium.com/@stefanobernardi/decentralized-organizations-are-the-future-why-im-joining-aragon-52ddd339ed2e)
@@ -53,7 +46,14 @@
 * [Agile Governance](https://www.researchgate.net/publication/299578743_Foundations_for_an_Agile_Governance_Manifesto_a_bridge_for_business_agility)
 * [Community by the Numbers, Part One: Group Thresholds](http://www.lifewithalacrity.com/2008/09/group-threshold.html)
 
-## Projects <a name = "proj"></a>
+## Moloch <a name = "moloch"></a>
+
+* [Whitepaper](https://github.com/MolochVentures/Whitepaper)
+* [Moloch DAO - User Experience Analysis](https://medium.com/@stellarmagnet/moloch-dao-user-experience-analysis-644a0356955) by Yalda Mousavinia (1/20/19)
+* [Inside Moloch: A new DAO aims to fix Ethereum](https://decryptmedia.com/5206/fixing-ethereum) by Ben Munster (2/15/19)
+* **[Meditations on Moloch](https://slatestarcodex.com/2014/07/30/meditations-on-moloch/)  by Scott Alexander (7/30/2014)**
+
+## Governance Crypto Projects <a name = "proj"></a>
 * **[Aragon](https://www.youtube.com/watch?v=AqjIWmiAidw)**
 * Radical Markets
 * Colony
