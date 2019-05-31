@@ -20,6 +20,10 @@ pub trait Trait: system::Trait {
 	// the staking balance
 	type Currency: LockableCurrency<Self::AccountId, Moment=Self::BlockNumber>;
 
+	// following democracy's conventions
+	type Proposal: Parameter + Dispatchable<Origin=Self::Origin> + IsSubType<Module<Self>>;
+	// consider chaining the metagovernance trait depending on how I organize these patterns
+
 	// overarching event type
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 }
@@ -41,7 +45,7 @@ pub struct Pool<AccountId> {
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 #[derive(Encode, Decode, Clone, PartialEq, Eq)]
 struct Base<AccountId, Balance> {
-	proposer: AccountId,
+	sponsor: AccountId,
 	applicant: AccountId,
 	sharesRequested: u32,
 	tokenTribute: Balance,
@@ -52,7 +56,7 @@ struct Base<AccountId, Balance> {
 #[derive(Encode, Decode, Clone, PartialEq, Eq)]
 pub struct Proposal<AccountId, Balance, BlockNumber> {
 	base_hash: Vec<u8>,				 // hash of the proposal
-	proposer: AccountId,			 // proposer AccountId (must be a member)
+	sponsor: AccountId,			 // sponsor AccountId (must be a member)
 	applicant: AccountId,			 // applicant AccountId
 	shares: u32, 					 // number of requested shares
 	startTime: BlockNumber,			 // when the voting period starts
@@ -68,8 +72,8 @@ pub struct Proposal<AccountId, Balance, BlockNumber> {
 decl_event!(
 	pub enum Event<T> where Balance = BalanceOf<T>, <T as system::Trait>::AccountId 
 	{
-		Proposed(Vec<u8>, Balance, AccountId, AccountId),	// (proposal, tokenTribute, proposer, applicant)
-		Aborted(Vec<u8>, Balance, AccountId, AccountId),	// (proposal, proposer, applicant)
+		Proposed(Vec<u8>, Balance, AccountId, AccountId),	// (proposal, tokenTribute, sponsor, applicant)
+		Aborted(Vec<u8>, Balance, AccountId, AccountId),	// (proposal, sponsor, applicant)
 		Voted(Vec<u8>, bool, u32, u32),						// (proposal, vote, yesVotes, noVotes)
 		RemoveStale(Vec<u8>, u64),							// (hash, however_much_time_it_was_late_by)
 		Processed(Vec<u8>, Balance, AccountId, bool),		// (proposal, tokenTribute, NewMember, executed_correctly)
@@ -81,12 +85,12 @@ decl_storage! {
 	trait Store for Module<T: Trait> as Dao {
 		// The length of a voting period in sessions
 		pub VotingPeriod get(voting_period) config(): T::BlockNumber = T::BlockNumber::sa(500);
-		// the time after the voting period starts during which the proposer can abort
+		// the time after the voting period starts during which the sponsor can abort
 		pub AbortWindow get(abort_window) config(): T::BlockNumber = T::BlockNumber::sa(200);
 		// The length of a grace period in sessions
 		pub GracePeriod get(grace_period) config(): T::BlockNumber = T::BlockNumber::sa(1000);
 		pub ProposalFee get(proposal_fee) config(): BalanceOf<T>; // applicant's bond
-		pub ProposalBond get(proposal_bond) config(): BalanceOf<T>; // proposer's bond
+		pub ProposalBond get(proposal_bond) config(): BalanceOf<T>; // sponsor's bond
 		pub DilutionBound get(dilution_bound) config(): u32;
 
 		/// TRACKING PROPOSALS
@@ -143,7 +147,7 @@ decl_module! {
 
 		fn propose(origin, applicant: AccountId, shares: u32, tokenTribute: BalanceOf<T>) -> Result {
 			let who = ensure_signed(origin)?;
-			ensure!(Self::is_member(&who), "proposer is not a member of Dao");
+			ensure!(Self::is_member(&who), "sponsor is not a member of Dao");
 
 			// check that too many shares aren't requsted ( 100% is a high upper bound)
 			ensure!(shares <= Self::total_shares(), "too many shares requested");
@@ -157,7 +161,7 @@ decl_module! {
 
 			// reserve member's bond for proposal
 			T::Currency::reserve(&who, Self::proposal_bond())
-				.map_err(|_| "balance of proposer is too low")?;
+				.map_err(|_| "balance of sponsor is too low")?;
 			// reserve applicant's tokenTribute for proposal
 			T::Currency::reserve(&applicant, tokenTribute)
 				.map_err(|_| "balance of applicant is too low")?;
@@ -191,14 +195,14 @@ decl_module! {
 		/// Allow revocation of the proposal without penalty within the abortWindow
 		fn abort(origin, hash: Vec<u8>) -> Result {
 			let who = ensure_signed(origin)?;
-			ensure!(Self::is_member(&who), "proposer is not a member of Dao");
+			ensure!(Self::is_member(&who), "sponsor is not a member of Dao");
 
 			// check if proposal exists
 			ensure!(Self::proposals::exists(hash), "proposal does not exist");
 
 			let proposal = Self::proposals::get(hash);
 
-			ensure!(proposal.proposer == &who, "Only the proposer can abort");
+			ensure!(proposal.sponsor == &who, "Only the sponsor can abort");
 
 			// check that the abort is within the window
 			ensure!(
@@ -206,8 +210,8 @@ decl_module! {
 				"it is past the abort window"
 			);
 
-			// return the proposalBond back to the proposer because they aborted
-			T::Currency::unreserve(&proposal.proposer, Self::proposal_bond());
+			// return the proposalBond back to the sponsor because they aborted
+			T::Currency::unreserve(&proposal.sponsor, Self::proposal_bond());
 			// and the tokenTribute to the applicant
 			T::Currency::unreserve(&proposal.applicant, proposal.tokenTribute);
 
@@ -215,14 +219,14 @@ decl_module! {
 
 			Self::remove_proposal(hash)?;
 
-			Self::deposit_event(RawEvent::Aborted(hash, proposal.tokenTribute, proposal.proposer, proposal.applicant));
+			Self::deposit_event(RawEvent::Aborted(hash, proposal.tokenTribute, proposal.sponsor, proposal.applicant));
 
 			Ok(())
 		}
 
 		fn vote(origin, hash: Vec<u8>, approve: bool) -> Result {
 			let who = ensure_signed(origin)?;
-			ensure!(Self::is_member(&who), "proposer is not a member of Dao");
+			ensure!(Self::is_member(&who), "sponsor is not a member of Dao");
 			
 			ensure!(Self::proposals::exists(hash), "proposal does not exist");
 
@@ -267,7 +271,7 @@ decl_module! {
 
 		fn process(origin, hash: Vec<u8>) -> Result {
 			let who = ensure_signed(origin)?;
-			ensure!(Self::is_member(&who), "proposer is not a member of the DAO");
+			ensure!(Self::is_member(&who), "sponsor is not a member of the DAO");
 			ensure!(Self::proposals::exists(hash), "proposal does not exist");
 
 			let proposal = Self::proposals::get(hash);
@@ -288,10 +292,10 @@ decl_module! {
 				/// if the proposal passes after it is stale or time expires,
 				/// the bonds are forfeited and redistributed to the processer
 
-				// transfer the proposalBond back to the proposer
-				T::Currency::unreserve(&proposal.proposer, Self::proposal_bond());
-				// transfer proposer's proposal bond to the processer
-				T::Currency::transfer(&proposal.proposer, &who, Self::proposal_bond());
+				// transfer the proposalBond back to the sponsor
+				T::Currency::unreserve(&proposal.sponsor, Self::proposal_bond());
+				// transfer sponsor's proposal bond to the processer
+				T::Currency::transfer(&proposal.sponsor, &who, Self::proposal_bond());
 
 				// return the applicant's tokenTribute
 				T::Currency::unreserve(&proposal.applicant, proposal.tokenTribute);
@@ -307,15 +311,15 @@ decl_module! {
 				/// Therefore, this block only executes if the grace_period has proceeded, 
 				/// but the proposal hasn't been processed QED
 
-				// transfer the proposalBond back to the proposer
-				T::Currency::unreserve(&proposal.proposer, Self::proposal_bond());
+				// transfer the proposalBond back to the sponsor
+				T::Currency::unreserve(&proposal.sponsor, Self::proposal_bond());
 				// and the applicant's tokenTribute
 				T::Currency::unreserve(&proposal.applicant, proposal.tokenTribute);
 
-				// split the proposal fee between the proposer and the processer
+				// split the proposal fee between the sponsor and the processer
 				let txfee = Self::proposal_fee().checked_mul(0.5);
 				let _ = T::Currency::make_transfer(&proposal.applicant, &who, txfee);
-				let _ = T::Currency::make_transfer(&proposal.applicant, &proposal.proposer, txfee);
+				let _ = T::Currency::make_transfer(&proposal.applicant, &proposal.sponsor, txfee);
 
 				let netTribute = proposal.tokenTribute - Self::proposal_fee();
 
@@ -340,10 +344,10 @@ decl_module! {
 				/// This branch should actually never execute (it would imply not passed <=> not in grace period)
 				/// proposal did not pass
 				/// send all bonds to the processer
-				// transfer the proposalBond back to the proposer
-				T::Currency::unreserve(&proposal.proposer, Self::proposal_bond());
-				// transfer proposer's proposal bond to the processer
-				T::Currency::transfer(&proposal.proposer, &who, Self::proposal_bond());
+				// transfer the proposalBond back to the sponsor
+				T::Currency::unreserve(&proposal.sponsor, Self::proposal_bond());
+				// transfer sponsor's proposal bond to the processer
+				T::Currency::transfer(&proposal.sponsor, &who, Self::proposal_bond());
 				// return the applicant's tokenTribute
 				T::Currency::unreserve(&proposal.applicant, proposal.tokenTribute);
 				// transfer applicant's proposal fee to the processer
@@ -362,7 +366,7 @@ decl_module! {
 		// --> add function input field `sharesToBurn: u32`
 		fn rage_quit(origin) -> Result {
 			let who = ensure_signed(origin)?;
-			ensure!(Self::is_member(&who), "proposer is not a member of the DAO");
+			ensure!(Self::is_member(&who), "sponsor is not a member of the DAO");
 
 			let shares = Self::member_shares::get(&who);
 			// ensure!(shares >= sharesToBurn, "insufficient shares"); // add back when sharesToBurn functionality re-added
@@ -386,7 +390,7 @@ impl<AccountId, Balance, BlockNumber> Default for Proposal<AccountId, Balance, B
 	fn default() -> Self {
 		Proposal {
 			base_hash: 0,		// should be set manually
-			proposer: 1,		// should ""
+			sponsor: 1,		// should ""
 			applicant: 2,		// should ""
 			shares: 10,			// should ""
 			startTime: 11,		// should ""
@@ -402,9 +406,9 @@ impl<AccountId, Balance, BlockNumber> Default for Proposal<AccountId, Balance, B
 }
 
 impl<AccountId, Balance, BlockNumber> Proposal<AccountId, Balance, BlockNumber> {
-	pub fn new(proposer: AccountId, applicant: AccountId, shares: u32, tokenTribute: Balance, time: BlockNumber) -> Self {
+	pub fn new(sponsor: AccountId, applicant: AccountId, shares: u32, tokenTribute: Balance, time: BlockNumber) -> Self {
 		let base = Base {
-			proposer: &proposer,
+			sponsor: &sponsor,
 			applicant: &applicant,
 			shares: shares,
 			tokenTribute: tokenTribute
@@ -414,13 +418,13 @@ impl<AccountId, Balance, BlockNumber> Proposal<AccountId, Balance, BlockNumber> 
 		// ensure a proposal with the same UID encoding doesn't exist
 		ensure!(!(Self::proposals::exists(hash)), "Key collision ;(");
 
-		let yesVotes = Self::member_shares::get(&proposer);
+		let yesVotes = Self::member_shares::get(&sponsor);
 		let maxVotes = Self::total_shares();
 		Self::total_shares::mutate(|count| count + shares);
 
 		Proposal {
 			base_hash: hash,
-			proposer: &proposer,
+			sponsor: &sponsor,
 			applicant: &applicant,
 			shares: shares,
 			startTime: time,
