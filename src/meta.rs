@@ -1,6 +1,24 @@
 // Copyright 2019 Amar Singh
 // This file is part of Sunshine, licensed with the MIT License
-  
+
+// TODO
+// define Application
+// identify different function signatures...
+trait moloch<AccountId, BalanceOf> {
+	type Error: some_err_enum;
+
+	pub fn propose(origin, Option<Box<Application>>) -> Result<Application, Error>;
+
+	pub fn abort(origin, Option<Box<Application>>) -> Result<Application, Error>;
+
+	pub fn vote(origin, Option<Box<Application>>) -> Result<Application, Error>;
+
+	pub fn process(origin, Option<Box<Application>>) -> Result<Application, Error>;
+
+	pub fn exit(origin, Option<Box<Application>>) -> Result<Application, Error>;
+}
+
+/// ----------------------referendum logic ----------------------
 //! Brainstorming (pools ~= threadpools in this *context*)
 //! What if every proposal was an object that was voted on in a pool 
 //! Once it passed, it would be sent to a different pool where it *might* get processed
@@ -23,7 +41,7 @@ pub trait Setting {
 
 /// Referendum
 /// a lightweight handle like `Arc`
-pub trait Referendum: Clone {
+pub trait election: Clone {
 
     // the error type for interacting with the Referendum
     type Error: std::fmt::Debug + Send;
@@ -39,10 +57,6 @@ pub trait Referendum: Clone {
 
     // configure voting algorithm
     fn config<A, S, T>(&self, algorithm: A, sybil: S, threshold: T) -> Self::VoteUpdate;
-}
-
-pub trait Election: Clone {
-    
 }
 
 // OBJECTIVE: abstract all voting functionality
