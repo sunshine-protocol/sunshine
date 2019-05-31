@@ -8,7 +8,7 @@ Even so, this implementation is far from optimized both in terms of performance 
 
 My **main objective** with these docs is to clearly document the choices I make so that other projects can make different choices when appropriate for the context of their use case. [MolochDAO](https://github.com/MolochVentures/moloch) encourages developers to `STEAL THIS CODE` -- this is a clear step in the right direction.
 
-The goal of my talk at [Sub0](https://sub0.parity.io/) was to convey the significant complexity of designing a minimal fund coordination DAO. In the talk, I covered the clash between lock-in and instant withdrawals before briefly introducing a closed loop for bonding proposals and incentivizing member action. Thereafter, I had a slide that read: `There is a lot of hidden complexity` with the following list of open questions:
+The goal of [my talk at Sub0](https://www.youtube.com/watch?v=eguDIG11nW8) was to convey the significant complexity of designing a minimal fund coordination DAO. In the talk, I covered the clash between lock-in and instant withdrawals before briefly introducing a closed loop for bonding proposals and incentivizing member action. Thereafter, I had a slide that read: `There is a lot of hidden complexity` with the following list of open questions:
 * Should the voting period transition to the grace period immediately once a threshold of support is achieved?
 * Is the voting period time window finite and, if so, what do we want to do with stale proposals?
 * Is the proposal immediately executed once it passes a threshold in the voting period or should the execution delay match the *grace period* during which dissenters can exit?
