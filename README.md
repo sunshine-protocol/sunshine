@@ -3,11 +3,24 @@
 | [Build DAOs with Substrate](#y) | [Introduction to Moloch](#moloch) | [More Reading](./docs/library.md) 
 | ------------- | ------------- | ------------- |
 
-**Sunshine** is a fund coordination DAO on Substrate inspired by **[Moloch](https://github.com/MolochVentures/moloch)**.
+**Sunshine** is a fund coordination DAO on Substrate inspired by **[Moloch](https://github.com/MolochVentures/moloch)**. The basic idea is to use Moloch's governance mechanism to coordinate membership and raise capital. Thereafter, signalling will strive to be generic and flexible, but I am first prioritizing functionality before abstracting shared behavior. I've identified the significant tasks 
 
-**WARNING: this code is untested and should NOT be used in production**
+*Necessary*
+-[] signalling
+    -[] members vote (weighted by stake) to fund grants (applications with only the transaction fee)
+    -[] members vote to accept new members
+-[] managing sets
+    -[] changing sets
+    -[] tracking groups with `Origin` and maps in `decl_storage`
+-[] lock-in vs fast withdrawal (voting periods) <=> exit mechanisms
+-[] design criteria
 
-This project serves to demonstrate patterns common to governance mechanisms built with Substrate. In the future, it might act as a sustainable fund coordination mechanism for the Polkadot ecosystem, but there's a lot of work to be done before then.
+*Optional*
+-[] (optional/extension) members vote to grant voice in the DAO based on community activism could be useful, but it opens an attack in which the malicious entity increases their relative vote advantage by overpowering the group and voting in someone that agrees with their side on a prominent issue
+-[] (optional/extension) members vote to reject new members
+-[] (optional/extension) using a prediction on an oracle to lock-in a vote on an outcome
+-[] (optional/extension) creating SubDAOs with a strict subset of the members of the DAO, but the rest of the members weight all their support on someone in the SubDAO
+
 
 ## What is Moloch? <a name = "moloch"></a>
 
