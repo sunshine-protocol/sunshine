@@ -5,7 +5,7 @@ name = 'sunshine'
 version = '0.1.0'
 
 [dependencies]
-futures = "0.1.25" # swap out when 0.1.5.0 is added (PR open now)
+futures = "0.1.27" # swap out when 0.1.5.0 is added (PR open now)
 
 [features]
 default = ['std']
