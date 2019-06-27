@@ -85,7 +85,7 @@ Specifically, I think it would be cool to build
 * Income Share Agreements
 * Auction Models
 
-If you're still not convinced and would like more details, feel free to check out the articles listed below, [the official documentation](https://docs.substrate.dev/), and the [github](https://github.com/paritytech/substrate/).
+If you're still not convinced and would like more details, feel free to check out the articles listed below, [the official documentation](https://substrate.dev/), and the [github](https://github.com/paritytech/substrate/).
 * [A brief summary of everything Substrate and Polkadot](https://www.parity.io/a-brief-summary-of-everything-substrate-polkadot/)
 * [What is Parity Substrate](https://www.parity.io/what-is-substrate/)
 * [Substrate in a nutshell](https://www.parity.io/substrate-in-a-nutshell/)
