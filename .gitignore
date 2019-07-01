@@ -1,4 +1,5 @@
 plan.md
+build/
 target/
 .DS_Store
 .gitattributes
