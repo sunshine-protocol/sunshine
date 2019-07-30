@@ -54,6 +54,8 @@
 * **[Meditations on Moloch](https://slatestarcodex.com/2014/07/30/meditations-on-moloch/)  by Scott Alexander (7/30/2014)**
 
 ## Governance Crypto Projects <a name = "proj"></a>
+> [Overview of Moloch, Aragon, DaoStack, and Colony](https://kronosapiens.github.io/blog/2019/06/16/aragon-daostack-colony-moloch.html)
+
 * **[Aragon](https://www.youtube.com/watch?v=AqjIWmiAidw)**
 * Radical Markets
 * Colony
