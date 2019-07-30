@@ -1,18 +1,7 @@
-# SunshineDAO
+# ⓢⓤⓝⓢⓗⓘⓝⓔ 🌞
 
-**Sunshine** is a fund coordination DAO on Substrate inspired by **[Moloch](https://github.com/MolochVentures/moloch)**. The basic idea is to use Moloch's governance mechanism to coordinate membership and raise capital. Thereafter, signalling will strive to be generic and flexible, but I am prioritizing functionality before abstracting shared behavior. I've identified the following tasks:
+**sunshine** is a fund coordination DAO on Substrate inspired by **[moloch](https://github.com/MolochVentures/moloch)**. 
 
-*Necessary*
-- [ ] generic signalling
-    - [ ] members vote (weighted by stake) to fund grants (applications with only the transaction fee)
-    - [ ] members vote to accept new members
-- [ ] dynamic membership
-    - [ ] use `OnMembershipChanged` trait
-    - [ ] tracking groups with a custom `Origin` type
-- [ ] lock-in vs fast withdrawal (voting periods) <=> exit mechanisms
-- [ ] design criteria writing
+**This project is currently being rewritten to take advantage of new features in the Substrate V2.0 API**, see [module](./module) for more details on the latest version.
 
-*Optional*
-- [ ] (optional/extension) members can vote to remove existing members
-- [ ] (optional/extension) using a prediction on an oracle to lock-in a vote on an outcome (holographic consensus)
-- [ ] (optional/extension) signal delegation with SubDAOs
+*See [daoЯoad](https://github.com/4meta5/daoRoad) for greater insight into how this project pulls from governance patterns in the [srml](https://github.com/paritytech/substrate/tree/master/srml)*
