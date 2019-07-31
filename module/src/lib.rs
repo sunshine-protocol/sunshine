@@ -3,7 +3,7 @@
 
 pub mod dao;
 
-pub use dao::{Call, Event, Module, RawEvent, Trait};
+pub use dao::{Event, RawEvent, Trait};
 
 // test scaffolding
 #[cfg(test)]

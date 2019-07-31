@@ -1,3 +1,6 @@
+/// TODO
+///
+/// - rethink all fields of the structs to minimize calls to storage
 use parity_codec::{Decode, Encode};
 #[cfg(feature = "std")]
 use runtime_primitives::traits::{AccountIdConversion, Hash, StaticLookup, Zero};
@@ -71,9 +74,7 @@ pub struct Election<AccountId, BlockNumber> {
 /// Voter state (for lock-in + 'instant' withdrawals)
 #[derive(Encode, Decode, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Debug))]
-pub struct Member<AccountId, Balance> {
-    // accountId directly associated with membership
-    member_id: AccountId,
+pub struct Member<Balance> {
     // total shares owned by the member
     all_shares: Shares,
     // shares reserved based on pending proposal support
@@ -90,10 +91,6 @@ pub trait Trait: system::Trait {
     /// The overarching event type
     type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 
-    /// What to do when the members change
-    type ChangeMembers: ChangeMembers<Self::AccountId>;
-    // TODO: use this
-
     /// Base proposal bond, true bond depends on pot size and pending proposals (see `fn proposal_bond`)
     type ProposalBond: Get<BalanceOf<Self>>;
 
@@ -109,12 +106,12 @@ pub trait Trait: system::Trait {
     /// Period after proposal acceptance during which *commitment-free* dissenters may exit
     type GraceWindow: Get<Self::BlockNumber>;
 
-    /// Frequency with which stale proposals and applications are purged
+    /// Frequency with which stale proposals and applications are swept
     /// -- purpose: mitigate state bloat
-    type PurgeFrequency: Get<Self::BlockNumber>;
+    type SweepFrequency: Get<Self::BlockNumber>;
 
     /// Frequency with which passed proposals are executed
-    type ExecuteFrequency: Get<Self::BlockNumber>;
+    type IssuanceFrequency: Get<Self::BlockNumber>;
 }
 
 decl_event!(
@@ -142,40 +139,6 @@ decl_event!(
     }
 );
 
-decl_storage! {
-    trait Store for Module<T: Trait> as MiniDAO {
-        /// Applications that are awaiting sponsorship
-        Applications get(applications): map T::Hash => Application<AccountId, Balance, BlockNumber>;
-        /// All applicants
-        Applicant get(applicant): Vec<T::AccountId>;
-        /// Applications that have grown stale, awaiting purging
-        StaleApps get(stale_apps): Vec<T::Hash>;
-
-        /// Proposals that have been made.
-        Proposals get(proposals): map T::Hash => Option<Proposal<T::AccountId, BalanceOf<T>, T::BlockNumber, Application>>;
-        /// From Proposal Hash to election state
-        Elections get(elections): map T::Hash => Election<AccountId, BlockNumber>;
-        /// Proposals that have passed, awaiting execution in `on_finalize`
-        Passed get(passed): Vec<T::Hash>;
-        /// Proposals that have grown stale, awaiting purging
-        StaleProposals get(stale_proposals): Vec<T::Hash>;
-
-        // Outstanding shares requested (directly proposed || apply + sponsor)
-        SharesRequested get(shares_requested): Shares;
-        // Total shares issued
-        SharesIssued get(shares_issued): Shares;
-
-        /// Members of the DAO
-        Member get(member): Vec<T::AccountId>;
-        /// Tracking membership shares (voting strength)
-        MemberInfo get(member_info): map T::AccountId => Member<T::AccountId, BalanceOf<T>>;
-        /// Active voting members (requires additional bond)
-        Voter get(voter): Vec<T::AccountId>;
-
-        // TODO: re-add proxy functionality; consider alternative APIs
-    }
-}
-
 decl_module! {
     pub struct Module<T: Trait> for enum Call where origin: T::Origin {
         fn deposit_event<T>() = default;
@@ -196,10 +159,10 @@ decl_module! {
         const GraceWindow: T::BlockNumber = T::BlockNumber::get();
 
         /// Period between stale proposal purges
-        const PurgeFrequency: T::BlockNumber = T::PurgeFrequency::get();
+        const SweepFrequency: T::BlockNumber = T::SweepFrequency::get();
 
         /// Period between successive batch execution of passed proposals
-        const ExecuteFrequency: T::BlockNumber = T::ExecuteFrequency::get();
+        const IssuanceFrequency: T::BlockNumber = T::IssuanceFrequency::get();
 
         fn apply(
             origin,
@@ -243,7 +206,7 @@ decl_module! {
             ensure!(Self::is_member(&sponsor), "sponsor must be a member");
 
             let mut app = Self::applications(&app_hash).ok_or("application must exist")?;
-            // if the sponsor is the applicant, there are required restrictions on voting for self
+            // if the sponsor is the applicant, there are required restrictions on voting for self (see `fn propose`)
             ensure(&app.applicant != &sponsor, "direct proposals should be made via `propose`");
 
             // TODO: better system for managing pending applications (better purge)
@@ -344,7 +307,7 @@ decl_module! {
                 "not enough free shares to burn"
             );
             // TODO: priority to verify valid behavior below via tests
-            let burn_ratio = Permill::from_rational_approximation(to_burn, Self::shares_issued());
+            let burn_ratio = Permill::from_rational_approximation(to_burn, Self::total_shares());
             let proportionate_balance = burn_ratio * Self::pot();
             // NOTE: if the above doesn't work, multiple numerator in `from_rational_approximation` by Self::pot()
             let _ = T::Currency::transfer(&Self::account_id(), &arsonist, proportionate_balance)?;
@@ -357,22 +320,22 @@ decl_module! {
                 <Member<T>>::mutate(|members| members.retain(|m| m != &arsonist));
                 <MemberInfo<T>>::remove(&arsonist);
             }
-            <SharesIssued<T>>::mutate(|val| val -= to_burn);
+            <TotalShares<T>>::mutate(|val| val -= to_burn);
+            Self::deposit_event(RawEvent::SharesBurned(arsonist, to_burn, proportionate_balance));
             Ok(())
         }
 
         fn on_finalize(n: T::BlockNumber) {
+            // TODO: frequency adjustments based on proposal throughput
 
             // PURGE
-            if (n % T::PurgeFrequency::get()).is_zero() {
-                Self::purge();
+            if (n % T::SweepFrequency::get()).is_zero() {
+                Self::sweep();
             }
 
-            // SPEND
-            let mut budget = Self::pot();
-            if (n % T::ExecuteFrequency::get()).is_zero() {
-                Self::execute();
-                budget = Self::spend(budget); // more nuanced
+            // ISSUANCE
+            if (n % T::IssuanceFrequency::get()).is_zero() {
+                Self::issuance(n);
             }// TODO: is_zero() requires the Zero trait from runtime_primitives::traits
 
             Self::deposit_event(RawEvent::BudgetRemaining(budget));
@@ -380,9 +343,43 @@ decl_module! {
     }
 }
 
-// treasury
+// test if order matters
+decl_storage! {
+    trait Store for Module<T: Trait> as MiniDAO {
+        /// Applications that are awaiting sponsorship
+        Applications get(applications): map T::Hash => Application<T::AccountId, BalanceOf<T>, T::BlockNumber>;
+        /// All applicants
+        Applicant get(applicant): Vec<T::AccountId>;
+        /// Applications that have grown stale, awaiting purging
+        StaleApps get(stale_apps): Vec<T::Hash>;
+
+        /// Proposals that have been made.
+        Proposals get(proposals): map T::Hash => Option<Proposal<T::AccountId, BalanceOf<T>>>;
+        /// From Proposal Hash to election state
+        Elections get(elections): map T::Hash => Election<T::AccountId, T::BlockNumber>;
+        /// Proposals that have passed, awaiting execution in `on_finalize`
+        Passed get(passed): Vec<T::Hash>;
+        /// Proposals that have grown stale, awaiting purging
+        StaleProposals get(stale_proposals): Vec<T::Hash>;
+
+        // Outstanding shares requested (directly proposed || apply + sponsor)
+        SharesRequested get(shares_requested): Shares;
+        // Total shares issued
+        TotalShares get(total_issued): Shares;
+
+        /// Members of the DAO
+        Members get(members): Vec<T::AccountId>;
+        /// Tracking membership shares (voting strength)
+        MemberInfo get(member_info): map T::AccountId => Member<BalanceOf<T>>;
+        /// Active voting members (requires additional bond)
+        Voters get(voters): Vec<T::AccountId>;
+
+        // TODO: re-add proxy functionality; consider alternative APIs
+    }
+}
+
 impl<T: Trait> Module<T> {
-    // dao accountId
+    // ----DAO----
     pub fn account_id() -> T::AccountId {
         DAO_ID.into_account()
     } // TODO: requires trait AccountIdConversion
@@ -391,21 +388,19 @@ impl<T: Trait> Module<T> {
     fn pot() -> BalanceOf<T> {
         T::Currency::free_balance(&Self::account_id())
     }
-}
 
-// supporting methods
-impl<T: Trait> Module<T> {
+    // ----Supporters for Ensure Checks----
     pub fn is_applicant(who: &T::AccountId) -> bool {
         Self::applicant().contains(who)
     }
     pub fn is_member(who: &T::AccountId) -> bool {
-        Self::member().contains(who)
+        Self::members().contains(who)
     }
     pub fn is_voter(who: &T::AccountId) -> bool {
         Self::voter().contains(who)
     }
 
-    // calculate proposal bond
+    // ----Bond Calculations----
     pub fn proposal_bond(shares_requested: Shares, donation: Option<BalanceOf<T>>) -> BalanceOf<T> {
         // check total shares requested
         // vs total shares issued vs this share request
@@ -420,16 +415,13 @@ impl<T: Trait> Module<T> {
         }
         Permill::from_percent(5) * Self::pot()
     }
-
-    // TODO: based on outstanding voters
-    fn vote_bond(new_voter: AccountId) -> BalanceOf<T> {
-        // TODO: make more flexible
+    fn vote_bond(new_voter: T::AccountId) -> BalanceOf<T> {
+        // TODO: make more flexible, based on outstanding voter stats
         let temp_to_change = Permill::from_percent(10) * Self::pot();
 
         // add to member voter bond information
         temp_to_change
     }
-
     fn calculate_threshold(shares_requested: Shares, donation: Option<BalanceOf<T>>) -> Shares {
         // TODO: should depend on inputs, total outstanding requests, and other factors (like the proposal_bond)
 
@@ -438,19 +430,25 @@ impl<T: Trait> Module<T> {
         let threshold = total_shares / 5 + 1;
     }
 
-    fn reserve_shares(voter: AccountId, support: Shares) -> Result {
+    // ----Auxiliary Methods----
+    fn reserve_shares(voter: T::AccountId, support: Shares) -> Result {
         let mut member = Self::member_info(&voter).ok_or("voter must be a member")?;
         let free_shares = member.all_shares - member.reserved_shares;
-        ensure!(
-            support =< free_shares,
-            "not enough free shares to signal support during sponsor"
-        );
-        <MemberInfo<T>>::mutate(&member, |m| m.reserved_shares += support);
+        ensure!(support <= free_shares, "not enough free shares to signal support during sponsor");
+        Self::member_info::mutate(&member, |m| m.reserved_shares += support);
         Ok(())
     }
-
-    // depends on a defined target number of members
-    // {`calculate_entry_fee`, `calculate_vote_bond`, `calculate_spend_frequency`, `calculate_threshold`}
+    // Enables burning of more shares based on proposal passage typically or passage
+    // but the voter dissented and is freed during the GraceWindow
+    fn liberate(free_voters: &[T::AccountId]) -> Result {
+        // taking input as slice is optimal; prefer to iterate over slice vs vec
+        free_voters.into_iter().for_each(|vote| {
+            let mut voter = Self::member_info(vote.0).ok_or("voter does not exist")?;
+            // shares are returned because this side lost
+            voter.reserved_shares -= vote.1;
+        });
+        Ok(())
+    }
 
     // !--private functions--!
 
@@ -479,7 +477,7 @@ impl<T: Trait> Module<T> {
         // ayes and nays vectors
         let mut ayes = Vec::new();
         let mut nays: Vec<(T::AccountId, Shares)> = Vec::new();
-        ayes.push((proposer.clone(), support));
+        ayes.push((sponsor.clone(), support));
 
         // clone proposer for event emission after proposal insertion
         let s = sponsor.clone();
@@ -501,9 +499,9 @@ impl<T: Trait> Module<T> {
         // take hash of proposal
         let hash = <T as system::Trait>::Hashing::hash_of(&proposal);
         // insert proposal
-        <Proposals<T>>::insert(hash, &proposal);
+        Self::proposals::insert(hash, &proposal);
         // insert election
-        <Elections<T>>::insert(hash, &election);
+        Self::elections::insert(hash, &election);
         Self::deposit_event(RawEvent::Proposed(s, hash, shares_requested, vote_start));
         Ok(())
     }
@@ -511,21 +509,24 @@ impl<T: Trait> Module<T> {
     /// Voting
     ///
     /// Called by `vote` and `proxy_vote`
-    fn do_vote(
-        voter: T::AccountId,
-        hash: T::Hash,
-        support: Shares,
-        approve: bool,
-    ) -> Result {
+    fn do_vote(voter: T::AccountId, hash: T::Hash, support: Shares, approve: bool) -> Result {
         // verify election existence
         let mut election = Self::elections(&hash).ok_or("election must exit")?;
-        ensure!(election.applicant != &voter, "potential recipient may not vote");
+        ensure!(
+            election.applicant != &voter,
+            "potential recipient may not vote"
+        );
+
+        // check if the proposal has already passed and entered the grace period
+        if let Some(time) = election.grace_end {
+            return Err("Proposal passed, grace period already started");
+        }
 
         let now = <system::Module<T>>::block_number();
 
         if election.vote_start + T::VoteWindow::get() < now {
-            <Stale<T>>::mutate(|proposals| proposals.push(hash.clone())); // TODO: update with `append` once PR merged
-            return Err("The voting period is over for this proposal");
+            Self::stale_proposals::mutate(|proposals| proposals.push(hash.clone())); // TODO: update with `append` once PR merged
+            return Err("Proposal is stale, no more voting!");
         }
 
         let position_yes = election.ayes.iter().position(|a| a.0 == &voter);
@@ -558,78 +559,108 @@ impl<T: Trait> Module<T> {
                 election.state.1 += pos.1;
             }
         }
-        // update MemberInfo
-        Self::reserve_shares(sponsor.clone(), support)?;
+        // update MemberInfo to reflect vote reservations
+        Self::reserve_shares(voter.clone(), support)?;
         // unnecessary type aliasing
         let total_support = election.state.0;
         let total_against = election.state.1;
-        // TODO: p.threshold should be updated if dynamics have changed?
-
-        if total_support > election.threshold {
-            // INITIATE GRACE PERIOD AND ENFORCE HERE
-            <Passed<T>>::mutate(|pass| pass.push(hash)); // TODO: update with `append` once 3071 merged
-            // pass a vector of AccountIds for dissenting voters
-            Self::liberate_dissenters(&);
-        }
-
-        // TODO: add path in which negative feedback rises above some threshold
-        // should slash some of the proposal bond in this event
-
+        // TODO: election.threshold should be updated if surrounding state has changed?
         Self::deposit_event(RawEvent::Voted(
             voter,
-            time,
+            now,
             hash,
             approve,
             total_support,
             total_against,
         ));
+
+        if total_support > election.threshold {
+            Self::passed::mutate(|pass| pass.push(hash)); // TODO: update with `append` once 3071 merged
+            election.grace_end = now + T::GraceWindow::get();
+            // pass a slice of AccountIds for dissenting voters
+            Self::liberate(&election.nays[..]);
+        }
+
+        // TODO: add path in which negative feedback rises above some threshold
+        // should slash some of the proposal bond in this event
         Ok(())
     }
 
     /// Execution
     ///
     /// Called in `on_finalize` according to `T::SpendFrequency`
-    fn execute(mut budget_remaining: BalanceOf<T>) -> BalanceOf<T> {
-        let mut missed_any = false;
-        <Passed<T>>::mutate(|v| {
-            v.retain(|&hash| {
-                if let Some(p) = Self::proposals(hash) {
-                    if p.value <= budget_remaining {
-                        budget_remaining -= p.value;
-                        <Proposals<T>>::remove(hash);
+    fn issuance(n: T::BlockNumber) -> Result {
+        Self::passed::get().into_iter().for_each(|&hash| {
+            if let Some(e) = Self::elections(hash) {
+                // liberal grace period (sometimes longer than necessary)
+                if n >= e.grace_end {
+                    if let Some(p) = Self::proposals(hash) {
+                        // unbond the sponsor
+                        T::Currency::unreserve(&p.sponsor, &p.sponsor_bond);
+                        // transfer donation from applicant
+                        T::Currency::unreserve(&p.applicant, &p.donation);
+                        T::Currency::transfer(&p.applicant, &Self::account_id(), &p.donation);
 
-                        //might require checks that I'm neglecting...? case of multiple proposals?
-
-                        // return bond
-                        let _ = T::Currency::unreserve(&p.proposer, p.bond);
-
-                        // transfer the funds
-                        let _ = T::Currency::transfer(&Self::account_id(), &p.beneficiary, p.value);
-
-                        Self::deposit_event(RawEvent::Paid(hash, p.value, p.beneficiary));
-                        false
-                    } else {
-                        missed_any = true;
-                        true
+                        if Self::members::exists(&p.applicant) {
+                            Self::member_info::mutate(&p.applicant, |mem| {
+                                mem.all_shares += &p.shares_requested
+                            });
+                        } else {
+                            let all_shares = &p.shares_requested;
+                            let reserved_shares = 0 as Shares;
+                            let voter_bond = None;
+                            Self::member_info::insert(
+                                &p.applicant,
+                                Member {
+                                    all_shares,
+                                    reserved_shares,
+                                    voter_bond,
+                                },
+                            );
+                            Self::members::mutate(|mems| mems.push(p.applicant.clone())); // `append` with 3071
+                        }
+                        Self::shares_requested::mutate(|valu| valu -= &p.shares_requested);
+                        Self::total_shares::mutate(|val| val += &p.shares_requested);
                     }
-                } else {
-                    false
+                    Self::liberate(&e.ayes[..]);
                 }
-            });
+            }
+            Self::elections::remove(hash);
+            Self::proposals::remove(hash);
         });
-        budget_remaining
+        Self::passed::kill();
+        Ok(())
     }
 
     /// Purging stale proposals
     ///
     /// Called in `on_finalize` according to `T::SpendFrequency`
-    fn purge() {
+    fn sweep() {
         // use type state to consume lazy iterator adaptor
-        // TODO: ask for review and discuss
-        let _ = <Stale<T>>::get().into_iter().for_each(|h| {
-            <Proposals<T>>::remove(h);
+        let _ = <StaleProposals<T>>::get().into_iter().for_each(|h| {
+            if let Some(election) = Self::elections(&h) {
+                let nays = election.nays.clone();
+                let old_votes = election.ayes.append(&mut nays);
+                Self::liberate(&old_votes[..]);
+            }
+            let proposal = Self::proposals(&h).ok_or("proposal dne")?;
+            Self::shares_requested::mutate(|val| val -= proposal.shares_requested);
+            // negative incentives, proposal bond goes to the treasury
+            T::Currency::unreserve(&proposal.sponsor, &proposal.sponsor_bond);
+            T::Currency::transfer(&proposal.sponsor, &Self::account_id(), &proposal.sponsor_bond);
+            Self::elections::remove(&h);
+            Self::proposals::remove(&h);
         });
-        <Stale<T>>::kill();
+        Self::stale_proposals::kill();
+
+        let _ = Self::stale_apps::get().into_iter().for_each(|h| {
+            // // uncomment to add punishment
+            // if let Some(app) = Self::applications(&h) {
+            //     // punish by taking percent of donation here
+            // }
+            Self::applications::remove(&h);
+        });
+        Self::stale_apps::kill();
     }
 }
 
