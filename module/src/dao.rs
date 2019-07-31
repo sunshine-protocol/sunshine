@@ -35,29 +35,33 @@ pub struct Application<AccountId, Balance, BlockNumber> {
 /// `=>` would need to link Election to every Proposal
 #[derive(Encode, Decode, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Debug))]
-pub struct Proposal<AccountId, Balance, BlockNumber, Application> {
-    /// Sponsor Information
+pub struct Proposal<AccountId, Balance> {
     // the proposal sponsor must be a member
     sponsor: AccountId,
     // the sponsor's bond
     sponsor_bond: Balance,
-
-    /// Application Information
     // the applicant does not need to be a member
     applicant: AccountId,
     // applicant;s donation to the DAO
     donation: Option<Balance>,
     // membership shares requested
     shares_requested: Shares,
+}
 
-    /// (Election State)
+/// Election State
+#[derive(Encode, Decode, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub struct Election<AccountId, BlockNumber> {
+    // applicant accountId (to prevent when == &voter)
+    applicant: AccountId,
     // BlockNumber at initial proposal
     vote_start: BlockNumber, // TODO: eventually consider adding GraceWindow and VoteWindow; unique to every proposal (~complexity for flexibility)
-    grace_end: Option<BlockNumber>, // initiated by proposal passage in `vote`
+    // initiated by proposal passage in `vote`
+    grace_end: Option<BlockNumber>,
     // threshold for passage
     threshold: Shares, // TODO: update based on dilution dynamics in `vote` (like in MolochDAO); calculate_threshold based on donation/shares ratio relative to average
     // shares in favor, shares against
-    election_state: (Shares, Shares),
+    state: (Shares, Shares),
     // supporting voters (voted yes)
     ayes: Vec<(AccountId, Shares)>,
     // against voters (voted no)
@@ -149,8 +153,8 @@ decl_storage! {
 
         /// Proposals that have been made.
         Proposals get(proposals): map T::Hash => Option<Proposal<T::AccountId, BalanceOf<T>, T::BlockNumber, Application>>;
-        /// Number of active proposals
-        TotalProposals get(total_proposals): ProposalCount;
+        /// From Proposal Hash to election state
+        Elections get(elections): map T::Hash => Election<AccountId, BlockNumber>;
         /// Proposals that have passed, awaiting execution in `on_finalize`
         Passed get(passed): Vec<T::Hash>;
         /// Proposals that have grown stale, awaiting purging
@@ -163,14 +167,10 @@ decl_storage! {
 
         /// Members of the DAO
         Member get(member): Vec<T::AccountId>;
-        /// Total member count
-        TotalMembers get(total_members): MemberCount;
         /// Tracking membership shares (voting strength)
         MemberInfo get(member_info): map T::AccountId => Member<T::AccountId, BalanceOf<T>>;
         /// Active voting members (requires additional bond)
         Voter get(voter): Vec<T::AccountId>;
-        /// Total active voter count (requires additional bond)
-        TotalVoters get(voter_count): MemberCount;
 
         // TODO: re-add proxy functionality; consider alternative APIs
     }
@@ -216,9 +216,6 @@ decl_module! {
                     .map_err(|_| "applicant can't afford donation")?;
             }
 
-            let c = Self::total_apps() + 1;
-            TotalApps::put(c); // TODO: replace with #3
-
             let start = <system::Module<T>>::block_number();
             // clone applicant for event emission post app insertion
             let a = applicant.clone();
@@ -246,6 +243,8 @@ decl_module! {
             ensure!(Self::is_member(&sponsor), "sponsor must be a member");
 
             let mut app = Self::applications(&app_hash).ok_or("application must exist")?;
+            // if the sponsor is the applicant, there are required restrictions on voting for self
+            ensure(&app.applicant != &sponsor, "direct proposals should be made via `propose`");
 
             // TODO: better system for managing pending applications (better purge)
             if app.start + T::ApplicationWindow::get() < <system::Module<T>>::block_number() {
@@ -299,10 +298,10 @@ decl_module! {
             ensure!(!Self::is_voter(&new_voter), "must not be an active voter yet");
 
             let vote_bond = Self::vote_bond(&new_voter);
-            T::Currency::reserve(&new_voter, T::VoteBond::get())
+            T::Currency::reserve(&new_voter, vote_bond)
                 .map_err(|_| "member doesn't have enough free balance for vote bond")?;
 
-            <Voter<T>>::mutate(|v| v.push(new_voter.clone())); // replace with append once
+            <Voter<T>>::mutate(|v| v.push(new_voter.clone())); // `append` once 3071 merged
             let start = <system::Module<T>>::block_number();
 
             Self::deposit_event(RawEvent::RegisterVoter(new_voter, start));
@@ -317,7 +316,7 @@ decl_module! {
             // TODO: measure instances of misbehavior in a stateful way; slash some percent here
             T::Currency::unreserve(&old_voter, T::VoteBond::get());
 
-            <Voter<T>>::get().retain(|v| v != &old_voter);
+            <Voter<T>>::mutate(|voters| voters.retain(|v| v != &old_voter));
             let end = <system::Module<T>>::block_number();
 
             Self::deposit_event(RawEvent::DeRegisterVoter(old_voter, end));
@@ -334,6 +333,34 @@ decl_module! {
             Self::do_vote(voter, proposal_hash, support, approve)
         }
 
+        /// Burn shares
+        fn burn(origin, to_burn: Shares) -> Result {
+            ensure!(to_burn > 0, "can only burn > 0 shares");
+            let arsonist = ensure_signed(origin)?;
+            let mut member = Self::member_info(&arsonist).ok_or("must be a member to burn shares")?;
+            let free_shares = member.all_shares - member.reserved_shares;
+            ensure!(
+                to_burn =< free_shares
+                "not enough free shares to burn"
+            );
+            // TODO: priority to verify valid behavior below via tests
+            let burn_ratio = Permill::from_rational_approximation(to_burn, Self::shares_issued());
+            let proportionate_balance = burn_ratio * Self::pot();
+            // NOTE: if the above doesn't work, multiple numerator in `from_rational_approximation` by Self::pot()
+            let _ = T::Currency::transfer(&Self::account_id(), &arsonist, proportionate_balance)?;
+            if to_burn < free_shares {
+                // member is only burning some of their shares
+                member.all_shares -= to_burn;
+            } else {
+                ensure!(!<Voter<T>>::exists(&arsonist), "get voter bond (deregister) before leaving the DAO");
+                // member is burning all shares and leaving the DAO
+                <Member<T>>::mutate(|members| members.retain(|m| m != &arsonist));
+                <MemberInfo<T>>::remove(&arsonist);
+            }
+            <SharesIssued<T>>::mutate(|val| val -= to_burn);
+            Ok(())
+        }
+
         fn on_finalize(n: T::BlockNumber) {
 
             // PURGE
@@ -344,6 +371,7 @@ decl_module! {
             // SPEND
             let mut budget = Self::pot();
             if (n % T::ExecuteFrequency::get()).is_zero() {
+                Self::execute();
                 budget = Self::spend(budget); // more nuanced
             }// TODO: is_zero() requires the Zero trait from runtime_primitives::traits
 
@@ -410,6 +438,17 @@ impl<T: Trait> Module<T> {
         let threshold = total_shares / 5 + 1;
     }
 
+    fn reserve_shares(voter: AccountId, support: Shares) -> Result {
+        let mut member = Self::member_info(&voter).ok_or("voter must be a member")?;
+        let free_shares = member.all_shares - member.reserved_shares;
+        ensure!(
+            support =< free_shares,
+            "not enough free shares to signal support during sponsor"
+        );
+        <MemberInfo<T>>::mutate(&member, |m| m.reserved_shares += support);
+        Ok(())
+    }
+
     // depends on a defined target number of members
     // {`calculate_entry_fee`, `calculate_vote_bond`, `calculate_spend_frequency`, `calculate_threshold`}
 
@@ -427,17 +466,11 @@ impl<T: Trait> Module<T> {
     ) -> Result {
         // bond the proposer
         let sponsor_bond = Self::proposal_bond(shares_requested, donation);
-        T::Currency::reserve(&proposer, sponsor_bond).map_err(|_| "Proposer's balance too low")?;
+        T::Currency::reserve(&sponsor, sponsor_bond).map_err(|_| "Proposer's balance too low")?;
 
         let threshold = Self::calculate_threshold(shares_requested, donation);
 
-        let member = Self::member_info(&proposer);
-        let free_shares = member.all_shares - member.reserved_shares;
-        ensure!(
-            support < free_shares,
-            "not enough free shares to signal support during sponsor"
-        );
-        <MemberInfo<T>>::mutate(&proposer, |m| m.reserved_shares += support);
+        Self::reserve_shares(sponsor.clone(), support)?;
 
         // start the voting period
         let vote_start = <system::Module<T>>::block_number();
@@ -456,6 +489,9 @@ impl<T: Trait> Module<T> {
             applicant,
             donation,
             shares_requested,
+        };
+        let election = Election {
+            applicant, // might require a clone
             vote_start,
             grace_end,
             threshold,
@@ -466,6 +502,8 @@ impl<T: Trait> Module<T> {
         let hash = <T as system::Trait>::Hashing::hash_of(&proposal);
         // insert proposal
         <Proposals<T>>::insert(hash, &proposal);
+        // insert election
+        <Elections<T>>::insert(hash, &election);
         Self::deposit_event(RawEvent::Proposed(s, hash, shares_requested, vote_start));
         Ok(())
     }
@@ -475,59 +513,63 @@ impl<T: Trait> Module<T> {
     /// Called by `vote` and `proxy_vote`
     fn do_vote(
         voter: T::AccountId,
-        proposal_hash: T::Hash,
+        hash: T::Hash,
         support: Shares,
         approve: bool,
     ) -> Result {
-        // verify proposal existence
-        let mut p = Self::proposals(&proposal_hash).ok_or("proposal must exist")?;
+        // verify election existence
+        let mut election = Self::elections(&hash).ok_or("election must exit")?;
+        ensure!(election.applicant != &voter, "potential recipient may not vote");
 
-        let time = <system::Module<T>>::block_number();
+        let now = <system::Module<T>>::block_number();
 
-        if p.vote_start + T::VoteWindow::get() < time {
-            <Stale<T>>::mutate(|s| s.push(proposal_hash.clone())); // TODO: update with `append` once PR merged
+        if election.vote_start + T::VoteWindow::get() < now {
+            <Stale<T>>::mutate(|proposals| proposals.push(hash.clone())); // TODO: update with `append` once PR merged
             return Err("The voting period is over for this proposal");
         }
 
-        let position_yes = p.ayes.iter().position(|a| a.0 == &voter);
-        let position_no = p.nays.iter().position(|a| a.0 == &voter);
+        let position_yes = election.ayes.iter().position(|a| a.0 == &voter);
+        let position_no = election.nays.iter().position(|a| a.0 == &voter);
 
         if approve {
             if position_yes.is_none() {
-                p.ayes.push((voter.clone(), support));
-                p.election_state.0 += support;
+                election.ayes.push((voter.clone(), support));
+                election.state.0 += support;
             } else {
                 return Err("duplicate vote");
             }
             // executes if the previous vote was no
             if let Some(pos) = position_no {
                 // ability to change vote at no cost prevents bribery attacks
-                p.nays.swap_remove(pos);
-                p.election_state.1 -= pos.1;
-                p.election_state.0 += pos.1;
+                election.nays.swap_remove(pos);
+                election.state.1 -= pos.1;
+                election.state.0 += pos.1;
             }
         } else {
             if position_no.is_none() {
-                p.nays.push((voter.clone(), support));
-                p.election_state.1 += support;
+                election.nays.push((voter.clone(), support));
+                election.state.1 += support;
             } else {
                 return Err("duplicate vote");
             }
             if let Some(pos) = position_yes {
-                p.ayes.swap_remove(pos);
-                p.election_state.0 -= pos.1;
-                p.election_state.1 += pos.1
+                election.ayes.swap_remove(pos);
+                election.state.0 -= pos.1;
+                election.state.1 += pos.1;
             }
         }
-
-        // abstract a vote count method
-        // we don't want to recalculate for every vote
-        let total_support = p.election_state.0;
-        let total_against = p.election_state.1;
+        // update MemberInfo
+        Self::reserve_shares(sponsor.clone(), support)?;
+        // unnecessary type aliasing
+        let total_support = election.state.0;
+        let total_against = election.state.1;
         // TODO: p.threshold should be updated if dynamics have changed?
 
-        if total_support > p.threshold {
-            <Passed<T>>::mutate(|pass| pass.push(proposal_hash)); // TODO: update with `append` once 3071 merged
+        if total_support > election.threshold {
+            // INITIATE GRACE PERIOD AND ENFORCE HERE
+            <Passed<T>>::mutate(|pass| pass.push(hash)); // TODO: update with `append` once 3071 merged
+            // pass a vector of AccountIds for dissenting voters
+            Self::liberate_dissenters(&);
         }
 
         // TODO: add path in which negative feedback rises above some threshold
@@ -536,7 +578,7 @@ impl<T: Trait> Module<T> {
         Self::deposit_event(RawEvent::Voted(
             voter,
             time,
-            proposal_hash,
+            hash,
             approve,
             total_support,
             total_against,
@@ -555,8 +597,6 @@ impl<T: Trait> Module<T> {
                     if p.value <= budget_remaining {
                         budget_remaining -= p.value;
                         <Proposals<T>>::remove(hash);
-                        let total = Self::total_proposals() - 1;
-                        <TotalProposals>::put(total);
 
                         //might require checks that I'm neglecting...? case of multiple proposals?
 
@@ -588,8 +628,6 @@ impl<T: Trait> Module<T> {
         // TODO: ask for review and discuss
         let _ = <Stale<T>>::get().into_iter().for_each(|h| {
             <Proposals<T>>::remove(h);
-            let total = Self::total_proposals() - 1;
-            <TotalProposals>::put(total);
         });
         <Stale<T>>::kill();
     }
