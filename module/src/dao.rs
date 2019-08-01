@@ -95,6 +95,9 @@ pub trait Trait: system::Trait {
     /// Period for which applications are valid after initial application
     type ApplicationWindow: Get<Self::BlockNumber>;
 
+    /// Period during which applications can be revoked without penalty
+    type AbortWindow: Get<Self::BlockNumber>;
+
     /// Period for which votes are valid after initial proposal
     type VoteWindow: Get<Self::BlockNumber>;
 
@@ -179,6 +182,9 @@ decl_module! {
 
         /// Period in which applications are valid after initial application
         const ApplicationWindow: T::BlockNumber = T::ApplicationWindow::get();
+
+        /// Period during which applications can be revoked without penalty
+        const AbortWindow: T::BlockNumber = T::AbortWindow::get();
 
         /// Period after initial proposal during which voting is allowed
         const VoteWindow: T::BlockNumber = T::VoteWindow::get();
@@ -270,12 +276,60 @@ decl_module! {
             Ok(())
         }
 
-        // TODO: abort function
-        //
-        // -- would require an abort window
+        fn abort(origin, hash: T::Hash) -> Result {
+            let abortee = ensure_signed(origin)?;
+
+            let now = <system::Module<T>>::block_number();
+
+            // if application, purge application and end
+            if let Some(app) = Self::applications(&hash) {
+                ensure!(&abortee == &app.applicant, "only the applicant can abort the proposal");
+                if app.start + T::ApplicationWindow::get() < now {
+                    <StaleApps<T>>::mutate(|s| s.push(hash.clone())); // TODO: `append` after 3071 merged
+                    return Err("The window has passed for this application");
+                }
+
+                <Applications<T>>::remove(&hash);
+            }
+
+            // if live proposal, cleanup is harder are necessary
+            if let Some(mut election) = Self::elections(&hash) {
+                // only the applicant can call abort
+                ensure!(&abortee == &election.applier, "only the applicant can abort the proposal");
+
+                // no aborting if the proposal has overcome the threshold of support for/against
+                ensure!(election.threshold > election.state.0 || election.threshold > election.state.1, "too controversial; the vote already has too much support for/against the proposal");
+
+                // checking against time
+                if election.vote_start + T::AbortWindow::get() < now {
+                    return Err("past the abort window, too late");
+                } else if election.vote_start + T::VoteWindow::get() < now {
+                    <StaleProposals<T>>::mutate(|proposals| proposals.push(hash.clone())); // TODO: update with `append` once PR merged
+                    return Err("Proposal is stale, no more voting!");
+                } else if let Some(time) = election.grace_end {
+                    return Err("Proposal passed, grace period already started");
+                }
+
+                // liberate voters
+                let votes: Vec<(T::AccountId, Shares)> = election.ayes.into_iter().chain(election.nays).collect();
+                Self::liberate(&votes[..]);
+            }
+
+            if let Some(proposal) = Self::proposals(&hash) {
+                let shares_requested = <SharesRequested>::get() - proposal.shares_requested;
+                <SharesRequested>::put(shares_requested);
+                // negative incentives, proposal bond goes to the treasury
+                T::Currency::unreserve(&proposal.sponsor, proposal.sponsor_bond);
+                T::Currency::transfer(&proposal.sponsor, &Self::account_id(), proposal.sponsor_bond);
+            }
+            <Elections<T>>::remove(&hash);
+            <Proposals<T>>::remove(&hash);
+
+            Ok(())
+        }
 
         // register as a new voter
-        pub fn register(origin) -> Result {
+        fn register(origin) -> Result {
             let new_voter = ensure_signed(origin)?;
             ensure!(Self::is_member(&new_voter), "every voter must be a member");
             ensure!(!Self::is_voter(&new_voter), "must not be an active voter yet");
@@ -292,7 +346,7 @@ decl_module! {
         }
 
         // deregister as a new voter
-        pub fn deregister(origin) -> Result {
+        fn deregister(origin) -> Result {
             let old_voter = ensure_signed(origin)?;
             ensure!(Self::is_voter(&old_voter), "must be an active voter");
 
@@ -309,7 +363,7 @@ decl_module! {
         /// Vote
         ///
         /// -- separate from `do_vote` to facilitate proxy functionality soon
-        pub fn vote(origin, proposal_hash: T::Hash, support: Shares, approve: bool) -> Result {
+        fn vote(origin, proposal_hash: T::Hash, support: Shares, approve: bool) -> Result {
             let voter = ensure_signed(origin)?;
             ensure!(Self::is_voter(&voter), "The member must be an active voter");
 
@@ -418,7 +472,10 @@ impl<T: Trait> Module<T> {
     fn reserve_shares(voter: T::AccountId, support: Shares) -> Result {
         let mut member = <MemberInfo<T>>::get(&voter).ok_or("voter must be a member")?;
         let free_shares = member.all_shares - member.reserved_shares;
-        ensure!(support <= free_shares, "not enough free shares to signal support during sponsor");
+        ensure!(
+            support <= free_shares,
+            "not enough free shares to signal support during sponsor"
+        );
         member.reserved_shares += support;
         Ok(())
     }
@@ -492,7 +549,7 @@ impl<T: Trait> Module<T> {
         Self::deposit_event(RawEvent::Proposed(s, hash, shares_requested, vote_start));
         Ok(())
     }
-    
+
     /// Voting
     ///
     /// Called by `vote` and `proxy_vote`
@@ -631,7 +688,8 @@ impl<T: Trait> Module<T> {
         // use type state to consume lazy iterator adaptor
         let _ = <StaleProposals<T>>::get().into_iter().for_each(|h| {
             if let Some(election) = Self::elections(&h) {
-                let votes: Vec<(T::AccountId, Shares)> = election.ayes.into_iter().chain(election.nays).collect();
+                let votes: Vec<(T::AccountId, Shares)> =
+                    election.ayes.into_iter().chain(election.nays).collect();
                 Self::liberate(&votes[..]);
             }
             if let Some(proposal) = Self::proposals(&h) {
@@ -639,7 +697,11 @@ impl<T: Trait> Module<T> {
                 <SharesRequested>::put(shares_requested);
                 // negative incentives, proposal bond goes to the treasury
                 T::Currency::unreserve(&proposal.sponsor, proposal.sponsor_bond);
-                T::Currency::transfer(&proposal.sponsor, &Self::account_id(), proposal.sponsor_bond);
+                T::Currency::transfer(
+                    &proposal.sponsor,
+                    &Self::account_id(),
+                    proposal.sponsor_bond,
+                );
             }
             <Elections<T>>::remove(&h);
             <Proposals<T>>::remove(&h);
@@ -686,16 +748,13 @@ mod tests {
             // get address for checking membership
             let who = ensure_signed(Origin::signed(0)).expect("smh^smh");
             assert!(DAO::is_member(&who));; // how do I get the accountId
-                                                // join request from existing member should fail
+                                            // join request from existing member should fail
             assert_noop!(
                 DAO::join(Origin::signed(0)),
                 "new member is already a member"
             );
             // (3, 9) can't join because 9 < 10 (and 10 is EntryFee)
-            assert_noop!(
-                DAO::join(Origin::signed(3)),
-                "Not rich enough to join ;("
-            );
+            assert_noop!(DAO::join(Origin::signed(3)), "Not rich enough to join ;(");
         });
     }
 
@@ -757,10 +816,7 @@ mod tests {
             assert_ok!(DAO::join(Origin::signed(0)));
             assert_ok!(DAO::join(Origin::signed(1)));
             // can't vote on nonexistent proposal
-            assert_noop!(
-                DAO::vote(Origin::signed(1), 1, true),
-                "proposal must exist"
-            );
+            assert_noop!(DAO::vote(Origin::signed(1), 1, true), "proposal must exist");
             // make proposal for voting
             assert_ok!(DAO::propose(Origin::signed(0), 11, 3));
             assert_eq!(DAO::total_proposals(), 1);

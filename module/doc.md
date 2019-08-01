@@ -1,5 +1,8 @@
 ## Proposal Event Loop
 
+* draw diagrams for incentive flows `=>` improve on configurability
+* add `abort` function with `type AbortWindow = Get<Self::BlockNumber>` in `pub Trait{}`
+
 * applications
 * validation/rejection
 * execution
