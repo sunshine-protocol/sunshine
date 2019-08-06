@@ -1,7 +1,15 @@
-## Proposal Event Loop
+## PR Information
 
-* draw diagrams for incentive flows `=>` improve on configurability
-* add `abort` function with `type AbortWindow = Get<Self::BlockNumber>` in `pub Trait{}`
+> in response to issue #21
+
+* **finish unit testing**
+* **finish documentation**
+* minimize storage calls by adding `shares_requested` to `Elections` struct
+* replace `Threshold` with a `VoteThreshold` object like in `srml/democracy` (could eventually make this voting abstraction into its own module)
+* clean up if statement heLL in the `issuance` and `purge` methods `=>` many times when multiple of the same storage calls are made
+
+
+## Proposal Event Loop
 
 * applications
 * validation/rejection
