@@ -1,3 +1,8 @@
+/// Sunshine MVP
+/// -- share-weighted voting
+/// -- collateral from applicants is `Balance`; collateral from voters/proposers is `Shares`
+/// -- implements lock-in and *instant withdrawal* like Moloch
+
 use parity_codec::{Decode, Encode};
 #[cfg(feature = "std")]
 use runtime_primitives::traits::{AccountIdConversion, Hash, Zero}; // StaticLookup
@@ -36,22 +41,25 @@ pub struct Application<AccountId, Balance, BlockNumber> {
 pub struct Proposal<AccountId, Balance> {
     // the proposal sponsor must be a member
     sponsor: AccountId,
-    // the sponsor's bond
-    sponsor_bond: Balance,
+    // the sponsor's vote (/bond in support, like a voter)
+    sponsor_vote: Shares,
     // the applicant does not need to be a member
-    applicant: AccountId,
-    // applicant;s donation to the DAO
+    applicant: Option<AccountId>,
+    // applicant's donation to the DAO
     donation: Option<Balance>,
     // membership shares requested
     shares_requested: Shares,
 }
 
 /// Election State
+///
+/// TODO: (1) add shares_requested field
+///        (2) abstract out voting and replace threshold with `VoteThreshold` for more algorithms
 #[derive(Encode, Decode, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct Election<AccountId, BlockNumber> {
     // applicant accountId (to prevent when == &voter)
-    applier: AccountId,
+    app_sender: AccountId,
     // BlockNumber at initial proposal
     vote_start: BlockNumber, // TODO: eventually consider adding GraceWindow and VoteWindow; unique to every proposal (~complexity for flexibility)
     // initiated by proposal passage in `vote`
@@ -69,13 +77,14 @@ pub struct Election<AccountId, BlockNumber> {
 /// Voter state (for lock-in + 'instant' withdrawals)
 #[derive(Encode, Decode, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Debug))]
-pub struct Member<Balance> {
+pub struct Member {
     // total shares owned by the member
     all_shares: Shares,
     // shares reserved based on pending proposal support
     reserved_shares: Shares,
-    // active voters are bonded
-    voter_bond: Option<Balance>, // TODO: use some `if let Some` pattern for checking
+    // shares reserved for voters
+    voter_bond: Option<Shares>,
+    // TODO: consider more stateful pattern via `BTreeMap<Hash, Shares>` for vote pairs
 }
 // END TYPES
 
@@ -87,10 +96,10 @@ pub trait Trait: system::Trait {
     type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 
     /// Bond required for proposal
-    type ProposalBond: Get<BalanceOf<Self>>;
+    type ProposalBond: Get<Shares>; // TODO: add issue and change this bond to shares
 
     /// Bond required to become an active voter
-    type VoteBond: Get<BalanceOf<Self>>;
+    type VoteBond: Get<Shares>; // TODO: add issue and change this bond to shares
 
     /// Period for which applications are valid after initial application
     type ApplicationWindow: Get<Self::BlockNumber>;
@@ -121,19 +130,21 @@ decl_event!(
         <T as system::Trait>::Hash,
         Shares = Shares,
     {
-        // applicant AccountId, proposal Hash, donation amount (if any), shares requested
+        // applicant AccountId, application Hash, donation amount (if any), shares requested
         Applied(AccountId, Hash, Option<Balance>, Shares),
+        // applicant AccountId, application Hash, 
+        Aborted(AccountId, Hash), // TODO: could add abortion fee charged (if any); atm \exists none
         // sponsor AccountId, proposal Hash, shares requested, block number
         Proposed(AccountId, Hash, Shares, BlockNumber),
-        // new voter AccountId, BlockNumber at registration
-        RegisterVoter(AccountId, BlockNumber),
+        // new voter AccountId, Shares bonded by new voter, BlockNumber at registration
+        RegisterVoter(AccountId, Shares, BlockNumber),
         // old voter AccountId, BlockNumber at deregistration
-        DeRegisterVoter(AccountId, BlockNumber),
-        // voter AccountId, block number, proposal Hash, vote bool, yes_count, no_count
-        Voted(AccountId, BlockNumber, Hash, bool, Shares, Shares), // TODO: add BlockNumber
-        // new member AccountId, shares issued, balance committed
+        DeRegisterVoter(AccountId, Shares, BlockNumber),
+        // voter AccountId, block number, proposal Hash, vote bool, vote_weight, yes_count, no_count
+        Voted(AccountId, BlockNumber, Hash, bool, Shares, Shares, Shares), // TODO: add BlockNumber
+        // new member AccountId, shares issued, donation (balance) staked
         SharesIssued(AccountId, Shares, Balance),
-        // member ID, shares burned, balance returned
+        // member ID, shares burned, funds withdrawn from exit
         SharesBurned(AccountId, Shares, Balance),
     }
 );
@@ -161,24 +172,27 @@ decl_storage! {
         // Total shares issued
         TotalShares get(total_shares): Shares;
 
+        // TotalShares get(total_shares) build(|config: &GenesisConfig<T>| {
+        //     config.memberz.iter().fold(Zero::zero(), |acc: Shares, &(_, n)| acc + n)
+        // }): Shares;
+
         /// Members of the DAO
         Members get(members): Vec<T::AccountId>;
         /// Tracking membership shares (voting strength)
-        MemberInfo get(member_info): map T::AccountId => Option<Member<BalanceOf<T>>>;
-        /// Active voting members (requires additional bond)
+        MemberInfo get(member_info): map T::AccountId => Option<Member>;
+        /// Active voting members (requires addition Shares-based bond)
         Voters get(voters): Vec<T::AccountId>;
-
-        // TODO: re-add proxy functionality; consider alternative APIs
     }
+    // add_extra_genesis {} // for tests set up
 }
 
 decl_module! {
     pub struct Module<T: Trait> for enum Call where origin: T::Origin {
         /// Bond for proposals, to be returned
-        const ProposalBond: BalanceOf<T> = T::ProposalBond::get();
+        const ProposalBond: Shares = T::ProposalBond::get();
 
         /// Bond for active voters, to be returned
-        const VoteBond: BalanceOf<T> = T::VoteBond::get();
+        const VoteBond: Shares = T::VoteBond::get();
 
         /// Period in which applications are valid after initial application
         const ApplicationWindow: T::BlockNumber = T::ApplicationWindow::get();
@@ -202,7 +216,7 @@ decl_module! {
 
         fn apply(origin, shares_requested: Shares, donation: Option<BalanceOf<T>>) -> Result {
             let applicant = ensure_signed(origin)?;
-            // can be commended to remove restriction of one application per pending applicant (otherwise, need better spam protection)
+            // if removed, we risk duplicate applications with the same hash?
             ensure!(!Self::is_applicant(&applicant), "only one application per applicant");
 
             // reserve donation if it exists
@@ -246,7 +260,7 @@ decl_module! {
             }
 
             // make the proposal
-            Self::do_propose(sponsor.clone(), app.applicant, support, app.donation, app.shares_requested)?;
+            Self::do_propose(sponsor, Some(app.applicant), support, app.donation, app.shares_requested)?;
 
             // remove the application, the proposal is live
             <Applications<T>>::remove(app_hash);
@@ -272,7 +286,7 @@ decl_module! {
             }
 
             // direct proposal
-            Self::do_propose(proposer.clone(), proposer, 0, donation, shares_requested)?;
+            Self::do_propose(proposer, None, 0, donation, shares_requested)?;
             Ok(())
         }
 
@@ -283,19 +297,28 @@ decl_module! {
 
             // if application, purge application and end
             if let Some(app) = Self::applications(&hash) {
+                // INVARIANT: an application must only exist iff there are no associated proposals or elections
+                // -- this prevents unreserving the donation amount twice inadvertently
                 ensure!(&abortee == &app.applicant, "only the applicant can abort the proposal");
                 if app.start + T::ApplicationWindow::get() < now {
                     <StaleApps<T>>::mutate(|s| s.push(hash.clone())); // TODO: `append` after 3071 merged
                     return Err("The window has passed for this application");
                 }
+                // return the application donation
+                if let Some(donate) = app.donation {
+                    T::Currency::unreserve(&app.applicant, donate);
+                    // TODO: could calculate and charge an abort fee here
+                }
 
                 <Applications<T>>::remove(&hash);
+                Self::deposit_event(RawEvent::Aborted(abortee.clone(), hash.clone()));
+                return Ok(());
             }
 
             // if live proposal, cleanup is harder are necessary
             if let Some(mut election) = Self::elections(&hash) {
                 // only the applicant can call abort
-                ensure!(&abortee == &election.applier, "only the applicant can abort the proposal");
+                ensure!(&abortee == &election.app_sender, "only the applicant can abort the proposal");
 
                 // no aborting if the proposal has overcome the threshold of support for/against
                 ensure!(election.threshold > election.state.0 || election.threshold > election.state.1, "too controversial; the vote already has too much support for/against the proposal");
@@ -315,48 +338,56 @@ decl_module! {
                 Self::liberate(&votes[..]);
             }
 
+            // this call is only to get the `shares_requested`
+            // TODO: should just add the field to `Election` to make this 1 call instead of 2
             if let Some(proposal) = Self::proposals(&hash) {
                 let shares_requested = <SharesRequested>::get() - proposal.shares_requested;
                 <SharesRequested>::put(shares_requested);
-                // negative incentives, proposal bond goes to the treasury
-                T::Currency::unreserve(&proposal.sponsor, proposal.sponsor_bond);
-                T::Currency::transfer(&proposal.sponsor, &Self::account_id(), proposal.sponsor_bond);
+                // could take an abort fee
             }
             <Elections<T>>::remove(&hash);
             <Proposals<T>>::remove(&hash);
-
+            Self::deposit_event(RawEvent::Aborted(abortee, hash));
             Ok(())
         }
 
         // register as a new voter
         fn register(origin) -> Result {
             let new_voter = ensure_signed(origin)?;
-            ensure!(Self::is_member(&new_voter), "every voter must be a member");
+
+            let mut member = <MemberInfo<T>>::get(&new_voter).ok_or("no info on member!")?;
             ensure!(!Self::is_voter(&new_voter), "must not be an active voter yet");
 
-            let vote_bond = Self::vote_bond();
-            T::Currency::reserve(&new_voter, vote_bond)
-                .map_err(|_| "member doesn't have enough free balance for vote bond")?;
+            let vote_bond: Shares = Self::calculate_vbond();
+            member.voter_bond = Some(vote_bond);
 
             <Voters<T>>::mutate(|v| v.push(new_voter.clone())); // `append` once 3071 merged
             let start = <system::Module<T>>::block_number();
 
-            Self::deposit_event(RawEvent::RegisterVoter(new_voter, start));
+            Self::deposit_event(RawEvent::RegisterVoter(new_voter, vote_bond, start));
             Ok(())
         }
 
-        // deregister as a new voter
+        /// Deregister an active voter
+        ///
+        /// -- returns `voter_bond`
+        /// -- prevents any voting upon execution 
         fn deregister(origin) -> Result {
             let old_voter = ensure_signed(origin)?;
             ensure!(Self::is_voter(&old_voter), "must be an active voter");
 
-            // TODO: measure instances of misbehavior in a stateful way; slash some percent here
-            T::Currency::unreserve(&old_voter, T::VoteBond::get());
+            let mut member = <MemberInfo<T>>::get(&old_voter).ok_or("no member information")?;
+            let mut shares_released: Shares = 0;
+            if let Some(bond_remains) = member.voter_bond {
+                member.voter_bond = None; // return the bond
+                shares_released += bond_remains;
+            }
 
+            // take the voter out of the associated storage item (prevent future voting)
             <Voters<T>>::mutate(|voters| voters.retain(|v| v != &old_voter));
             let end = <system::Module<T>>::block_number();
 
-            Self::deposit_event(RawEvent::DeRegisterVoter(old_voter, end));
+            Self::deposit_event(RawEvent::DeRegisterVoter(old_voter, shares_released, end));
             Ok(())
         }
 
@@ -375,21 +406,26 @@ decl_module! {
             ensure!(to_burn > 0, "can only burn > 0 shares");
             let arsonist = ensure_signed(origin)?;
             let mut member = Self::member_info(&arsonist).ok_or("must be a member to burn shares")?;
-            let free_shares = member.all_shares - member.reserved_shares;
+            let mut free_shares: Shares = member.all_shares - member.reserved_shares;
+            let mut still_voter = false;
+            if let Some(bond_remains) = member.voter_bond {
+                free_shares -= bond_remains;
+                still_voter = true;
+            }
             ensure!(to_burn <= free_shares, "not enough free shares to burn");
-            // TODO: priority to verify valid behavior below via tests
+            // TODO: make this burn_ratio more dilutive
             let burn_ratio = Permill::from_rational_approximation(to_burn, Self::total_shares());
             let proportionate_balance = burn_ratio * Self::pot();
-            // NOTE: if the above doesn't work, multiple numerator in `from_rational_approximation` by Self::pot()
+            // NOTE: if the above doesn't work, multiply numerator in `from_rational_approximation` by Self::pot()
             let _ = T::Currency::transfer(&Self::account_id(), &arsonist, proportionate_balance)?;
-            if to_burn < free_shares {
-                // member is only burning some of their shares
-                member.all_shares -= to_burn;
-            } else {
-                ensure!(!Self::is_voter(&arsonist), "get voter bond (deregister) before leaving the DAO");
-                // member is burning all shares and leaving the DAO
+            // check if the member is leaving the DAO
+            if (member.all_shares, member.reserved_shares, still_voter) == (0, 0, false) {
+                // member is leaving the DAO
                 <Members<T>>::mutate(|members| members.retain(|m| m != &arsonist));
                 <MemberInfo<T>>::remove(&arsonist);
+            } else {
+                // member is staying the DAO but burning some free shares
+                member.all_shares -= to_burn;
             }
             let total_shares_issued = Self::total_shares() - to_burn;
             <TotalShares>::put(total_shares_issued);
@@ -438,43 +474,63 @@ impl<T: Trait> Module<T> {
         Self::voters().contains(who)
     }
 
-    fn proposal_bond(shares_requested: Shares, donation: Option<BalanceOf<T>>) -> BalanceOf<T> {
-        // check total shares requested
-        // vs total shares issued vs this share request
-        // vs this donation
-
-        // ideal donation conforms to DAO balance/shares issued ratio
-        // TODO: make adjustable and able to vote on this
-        // let ideal = Permill::from_percent(10) *
-        if let Some(val) = donation {
-            // check how ratio of this value to shares_requested is relative to
-            return Permill::from_percent(10) * val;
+    fn calculate_pbond(shares_requested: Shares, donation: Option<BalanceOf<T>>, direct: bool) -> Shares {
+        // 20 % higher proposal bond base for direct proposals
+        let direct_multiplier = Permill::from_percent(20); 
+        let base_bond: Shares = T::ProposalBond::get();
+        let bond = if direct { (direct_multiplier*base_bond) + base_bond } else { base_bond };
+        if let Some(donated) = donation {
+            // expected ratio: 1 share = 1 balance 1-to-1
+            let sr: BalanceOf<T> = shares_requested.into();
+            let positive = sr >= donated;
+            if positive {
+                // donation is low relative to shares => higher required proposal bond
+                let diff = sr - donated;
+                let diff_abs = Permill::from_rational_approximation(diff, donated);
+                let delta = diff_abs * bond;
+                // (1 + diff_abs)(T::ProposalBond::get())
+                let pricy_proposal_bond = delta + bond;
+                return pricy_proposal_bond
+            } else {
+                // donation is high relative to shares => lower required proposal bond
+                let diff = donated - sr;
+                let diff_abs = Permill::from_rational_approximation(diff, donated);
+                let delta = diff_abs * bond;
+                // (1 - diff_abs)(T::ProposalBond::get())
+                let cheap_proposal_bond = bond - delta;
+                return cheap_proposal_bond
+            }
         }
-        Permill::from_percent(5) * Self::pot()
+        // no donation `=>` pure grant
+        // TODO: set relatively high proposal bond (could multiply by 2, but too arbitrary)
+        bond
     }
-    fn vote_bond() -> BalanceOf<T> {
-        // TODO: make more flexible, based on outstanding voter stats
-        let temp_to_change = Permill::from_percent(10) * Self::pot();
-
-        // add to member voter bond information
-        temp_to_change
+    fn calculate_vbond() -> Shares {
+        // TODO: increase/decrease based on proposal throughput rolling average
+        // (mvp returns constant)
+        T::VoteBond::get()
     }
     fn calculate_threshold(shares_requested: Shares, donation: Option<BalanceOf<T>>) -> Shares {
-        // TODO: should depend on inputs, total outstanding requests, and other factors (like the proposal_bond)
+        // TODO: might also rely on 
+        // -- sponsored vs direct proposal (to prioritize sponsored proposals if necessary)
+        // -- proposal throughput targets vs reality
 
         // temporary hard-coded threshold (> 20% of outstanding shares)
         let total_shares = Self::total_shares();
-        let threshold = total_shares / 5 + 1;
+        let threshold = (total_shares / 5) + 1;
         threshold
     }
 
     // ----Auxiliary Methods----
     fn reserve_shares(voter: T::AccountId, support: Shares) -> Result {
-        let mut member = <MemberInfo<T>>::get(&voter).ok_or("voter must be a member")?;
-        let free_shares = member.all_shares - member.reserved_shares;
+        let mut member = <MemberInfo<T>>::get(&voter).ok_or("must be a member")?;
+        let mut free_shares = member.all_shares - member.reserved_shares;
+        if let Some(vbond) = member.voter_bond {
+            free_shares -= vbond;
+        }
         ensure!(
             support <= free_shares,
-            "not enough free shares to signal support during sponsor"
+            "not enough free shares to signal support"
         );
         member.reserved_shares += support;
         Ok(())
@@ -493,23 +549,39 @@ impl<T: Trait> Module<T> {
 
     // !--private functions--!
 
-    /// Proposals (of the spend variety)
+    /// Make proposals (of the spend variety)
     ///
-    /// Called by `propose` and `proxy_propose`
+    /// Called by `sponsor` and `propose`
     fn do_propose(
         sponsor: T::AccountId,
-        applicant: T::AccountId,
+        applicant: Option<T::AccountId>,
         support: Shares,
         donation: Option<BalanceOf<T>>,
         shares_requested: Shares,
     ) -> Result {
-        // bond the proposer
-        let sponsor_bond = Self::proposal_bond(shares_requested, donation);
-        T::Currency::reserve(&sponsor, sponsor_bond).map_err(|_| "Proposer's balance too low")?;
+        let mut sponsor_bond: Shares = 0;
+        if let Some(apple) = applicant.clone() {
+            // sponsored proposal
+            sponsor_bond += Self::calculate_pbond(shares_requested, donation, false);
+        } else {
+            // direct proposal
+            sponsor_bond += Self::calculate_pbond(shares_requested, donation, true);
+        }
+
+        // check support >= proposal bond, bond the difference if support < proposal_bond
+        let lower_support = support < sponsor_bond;
+        let mut sponsor_vote: Shares = 0;
+        if lower_support {
+            // sponsor_bond > support so reserve sponsor_bond
+            Self::reserve_shares(sponsor.clone(), sponsor_bond)?;
+            sponsor_vote = sponsor_bond;
+        } else {
+            // sponsor_bond <= support so reserve support
+            Self::reserve_shares(sponsor.clone(), support)?;
+            sponsor_vote = support;
+        }
 
         let threshold = Self::calculate_threshold(shares_requested, donation);
-
-        Self::reserve_shares(sponsor.clone(), support)?;
 
         // start the voting period
         let vote_start = <system::Module<T>>::block_number();
@@ -518,21 +590,26 @@ impl<T: Trait> Module<T> {
         // ayes and nays vectors
         let mut ayes = Vec::new();
         let mut nays: Vec<(T::AccountId, Shares)> = Vec::new();
-        ayes.push((sponsor.clone(), support));
-        let state: (Shares, Shares) = (support, 0);
+        ayes.push((sponsor.clone(), sponsor_vote));
+        let state: (Shares, Shares) = (sponsor_vote, 0);
 
+        // if direct proposal, then election.app_sender = sponsor
+        let mut app_sender = sponsor.clone();
+        if let Some(new_mem_applied) = applicant.clone() {
+            // not a direct proposal `=>` applier is applicant
+            app_sender = new_mem_applied;
+        }
         // clone proposer for event emission after proposal insertion
         let s = sponsor.clone();
-        let applier = applicant.clone();
         let proposal = Proposal {
             sponsor,
-            sponsor_bond,
+            sponsor_vote,
             applicant,
             donation,
             shares_requested,
         };
         let election = Election {
-            applier, // might require a clone
+            app_sender, // might require a clone
             vote_start,
             grace_end,
             threshold,
@@ -545,7 +622,7 @@ impl<T: Trait> Module<T> {
         // insert proposal
         <Proposals<T>>::insert(hash, &proposal);
         // insert election
-        <Elections<T>>::insert(hash, &election);
+        <Elections<T>>::insert(hash, election);
         Self::deposit_event(RawEvent::Proposed(s, hash, shares_requested, vote_start));
         Ok(())
     }
@@ -557,7 +634,7 @@ impl<T: Trait> Module<T> {
         // verify election existence
         let mut election = Self::elections(&hash).ok_or("election must exit")?;
         ensure!(
-            &election.applier != &voter,
+            &election.app_sender != &voter,
             "potential recipient may not vote"
         );
 
@@ -612,6 +689,7 @@ impl<T: Trait> Module<T> {
             now,
             hash,
             approve,
+            support,
             total_support,
             total_against,
         ));
@@ -623,14 +701,15 @@ impl<T: Trait> Module<T> {
             let _ = Self::liberate(&election.nays[..]);
         }
 
-        // TODO: add path in which negative feedback rises above some threshold
-        // should slash some of the proposal bond under this event
+        // TODO: add path for when total_against > some_threshold
+        // --> slash some proposal bonds in this event? some negative incentive?
         Ok(())
     }
 
     /// Execution
     ///
     /// Called in `on_finalize` according to `T::SpendFrequency`
+    /// TODO: create more ensure statements and prevent if statement heLL
     fn issuance(n: T::BlockNumber) -> Result {
         <Passed<T>>::get().into_iter().for_each(|hash| {
             if let Some(e) = Self::elections(hash) {
@@ -638,38 +717,45 @@ impl<T: Trait> Module<T> {
                 if let Some(end) = e.grace_end {
                     if end <= n {
                         if let Some(p) = Self::proposals(hash) {
-                            // unbond the sponsor
-                            T::Currency::unreserve(&p.sponsor, p.sponsor_bond);
                             if let Some(donate) = p.donation {
-                                // transfer donation from applicant
-                                T::Currency::unreserve(&p.applicant, donate);
-                                T::Currency::transfer(&p.applicant, &Self::account_id(), donate);
+                                if let Some(applied) = p.applicant.clone() {
+                                    // transfer donation from applicant
+                                    T::Currency::unreserve(&applied, donate);
+                                    T::Currency::transfer(&applied, &Self::account_id(), donate);
+                                } else {
+                                    // transfer donation from sponsor (direct proposal)
+                                    T::Currency::unreserve(&p.sponsor, donate);
+                                    T::Currency::transfer(&p.sponsor, &Self::account_id(), donate);
+                                }
                             }
-                            if Self::is_member(&p.applicant) {
-                                <MemberInfo<T>>::mutate(&p.applicant, |mem| {
-                                    if let Some(memb) = mem {
-                                        memb.all_shares += p.shares_requested;
-                                    }
-                                });
-                            } else {
+                            if let Some(appled) = p.applicant {
+                                // not a direct proposal, applicant is outside non-member
                                 let all_shares = p.shares_requested;
-                                let reserved_shares = 0 as Shares;
+                                let reserved_shares: Shares = 0;
                                 let voter_bond = None;
                                 <MemberInfo<T>>::insert(
-                                    &p.applicant,
+                                    &appled,
                                     Member {
                                         all_shares,
                                         reserved_shares,
                                         voter_bond,
                                     },
                                 );
-                                <Members<T>>::mutate(|mems| mems.push(p.applicant.clone())); // `append` with 3071
+                                <Members<T>>::mutate(|mems| mems.push(appled.clone())); // `append` with 3071
+                            } else {
+                                // direct proposal, sponsor information changed
+                                <MemberInfo<T>>::mutate(&p.sponsor, |mem| {
+                                    if let Some(memb) = mem {
+                                        memb.all_shares += p.shares_requested;
+                                    }
+                                });
                             }
                             let shares_requested = <SharesRequested>::get() - p.shares_requested;
                             <SharesRequested>::put(shares_requested);
                             let total_shares = <TotalShares>::get() + p.shares_requested; // TODO: checked_add
                             <TotalShares>::put(total_shares);
                         }
+                        // proposer/sponsor is unbonded here
                         Self::liberate(&e.ayes[..]);
                     }
                 }
@@ -690,18 +776,14 @@ impl<T: Trait> Module<T> {
             if let Some(election) = Self::elections(&h) {
                 let votes: Vec<(T::AccountId, Shares)> =
                     election.ayes.into_iter().chain(election.nays).collect();
+                // proposal/sponsor bond returned below
                 Self::liberate(&votes[..]);
             }
+            // TODO: once again, proposal is only called to change SharesRequested
+            // -- just add it to the Election struct and save two calls!
             if let Some(proposal) = Self::proposals(&h) {
                 let shares_requested = <SharesRequested>::get() - proposal.shares_requested;
                 <SharesRequested>::put(shares_requested);
-                // negative incentives, proposal bond goes to the treasury
-                T::Currency::unreserve(&proposal.sponsor, proposal.sponsor_bond);
-                T::Currency::transfer(
-                    &proposal.sponsor,
-                    &Self::account_id(),
-                    proposal.sponsor_bond,
-                );
             }
             <Elections<T>>::remove(&h);
             <Proposals<T>>::remove(&h);
@@ -716,118 +798,5 @@ impl<T: Trait> Module<T> {
             <Applications<T>>::remove(&h);
         });
         <StaleApps<T>>::kill();
-    }
-}
-
-// TESTING
-#[cfg(test)]
-mod tests {
-    use crate::tests::Origin;
-    use crate::tests::*; // {Call, Event as OuterEvent}
-                         // use runtime_primitives::{
-                         //     testing::Header,
-                         //     traits::{BlakeTwo256, IdentityLookup, OnFinalize},
-                         // };
-    use support::{assert_err, assert_noop, assert_ok}; // dispatch::Result, Hashable
-    use system::ensure_signed; // there must be a better way of getting AccountId
-
-    #[test]
-    fn basic_setup_works() {
-        with_externalities(&mut new_test_ext(), || {
-            assert_eq!(DAO::pot(), 0);
-            assert_eq!(DAO::total_proposals(), 0);
-        });
-    }
-
-    #[test]
-    fn join_works() {
-        with_externalities(&mut new_test_ext(), || {
-            // test that join takes 10 from balance
-            assert_ok!(DAO::join(Origin::signed(0)));
-            assert_eq!(Balances::free_balance(&0), 90);
-            // get address for checking membership
-            let who = ensure_signed(Origin::signed(0)).expect("smh^smh");
-            assert!(DAO::is_member(&who));; // how do I get the accountId
-                                            // join request from existing member should fail
-            assert_noop!(
-                DAO::join(Origin::signed(0)),
-                "new member is already a member"
-            );
-            // (3, 9) can't join because 9 < 10 (and 10 is EntryFee)
-            assert_noop!(DAO::join(Origin::signed(3)), "Not rich enough to join ;(");
-        });
-    }
-
-    #[test]
-    fn exit_works() {
-        with_externalities(&mut new_test_ext(), || {
-            // join to exit immediately after
-            assert_ok!(DAO::join(Origin::signed(0)));
-            // exit should work
-            assert_ok!(DAO::exit(Origin::signed(0)));
-            // exit for non-member should not work
-            assert_noop!(
-                DAO::exit(Origin::signed(1)),
-                "exiting member must be a member"
-            );
-        });
-    }
-
-    #[test]
-    fn propose_works() {
-        with_externalities(&mut new_test_ext(), || {
-            // nonmember propose fails
-            assert_noop!(
-                DAO::propose(Origin::signed(0), 10, 3),
-                "proposer must be a member to make a proposal"
-            );
-            // join to add 10 to the treasury
-            assert_ok!(DAO::join(Origin::signed(0)));
-            // proposal outweighs DAO's funds
-            assert_noop!(
-                DAO::propose(Origin::signed(0), 11, 3),
-                "not enough funds in the DAO to execute proposal"
-            );
-            // 10 + 10 = 20
-            assert_ok!(DAO::join(Origin::signed(1)));
-            // proposal should work
-            assert_ok!(DAO::propose(Origin::signed(0), 11, 3));
-            assert_eq!(DAO::total_proposals(), 1);
-            // 100 - EntryFee(10) - ProposalBond(2) = 88
-            assert_eq!(Balances::free_balance(&0), 88);
-            // proposal can't be done without proposal bond
-            assert_ok!(DAO::join(Origin::signed(4)));
-            assert_noop!(
-                DAO::propose(Origin::signed(4), 10, 3),
-                "Proposer's balance too low"
-            );
-        });
-    }
-
-    #[test]
-    fn vote_works() {
-        with_externalities(&mut new_test_ext(), || {
-            // nonmember can't vote
-            assert_noop!(
-                DAO::vote(Origin::signed(0), 1, true),
-                "voter must be a member to approve/deny a proposal"
-            );
-            // join, join
-            assert_ok!(DAO::join(Origin::signed(0)));
-            assert_ok!(DAO::join(Origin::signed(1)));
-            // can't vote on nonexistent proposal
-            assert_noop!(DAO::vote(Origin::signed(1), 1, true), "proposal must exist");
-            // make proposal for voting
-            assert_ok!(DAO::propose(Origin::signed(0), 11, 3));
-            assert_eq!(DAO::total_proposals(), 1);
-            // vote for member works
-            assert_ok!(DAO::vote(Origin::signed(1), 1, true));
-            // can't duplicate vote
-            // assert_noop!(DAO::vote(Origin::signed(1), 0, true), "duplicate vote"); // doesn't really work
-            // can switch vote
-            assert_ok!(DAO::vote(Origin::signed(1), 1, false));
-            // can't duplicate vote
-            // assert_noop!(DAO::vote(Origin::signed(1), 0, false), "duplicate vote"); // doesn't really work
-        });
     }
 }

@@ -1,18 +1,24 @@
 # Documentation
 
-Sunshine is a fund coordination decentralized autonomous organization (DAO) built on Substrate. The current iteration demonstrates the interactive patterns common to most DAOs in the context of Substrate's runtime. 
+Sunshine is a fund coordination decentralized autonomous organization (DAO) built on Substrate. The current iteration demonstrates the interactive patterns common to most DAOs in the context of Substrate's runtime. This project was originally inspired by [Moloch](https://github.com/moloch).
 
-Even so, this implementation is far from optimized both in terms of performance as well mechanism design. As I *level-up* in Rust, I will keep integrating the patterns I learn into the existing implementation. In my free time, I'll also continue familiarizing myself with the deluge of fresh mechanism ideas circulating the space (e.g. cryptotwitter ™️). 
+## Motivation
 
-## Document Mechanism Design Choices and Thought Process
+A common mistake is to start designing user-facing applications by brainstorming a layout. When this is done for blockchain-based applications, the UI looks a lot like centralized, web-based application because the designer inadvertently maps to the layouts that are most familiar. While this might seem preferrable, it ignores the fact that blockchain-powered applications offer an entirely new set of features, many of which we have yet to invent/discover. Indeed, UI and layout should be extracted from the feature set and not the other way around. Only through closely examining the relative features of modern blockchains can we extract the best UX for applications.
 
-My **main objective** with these docs is to clearly document the choices I make so that other projects can make different choices when appropriate for the context of their use case. [MolochDAO](https://github.com/MolochVentures/moloch) encourages developers to `STEAL THIS CODE` -- this is a clear step in the right direction.
+An example on Ethereum is the growing popularity of meta-transactions. While meta-transactions are quite clever, they rely on centralized relayers on L2 to submit transaction batches. This sacrifices security and is limited in terms of long-term sustainability. The incentivization of decentralized relayer markets is still an open problem (I expect this to be solved by configurable block rewards on Substrate that can be used to fund relayer networks and other auxiliary support).
 
-The goal of [my talk at Sub0](https://www.youtube.com/watch?v=eguDIG11nW8) was to convey the significant complexity of designing a minimal fund coordination DAO. In the talk, I covered the clash between lock-in and instant withdrawals before briefly introducing a closed loop for bonding proposals and incentivizing member action. Thereafter, I had a slide that read: `There is a lot of hidden complexity` with the following list of open questions:
+## Purpose
+
+**Document Mechanism Design Choices for Maximal Forkability**
+
+The **main objective** of this project is to clearly document the often ignored design decisions made that other projects can make different choices when appropriate for the context of their use case. Given Substrate's modularity, there isn't always a *best* way to do something, often times a few choices provide varying associated tradeoffs.
+
+The goal of [the talk at Sub0](https://www.youtube.com/watch?v=eguDIG11nW8) was to convey the significant complexity of designing a minimal fund coordination DAO. The talk covered the clash between lock-in and instant withdrawals before briefly introducing a closed loop for bonding proposals and incentivizing member action. Thereafter, a slide read: `There is a lot of hidden complexity` with the following list of open questions:
 * Should the voting period transition to the grace period immediately once a threshold of support is achieved?
-* Is the voting period time window finite and, if so, what do we want to do with stale proposals?
+* Is the voting period time window finite and, if so, what is to be done with stale proposals?
 * Is the proposal immediately executed once it passes a threshold in the voting period or should the execution delay match the *grace period* during which dissenters can exit?
-* Is there an appeals process to reverse voting outcomes?
+* Is there an appeals process to reverse voting outcomes? *dispure resolution court*
 * Do we require an additional actor to process the proposal if is approved? Incentives?
 * What is the incentive to vote earlier? What is the incentive to vote at all?
 * How are votes weighted (or *preferences aggregated*)? Does voter turnout influence the required passing thresholds?

@@ -1,8 +1,6 @@
-# sunshine
+# Sunshot
 
-*sunshine* is a governance experiment to demonstrate the flexible and dynamic incentive mechanisms that can be built with Substrate. It was originally inspired by [Moloch](https://github.com/moloch).
-
-## Some Unimplemented Ideas
+* random additional ideas for building on Substrate
 
 
 ### Reorder the Order of Defaults During Dilution
