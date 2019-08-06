@@ -15,7 +15,7 @@ mod tests {
     pub use runtime_primitives::{
         testing::{Digest, DigestItem, Header},
         traits::{BlakeTwo256, IdentityLookup, OnFinalize},
-        BuildStorage, Permill, Perbill,
+        BuildStorage, Perbill, Permill,
     };
     use support::{impl_outer_origin, parameter_types};
 
@@ -36,42 +36,58 @@ mod tests {
 
     pub struct ProposalBond;
     impl Get<u64> for ProposalBond {
-        fn get() -> u64 { PROPOSAL_BOND.with(|v| *v.borrow()) }
+        fn get() -> u64 {
+            PROPOSAL_BOND.with(|v| *v.borrow())
+        }
     }
 
     pub struct VoteBond;
     impl Get<u64> for VoteBond {
-        fn get() -> u64 { VOTE_BOND.with(|v| *v.borrow()) }
+        fn get() -> u64 {
+            VOTE_BOND.with(|v| *v.borrow())
+        }
     }
 
     pub struct ApplicationWindow;
     impl Get<u64> for ApplicationWindow {
-        fn get() -> u64 { APPLICATION_WINDOW.with(|v| *v.borrow()) }
+        fn get() -> u64 {
+            APPLICATION_WINDOW.with(|v| *v.borrow())
+        }
     }
 
     pub struct AbortWindow;
     impl Get<u64> for AbortWindow {
-        fn get() -> u64 { ABORT_WINDOW.with(|v| *v.borrow()) }
+        fn get() -> u64 {
+            ABORT_WINDOW.with(|v| *v.borrow())
+        }
     }
 
     pub struct VoteWindow;
     impl Get<u64> for VoteWindow {
-        fn get() -> u64 { VOTE_WINDOW.with(|v| *v.borrow()) }
+        fn get() -> u64 {
+            VOTE_WINDOW.with(|v| *v.borrow())
+        }
     }
 
     pub struct GraceWindow;
     impl Get<u64> for GraceWindow {
-        fn get() -> u64 { GRACE_WINDOW.with(|v| *v.borrow()) }
+        fn get() -> u64 {
+            GRACE_WINDOW.with(|v| *v.borrow())
+        }
     }
 
     pub struct SweepFrequency;
     impl Get<u64> for SweepFrequency {
-        fn get() -> u64 { SWEEP_FREQUENCY.with(|v| *v.borrow()) }
+        fn get() -> u64 {
+            SWEEP_FREQUENCY.with(|v| *v.borrow())
+        }
     }
 
     pub struct IssuanceFrequency;
     impl Get<u64> for IssuanceFrequency {
-        fn get() -> u64 { ISSUANCE_FREQUENCY.with(|v| *v.borrow()) }
+        fn get() -> u64 {
+            ISSUANCE_FREQUENCY.with(|v| *v.borrow())
+        }
     }
 
     // Workaround for https://github.com/rust-lang/rust/issues/26925
@@ -150,7 +166,7 @@ mod tests {
                 // 2 min / 6 seconds = 20
                 application_window: 20,
                 // 3 min / 6 seconds = 30
-                abort_window:  30,
+                abort_window: 30,
                 // 5 min / 6 seconds = 50
                 vote_window: 50,
                 // 5 min / 6 seconds = 50
@@ -203,32 +219,22 @@ mod tests {
             GRACE_WINDOW.with(|v| *v.borrow_mut() = self.grace_window);
             SWEEP_FREQUENCY.with(|v| *v.borrow_mut() = self.sweep_frequency);
             ISSUANCE_FREQUENCY.with(|v| *v.borrow_mut() = self.issuance_frequency);
-	    }
+        }
         pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
             self.set_associated_consts();
-            let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap().0;
-            t.extend(GenesisConfig::<Runtime> {
-                balances: {
-                    vec![
-                        (1, 100),
-                        (2, 50),
-                        (3, 25),
-                        (4, 10),
-                        (5, 5),
-                        (6, 1),
-                    ]
-                },
-                members: {
-                    vec![
-                        (1, 10),
-                        (2, 10),
-                        (3, 50),
-                        (4, 0),
-                        (5, 0),
-                        (6, 0),
-                    ]
-                },
-            }.build_storage().unwrap().0);
+            let mut t = system::GenesisConfig::default()
+                .build_storage::<Runtime>()
+                .unwrap()
+                .0;
+            t.extend(
+                GenesisConfig::<Runtime> {
+                    balances: { vec![(1, 100), (2, 50), (3, 25), (4, 10), (5, 5), (6, 1)] },
+                    members: { vec![(1, 10), (2, 10), (3, 50), (4, 0), (5, 0), (6, 0)] },
+                }
+                .build_storage()
+                .unwrap()
+                .0,
+            );
             t.into()
         }
     }

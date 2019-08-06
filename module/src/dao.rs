@@ -2,7 +2,6 @@
 /// -- share-weighted voting
 /// -- collateral from applicants is `Balance`; collateral from voters/proposers is `Shares`
 /// -- implements lock-in and *instant withdrawal* like Moloch
-
 use parity_codec::{Decode, Encode};
 #[cfg(feature = "std")]
 use runtime_primitives::traits::{AccountIdConversion, Hash, Zero}; // StaticLookup
@@ -371,7 +370,7 @@ decl_module! {
         /// Deregister an active voter
         ///
         /// -- returns `voter_bond`
-        /// -- prevents any voting upon execution 
+        /// -- prevents any voting upon execution
         fn deregister(origin) -> Result {
             let old_voter = ensure_signed(origin)?;
             ensure!(Self::is_voter(&old_voter), "must be an active voter");
@@ -474,11 +473,19 @@ impl<T: Trait> Module<T> {
         Self::voters().contains(who)
     }
 
-    fn calculate_pbond(shares_requested: Shares, donation: Option<BalanceOf<T>>, direct: bool) -> Shares {
+    fn calculate_pbond(
+        shares_requested: Shares,
+        donation: Option<BalanceOf<T>>,
+        direct: bool,
+    ) -> Shares {
         // 20 % higher proposal bond base for direct proposals
-        let direct_multiplier = Permill::from_percent(20); 
+        let direct_multiplier = Permill::from_percent(20);
         let base_bond: Shares = T::ProposalBond::get();
-        let bond = if direct { (direct_multiplier*base_bond) + base_bond } else { base_bond };
+        let bond = if direct {
+            (direct_multiplier * base_bond) + base_bond
+        } else {
+            base_bond
+        };
         if let Some(donated) = donation {
             // expected ratio: 1 share = 1 balance 1-to-1
             let sr: BalanceOf<T> = shares_requested.into();
@@ -490,7 +497,7 @@ impl<T: Trait> Module<T> {
                 let delta = diff_abs * bond;
                 // (1 + diff_abs)(T::ProposalBond::get())
                 let pricy_proposal_bond = delta + bond;
-                return pricy_proposal_bond
+                return pricy_proposal_bond;
             } else {
                 // donation is high relative to shares => lower required proposal bond
                 let diff = donated - sr;
@@ -498,7 +505,7 @@ impl<T: Trait> Module<T> {
                 let delta = diff_abs * bond;
                 // (1 - diff_abs)(T::ProposalBond::get())
                 let cheap_proposal_bond = bond - delta;
-                return cheap_proposal_bond
+                return cheap_proposal_bond;
             }
         }
         // no donation `=>` pure grant
@@ -511,7 +518,7 @@ impl<T: Trait> Module<T> {
         T::VoteBond::get()
     }
     fn calculate_threshold(shares_requested: Shares, donation: Option<BalanceOf<T>>) -> Shares {
-        // TODO: might also rely on 
+        // TODO: might also rely on
         // -- sponsored vs direct proposal (to prioritize sponsored proposals if necessary)
         // -- proposal throughput targets vs reality
 
