@@ -1,8 +1,9 @@
-/// Sunshine MVP
-/// -- share-weighted voting
-/// -- collateral from applicants is `Balance`; collateral from voters/proposers is `Shares`
-/// -- implements lock-in and *instant withdrawal* like Moloch
-use parity_codec::{Decode, Encode};
+/// abstract out the Threshold struct into a separate file
+///
+/// -- (1) use the `democracy` module for reference
+/// -- (2) abstract voting into its own module like `elections`
+/// starting point `=>` the 3rd implementation of the last section
+use parity_scale_codec::{Decode, Encode};
 #[cfg(feature = "std")]
 use runtime_primitives::traits::{AccountIdConversion, Hash, Zero}; // StaticLookup
 use runtime_primitives::{ModuleId, Permill};
@@ -31,13 +32,12 @@ pub struct Application<AccountId, Balance, BlockNumber> {
     start: BlockNumber,
 }
 
-/// Spending Proposal
+/// Generic Moloch Proposal
 ///
-/// separate fields into multiple structs (create Election struct?)
-/// `=>` would need to link Election to every Proposal
+/// TODO: replace Threshold with struct-based voting algorithm object
 #[derive(Encode, Decode, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Debug))]
-pub struct Proposal<AccountId, Balance> {
+pub struct Proposal<AccountId, Balance, BlockNumber> {
     // the proposal sponsor must be a member
     sponsor: AccountId,
     // the sponsor's vote (/bond in support, like a voter)
@@ -48,17 +48,6 @@ pub struct Proposal<AccountId, Balance> {
     donation: Option<Balance>,
     // membership shares requested
     shares_requested: Shares,
-}
-
-/// Election State
-///
-/// TODO: (1) add shares_requested field
-///        (2) abstract out voting and replace threshold with `VoteThreshold` for more algorithms
-#[derive(Encode, Decode, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Debug))]
-pub struct Election<AccountId, BlockNumber> {
-    // applicant accountId (to prevent when == &voter)
-    app_sender: AccountId,
     // BlockNumber at initial proposal
     vote_start: BlockNumber, // TODO: eventually consider adding GraceWindow and VoteWindow; unique to every proposal (~complexity for flexibility)
     // initiated by proposal passage in `vote`
@@ -158,9 +147,7 @@ decl_storage! {
         StaleApps get(stale_apps): Vec<T::Hash>;
 
         /// Proposals that have been made.
-        Proposals get(proposals): map T::Hash => Option<Proposal<T::AccountId, BalanceOf<T>>>;
-        /// From Proposal Hash to election state
-        Elections get(elections): map T::Hash => Option<Election<T::AccountId, T::BlockNumber>>;
+        Proposals get(proposals): map T::Hash => Option<Proposal<T::AccountId, BalanceOf<T>, T::BlockNumber>>;
         /// Proposals that have passed, awaiting execution in `on_finalize`
         Passed get(passed): Vec<T::Hash>;
         /// Proposals that have grown stale, awaiting purging
@@ -296,7 +283,7 @@ decl_module! {
 
             // if application, purge application and end
             if let Some(app) = Self::applications(&hash) {
-                // INVARIANT: an application must only exist iff there are no associated proposals or elections
+                // INVARIANT: an application must only exist iff there are no associated proposals
                 // -- this prevents unreserving the donation amount twice inadvertently
                 ensure!(&abortee == &app.applicant, "only the applicant can abort the proposal");
                 if app.start + T::ApplicationWindow::get() < now {
@@ -315,36 +302,28 @@ decl_module! {
             }
 
             // if live proposal, cleanup is harder are necessary
-            if let Some(mut election) = Self::elections(&hash) {
-                // only the applicant can call abort
-                ensure!(&abortee == &election.app_sender, "only the applicant can abort the proposal");
+            if let Some(proposal) = Self::proposals(&hash) {
+                // only the applicant can call abort // TODO: => direct proposals cannot be aborted? rethink this...
+                ensure!(proposal.applicant.is_some(), "only the applicant can abort the proposal");
 
                 // no aborting if the proposal has overcome the threshold of support for/against
-                ensure!(election.threshold > election.state.0 || election.threshold > election.state.1, "too controversial; the vote already has too much support for/against the proposal");
+                ensure!(proposal.threshold > proposal.state.0 || proposal.threshold > proposal.state.1, "too controversial; the vote already has too much support for/against the proposal");
 
-                // checking against time
-                if election.vote_start + T::AbortWindow::get() < now {
+                // checking valid time
+                ensure!(proposal.grace_end.is_none(), "Proposal passed, grace period already started");
+                if proposal.vote_start + T::AbortWindow::get() < now {
                     return Err("past the abort window, too late");
-                } else if election.vote_start + T::VoteWindow::get() < now {
-                    <StaleProposals<T>>::mutate(|proposals| proposals.push(hash.clone())); // TODO: update with `append` once PR merged
-                    return Err("Proposal is stale, no more voting!");
-                } else if let Some(time) = election.grace_end {
-                    return Err("Proposal passed, grace period already started");
                 }
 
+                // subtract requested share count
+                let shares_requested = <SharesRequested>::get() - proposal.shares_requested;
+                <SharesRequested>::put(shares_requested);
+
                 // liberate voters
-                let votes: Vec<(T::AccountId, Shares)> = election.ayes.into_iter().chain(election.nays).collect();
+                let votes: Vec<(T::AccountId, Shares)> = proposal.ayes.into_iter().chain(proposal.nays).collect();
                 Self::liberate(&votes[..]);
             }
 
-            // this call is only to get the `shares_requested`
-            // TODO: should just add the field to `Election` to make this 1 call instead of 2
-            if let Some(proposal) = Self::proposals(&hash) {
-                let shares_requested = <SharesRequested>::get() - proposal.shares_requested;
-                <SharesRequested>::put(shares_requested);
-                // could take an abort fee
-            }
-            <Elections<T>>::remove(&hash);
             <Proposals<T>>::remove(&hash);
             Self::deposit_event(RawEvent::Aborted(abortee, hash));
             Ok(())
@@ -567,7 +546,7 @@ impl<T: Trait> Module<T> {
         shares_requested: Shares,
     ) -> Result {
         let mut sponsor_bond: Shares = 0;
-        if let Some(apple) = applicant.clone() {
+        if applicant.clone().is_some() {
             // sponsored proposal
             sponsor_bond += Self::calculate_pbond(shares_requested, donation, false);
         } else {
@@ -599,13 +578,7 @@ impl<T: Trait> Module<T> {
         let mut nays: Vec<(T::AccountId, Shares)> = Vec::new();
         ayes.push((sponsor.clone(), sponsor_vote));
         let state: (Shares, Shares) = (sponsor_vote, 0);
-
-        // if direct proposal, then election.app_sender = sponsor
-        let mut app_sender = sponsor.clone();
-        if let Some(new_mem_applied) = applicant.clone() {
-            // not a direct proposal `=>` applier is applicant
-            app_sender = new_mem_applied;
-        }
+        
         // clone proposer for event emission after proposal insertion
         let s = sponsor.clone();
         let proposal = Proposal {
@@ -614,9 +587,6 @@ impl<T: Trait> Module<T> {
             applicant,
             donation,
             shares_requested,
-        };
-        let election = Election {
-            app_sender, // might require a clone
             vote_start,
             grace_end,
             threshold,
@@ -627,9 +597,7 @@ impl<T: Trait> Module<T> {
         // take hash of proposal
         let hash = <T as system::Trait>::Hashing::hash_of(&proposal);
         // insert proposal
-        <Proposals<T>>::insert(hash, &proposal);
-        // insert election
-        <Elections<T>>::insert(hash, election);
+        <Proposals<T>>::insert(hash, proposal);
         Self::deposit_event(RawEvent::Proposed(s, hash, shares_requested, vote_start));
         Ok(())
     }
@@ -638,58 +606,55 @@ impl<T: Trait> Module<T> {
     ///
     /// Called by `vote` and `proxy_vote`
     fn do_vote(voter: T::AccountId, hash: T::Hash, support: Shares, approve: bool) -> Result {
-        // verify election existence
-        let mut election = Self::elections(&hash).ok_or("election must exit")?;
+        // verify proposal existence
+        let mut proposal = Self::proposals(&hash).ok_or("proposal doesnt exist")?;
         ensure!(
-            &election.app_sender != &voter,
-            "potential recipient may not vote"
+            &proposal.sponsor != &voter,
+            "the sponsor may not vote"
         );
 
         // check if the proposal has already passed and entered the grace period
-        if let Some(time) = election.grace_end {
-            return Err("Proposal passed, grace period already started");
-        }
-
+        ensure!(proposal.grace_end.is_none(), "Proposal passed, grace period already started");
+        // otherwise, get the current time to check that it is within the voting window
         let now = <system::Module<T>>::block_number();
-
-        if election.vote_start + T::VoteWindow::get() < now {
-            <StaleProposals<T>>::mutate(|proposals| proposals.push(hash.clone())); // TODO: update with `append` once PR merged
+        if proposal.vote_start + T::VoteWindow::get() < now {
+            <StaleProposals<T>>::mutate(|proposals| proposals.push(hash.clone())); // TODO: update with `append` once 3071 merged
             return Err("Proposal is stale, no more voting!");
         }
 
-        let position_yes = election.ayes.iter().position(|a| &a.0 == &voter);
-        let position_no = election.nays.iter().position(|a| &a.0 == &voter);
+        let position_yes = proposal.ayes.iter().position(|a| &a.0 == &voter);
+        let position_no = proposal.nays.iter().position(|a| &a.0 == &voter);
 
         if approve {
             if position_yes.is_none() {
-                election.ayes.push((voter.clone(), support));
-                election.state.0 += support;
+                proposal.ayes.push((voter.clone(), support));
+                proposal.state.0 += support;
             } else {
                 return Err("duplicate vote");
             }
             // executes if the previous vote was no
             if let Some(pos) = position_no {
                 // ability to change vote at no cost prevents bribery attacks
-                election.nays.swap_remove(pos);
-                election.state.0 += support;
+                proposal.nays.swap_remove(pos);
+                proposal.state.0 += support;
             }
         } else {
             if position_no.is_none() {
-                election.nays.push((voter.clone(), support));
-                election.state.1 += support;
+                proposal.nays.push((voter.clone(), support));
+                proposal.state.1 += support;
             } else {
                 return Err("duplicate vote");
             }
             if let Some(pos) = position_yes {
-                election.ayes.swap_remove(pos);
-                election.state.1 += support;
+                proposal.ayes.swap_remove(pos);
+                proposal.state.1 += support;
             }
         }
         // update MemberInfo to reflect vote reservations
         Self::reserve_shares(voter.clone(), support)?;
         // unnecessary type aliasing
-        let total_support = election.state.0;
-        let total_against = election.state.1;
+        let total_support = proposal.state.0;
+        let total_against = proposal.state.1;
         // TODO: election.threshold should be updated if surrounding state has changed?
         Self::deposit_event(RawEvent::Voted(
             voter,
@@ -701,11 +666,11 @@ impl<T: Trait> Module<T> {
             total_against,
         ));
 
-        if total_support > election.threshold {
+        if total_support > proposal.threshold {
             <Passed<T>>::mutate(|pass| pass.push(hash)); // TODO: update with `append` once 3071 merged
-            election.grace_end = Some(now + T::GraceWindow::get());
+            proposal.grace_end = Some(now + T::GraceWindow::get());
             // pass a slice of AccountIds for dissenting voters
-            let _ = Self::liberate(&election.nays[..]);
+            let _ = Self::liberate(&proposal.nays[..]);
         }
 
         // TODO: add path for when total_against > some_threshold
@@ -719,55 +684,59 @@ impl<T: Trait> Module<T> {
     /// TODO: create more ensure statements and prevent if statement heLL
     fn issuance(n: T::BlockNumber) -> Result {
         <Passed<T>>::get().into_iter().for_each(|hash| {
-            if let Some(e) = Self::elections(hash) {
-                // liberal grace period (sometimes longer than necessary)
-                if let Some(end) = e.grace_end {
+            // if the proposal exists, 
+            if let Some(p) = Self::proposals(hash) {
+                // if after the grace period ends (wait until then to execute)
+                if let Some(end) = p.grace_end {
                     if end <= n {
-                        if let Some(p) = Self::proposals(hash) {
-                            if let Some(donate) = p.donation {
-                                if let Some(applied) = p.applicant.clone() {
-                                    // transfer donation from applicant
-                                    T::Currency::unreserve(&applied, donate);
-                                    T::Currency::transfer(&applied, &Self::account_id(), donate);
-                                } else {
-                                    // transfer donation from sponsor (direct proposal)
-                                    T::Currency::unreserve(&p.sponsor, donate);
-                                    T::Currency::transfer(&p.sponsor, &Self::account_id(), donate);
-                                }
-                            }
-                            if let Some(appled) = p.applicant {
-                                // not a direct proposal, applicant is outside non-member
-                                let all_shares = p.shares_requested;
-                                let reserved_shares: Shares = 0;
-                                let voter_bond = None;
-                                <MemberInfo<T>>::insert(
-                                    &appled,
-                                    Member {
-                                        all_shares,
-                                        reserved_shares,
-                                        voter_bond,
-                                    },
-                                );
-                                <Members<T>>::mutate(|mems| mems.push(appled.clone())); // `append` with 3071
+                        // check if anyone donated
+                        if let Some(donate) = p.donation {
+                            if let Some(applied) = p.applicant.clone() {
+                                // transfer donation from applicant
+                                T::Currency::unreserve(&applied, donate);
+                                T::Currency::transfer(&applied, &Self::account_id(), donate);
                             } else {
-                                // direct proposal, sponsor information changed
-                                <MemberInfo<T>>::mutate(&p.sponsor, |mem| {
-                                    if let Some(memb) = mem {
-                                        memb.all_shares += p.shares_requested;
-                                    }
-                                });
+                                // transfer donation from sponsor (direct proposal)
+                                T::Currency::unreserve(&p.sponsor, donate);
+                                T::Currency::transfer(&p.sponsor, &Self::account_id(), donate);
                             }
-                            let shares_requested = <SharesRequested>::get() - p.shares_requested;
-                            <SharesRequested>::put(shares_requested);
-                            let total_shares = <TotalShares>::get() + p.shares_requested; // TODO: checked_add
-                            <TotalShares>::put(total_shares);
                         }
+
+                        // handle both cases of sponsored and/or direct proposal
+                        if let Some(apper) = p.applicant {
+                            // not a direct proposal, applicant is outside non-member
+                            let all_shares = p.shares_requested;
+                            let reserved_shares: Shares = 0;
+                            let voter_bond = None;
+                            <MemberInfo<T>>::insert(
+                                &apper,
+                                Member {
+                                    all_shares,
+                                    reserved_shares,
+                                    voter_bond,
+                                },
+                            );
+                            <Members<T>>::mutate(|mems| mems.push(apper.clone())); // `append` with 3071
+                        } else {
+                            // direct proposal, sponsor information changed
+                            <MemberInfo<T>>::mutate(&p.sponsor, |mem| {
+                                if let Some(memb) = mem {
+                                    memb.all_shares += p.shares_requested;
+                                }
+                            });
+                        }
+
+                        // update the shares requested
+                        let shares_requested = <SharesRequested>::get() - p.shares_requested;
+                        <SharesRequested>::put(shares_requested);
+                        let total_shares = <TotalShares>::get() + p.shares_requested; // TODO: checked_add
+                        <TotalShares>::put(total_shares);
+
                         // proposer/sponsor is unbonded here
-                        Self::liberate(&e.ayes[..]);
+                        Self::liberate(&p.ayes[..]);
                     }
                 }
             }
-            <Elections<T>>::remove(hash);
             <Proposals<T>>::remove(hash);
         });
         <Passed<T>>::kill();
@@ -780,19 +749,15 @@ impl<T: Trait> Module<T> {
     fn sweep() {
         // use type state to consume lazy iterator adaptor
         let _ = <StaleProposals<T>>::get().into_iter().for_each(|h| {
-            if let Some(election) = Self::elections(&h) {
+            if let Some(proposal) = Self::proposals(&h) {
                 let votes: Vec<(T::AccountId, Shares)> =
-                    election.ayes.into_iter().chain(election.nays).collect();
+                    proposal.ayes.into_iter().chain(proposal.nays).collect();
                 // proposal/sponsor bond returned below
                 Self::liberate(&votes[..]);
-            }
-            // TODO: once again, proposal is only called to change SharesRequested
-            // -- just add it to the Election struct and save two calls!
-            if let Some(proposal) = Self::proposals(&h) {
+
                 let shares_requested = <SharesRequested>::get() - proposal.shares_requested;
                 <SharesRequested>::put(shares_requested);
             }
-            <Elections<T>>::remove(&h);
             <Proposals<T>>::remove(&h);
         });
         <StaleProposals<T>>::kill();

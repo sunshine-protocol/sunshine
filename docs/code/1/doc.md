@@ -2,6 +2,9 @@
 
 > in response to issue #21
 
+**Refactoring**
+* 
+
 * **finish unit testing**
 * **finish documentation**
 * minimize storage calls by adding `shares_requested` to `Elections` struct

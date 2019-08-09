@@ -15,3 +15,9 @@ Moloch 👹 wants to apply for grant funding from the Sunshine DAO 🌞.
 Bob 🧐 is a member of a Sunshine DAO. He has enough shares to sponsor 🧐 proposals by bonding his voting privileges.
 
 ## Grant Application
+
+Some notable team requires a grant.
+
+* compelling stories `=>` use the upcoming governance workshop
+
+* community building is undervalued because it doesn't necessarily require technical skill in a technical space

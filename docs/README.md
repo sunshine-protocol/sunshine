@@ -1,14 +1,14 @@
-# Documentation
+# docs
 
 Sunshine is a fund coordination decentralized autonomous organization (DAO) built on Substrate. The current iteration demonstrates the interactive patterns common to most DAOs in the context of Substrate's runtime. This project was originally inspired by [Moloch](https://github.com/moloch).
 
-## Motivation
+## motivation
 
 A common mistake is to start designing user-facing applications by brainstorming a layout. When this is done for blockchain-based applications, the UI looks a lot like centralized, web-based application because the designer inadvertently maps to the layouts that are most familiar. While this might seem preferrable, it ignores the fact that blockchain-powered applications offer an entirely new set of features, many of which we have yet to invent/discover. Indeed, UI and layout should be extracted from the feature set and not the other way around. Only through closely examining the relative features of modern blockchains can we extract the best UX for applications.
 
 An example on Ethereum is the growing popularity of meta-transactions. While meta-transactions are quite clever, they rely on centralized relayers on L2 to submit transaction batches. This sacrifices security and is limited in terms of long-term sustainability. The incentivization of decentralized relayer markets is still an open problem (I expect this to be solved by configurable block rewards on Substrate that can be used to fund relayer networks and other auxiliary support).
 
-## Purpose
+## purpose
 
 **Document Mechanism Design Choices for Maximal Forkability**
 
