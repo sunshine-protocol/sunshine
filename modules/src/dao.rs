@@ -13,6 +13,8 @@ use support::{
 };
 use system::ensure_signed;
 
+use count::Threshold;
+
 // START TYPES
 type Shares = u32;
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
@@ -53,7 +55,7 @@ pub struct Proposal<AccountId, Balance, BlockNumber> {
     // initiated by proposal passage in `vote`
     grace_end: Option<BlockNumber>,
     // threshold for passage
-    threshold: Shares, // TODO: update based on dilution dynamics in `vote` (like in MolochDAO); calculate_threshold based on donation/shares ratio relative to average
+    threshold: Threshold, // TODO: update based on dilution dynamics in `vote` (like in MolochDAO); calculate_threshold based on donation/shares ratio relative to average
     // shares in favor, shares against
     state: (Shares, Shares),
     // supporting voters (voted yes)
@@ -73,6 +75,15 @@ pub struct Member {
     // shares reserved for voters
     voter_bond: Option<Shares>,
     // TODO: consider more stateful pattern via `BTreeMap<Hash, Shares>` for vote pairs
+}
+
+#[derive(Encode, Decode, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub enum Bond {
+    // shares locked up in voting, time when they will be released
+    Voter(&[(Shares, BlockNumber)]),
+    // shares locked up from sponsoring proposals, time when released
+    Proposal(&[(Shares, BlockNumber)]),
 }
 // END TYPES
 
@@ -452,6 +463,7 @@ impl<T: Trait> Module<T> {
         Self::voters().contains(who)
     }
 
+    // TODO: switch bond calculations to logic in count.rs
     fn calculate_pbond(
         shares_requested: Shares,
         donation: Option<BalanceOf<T>>,
