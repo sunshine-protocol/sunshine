@@ -1,5 +1,5 @@
 [package]
-name = "sunshine"
+name = "sunshine-basic"
 version = "0.1.0"
 authors = ["4meta5"]
 edition = "2018"
@@ -7,17 +7,17 @@ edition = "2018"
 [features]
 default = ['std']
 std = [
-    'parity-codec/std',
+    'parity-scale-codec/std',
     'support/std',
     'system/std',
     'balances/std',
     'runtime-primitives/std',
 ]
 
-[dependencies.parity-codec]
+[dependencies.parity-scale-codec]
 default-features = false
 features = ['derive']
-version = '4.1.4'
+version = '1.0.5'
 
 [dependencies.support]
 default_features = false

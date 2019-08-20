@@ -1,7 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![recursion_limit = "128"]
 pub mod dao;
-pub mod test;
 
 pub use dao::{Call, Event, Module, RawEvent, Trait};
 
