@@ -1,8 +1,8 @@
-/// Sunshine MVD -- (1) MVP DAO
+/// Sunshine Minimal Impl
 /// -- share-weighted voting
 /// -- collateral from applicants is `Balance`; collateral from voters/proposers is `Shares`
 /// -- implements lock-in and *instant withdrawal* like Moloch
-use parity_codec::{Decode, Encode};
+use parity_scale_codec::{Decode, Encode};
 #[cfg(feature = "std")]
 use runtime_primitives::traits::{AccountIdConversion, Hash, Zero}; // StaticLookup
 use runtime_primitives::{ModuleId, Permill};
@@ -806,3 +806,4 @@ impl<T: Trait> Module<T> {
         });
         <StaleApps<T>>::kill();
     }
+}

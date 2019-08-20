@@ -10,9 +10,7 @@ debug/
 moonshine
 
 # drafts/planning
-docs/mafesto.md
-docs/mafesto/
-docs/paper/
+docs/
 plan.md
 **/*/drafts/
 

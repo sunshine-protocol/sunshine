@@ -217,20 +217,13 @@ decl_module! {
                 donation,
                 mint_request,
 
-            }; // now I'm reconsidering
-            // depending on how many applications and % of passage, this could be a lot
-            let app = Application {
-                applicant,
-                donation,
-                mint_request,
-                start,
             };
             // take hash of application
-            let hash = <T as system::Trait>::Hashing::hash_of(&app);
+            let hash = <T as system::Trait>::Hashing::hash_of(&prop);
             // insert application
-            <Applications<T>>::insert(hash, &app);
+            <Proposals<T>>::insert(hash, &prop);
             // add applicant to applicant pool
-            <Applicants<T>>::mutate(|applicants| applicants.push(a.clone())); // TODO: `append` once 3071
+            <Proposals<T>>::mutate(|props| props.push(a.clone())); // TODO: `append` once 3071
             // deposit event
             Self::deposit_event(RawEvent::Applied(a, hash, donation, mint_request);
             Ok(())
@@ -240,21 +233,23 @@ decl_module! {
             let sponsor = ensure_signed(origin)?;
             ensure!(Self::is_member(&sponsor), "sponsor must be a member");
 
-            let app = Self::applications(&app_hash).ok_or("application must exist")?;
+            let app = Self::proposals(&app_hash).ok_or("application must exist")?;
+            let now = <system::module<T>::block_number();
             // if the sponsor is the applicant, there are required restrictions on voting for self (see `fn propose`)
-            ensure!(&app.applicant != &sponsor, "direct proposals should be made via `propose`");
-
-            // TODO: better system for managing pending applications (better purge)
-            if app.start + T::ApplicationWindow::get() < <system::Module<T>>::block_number() {
-                <StaleApps<T>>::mutate(|s| s.push(app_hash.clone())); // TODO: `append` after 3071 merged
-                return Err("The window has passed for this application");
-            }
-
-            // make the proposal
-            Self::do_propose(sponsor, Some(app.applicant), support, app.donation, app.mint_request)?;
-
-            // remove the application, the proposal is live
-            <Applications<T>>::remove(app_hash);
+            match app.state {
+                Application(n) => {
+                    if n + T::ApplicationWindow::get() < now {
+                        <StaleApps<T>>::mutate(|s| s.push(app_hash.clone())); // append after 3071
+                        return Err("The window has passed for this application");
+                    }
+                    // make the proposal
+                    Self::do_propose(sponsor, Some(app.applicant), support, app.donation, app.mint_request)?;
+                }
+                // eventually, could include voters in capital formation to bias down required share threshold
+                // could create a market for backing laws that represents the expectation that it will be overturned or changed
+                // -- the hard part is creating both sides of such a market...
+                _ => return Err("The proposal's state is not of the form `Application(T)`");
+            };
 
             Ok(())
         }
@@ -287,59 +282,30 @@ decl_module! {
             let now = <system::Module<T>>::block_number();
 
             // if application, purge application and end
-            if let Some(app) = Self::applications(&hash) {
+            if let Some(app) = Self::proposals(&hash) {
                 // INVARIANT: an application must only exist iff there are no associated proposals or elections
                 // -- this prevents unreserving the donation amount twice inadvertently
-                ensure!(&abortee == &app.applicant, "only the applicant can abort the proposal");
-                if app.start + T::ApplicationWindow::get() < now {
-                    <StaleApps<T>>::mutate(|s| s.push(hash.clone())); // TODO: `append` after 3071 merged
-                    return Err("The window has passed for this application");
+                match app.state {
+                    Application(n) => {
+                        ensure!(app.applicant.is_some(), "only the applicant can abort the proposal");
+                        ensure!(&abortee == &app.applicant.expect("the check directly above keeps this unwrap safe qed"), "only the applicant can abort the proposal");
+                        if n + T::ApplicationWindow::get() < now {
+                            <StaleApps<T>>::mutate(|s| s.push(hash.clone())); // TODO: `append` after 3071 merged
+                            return Err("The window has passed for this application");
+                        }
+                        // return the application if the window hasnt passed (checked above)
+                        if let Some(donate) = &app.donation {
+                            T::Currency::unreserve(&app.applicant, donate);
+                            // TODO: could calculate and charge an abort fee here
+                        }
+                        <Proposals<T>>::remove(&hash);
+                        Self::deposit_event(RawEvent::Aborted(abortee.clone(), hash.clone()));
+                        return Ok(());
+                    };
+                    _ => return Err("can't abort if not in the application state");
                 }
-                // return the application donation
-                if let Some(donate) = app.donation {
-                    T::Currency::unreserve(&app.applicant, donate);
-                    // TODO: could calculate and charge an abort fee here
-                }
-
-                <Applications<T>>::remove(&hash);
-                Self::deposit_event(RawEvent::Aborted(abortee.clone(), hash.clone()));
-                return Ok(());
             }
-
-            // if live proposal, cleanup is harder are necessary
-            if let Some(mut election) = Self::elections(&hash) {
-                // only the applicant can call abort
-                ensure!(&abortee == &election.app_sender, "only the applicant can abort the proposal");
-
-                // no aborting if the proposal has overcome the threshold of support for/against
-                ensure!(election.threshold > election.state.0 || election.threshold > election.state.1, "too controversial; the vote already has too much support for/against the proposal");
-
-                // checking against time
-                if election.vote_start + T::AbortWindow::get() < now {
-                    return Err("past the abort window, too late");
-                } else if election.vote_start + T::VoteWindow::get() < now {
-                    <StaleProposals<T>>::mutate(|proposals| proposals.push(hash.clone())); // TODO: update with `append` once PR merged
-                    return Err("Proposal is stale, no more voting!");
-                } else if let Some(time) = election.grace_end {
-                    return Err("Proposal passed, grace period already started");
-                }
-
-                // liberate voters
-                let votes: Vec<(T::AccountId, Shares)> = election.ayes.into_iter().chain(election.nays).collect();
-                Self::liberate(&votes[..]);
-            }
-
-            // this call is only to get the `shares_requested`
-            // TODO: should just add the field to `Election` to make this 1 call instead of 2
-            if let Some(proposal) = Self::proposals(&hash) {
-                let shares_requested = <SharesRequested>::get() - proposal.shares_requested;
-                <SharesRequested>::put(shares_requested);
-                // could take an abort fee
-            }
-            <Elections<T>>::remove(&hash);
-            <Proposals<T>>::remove(&hash);
-            Self::deposit_event(RawEvent::Aborted(abortee, hash));
-            Ok(())
+            Err("the application was not in the proposal mapping")
         }
 
         // register as a new voter
@@ -349,8 +315,11 @@ decl_module! {
             let mut member = <MemberInfo<T>>::get(&new_voter).ok_or("no info on member!")?;
             ensure!(!Self::is_voter(&new_voter), "must not be an active voter yet");
 
+            // TODO: governance of the formula behind this bond should be more nuanced
+            // voter bond should be based on how much voter bonds are already locked up relative to 
+            // proposal throughput
             let vote_bond: Shares = Self::calculate_vbond();
-            member.voter_bond = Some(vote_bond);
+            ensure!(member.all_shares - member.reserved_shares > vote_bond, "not enough funds to become a voter at this time");
 
             <Voters<T>>::mutate(|v| v.push(new_voter.clone())); // `append` once 3071 merged
             let start = <system::Module<T>>::block_number();
@@ -368,17 +337,16 @@ decl_module! {
             ensure!(Self::is_voter(&old_voter), "must be an active voter");
 
             let mut member = <MemberInfo<T>>::get(&old_voter).ok_or("no member information")?;
-            let mut shares_released: Shares = 0;
-            if let Some(bond_remains) = member.voter_bond {
-                member.voter_bond = None; // return the bond
-                shares_released += bond_remains;
-            }
+            // need a stateful way to track the voter bond per voter so it can be properlu returned
+            // during deregistration (basically, add it back to the struct with Option<Shares>)
+            let voter_bond: Shares = Self::calculate_vbond();
+            member.reserved_shares -= voter_bond;
 
             // take the voter out of the associated storage item (prevent future voting)
             <Voters<T>>::mutate(|voters| voters.retain(|v| v != &old_voter));
             let end = <system::Module<T>>::block_number();
 
-            Self::deposit_event(RawEvent::DeRegisterVoter(old_voter, shares_released, end));
+            Self::deposit_event(RawEvent::DeRegisterVoter(old_voter, voter_bond, end));
             Ok(())
         }
 
@@ -398,11 +366,6 @@ decl_module! {
             let arsonist = ensure_signed(origin)?;
             let mut member = Self::member_info(&arsonist).ok_or("must be a member to burn shares")?;
             let mut free_shares: Shares = member.all_shares - member.reserved_shares;
-            let mut still_voter = false;
-            if let Some(bond_remains) = member.voter_bond {
-                free_shares -= bond_remains;
-                still_voter = true;
-            }
             ensure!(to_burn <= free_shares, "not enough free shares to burn");
             // TODO: make this burn_ratio more dilutive
             let burn_ratio = Permill::from_rational_approximation(to_burn, Self::total_shares());
@@ -410,13 +373,11 @@ decl_module! {
             // NOTE: if the above doesn't work, multiply numerator in `from_rational_approximation` by Self::pot()
             let _ = T::Currency::transfer(&Self::account_id(), &arsonist, proportionate_balance)?;
             // check if the member is leaving the DAO
-            if (member.all_shares, member.reserved_shares, still_voter) == (0, 0, false) {
+            member.all_shares -= to_burn;
+            if member.all_shares == 0 {
                 // member is leaving the DAO
                 <Members<T>>::mutate(|members| members.retain(|m| m != &arsonist));
                 <MemberInfo<T>>::remove(&arsonist);
-            } else {
-                // member is staying the DAO but burning some free shares
-                member.all_shares -= to_burn;
             }
             let total_shares_issued = Self::total_shares() - to_burn;
             <TotalShares>::put(total_shares_issued);
@@ -470,11 +431,12 @@ impl<T: Trait> Module<T> {
         donation: Option<BalanceOf<T>>,
         direct: bool,
     ) -> Shares {
-        // 20 % higher proposal bond base for direct proposals
-        let direct_multiplier = Permill::from_percent(20);
+        // 75 % lower proposal bond base for direct proposals
+        // members can do more proposals 
+        let direct_multiplier = Permill::from_percent(75);
         let base_bond: Shares = T::ProposalBond::get();
         let bond = if direct {
-            (direct_multiplier * base_bond) + base_bond
+            base_bond - (direct_multiplier * base_bond)
         } else {
             base_bond
         };
@@ -554,7 +516,10 @@ impl<T: Trait> Module<T> {
     fn do_propose(
         sponsor: T::AccountId,
         applicant: Option<T::AccountId>,
-        support: Shares,
+        support: Shares, 
+        // CONTINUE FROM HERE
+        // vary the application window time according to how much higher/lower the support is relative to the calculated sponsor bond
+        // the support should buy a longer application window `=>` this is what capital purchases in this context
         donation: Option<BalanceOf<T>>,
         mint_request: Option<Shares>,
     ) -> Result {

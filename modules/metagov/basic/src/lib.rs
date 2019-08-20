@@ -1,10 +1,8 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![recursion_limit = "128"]
-pub mod v01;
-pub mod v02;
-pub mod test;
+pub mod dao;
 
-pub use v01::{Call, Event, Module, RawEvent, Trait};
+pub use dao::{Call, Event, Module, RawEvent, Trait};
 
 // test scaffolding
 #[cfg(test)]
