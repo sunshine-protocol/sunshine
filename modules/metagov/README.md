@@ -68,9 +68,11 @@ pub enum State<T> {
 
 This implementation minimizes calls to runtime storage, but is much harder to read/debug. The use of the enum to track `Proposal` state is elegant, but I feel like there is more to associate with each phase than just a block number for holding the expiration time. How can this be done better?
 
+*NOTE*: this implementation has not been finished yet and does NOT compile. I am considering changing the `burn` function such that it returns some certificate for burning within some amount of blocks. I want to be able to collateralize that burn request to provide a faster exit. I also want to abstract out the capital stack order of default and place collateral higher to delay dilution upon exit. All of this is designed with the intention of facilitating a fair exit; *definitely should have an opposite fork that enforces tangible dilution upon exit...*
+
 ## readable <a href="./readable"></a>
 
-This is my favorite of the three. It doesn't make as many calls to runtime storage as *basic* and also doesn't suffer from state bloat in the context of a full (unsponsored) application queue. I'll be continuing development with this implementation.
+This is my favorite of the three. It doesn't make as many calls to runtime storage as *basic* and also doesn't suffer from state bloat in the context of a full (unsponsored) application queue. I'll be continuing development with this implementation unless something comes out of the *storage* design.
 
 <!-- ## Loosely Coupled Modules (in progress)
 

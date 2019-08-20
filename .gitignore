@@ -3,14 +3,12 @@
 
 # unfinished/test code
 runtime/
-debug/
-**/*/cache/
+cache/
 
 # fork, wip
 moonshine
 
 # drafts/planning
-docs/
 plan.md
 **/*/drafts/
 
