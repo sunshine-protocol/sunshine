@@ -2,5 +2,11 @@
 
 **sunshine** is a fund coordination DAO on Substrate inspired by **[moloch](https://github.com/MolochVentures/moloch)**. 
 
-* **[modules](./modules)**::{[master](./modules/master), [metagov](./modules/metagov)}
-* *[substrate-vote](https://github.com/4meta5/substrate-vote) for greater insight into how this project pulls from governance patterns in the [srml](https://github.com/paritytech/substrate/tree/master/srml)*
+**[modules](./modules)**::{[master](./modules/master), [metagov](./modules/metagov)}
+
+*Read more about this project's vision: []()*
+
+## Design Criteria
+1. **accessible**: usability determines the diversity of users as well as rate of adoption
+2. **forkable**: modularity and extensibility encourage granular configuration based on use case
+3. **dynamic**: unambiguous on-chain runtime upgrades allow the system to adapt and evolve

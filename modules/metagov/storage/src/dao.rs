@@ -48,17 +48,17 @@ pub struct Proposal<AccountId, BlockNumber> {
     // the applicant (None if direct proposal by existing member)
     applicant: Option<AccountId>,
     // donation to the DAO (None if grant proposal)
-    donation: Option<Balance>,
+    donation: Option<BalanceOf>,
     // mint request for membership shares (None if pure donation)
     mint_request: Option<Shares>,
     // threshold for passage
-    threshold: Shares,                      // TODO: abstract into a voting module
+    threshold: Shares, // TODO: abstract into a voting module
     // shares in favor, shares against
-    scoreboard: (Shares, Shares),           // TODO: abstract into a voting module
+    scoreboard: (Shares, Shares), // TODO: abstract into a voting module
     // supporting voters (voted yes)
     ayes: Vec<(AccountId, Shares)>,
     // against voters (voted no)
-    nays: Vec<(AccountId, Shares)>,         // TODO: if enough no votes, then bond slashed `=>` otherwise returned
+    nays: Vec<(AccountId, Shares)>, // TODO: if enough no votes, then bond slashed `=>` otherwise returned
 }
 
 /// Voter state (for lock-in + 'instant' withdrawals)
@@ -69,9 +69,9 @@ pub struct Member {
     all_shares: Shares,
     // shares reserved based on pending proposal support/voting
     reserved_shares: Shares,
-}   // TODO: this structure requires enforcing reserved_shares <= all_shares
-    // why is this better than just having `free_shares` and reducing and adding to it?
-    // maybe because it allows for atomic edits and eventual consistency wrt all_shares >= reserved_shares
+} // TODO: this structure requires enforcing reserved_shares <= all_shares
+  // why is this better than just having `free_shares` and reducing and adding to it?
+  // maybe because it allows for atomic edits and eventual consistency wrt all_shares >= reserved_shares
 
 // END TYPES
 
@@ -167,6 +167,7 @@ decl_storage! {
 
 decl_module! {
     pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+        fn deposit_event() = default;
         /// Bond for proposals, to be returned
         const ProposalBond: Shares = T::ProposalBond::get();
 
@@ -191,8 +192,6 @@ decl_module! {
         /// Period between successive spends.
         const IssuanceFrequency: T::BlockNumber = T::IssuanceFrequency::get();
 
-        fn deposit_event<T>() = default;
-
         fn apply(origin, mint_request: Option<Shares>, donation: Option<BalanceOf<T>>) -> Result {
             let applicant = ensure_signed(origin)?;
             // if removed, we risk duplicate applications with the same hash?
@@ -207,10 +206,11 @@ decl_module! {
             // could screen here for proposals outside some range?
 
             let start = <system::Module<T>>::block_number();
+            let state = Application(start);
             // clone applicant for event emission post proposal insertion
             let a = applicant.clone();
             let prop = Proposal {
-                Application(start),
+                state,
                 None,
                 None,
                 applicant,
@@ -225,7 +225,7 @@ decl_module! {
             // add applicant to applicant pool
             <Proposals<T>>::mutate(|props| props.push(a.clone())); // TODO: `append` once 3071
             // deposit event
-            Self::deposit_event(RawEvent::Applied(a, hash, donation, mint_request);
+            Self::deposit_event(RawEvent::Applied(a, hash, donation, mint_request));
             Ok(())
         }
 
@@ -234,7 +234,7 @@ decl_module! {
             ensure!(Self::is_member(&sponsor), "sponsor must be a member");
 
             let app = Self::proposals(&app_hash).ok_or("application must exist")?;
-            let now = <system::module<T>::block_number();
+            let now = <system::module<T>>::block_number();
             // if the sponsor is the applicant, there are required restrictions on voting for self (see `fn propose`)
             match app.state {
                 Application(n) => {
@@ -301,8 +301,8 @@ decl_module! {
                         <Proposals<T>>::remove(&hash);
                         Self::deposit_event(RawEvent::Aborted(abortee.clone(), hash.clone()));
                         return Ok(());
-                    };
-                    _ => return Err("can't abort if not in the application state");
+                    },
+                    _ => return Err("can't abort if not in the application state")
                 }
             }
             Err("the application was not in the proposal mapping")
@@ -316,7 +316,7 @@ decl_module! {
             ensure!(!Self::is_voter(&new_voter), "must not be an active voter yet");
 
             // TODO: governance of the formula behind this bond should be more nuanced
-            // voter bond should be based on how much voter bonds are already locked up relative to 
+            // voter bond should be based on how much voter bonds are already locked up relative to
             // proposal throughput
             let vote_bond: Shares = Self::calculate_vbond();
             ensure!(member.all_shares - member.reserved_shares > vote_bond, "not enough funds to become a voter at this time");
@@ -432,7 +432,7 @@ impl<T: Trait> Module<T> {
         direct: bool,
     ) -> Shares {
         // 75 % lower proposal bond base for direct proposals
-        // members can do more proposals 
+        // members can do more proposals
         let direct_multiplier = Permill::from_percent(75);
         let base_bond: Shares = T::ProposalBond::get();
         let bond = if direct {
@@ -516,7 +516,7 @@ impl<T: Trait> Module<T> {
     fn do_propose(
         sponsor: T::AccountId,
         applicant: Option<T::AccountId>,
-        support: Shares, 
+        support: Shares,
         // CONTINUE FROM HERE
         // vary the application window time according to how much higher/lower the support is relative to the calculated sponsor bond
         // the support should buy a longer application window `=>` this is what capital purchases in this context
@@ -705,7 +705,8 @@ impl<T: Trait> Module<T> {
                                         voter_bond,
                                     },
                                 );
-                                <Members<T>>::mutate(|mems| mems.push(appled.clone())); // `append` with 3071
+                                <Members<T>>::mutate(|mems| mems.push(appled.clone()));
+                            // `append` with 3071
                             } else {
                                 // direct proposal, sponsor information changed
                                 <MemberInfo<T>>::mutate(&p.sponsor, |mem| {

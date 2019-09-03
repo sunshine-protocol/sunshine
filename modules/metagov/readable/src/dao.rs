@@ -173,6 +173,7 @@ decl_storage! {
 
 decl_module! {
     pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+        pub fn deposit_event() = default;
         /// Bond for proposals, to be returned
         const ProposalBond: Shares = T::ProposalBond::get();
 
@@ -196,8 +197,6 @@ decl_module! {
 
         /// Period between successive spends.
         const IssuanceFrequency: T::BlockNumber = T::IssuanceFrequency::get();
-
-        fn deposit_event<T>() = default;
 
         fn apply(origin, shares_requested: Shares, donation: Option<BalanceOf<T>>) -> Result {
             let applicant = ensure_signed(origin)?;
@@ -577,7 +576,7 @@ impl<T: Trait> Module<T> {
         let mut nays: Vec<(T::AccountId, Shares)> = Vec::new();
         ayes.push((sponsor.clone(), sponsor_vote));
         let state: (Shares, Shares) = (sponsor_vote, 0);
-        
+
         // clone proposer for event emission after proposal insertion
         let s = sponsor.clone();
         let proposal = Proposal {
@@ -607,13 +606,13 @@ impl<T: Trait> Module<T> {
     fn do_vote(voter: T::AccountId, hash: T::Hash, support: Shares, approve: bool) -> Result {
         // verify proposal existence
         let mut proposal = Self::proposals(&hash).ok_or("proposal doesnt exist")?;
-        ensure!(
-            &proposal.sponsor != &voter,
-            "the sponsor may not vote"
-        );
+        ensure!(&proposal.sponsor != &voter, "the sponsor may not vote");
 
         // check if the proposal has already passed and entered the grace period
-        ensure!(proposal.grace_end.is_none(), "Proposal passed, grace period already started");
+        ensure!(
+            proposal.grace_end.is_none(),
+            "Proposal passed, grace period already started"
+        );
         // otherwise, get the current time to check that it is within the voting window
         let now = <system::Module<T>>::block_number();
         if proposal.vote_start + T::VoteWindow::get() < now {
@@ -683,7 +682,7 @@ impl<T: Trait> Module<T> {
     /// TODO: create more ensure statements and prevent if statement heLL
     fn issuance(n: T::BlockNumber) -> Result {
         <Passed<T>>::get().into_iter().for_each(|hash| {
-            // if the proposal exists, 
+            // if the proposal exists,
             if let Some(p) = Self::proposals(hash) {
                 // if after the grace period ends (wait until then to execute)
                 if let Some(end) = p.grace_end {
@@ -715,7 +714,8 @@ impl<T: Trait> Module<T> {
                                     voter_bond,
                                 },
                             );
-                            <Members<T>>::mutate(|mems| mems.push(apper.clone())); // `append` with 3071
+                            <Members<T>>::mutate(|mems| mems.push(apper.clone()));
+                        // `append` with 3071
                         } else {
                             // direct proposal, sponsor information changed
                             <MemberInfo<T>>::mutate(&p.sponsor, |mem| {

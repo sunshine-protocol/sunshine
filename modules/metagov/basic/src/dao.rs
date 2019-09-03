@@ -187,6 +187,7 @@ decl_storage! {
 
 decl_module! {
     pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+        fn deposit_event() = default;
         /// Bond for proposals, to be returned
         const ProposalBond: Shares = T::ProposalBond::get();
 
@@ -210,8 +211,6 @@ decl_module! {
 
         /// Period between successive spends.
         const IssuanceFrequency: T::BlockNumber = T::IssuanceFrequency::get();
-
-        fn deposit_event<T>() = default;
 
         fn apply(origin, shares_requested: Shares, donation: Option<BalanceOf<T>>) -> Result {
             let applicant = ensure_signed(origin)?;
@@ -748,7 +747,8 @@ impl<T: Trait> Module<T> {
                                         voter_bond,
                                     },
                                 );
-                                <Members<T>>::mutate(|mems| mems.push(appled.clone())); // `append` with 3071
+                                <Members<T>>::mutate(|mems| mems.push(appled.clone()));
+                            // `append` with 3071
                             } else {
                                 // direct proposal, sponsor information changed
                                 <MemberInfo<T>>::mutate(&p.sponsor, |mem| {
