@@ -4,8 +4,6 @@
 
 **[modules](./modules)**::{[master](./modules/master), [metagov](./modules/metagov)}
 
-*Read more about this project's vision: []()*
-
 ## Design Criteria
 1. **accessible**: usability determines the diversity of users as well as rate of adoption
 2. **forkable**: modularity and extensibility encourage granular configuration based on use case
