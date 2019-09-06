@@ -21,16 +21,45 @@ type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::Ac
 // id f
 const DAO_ID: ModuleId = ModuleId(*b"py/daofi");
 
-/// Generic enum for representing proposal state
-///
-/// -- the type indicates when the state will end
-pub enum State<T> {
+/// Voter state (for lock-in + 'instant' withdrawals)
+#[derive(Encode, Decode, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub struct Member {
+    // total shares owned by the member
+    all_shares: Shares,
+    // shares reserved based on pending proposal support/voting
+    reserved_shares: Shares,
+} // TODO: this structure requires enforcing reserved_shares <= all_shares
+  // why is this better than just having `free_shares` and reducing and adding to it?
+  // maybe because it allows for atomic edits and eventual consistency wrt all_shares >= reserved_shares
+
+
+/// all proposal objects are encoded in the Paper type
+pub enum Paper<T> {
     // application period has commenced
     Application(T),
     // voting period has commenced
     Proposal(T),
     // the grace period has commenced
     Law(T),
+    // can only reverse previous laws (TODO: design process for amendments)
+    Amendment(T),
+}
+
+/// Application type
+// -- eventually the applicant should be able to be crowdfunded by more than one participant (governance of collateral itself)
+// requested recipient of shares
+pub struct Application<AccountId, Hash, > {
+    // applicant accountId (could also be more than one member)
+    applicant: AccountId,
+    // some ipfs hash with more information?
+    info: Hash,
+    // the applicant's donation to the DAO
+    donation: Option<Balance>,
+    // membership shares requested
+    shares_requested: Shares,
+    // start time, end time `=>` easier checks to verify validity (also can be adjusted)
+    time: (BlockNumber, BlockNumber),
 }
 
 /// Generic Moloch Proposal
@@ -39,8 +68,6 @@ pub enum State<T> {
 #[derive(Encode, Decode, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct Proposal<AccountId, BlockNumber> {
-    // application/proposal/law state
-    state: State<BlockNumber>,
     // the proposal sponsor must be a member
     sponsor: Option<AccountId>,
     // the sponsor's share bond (also vote in support by default)
@@ -60,19 +87,6 @@ pub struct Proposal<AccountId, BlockNumber> {
     // against voters (voted no)
     nays: Vec<(AccountId, Shares)>, // TODO: if enough no votes, then bond slashed `=>` otherwise returned
 }
-
-/// Voter state (for lock-in + 'instant' withdrawals)
-#[derive(Encode, Decode, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Debug))]
-pub struct Member {
-    // total shares owned by the member
-    all_shares: Shares,
-    // shares reserved based on pending proposal support/voting
-    reserved_shares: Shares,
-} // TODO: this structure requires enforcing reserved_shares <= all_shares
-  // why is this better than just having `free_shares` and reducing and adding to it?
-  // maybe because it allows for atomic edits and eventual consistency wrt all_shares >= reserved_shares
-
 // END TYPES
 
 pub trait Trait: system::Trait {
