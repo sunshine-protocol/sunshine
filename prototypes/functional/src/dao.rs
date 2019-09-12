@@ -11,6 +11,7 @@ use support::{
     decl_event, decl_module, decl_storage, dispatch::Result, ensure, StorageMap, StorageValue,
 };
 use system::ensure_signed;
+use crate::vest::VestingSchedule;
 
 // ----------------------------------START TYPES-------------------------------
 
@@ -35,30 +36,53 @@ pub struct Member {
 
 
 /// all proposal objects are encoded in the Paper type
-pub enum Paper<T> {
+pub enum Proposal<T> {
     // application period has commenced
     Application(T),
     // voting period has commenced
-    Proposal(T),
+    Referendum(T),
     // the grace period has commenced
     Law(T),
-    // can only reverse previous laws (TODO: design process for amendments)
-    Amendment(T),
+    // can only reverse previous laws (TODO: design process for amendments via DR Court)
+    // Amendment(T),
 }
 
 /// Application type
 // -- eventually the applicant should be able to be crowdfunded by more than one participant (governance of collateral itself)
 // requested recipient of shares
-pub struct Application<AccountId, Hash, > {
-    // applicant accountId (could also be more than one member)
+pub struct Application<AccountId, BalanceOf<T>, BlockNumber> {
+    // applicant accountId
     applicant: AccountId,
-    // some ipfs hash with more information?
-    info: Hash,
     // the applicant's donation to the DAO
-    donation: Option<Balance>,
+    donation: BalanceOf<T>, // if crowdfunded, Vec<(AccountId, Balance)> `=>` or some explicit struct Vec<Crowdfunded>
     // membership shares requested
     shares_requested: Shares,
-    // start time, end time `=>` easier checks to verify validity (also can be adjusted)
+    // start time, end time `=>` easier checks to verify validity (also can be adjusted and individualized)
+    time: (BlockNumber, BlockNumber),
+} // make the parameters generic like in the TCR tutorial
+
+// how could I create a type that allows for either (1) a single applicant with a single crowdfunded donation or (2) a crowdfunded application with multiple partial owners
+// -- this furthers my belief that person should be able to get a single share for participation
+// -- therefore, there is no 10:10 limit, someone can go for 1:1, but allowing 1:1 solves...might just be dumb idk
+
+/// Referendum type
+/// -- voting by members based on the shares they have (TODO: add liquid democracy market for vote delegation (lend votes for periods `=>` could use something like LockableCurrency mechanism for locking shares))
+pub struct Referendum<AccountId, BalanceOf<T>, BlockNumber> {
+    proposer: AccountId,
+    destination: AccountId,
+    // donation to the DAO
+    donation: BalanceOf<T>,
+    // vesting schedule with shares requested
+    vesting_schedule: VestingSchedule<Shares>,
+    // threshold for passage
+    threshold: Shares, // TODO: abstract into a voting module
+    // shares in favor, shares against
+    scoreboard: (Shares, Shares), // TODO: abstract into a voting module
+    // supporting voters (voted yes)
+    ayes: Vec<(AccountId, Shares)>,
+    // against voters (voted no)
+    nays: Vec<(AccountId, Shares)>, // TODO: if enough no votes, then bond slashed `=>` otherwise returned
+    // start time, end time
     time: (BlockNumber, BlockNumber),
 }
 

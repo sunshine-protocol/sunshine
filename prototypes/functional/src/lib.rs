@@ -2,6 +2,10 @@
 #![recursion_limit = "128"]
 pub mod dao;
 
+// still wip
+pub mod traits;
+pub mod vest;
+
 pub use dao::{Call, Event, Module, RawEvent, Trait};
 
 // test scaffolding

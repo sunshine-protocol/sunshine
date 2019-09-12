@@ -1,14 +1,34 @@
-# Metagovernance
+# templates
 
-In this folder, there are three different implementations of a fund coordination DAO on Substrate. Each implementation has unique tradeoffs in the context of user behavior. Likewise, the network should assign a **committee** to approve a list of acceptable application architectures. The acceptable architectures should be logically equivalent, but they ought to vary in cost depending on the user behavior. 
+1. basic
+2. readable
+3. functional
 
-> *Change car tires according to the weather. If weather is consistent and not erosive, we can keep the same tires for some time. When it snows or hails, we use the requisite equipment to increase safety.* 
+## old writing
 
-So, the question is **how can I create a governance body that coordinates which application architecture is most favorable in which scenarios?** I also want the mapping between scenarios and architectures to be enforced unless majority of coinvoters vote to change it or 25% of the committee votes to change it. Keeping this at such a low threshold prevents capture by allowing the minority to forcefully switch the algorithm. There must be a quota of switches per time period, but the protocol should automatically switch versions when conditions specify implementation superiority in context. In general, all implementations should be preferred in some scenario -- otherwise, it is by definition regression from some other choice (although wouldn't be that bad to keep back ups).
+In this folder, there are three different implementations of a fund coordination DAO on Substrate. Each implementation has unique tradeoffs in the context of user behavior. 
 
-This demonstrates an interesting application of Substrate's on-chain runtime upgrades in which upgrades may be able to be automatically executed according to some decided upon `conditions => implementation` mapping. This makes the most sense because there is rarely one uniformly superior application architecture. 
+### basic version
 
-The best design depends heavily on the use case in question as well as how stakeholder dynamics change after usage. Moreover, the solution to problems create new problems that are noticed after a lag. With this in mind, it is important to establish best practices for architecture deployment in specific contexts. Eventually I hope that all applications maintain the flexibility to coordinate responsive changes in architecture according to usage patterns. Powered by stakeholder governance, the described system embodies a dynamic organism that optimizes its structure according to its surroundings...like a *Molochameleon* :P
+The first working version, it lacks too many features, but contains the basic features
+
+### decrease runtime storage calls
+
+Similar logic to the basic version, with almost 1/3 less calls to runtime storage. 
+
+### functional: organize a bit more modularly to extract behavior into more modules
+
+## old idea: changing application architecture based on user behavioral patterns
+
+The governance should designate a **committee** to decide on a list of acceptable application architectures. I guess the most difficult part of this proposal is defining what cannot change between the application architectures. This could be a useful exercise to define the core of the system itself, thereby encouraging upgrade proposals for the parts that are open to change. Again, this does not always make things any clearer.
+
+It also isn't as simple as a simple TCR of architectures. Each architecture should have a few scenarios in which it is more favorable to use the architecture than other architectures. This could include scenarios in which vulnerabilies are discovered in different architectures.
+
+This idea might demonstrate an interesting application of Substrate's on-chain runtime upgrades in which upgrades may be able to be automatically executed according to some decided upon `conditions => implementation` mapping. This makes the most sense because there is rarely one uniformly superior application architecture. 
+
+The best design depends heavily on the use case in question as well as how stakeholder dynamics change after usage. 
+
+Moreover, the solution to problems create new problems that are noticed after a lag. With this in mind, it is important to establish best practices for architecture deployment in specific contexts. Eventually I hope that all applications maintain the flexibility to coordinate responsive changes in architecture according to usage patterns. Powered by stakeholder governance, the described system embodies a dynamic organism that optimizes its structure according to its surroundings...like a *Molochameleon* :P
 
 ## basic <a href="./basic"></a>
 
