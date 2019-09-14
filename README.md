@@ -1,6 +1,6 @@
 # ⓢⓤⓝⓢⓗⓘⓝⓔ 🌞
 
-**sunshine**🌞is a fund coordination DAO that fosters nuanced governance over pooled resources. The architecture is built to evolve and encourages **self-improvement**.
+**sunshine** is a fund coordination DAO that fosters nuanced governance over pooled resources. The architecture is built to evolve and encourages **self-improvement**.
 
 * [overview](#over)
 * [runtime architecture](#runtime)
@@ -24,7 +24,7 @@ Straightforward upgrades make applications built on the blockchain more suitable
 
 > minimal, single-file implementations are stored in [dao-templates](https://github.com/web3garden/dao-templates)
 
-the [runtime](./runtime/) configures four [modules]I(./modules/): 
+the [runtime](./runtime/) configures four [modules](./modules): 
 * membership
 * voting
 * fund
@@ -60,7 +60,7 @@ cargo run -- --dev
 
 Detailed logs may be shown by running the node with the following environment variables set: `RUST_LOG=debug RUST_BACKTRACE=1 cargo run -- --dev`.
 
-### Multi-node local testnet
+### multi-node local testnet
 
 If you want to see the multi-node consensus algorithm in action locally, then you can create a local testnet with two validator nodes for Alice and Bob, who are the initial authorities of the genesis chain that have been endowed with testnet units.
 
