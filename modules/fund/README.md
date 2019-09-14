@@ -1,5 +1,12 @@
 # fund
 
+This is the treasury. We will consider spending proposals for
+* investments
+* donations
+* loans (*which are like fixed income investments, but might have floating rates*)
+
+These proposals will have two possible paths for passage
+
 Asset management committee in the context of `sunshine`. Central to any DAO is its ability to flexibly manage its pool of capital.
 
 Each member should be kept as a struct with certain fields. These fields include a projection vector...

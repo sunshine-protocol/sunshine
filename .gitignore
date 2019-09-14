@@ -2,8 +2,8 @@
 .DS_Store
 
 # unfinished/test code
-runtime/
 cache/
+prototypes/
 
 # fork, wip
 moonshine
