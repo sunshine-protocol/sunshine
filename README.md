@@ -1,6 +1,6 @@
 # ⓢⓤⓝⓢⓗⓘⓝⓔ 🌞
 
-**status: broken**: the previous minimal implementation is undergoing refactoring into four loosely coupled modules
+**status is broken**: the previous minimal implementation is undergoing refactoring into four loosely coupled modules
 
 **sunshine** is a fund coordination DAO that fosters nuanced governance over pooled resources. The architecture is built to evolve and encourages **self-improvement**.
 
