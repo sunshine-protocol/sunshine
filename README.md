@@ -8,7 +8,7 @@
 
 ## overview <a name = "over"></a>
 
-> "Over time, all the components of the DAO are likely to be upgraded using its own mechanisms...Given the high requirements for stability, **self-improvement will be critical to the survival of any DAO-based democratic system.**" ~[DAOs, Democracy and Governance]() by Ralph Merkle
+> "Over time, all the components of the DAO are likely to be upgraded using its own mechanisms...Given the high requirements for stability, **self-improvement will be critical to the survival of any DAO-based democratic system.**" ~[DAOs, Democracy and Governance](http://merkle.com/papers/DAOdemocracyDraft.pdf) by Ralph Merkle
 
 With continuous self-improvement in mind, sunshine's mechanism design aspires to be
 1. **accessible**: usability determines the diversity of users as well as rate of adoption
