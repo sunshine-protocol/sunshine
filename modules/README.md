@@ -18,10 +18,13 @@ The `voting` module is designed to be highly configurable to provide nuanced gov
 
 ## why not just use original srml modules? <a name = "y"></a>
 
-This project is designed to explore experimental features that may be eventually proposed for use in the Polkadot treasury. These features might include
-- [ ] DAOs as first-class members of other DAOs
-- [ ] the ability to merge and split DAOs *gracefully*
-- [ ] structured process for crowdfunding DAOs (and an investment criteria for D2D investment)
-- [ ] lending criteria for DAOs (which could also consider membership credit composition)
+This project's design pulls heavily from patterns in `srml/{membership, council, elections, democracy, staking, treasury`, but doesn't directly use these modules. This decision to not directly import the aforementioned srml modules is explicit and is rooted in the belief that specialization leads to optimization in the context of module development. The SRML as we know it today is optimized for Polkadot's runtime configuration because it was made for the Polkadot relay chain. 
 
-In many ways, this project pulls heavily from patterns in [`srml/{`]()[`membership, `]()[`council, `]()[`elections, `]()[`democracy, `]()[`staking, `]()**[`treasury`]()** among others. 
+Conversely, **sunshine** comprises of a set of modules that can be included in any parachain and/or parathread runtime to facilitate fund coordination amongst a defined stakeholder set. It's application is not limited to the Polkadot treasury although that is the most immediate use case.
+
+Other features that might be added in the feature include
+- [ ] `court` for dispute resolution (to appeal rejected proposals or settle procedural complaints)
+- [ ] DAOs as first-class members of `membership` (make `membership`'s governance composable/embeddable?)
+- [ ] enable arbitrary DAO splits and merges (*graceful*)
+- [ ] structured process for crowdfunding DAOs (and an investment criteria for D2D investment)
+- [ ] lending criteria for DAOs (which may also consider membership credit composition)
