@@ -12,7 +12,7 @@ sunshine's runtime configuration uses the `voting` module to make different inte
 * `committee` is selected by the `member`s using Phragmen with the `member` shares `=>` the committee does not generate any reward but maintains turnout bias for all `fund` decisions (see next decision type)
 * `fund` is similar to `treasury`, but provides nuanced governance of the assets held by the organization `=>` a key feature is the parameterization discussed briefly in `monetary-futarchy`
 
-![](../art/SUNSHINE.png)
+<img src="../art/SUNSHINE.png" width="300" height="200">
 
 The `voting` module is designed to be highly configurable to provide nuanced governance over the DAO's `membership`, `committee`, and `fund`. Each of the arrows in the above diagram requires a different configuration of the `voting` module in the runtime. In this sense, the arrows represent governance of a stakeholder set over internal decisions.
 
