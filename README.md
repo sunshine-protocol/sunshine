@@ -10,7 +10,7 @@
 
 > "Over time, all the components of the DAO are likely to be upgraded using its own mechanisms...Given the high requirements for stability, **self-improvement will be critical to the survival of any DAO-based democratic system.**" ~[DAOs, Democracy and Governance]() by Ralph Merkle
 
-With continuous self-improvement in mind, our **design philosophy** aspires to be
+With continuous self-improvement in mind, sunshine's mechanism design aspires to be
 1. **accessible**: usability determines the diversity of users as well as rate of adoption
 2. **forkable**: modularity and extensibility encourage granular configuration based on use case
 3. **dynamic**: unambiguous on-chain runtime upgrades allow the system to adapt and evolve
@@ -22,13 +22,19 @@ Straightforward upgrades make applications built on the blockchain more suitable
 
 ## runtime architecture <a name = "runtime"></a>
 
-> minimal, single-file implementations are stored in [dao-templates](https://github.com/web3garden/dao-templates)
+> minimal, single-file implementations are maintained in [dao-templates](https://github.com/web3garden/dao-templates)
 
 the [runtime](./runtime/) configures four [modules](./modules): 
-* membership
-* voting
-* fund
-* committee
+* [membership]()
+* [voting]()
+* [fund]()
+* [committee]()
+
+## sovereign::chain, para::{thread, chain}?
+
+**sunshine** comprises of a set of modules that can be included in any parachain and/or parathread runtime to facilitate fund coordination amongst a defined stakeholder set
+
+When designing **sunshine**, the initial motivating use case is the Polkadot treasury; [Kusama's treasury governance](https://medium.com/polkadot-network/kusama-rollout-and-governance-31eb18041044) does not support nuanced fund management. While it allows for voting on donations (*with a binary yes/no outcome*), the current design does not support investments or targeted liquidity provision. Additional experimental features are discussed in [modules](./modules/README#y), but a priority is the incorporation of forward guidance as detailed in [web3garden/monetary-futarchy](https://github.com/web3garden/monetary-futarchy).
 
 ## build instructions <a name = "build"></a>
 

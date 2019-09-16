@@ -8,8 +8,15 @@ use runtime_primitives::{ModuleId, weights::SimpleDispatchInfo,
 };
 use parity_scale_codec::{Encode, Decode};
 
-// not compiling, no worries :o)
-// use substrate_primitives::storage::well_known_keys::CHILD_STORAGE_KEY_PREFIX;
+// I want a generic election module that doesn't necessarily require `Balance` as collateral
+// define collateral as a type according to 
 
-const MODULE_ID: ModuleId = ModuleId(*b"auctions");
+pub trait Trait: system::Trait {
+	type Collateral: SimpleArithmetic + Codec + Copy + MaybeSerializeDebug + Default;
 
+
+}
+// an improved implementation of this uses a trait for the runtime to define how the collateral is bonded and unbonded
+// it might have a `BondState` which is stateful in the runtime and tracks how the bond changes in value while it's bonded
+// how much can be purchased back at any time
+// extra feature (TODO: add market for buying exit priority `=>` innovate on the dilution mechanism)

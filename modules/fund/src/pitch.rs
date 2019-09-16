@@ -36,5 +36,9 @@ pub trait Criteria<> {
     type Projections: Vec<dyn Criteria>;
 
     fn define_criteria() -> 
-} // I keep thinking of methods that need to be implemented in the context of runtime modules
-// this is only really possible in the context of 
+} // this trait is used like in Joshy's marketplace to enable voting on funds
+//
+
+pub trait Pitch<AccountId> {
+    
+}
