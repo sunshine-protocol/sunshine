@@ -1,5 +1,5 @@
 [package]
-name = "sunshine-basic"
+name = "auction"
 version = "0.1.0"
 authors = ["4meta5"]
 edition = "2018"
@@ -23,34 +23,34 @@ version = '1.0.5'
 default_features = false
 git = 'https://github.com/paritytech/substrate.git'
 package = 'srml-support'
-branch = 'master'
+branch = 'polkadot-master'
 
 [dependencies.system]
 default_features = false
 git = 'https://github.com/paritytech/substrate.git'
 package = 'srml-system'
-branch = 'master'
+branch = 'polkadot-master'
 
 [dependencies.balances]
 default_features = false
 git = 'https://github.com/paritytech/substrate.git'
 package = 'srml-balances'
-branch = 'master'
+branch = 'polkadot-master'
 
 [dependencies.runtime-primitives]
 default_features = false
 git = 'https://github.com/paritytech/substrate.git'
 package = 'sr-primitives'
-branch = 'master'
+branch = 'polkadot-master'
 
-[dev-dependencies.primitives]
+[dev-dependencies.substrate-primitives]
 default_features = false
 git = 'https://github.com/paritytech/substrate.git'
 package = 'substrate-primitives'
-branch = 'master'
+branch = 'polkadot-master'
 
 [dev-dependencies.runtime-io]
 default_features = false
 git = 'https://github.com/paritytech/substrate.git'
 package = 'sr-io'
-branch = 'master'
+branch = 'polkadot-master'
