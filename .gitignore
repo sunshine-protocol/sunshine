@@ -3,9 +3,8 @@
 
 # unfinished/test code
 cache/
-
-# fork wip w dispatchable proposals and exit claim certificates for collateral
-moonshine
+moonshine/
+refs/
 
 # drafts/planning
 plan.md

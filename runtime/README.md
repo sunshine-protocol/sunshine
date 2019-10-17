@@ -1,7 +1,9 @@
 # runtime
 
-configures the [modules](../modules/) into a runtime
 
-## research
+## committee
 
-* making this config into a para{chain, thread}, [cumulus](https://github.com/paritytech/cumulus)
+```rust
+
+
+```
