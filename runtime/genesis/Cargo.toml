@@ -1,0 +1,26 @@
+[package]
+name = 'genesis'
+version = "2.0.0"
+authors = ["4meta5"]
+edition = "2018"
+
+[dependencies.main-runtime]
+package = 'main-runtime'
+path = '../'
+
+[dependencies]
+babe-primitives = { package = "substrate-consensus-babe-primitives", git = "https://github.com/paritytech/substrate", branch = "master" }
+grandpa-primitives = { package = "substrate-finality-grandpa-primitives", git = "https://github.com/paritytech/substrate", branch = "master" }
+
+    © 2019 GitHub, Inc.
+    Terms
+    Privacy
+    Security
+    Status
+    Help
+
+    Contact GitHub
+    Pricing
+    API
+    Training
+    Blog
