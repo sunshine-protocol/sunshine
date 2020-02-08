@@ -34,11 +34,14 @@ jobs:
         path: ~/.cargo
         key: ${{ matrix.toolchain.rust }}-${{ matrix.platform.target }}-cache
 
-    - name: Install rust toolchain
-      uses: hecrj/setup-rust-action@v1
+    - name: Install toolchain
+      uses: actions-rs/toolchain@v1
       with:
-        rust-version: ${{ matrix.toolchain.rust }}
-        target: ${{ matrix.platform.target }}
+        profile: minimal
+        toolchain: nightly-2020-02-05
+        components: rustfmt
+        target: wasm32-unknown-unknown
+        default: true
 
     - name: Build modules
       run: cargo build
@@ -59,11 +62,14 @@ jobs:
         path: ~/.cargo
         key: lint-cache
 
-    - name: Install rust toolchain
-      uses: hecrj/setup-rust-action@v1
+    - name: Install toolchain
+      uses: actions-rs/toolchain@v1
       with:
-        rust-version: nightly
-        components: clippy, rustfmt
+        profile: minimal
+        toolchain: nightly-2020-02-05
+        components: rustfmt
+        target: wasm32-unknown-unknown
+        default: true
 
     - name: cargo fmt
       run: cargo fmt --all -- --check
