@@ -1,8 +1,7 @@
-
 use sp_runtime::{
-	generic,
-	traits::{IdentifyAccount, Verify},
-	MultiSignature,
+    generic,
+    traits::{IdentifyAccount, Verify},
+    MultiSignature,
 };
 
 /// An index to a block.
