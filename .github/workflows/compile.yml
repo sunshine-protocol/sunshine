@@ -1,0 +1,72 @@
+name: Compiles
+
+on:
+  pull_request:
+    branches:
+    - master
+  push:
+    branches:
+    - master
+
+jobs:
+  ci:
+    strategy:
+      fail-fast: false
+      matrix:
+        toolchain:
+        - rust: stable
+        - rust: nightly
+        platform:
+        - target: x86_64-unknown-linux-gnu
+        - target: wasm32-unknown-unknown
+          cross: true
+    runs-on: ubuntu-latest
+    env:
+      RUST_BACKTRACE: 1
+      CARGO_INCREMENTAL: 0
+    steps:
+    - name: Checkout sources
+      uses: actions/checkout@v1
+
+    - name: Cache cargo folder
+      uses: actions/cache@v1
+      with:
+        path: ~/.cargo
+        key: ${{ matrix.toolchain.rust }}-${{ matrix.platform.target }}-cache
+
+    - name: Install rust toolchain
+      uses: hecrj/setup-rust-action@v1
+      with:
+        rust-version: ${{ matrix.toolchain.rust }}
+        target: ${{ matrix.platform.target }}
+
+    - name: Build modules
+      run: cargo build
+
+    - name: Test modules
+      if: matrix.platform.cross != true
+      run: cargo test
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout sources
+      uses: actions/checkout@v1
+
+    - name: Cache cargo folder
+      uses: actions/cache@v1
+      with:
+        path: ~/.cargo
+        key: lint-cache
+
+    - name: Install rust toolchain
+      uses: hecrj/setup-rust-action@v1
+      with:
+        rust-version: nightly
+        components: clippy, rustfmt
+
+    - name: cargo fmt
+      run: cargo fmt --all -- --check
+
+    - name: cargo clippy
+      run: cargo clippy -- -D warnings
