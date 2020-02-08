@@ -391,6 +391,26 @@ impl pallet_staking::Trait for Runtime {
     type RewardCurve = RewardCurve;
 }
 
+use permissioned_share_collective;
+parameter_types! {
+    pub const MembershipProposalBond: u64 = 2;
+    pub const MembershipSponsorBond: (u32, u32) = (0, 3);
+    pub const MinimumVoteMagnitude: (u32, u32) = (0, 3);
+    // pub const MaximumShareIssuance: Permill = Permill::from_percent(50);
+    // pub const MinimumTurnoutToPass: Permill = Permill::from_percent(20);
+    pub const BatchPeriod: u64 = 2;
+}
+impl permissioned_share_collective::Trait for Runtime {
+    type Currency = pallet_balances::Module<Runtime>;
+    type Event = ();
+    type MembershipProposalBond = MembershipProposalBond;
+    type MembershipSponsorBond = MembershipSponsorBond;
+    type MinimumVoteMagnitude = MinimumVoteMagnitude;
+    // type MaximumShareIssuance = MaximumShareIssuance;
+    // type MinimumTurnoutToPass = MinimumTurnoutToPass;
+    type BatchPeriod = BatchPeriod;
+}
+
 construct_runtime!(
 	pub enum Runtime where
 		Block = Block,
@@ -415,6 +435,7 @@ construct_runtime!(
 		PalletTreasury: pallet_treasury::{Module, Call, Storage, Config, Event<T>},
 		Staking: pallet_staking,
 		Session: pallet_session::{Module, Call, Storage, Event, Config<T>},
+		PermissionedShareCollective: permissioned_share_collective::{Module, Call, Storage, Event, Config<T>},
 	}
 );
 

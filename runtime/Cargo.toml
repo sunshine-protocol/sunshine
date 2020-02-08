@@ -40,8 +40,8 @@ pallet-staking = { git = "https://github.com/paritytech/substrate.git", default-
 pallet-staking-reward-curve = { git = "https://github.com/paritytech/substrate.git", default-features = false }
 pallet-session = { git = "https://github.com/paritytech/substrate.git", default-features = false }
 pallet-babe = { git = "https://github.com/paritytech/substrate.git", default-features = false }
-
-# srml-permissioned-share-collective = { path = "../srml/permissioned-share-collective", optional = true, default-features = false }
+permissioned-share-collective = { path = "../srml/permissioned-share-collective", package = "permissioned-share-collective", default-features = false }
+clear_on_drop = { version = "0.2.3", features = ["no_cc"] }	# https://github.com/paritytech/substrate/issues/4179
 
 [build-dependencies]
 wasm-builder-runner = { package = "substrate-wasm-builder-runner", version = "1.0.4" }
@@ -81,5 +81,5 @@ std = [
 	"pallet-treasury/std",
 	"pallet-staking/std",
 	"system-rpc-runtime-api/std",
-    # "srml-permissioned-share-collective",
+    "permissioned-share-collective/std",
 ]

@@ -44,7 +44,6 @@ structopt = "0.3.9"
 frame-rpc-system = { package = "substrate-frame-rpc-system", git = "https://github.com/paritytech/substrate" }
 pallet-transaction-payment-rpc = { git = "https://github.com/paritytech/substrate" }
 # orml-oracle-rpc = { path = "orml/oracle/rpc" }
-
 runtime = { package = "suntime", path = "runtime" }
 
 [build-dependencies]
@@ -55,4 +54,7 @@ build-script-utils = { package = "substrate-build-script-utils", git = "https://
 members = [
 	"runtime",
 ]
-exclude = [ "runtime/wasm" ]
+exclude = [ 
+    "runtime/wasm",
+    "./srml",
+]
