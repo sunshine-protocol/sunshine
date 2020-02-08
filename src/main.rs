@@ -1,28 +1,23 @@
-//! Substrate Node Template CLI library.
-
-#![warn(missing_docs)]
-#![warn(unused_extern_crates)]
-
 mod chain_spec;
+mod rpc;
 #[macro_use]
 mod service;
 mod cli;
+mod command;
 
-pub use substrate_cli::{VersionInfo, IntoExit, error};
+pub use sc_cli::{error, VersionInfo};
 
-fn main() {
-	let version = VersionInfo {
-		name: "Substrate Node",
-		commit: env!("VERGEN_SHA_SHORT"),
-		version: env!("CARGO_PKG_VERSION"),
-		executable_name: "node-template",
-		author: "Anonymous",
-		description: "Template Node",
-		support_url: "support.anonymous.an",
-	};
+fn main() -> Result<(), error::Error> {
+    let version = VersionInfo {
+        name: "SunshineChain",
+        commit: env!("VERGEN_SHA_SHORT"),
+        version: env!("CARGO_PKG_VERSION"),
+        executable_name: "sunshine",
+        author: "4meta5",
+        description: "sunshine-chain",
+        support_url: "https://github.com/web3garden/sunshine",
+        copyright_start_year: 2020,
+    };
 
-	if let Err(e) = cli::run(::std::env::args(), cli::Exit, version) {
-		eprintln!("Fatal error: {}\n\n{:?}", e, e);
-		std::process::exit(1)
-	}
+    command::run(version)
 }
