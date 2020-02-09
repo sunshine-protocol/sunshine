@@ -54,5 +54,8 @@ build-script-utils = { package = "substrate-build-script-utils", git = "https://
 [workspace]
 members = [
 	"runtime",
+    "srml/share-collective",
+    "srml/executive",
+    "srml/util",
 ]
 exclude = [ "runtime/wasm" ]
