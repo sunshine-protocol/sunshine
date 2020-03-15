@@ -38,10 +38,6 @@ pub use frame_support::{
 };
 
 /// Importing a template pallet
-pub use shares;
-pub type Share = u64;
-pub type ShareId = u64;
-/// The only module that works right now
 pub use template;
 
 /// An index to a block.
@@ -229,11 +225,6 @@ impl sudo::Trait for Runtime {
 impl template::Trait for Runtime {
 	type Event = Event;
 }
-// impl shares::Trait for Runtime {
-// 	type Event = Event;
-// 	type Share = Share;
-// 	type ShareId = ShareId;
-// }
 
 construct_runtime!(
 	pub enum Runtime where

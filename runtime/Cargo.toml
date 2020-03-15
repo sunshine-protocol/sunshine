@@ -39,8 +39,8 @@ std = [
     'system/std',
     'timestamp/std',
     'transaction-payment/std',
+    'template/std',
     'shares/std',
-    'template/std'
 ]
 [dependencies.aura]
 default-features = false
@@ -91,7 +91,7 @@ version = '2.0.0-alpha.3'
 [dependencies.serde]
 features = ['derive']
 optional = true
-version = '1.0.101'
+version = '1.0.104'
 
 [dependencies.sp-api]
 default-features = false
@@ -182,13 +182,13 @@ version = '2.0.0-alpha.3'
 [dependencies.template]
 default-features = false
 package = 'pallet-template'
-path = '../pallets/template'
+path = '../modules/template'
 version = '2.0.0-alpha.3'
 
 [dependencies.shares]
 default-features = false
 package = 'shares'
-path = '../srml/shares'
+path = '../modules/shares'
 version = '0.0.1'
 
 [dependencies.timestamp]
