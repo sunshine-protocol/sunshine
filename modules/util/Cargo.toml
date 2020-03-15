@@ -13,12 +13,11 @@ sp-core = { git = "https://github.com/paritytech/substrate.git", version = "2.0.
 frame-support = { git = "https://github.com/paritytech/substrate.git", version = "2.0.0-alpha.3", rev = '013c1ee167354a08283fb69915fda56a62fee943', default-features = false }
 frame-system = { git = "https://github.com/paritytech/substrate.git", version = "2.0.0-alpha.3", rev = '013c1ee167354a08283fb69915fda56a62fee943', default-features = false }
 pallet-balances = { git = "https://github.com/paritytech/substrate.git", version = "2.0.0-alpha.3", rev = '013c1ee167354a08283fb69915fda56a62fee943', default-features = false }
+clear_on_drop = { version = "0.2.3", features = ["no_cc"] }	# https://github.com/paritytech/substrate/issues/4179
 
 [dev-dependencies]
 sp-io = { git = "https://github.com/paritytech/substrate.git", version = "2.0.0-alpha.3", rev = '013c1ee167354a08283fb69915fda56a62fee943', default-features = false }
 sp-core = { git = "https://github.com/paritytech/substrate.git", version = "2.0.0-alpha.3", rev = '013c1ee167354a08283fb69915fda56a62fee943', default-features = false }
-
-clear_on_drop = { version = "0.2.3", features = ["no_cc"] }	# https://github.com/paritytech/substrate/issues/4179
 
 [features]
 default = ["std"]
