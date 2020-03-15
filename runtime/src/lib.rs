@@ -41,6 +41,8 @@ pub use frame_support::{
 pub use shares;
 pub type Share = u64;
 pub type ShareId = u64;
+/// The only module that works right now
+pub use template;
 
 /// An index to a block.
 pub type BlockNumber = u32;
@@ -224,11 +226,14 @@ impl sudo::Trait for Runtime {
 }
 
 /// Used for the module template in `./template.rs`
-impl shares::Trait for Runtime {
+impl template::Trait for Runtime {
 	type Event = Event;
-	type Share = Share;
-	type ShareId = ShareId;
 }
+// impl shares::Trait for Runtime {
+// 	type Event = Event;
+// 	type Share = Share;
+// 	type ShareId = ShareId;
+// }
 
 construct_runtime!(
 	pub enum Runtime where
@@ -245,7 +250,7 @@ construct_runtime!(
 		TransactionPayment: transaction_payment::{Module, Storage},
 		Sudo: sudo::{Module, Call, Config<T>, Storage, Event<T>},
 		// Used for the module template in `./template.rs`
-		Shares: shares::{Module, Call, Storage, Event<T>},
+		TemplateModule: template::{Module, Call, Storage, Event<T>},
 	}
 );
 

@@ -40,6 +40,7 @@ std = [
     'timestamp/std',
     'transaction-payment/std',
     'shares/std',
+    'template/std'
 ]
 [dependencies.aura]
 default-features = false
@@ -178,11 +179,11 @@ package = 'frame-system'
 rev = '013c1ee167354a08283fb69915fda56a62fee943'
 version = '2.0.0-alpha.3'
 
-# [dependencies.template]
-# default-features = false
-# package = 'pallet-template'
-# path = '../pallets/template'
-# version = '2.0.0-alpha.3'
+[dependencies.template]
+default-features = false
+package = 'pallet-template'
+path = '../pallets/template'
+version = '2.0.0-alpha.3'
 
 [dependencies.shares]
 default-features = false
