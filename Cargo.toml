@@ -1,61 +1,11 @@
-[package]
-name = "sunshine-chain"
-version = "0.0.1"
-authors = ["4meta5"]
-build = "build.rs"
-edition = "2018"
-
 [profile.release]
-panic = "unwind"
-
-[[bin]]
-name = "sunshine"
-path = "src/main.rs"
-
-[dependencies]
-hex-literal = "0.2.1"
-serde_json = "1.0.47"
-jsonrpc-core = "14.0.5"
-
-futures = "0.3.4"
-log = "0.4.8"
-sp-io = { git = "https://github.com/paritytech/substrate.git" }
-sc-cli = { git = "https://github.com/paritytech/substrate.git" }
-sp-core = { git = "https://github.com/paritytech/substrate.git" }
-sc-executor = { git = "https://github.com/paritytech/substrate.git" }
-sc-service = { git = "https://github.com/paritytech/substrate.git" }
-sp-inherents = { git = "https://github.com/paritytech/substrate.git" }
-sc-transaction-pool = { git = "https://github.com/paritytech/substrate.git" }
-sp-transaction-pool = { git = "https://github.com/paritytech/substrate.git" }
-sc-network = { git = "https://github.com/paritytech/substrate.git" }
-sp-consensus = { git = "https://github.com/paritytech/substrate.git" }
-grandpa = { package = "sc-finality-grandpa", git = "https://github.com/paritytech/substrate.git" }
-grandpa-primitives = { package = "sp-finality-grandpa", git = "https://github.com/paritytech/substrate.git" }
-sc-client = { git = "https://github.com/paritytech/substrate.git" }
-sp-runtime = { git = "https://github.com/paritytech/substrate.git" }
-sc-telemetry = { git = "https://github.com/paritytech/substrate.git" }
-sc-rpc = { git = "https://github.com/paritytech/substrate" }
-sp-api = { git = "https://github.com/paritytech/substrate.git" }
-sp-consensus-babe = { git = "https://github.com/paritytech/substrate.git" }
-sc-consensus-babe = { git = "https://github.com/paritytech/substrate.git" }
-sc-basic-authorship = { git = "https://github.com/paritytech/substrate.git" }
-structopt = "0.3.9"
-
-frame-rpc-system = { package = "substrate-frame-rpc-system", git = "https://github.com/paritytech/substrate" }
-pallet-transaction-payment-rpc = { git = "https://github.com/paritytech/substrate" }
-# orml-oracle-rpc = { path = "orml/oracle/rpc" }
-
-runtime = { package = "suntime", path = "runtime" }
-
-[build-dependencies]
-vergen = "3.0.4"
-build-script-utils = { package = "substrate-build-script-utils", git = "https://github.com/paritytech/substrate.git" }
+panic = 'unwind'
 
 [workspace]
 members = [
-	"runtime",
-    "srml/share-collective",
-    "srml/executive",
-    "srml/util",
+    'node',
+    'modules/template',
+    'modules/shares',
+    'modules/util',
+    'runtime',
 ]
-exclude = [ "runtime/wasm" ]
