@@ -1,12 +1,9 @@
 use crate::{proposal::ProposalType, traits::Approved};
 use codec::{Decode, Encode};
 use frame_support::Parameter;
-#[cfg(feature = "std")]
-use serde::{Deserialize, Serialize};
 use sp_runtime::PerThing;
 
 #[derive(Clone, Copy, PartialEq, Eq, Encode, Decode, sp_runtime::RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[non_exhaustive]
 pub enum VoterYesNoView {
     /// Voted in favor
@@ -28,7 +25,6 @@ impl VoterYesNoView {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Encode, Decode, sp_runtime::RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 /// Binary vote to express for/against with magnitude
 pub struct YesNoVote<Signal> {
     pub direction: VoterYesNoView,
@@ -36,7 +32,6 @@ pub struct YesNoVote<Signal> {
 }
 
 #[derive(Clone, Copy, Default, PartialEq, Eq, Encode, Decode, sp_runtime::RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 /// This is the threshold configuration
 /// - weights votes when they are applied to vote state
 /// - evaluates passage of vote state
@@ -68,7 +63,6 @@ impl<FineArithmetic: PerThing> ThresholdConfig<FineArithmetic> {
 }
 
 #[derive(Clone, Copy, Default, PartialEq, Eq, Encode, Decode, sp_runtime::RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 /// More ergonomic to have this as a field inside of VoteState
 pub struct VoteThreshold<Signal, BlockNumber> {
     /// The amount of support required to pass the proposal
@@ -105,7 +99,6 @@ impl<Signal: Parameter, BlockNumber: Parameter> VoteThreshold<Signal, BlockNumbe
     }
 }
 
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[derive(PartialEq, Eq, Default, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
 /// The state of each executive membership proposal's ongoing voting
 pub struct VoteState<ShareId, VoteId, Signal, BlockNumber> {
@@ -142,7 +135,6 @@ impl<
     }
 }
 
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[derive(PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
 #[non_exhaustive]
 /// The possible outcomes for apply_vote

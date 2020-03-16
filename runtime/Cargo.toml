@@ -40,7 +40,7 @@ std = [
     'timestamp/std',
     'transaction-payment/std',
     'template/std',
-    'shares/std',
+    # 'shares/std',
 ]
 [dependencies.aura]
 default-features = false
@@ -60,7 +60,7 @@ version = '2.0.0-alpha.3'
 default-features = false
 features = ['derive']
 package = 'parity-scale-codec'
-version = '1.0.0'
+version = '1.2.0'
 
 [dependencies.frame-executive]
 default-features = false
@@ -189,6 +189,12 @@ version = '2.0.0-alpha.3'
 default-features = false
 package = 'shares'
 path = '../modules/shares'
+version = '0.0.1'
+
+[dependencies.vote-yesno]
+default-features = false
+package = 'vote-yesno'
+path = '../modules/vote-yesno'
 version = '0.0.1'
 
 [dependencies.timestamp]

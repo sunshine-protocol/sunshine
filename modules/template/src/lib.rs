@@ -9,8 +9,14 @@
 /// For more guidance on Substrate FRAME, see the example pallet
 /// https://github.com/paritytech/substrate/blob/master/frame/example/src/lib.rs
 
-use frame_support::{decl_module, decl_storage, decl_event, decl_error, dispatch};
-use system::ensure_signed;
+use codec::Codec;
+use frame_support::{decl_module, decl_storage, decl_event, decl_error, dispatch, Parameter};
+use frame_system::{self as system, ensure_signed};
+use sp_runtime::{
+    traits::{AtLeast32Bit, MaybeSerializeDeserialize, Member, Zero},
+    DispatchError, DispatchResult,
+};
+use sp_std::{fmt::Debug, prelude::*};
 
 #[cfg(test)]
 mod mock;
@@ -24,25 +30,50 @@ pub trait Trait: system::Trait {
 
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
-}
 
-// This pallet's storage items.
-decl_storage! {
-	trait Store for Module<T: Trait> as TemplateModule {
-		// Just a dummy storage item.
-		// Here we are declaring a StorageValue, `Something` as a Option<u32>
-		// `get(fn something)` is the default getter which returns either the stored `u32` or `None` if nothing stored
-		Something get(fn something): Option<u32>;
-	}
+    /// The share type
+    type Share: Parameter
+        + Member
+        + AtLeast32Bit
+        + Codec
+        + Default
+        + Copy
+        + MaybeSerializeDeserialize
+        + Debug
+        + Zero;
+
+    /// The share identifier type
+    type ShareId: Parameter
+        + Member
+        + AtLeast32Bit
+        + Codec
+        + Default
+        + Copy
+        + MaybeSerializeDeserialize
+        + Debug;
 }
 
 // The pallet's events
 decl_event!(
-	pub enum Event<T> where AccountId = <T as system::Trait>::AccountId {
-		/// Just a dummy event.
-		/// Event `Something` is declared with a parameter of the type `u32` and `AccountId`
-		/// To emit this event, we call the deposit function, from our runtime functions
+	pub enum Event<T>
+	where
+        <T as frame_system::Trait>::AccountId,
+        <T as Trait>::Share,
+        <T as Trait>::ShareId,
+	{
 		SomethingStored(u32, AccountId),
+		/// Reserver ID, Share Type, Amount
+        SharesReserved(AccountId, ShareId, Share),
+        /// UnReserver ID, Share Type, Amount
+        SharesUnReserved(AccountId, ShareId, Share),
+        /// Registrar ID, New Share Type ID
+        NewShareType(AccountId, ShareId),
+        /// Recipient of Issuance Account, Share Id with New Issuance
+        Issuance(AccountId, ShareId, Share),
+        /// Burned Account, Share Id with New Burning (_buyback_)
+        Buyback(AccountId, ShareId, Share),
+        /// Share Id, All Shares Issued
+        TotalSharesIssued(ShareId, Share),
 	}
 );
 
@@ -53,6 +84,24 @@ decl_error! {
 		NoneValue,
 		/// Value reached maximum and cannot be incremented further
 		StorageOverflow,
+		CannotAffordToReserveShareBond,
+        CannotAffordToUnreserveShareBond,
+        ShareTypeNotRegistered,
+        ShareHolderMembershipUninitialized,
+        ProfileNotInstantiated,
+        CanOnlyBurnReservedShares,
+        InitialIssuanceShapeIsInvalid,
+	}
+}
+
+// This pallet's storage items.
+decl_storage! {
+	trait Store for Module<T: Trait> as TemplateModule
+	{
+		// Just a dummy storage item.
+		// Here we are declaring a StorageValue, `Something` as a Option<u32>
+		// `get(fn something)` is the default getter which returns either the stored `u32` or `None` if nothing stored
+		Something get(fn something): Option<u32>;
 	}
 }
 

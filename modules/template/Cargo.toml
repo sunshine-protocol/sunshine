@@ -22,7 +22,7 @@ std = [
     'codec/std',
     'frame-support/std',
     'safe-mix/std',
-    'system/std',
+    'frame-system/std',
 ]
 
 [package]
@@ -34,13 +34,28 @@ license = 'Unlicense'
 name = 'pallet-template'
 repository = 'https://github.com/paritytech/substrate/'
 version = '2.0.0-alpha.3'
+[dependencies]
+# clear_on_drop = { version = "0.2.3", features = ["no_cc"] }	# https://github.com/paritytech/substrate/issues/4179
+util = {path = "../util", default-features=false}
 [dependencies.codec]
 default-features = false
 features = ['derive']
 package = 'parity-scale-codec'
-version = '1.0.0'
+version = '1.2.0'
 
 [dependencies.frame-support]
+default-features = false
+git = 'https://github.com/paritytech/substrate.git'
+rev = '013c1ee167354a08283fb69915fda56a62fee943'
+version = '2.0.0-alpha.3'
+
+[dependencies.sp-std]
+default-features = false
+git = 'https://github.com/paritytech/substrate.git'
+rev = '013c1ee167354a08283fb69915fda56a62fee943'
+version = '2.0.0-alpha.3'
+
+[dependencies.sp-runtime]
 default-features = false
 git = 'https://github.com/paritytech/substrate.git'
 rev = '013c1ee167354a08283fb69915fda56a62fee943'
@@ -50,7 +65,7 @@ version = '2.0.0-alpha.3'
 default-features = false
 version = '1.0.0'
 
-[dependencies.system]
+[dependencies.frame-system]
 default-features = false
 git = 'https://github.com/paritytech/substrate.git'
 package = 'frame-system'

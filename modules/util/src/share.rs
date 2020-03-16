@@ -1,12 +1,9 @@
 use crate::traits::VerifyShape;
 use codec::{Decode, Encode};
 use frame_support::Parameter;
-#[cfg(feature = "std")]
-use serde::{Deserialize, Serialize};
 use sp_runtime::{traits::Zero, RuntimeDebug};
 use sp_std::prelude::*;
 
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[derive(PartialEq, Eq, Copy, Default, Clone, Encode, Decode, RuntimeDebug)]
 /// The share profile stores information regarding share reservation in the context of
 /// collateralized actions
@@ -15,7 +12,6 @@ pub struct ShareProfile<Shares> {
     pub reserved: Shares,
 }
 
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[derive(PartialEq, Eq, Default, Clone, Encode, Decode, RuntimeDebug)]
 /// The account ownership for the share genesis
 pub struct SimpleShareGenesis<AccountId, Shares> {
