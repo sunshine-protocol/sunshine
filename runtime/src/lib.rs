@@ -35,8 +35,8 @@ pub use sp_runtime::BuildStorage;
 pub use sp_runtime::{Perbill, Permill};
 pub use timestamp::Call as TimestampCall;
 
-/// Importing a template pallet
-pub use template;
+/// Importing a shares pallet
+pub use shares;
 
 /// An index to a block.
 pub type BlockNumber = u32;
@@ -219,15 +219,8 @@ impl sudo::Trait for Runtime {
     type Call = Call;
 }
 
-/// Used for the module template in `./template.rs`
 pub type Share = u64;
 pub type ShareId = u64;
-impl template::Trait for Runtime {
-    type Event = Event;
-    type Share = Share;
-    type ShareId = ShareId;
-}
-
 impl shares::Trait for Runtime {
     type Event = Event;
     type Share = Share;
@@ -262,8 +255,7 @@ construct_runtime!(
         Balances: balances::{Module, Call, Storage, Config<T>, Event<T>},
         TransactionPayment: transaction_payment::{Module, Storage},
         Sudo: sudo::{Module, Call, Config<T>, Storage, Event<T>},
-        // Used for the module template in `./template.rs`
-        TemplateModule: template::{Module, Call, Storage, Event<T>},
+        // My modules
         Shares: shares::{Module, Call, Storage, Event<T>},
         //VoteYesno: vote_yesno::{Module, Call, Storage, Event<T>},
     }

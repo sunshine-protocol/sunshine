@@ -108,14 +108,14 @@ decl_storage! {
             }).collect::<Vec<_>>()
         }): double_map hasher(blake2_256) T::AccountId, hasher(blake2_256) T::ShareId => Option<ShareProfile<T::Share>>;
     }
-    // add_extra_genesis {
-    //     // REQUIRED: membership_shares.sum() == total_issuance
-    //     config(membership_shares): Vec<(T::AccountId, T::ShareId, T::Share)>;
-    //     // REQUIRED: no duplicate share_id entries in this vector
-    //     config(total_issuance): Vec<(T::ShareId, T::Share)>;
-    //     // REQUIRED: syncs with membership_shares on membership organization
-    //     config(shareholder_membership): Vec<(T::ShareId, Vec<T::AccountId>)>;
-    // }
+    add_extra_genesis {
+        // REQUIRED: membership_shares.sum() == total_issuance
+        config(membership_shares): Vec<(T::AccountId, T::ShareId, T::Share)>;
+        // REQUIRED: no duplicate share_id entries in this vector
+        config(total_issuance): Vec<(T::ShareId, T::Share)>;
+        // REQUIRED: syncs with membership_shares on membership organization
+        config(shareholder_membership): Vec<(T::ShareId, Vec<T::AccountId>)>;
+    }
 }
 
 decl_module! {
