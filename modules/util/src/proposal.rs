@@ -1,12 +1,9 @@
 use codec::{Decode, Encode};
-#[cfg(feature = "std")]
-use serde::{Deserialize, Serialize};
 use sp_runtime::RuntimeDebug;
 
 // associated with every proposal
 pub type ProposalId = u32;
 
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug)]
 #[non_exhaustive]
 /// The proposal taxonomy
@@ -23,7 +20,6 @@ impl Default for ProposalType {
     }
 }
 
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 #[non_exhaustive]
 /// Proposal stages
@@ -38,7 +34,6 @@ pub enum ProposalStage {
     Law,
 }
 
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 /// Proposal for membership changes to the LLC
 /// - join and levae types can both be represented in this form
@@ -59,7 +54,6 @@ pub struct MembershipProposal<AccountId, Shares, BalanceOf, BlockNumber> {
     pub time_proposed: BlockNumber,
 }
 
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 /// Pay schedule for grant proposals
 pub struct BasicPaySchedule<AccountId, BalanceOf, BlockNumber> {
@@ -69,7 +63,6 @@ pub struct BasicPaySchedule<AccountId, BalanceOf, BlockNumber> {
     start_block: Option<BlockNumber>,
 }
 
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 /// Proposal for membership changes to the LLC
 /// - join and levae types can both be represented in this form

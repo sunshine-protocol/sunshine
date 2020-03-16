@@ -1,5 +1,3 @@
-#![allow(clippy::string_lit_as_bytes)]
-#![allow(clippy::redundant_closure_call)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(test)]

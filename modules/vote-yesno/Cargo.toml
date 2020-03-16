@@ -1,19 +1,20 @@
+
 [package]
-name = "shares"
+name = "vote-yesno"
 version = "0.0.1"
 authors = ["4meta5"]
 edition = "2018"
 
 [dependencies]
 serde = { version = "1.0.104", optional = true }
-codec = { package = "parity-scale-codec", version = "1.2.0", default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "1.1.2", default-features = false, features = ["derive"] }
 sp-std = { git = "https://github.com/paritytech/substrate.git", version = "2.0.0-alpha.3", rev = '013c1ee167354a08283fb69915fda56a62fee943', default-features = false }
 sp-runtime = { git = "https://github.com/paritytech/substrate.git", version = "2.0.0-alpha.3", rev = '013c1ee167354a08283fb69915fda56a62fee943', default-features = false }
 frame-support = { git = "https://github.com/paritytech/substrate.git", version = "2.0.0-alpha.3", rev = '013c1ee167354a08283fb69915fda56a62fee943', default-features = false }
 frame-system = { git = "https://github.com/paritytech/substrate.git", version = "2.0.0-alpha.3", rev = '013c1ee167354a08283fb69915fda56a62fee943', default-features = false }
 pallet-balances = { git = "https://github.com/paritytech/substrate.git", version = "2.0.0-alpha.3", rev = '013c1ee167354a08283fb69915fda56a62fee943', default-features = false }
-util = { path = "../util", default-features=false}
-clear_on_drop = { version = "0.2.3", features = ["no_cc"] }	# https://github.com/paritytech/substrate/issues/4179
+util = {path = "../util", default-features=false}
+shares = {path = "../shares", default-features=false}
 
 [dev-dependencies]
 sp-io = { git = "https://github.com/paritytech/substrate.git", version = "2.0.0-alpha.3", rev = '013c1ee167354a08283fb69915fda56a62fee943', default-features = false }

@@ -39,7 +39,6 @@ std = [
     'system/std',
     'timestamp/std',
     'transaction-payment/std',
-    'template/std',
     'shares/std',
 ]
 [dependencies.aura]
@@ -60,7 +59,7 @@ version = '2.0.0-alpha.3'
 default-features = false
 features = ['derive']
 package = 'parity-scale-codec'
-version = '1.0.0'
+version = '1.2.0'
 
 [dependencies.frame-executive]
 default-features = false
@@ -179,17 +178,17 @@ package = 'frame-system'
 rev = '013c1ee167354a08283fb69915fda56a62fee943'
 version = '2.0.0-alpha.3'
 
-[dependencies.template]
-default-features = false
-package = 'pallet-template'
-path = '../modules/template'
-version = '2.0.0-alpha.3'
-
 [dependencies.shares]
 default-features = false
 package = 'shares'
 path = '../modules/shares'
 version = '0.0.1'
+
+# [dependencies.vote-yesno]
+# default-features = false
+# package = 'vote-yesno'
+# path = '../modules/vote-yesno'
+# version = '0.0.1'
 
 [dependencies.timestamp]
 default-features = false
