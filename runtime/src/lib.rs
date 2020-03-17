@@ -227,19 +227,19 @@ impl shares::Trait for Runtime {
     type ShareId = ShareId;
 }
 
-// pub use vote_yesno;
-// pub type Signal = u64;
-// pub type VoteId = u64;
-// parameter_types!{
-// 	pub const DefaultVoteLength: u32 = 10;
-// }
-// impl vote_yesno::Trait for Runtime {
-// 	type Event = Event;
-// 	type Signal = Signal;
-// 	type VoteId = VoteId;
-// 	type ShareData = AdminShares;
-// 	type DefaultVoteLength = DefaultVoteLength;
-// }
+pub use vote_yesno;
+pub type Signal = u64;
+pub type VoteId = u64;
+parameter_types! {
+    pub const DefaultVoteLength: u32 = 10;
+}
+impl vote_yesno::Trait for Runtime {
+    type Event = Event;
+    type Signal = Signal;
+    type VoteId = VoteId;
+    type ShareData = Shares;
+    type DefaultVoteLength = DefaultVoteLength;
+}
 
 construct_runtime!(
     pub enum Runtime where
@@ -257,7 +257,7 @@ construct_runtime!(
         Sudo: sudo::{Module, Call, Config<T>, Storage, Event<T>},
         // My modules
         Shares: shares::{Module, Call, Storage, Event<T>},
-        //VoteYesno: vote_yesno::{Module, Call, Storage, Event<T>},
+        VoteYesno: vote_yesno::{Module, Call, Storage, Event<T>},
     }
 );
 
