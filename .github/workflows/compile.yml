@@ -44,35 +44,35 @@ jobs:
         default: true
 
     - name: Build Node
-      run: cargo build
+      run: cargo build --release
 
-  #   - name: Test modules
-  #     if: matrix.platform.cross != true
-  #     run: cargo test
+    - name: Test modules
+      if: matrix.platform.cross != true
+      run: cargo test
 
-  # lint:
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #   - name: Checkout sources
-  #     uses: actions/checkout@v1
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout sources
+      uses: actions/checkout@v1
 
-  #   - name: Cache cargo folder
-  #     uses: actions/cache@v1
-  #     with:
-  #       path: ~/.cargo
-  #       key: lint-cache
+    - name: Cache cargo folder
+      uses: actions/cache@v1
+      with:
+        path: ~/.cargo
+        key: lint-cache
 
-  #   - name: Install toolchain
-  #     uses: actions-rs/toolchain@v1
-  #     with:
-  #       profile: minimal
-  #       toolchain: nightly-2020-02-05
-  #       components: clippy, rustfmt
-  #       target: wasm32-unknown-unknown
-  #       default: true
+    - name: Install toolchain
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: nightly-2020-02-05
+        components: clippy, rustfmt
+        target: wasm32-unknown-unknown
+        default: true
 
-  #   - name: cargo fmt
-  #     run: cargo fmt --all -- --check
+    - name: cargo fmt
+      run: cargo fmt --all -- --check
 
-  #   - name: cargo clippy
-  #     run: cargo clippy -- -D warnings
+    - name: cargo clippy
+      run: cargo clippy -- -D warnings

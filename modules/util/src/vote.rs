@@ -16,7 +16,7 @@ pub enum VoterYesNoView {
 
 impl VoterYesNoView {
     /// Helper method to tell us if a vote is in favor
-    pub fn is_in_favor(&self) -> bool {
+    pub fn is_in_favor(self) -> bool {
         match self {
             VoterYesNoView::InFavor => true,
             _ => false,
