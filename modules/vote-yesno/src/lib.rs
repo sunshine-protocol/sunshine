@@ -1,5 +1,6 @@
 #![allow(clippy::string_lit_as_bytes)]
 #![allow(clippy::redundant_closure_call)]
+#![allow(clippy::type_complexity)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(test)]
@@ -184,7 +185,7 @@ impl<T: Trait> IDIsAvailable<T::VoteId> for Module<T> {
 
 impl<T: Trait> GenerateUniqueID<T::VoteId> for Module<T> {
     fn generate_unique_id(proposed_id: T::VoteId) -> T::VoteId {
-        let generated_id = if !Self::id_is_available(proposed_id) {
+        if !Self::id_is_available(proposed_id) {
             let mut id_counter = <VoteIdCounter<T>>::get();
             while <VoteStates<T>>::get(id_counter).is_some() {
                 // TODO: add overflow check here
@@ -194,8 +195,7 @@ impl<T: Trait> GenerateUniqueID<T::VoteId> for Module<T> {
             id_counter
         } else {
             proposed_id
-        };
-        generated_id
+        }
     }
 }
 
@@ -215,7 +215,7 @@ impl<T: Trait> MintableSignal<T::AccountId, T::Signal> for Module<T> {
             // reserve as many as possible
             None
         };
-        let shares_reserved = T::ShareData::reserve(&who, share_id.into(), shares_to_reserve)?;
+        let shares_reserved = T::ShareData::reserve(&who, share_id, shares_to_reserve)?;
         // could add more nuanced conversion logic here; see doc/sharetovote
         let minted_signal: T::Signal = shares_reserved.into();
         <MintedSignal<T>>::insert(who, vote_id, minted_signal);
@@ -236,7 +236,7 @@ impl<T: Trait> MintableSignal<T::AccountId, T::Signal> for Module<T> {
             // does this propagate errors
             let minted_signal = Self::mint_signal(who.clone(), vote_id, share_id, None);
             if let Ok(add_to_sum) = minted_signal {
-                total_minted_signal = total_minted_signal + add_to_sum
+                total_minted_signal += add_to_sum
             }
             // TODO: PROPER ERROR HANDLING HERE
         });
@@ -268,8 +268,8 @@ impl<T: Trait> CalculateVoteThreshold<T::Signal, Permill> for Module<T> {
         possible_turnout: T::Signal,
     ) -> Self::VoteThreshold {
         // TODO: should add trait bound to ensure that these fields can multiply the possible turnout like this
-        let support_required = threshold_config.passage_threshold_pct * possible_turnout.clone();
-        let turnout_required = threshold_config.turnout_threshold_pct * possible_turnout.clone();
+        let support_required = threshold_config.passage_threshold_pct * possible_turnout;
+        let turnout_required = threshold_config.turnout_threshold_pct * possible_turnout;
         let now = system::Module::<T>::block_number();
         Self::VoteThreshold::new(support_required, turnout_required, now)
     }
@@ -302,8 +302,8 @@ impl<T: Trait> OpenVote for Module<T> {
             electorate: share_id,
             vote_id: new_vote_id,
             // in_favor, against, and turnout are 0 by default
-            proposal_type: proposal_type,
-            threshold: threshold,
+            proposal_type,
+            threshold,
             initialized: now,
             expires: ends,
             ..Default::default()

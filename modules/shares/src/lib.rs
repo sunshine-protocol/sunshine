@@ -1,3 +1,5 @@
+#![allow(clippy::string_lit_as_bytes)]
+#![allow(clippy::redundant_closure_call)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(test)]
@@ -104,7 +106,7 @@ decl_storage! {
                     free: *shares,
                     ..Default::default()
                 };
-                (who.clone(), id.clone(), share_profile)
+                (who.clone(), *id, share_profile)
             }).collect::<Vec<_>>()
         }): double_map hasher(blake2_256) T::AccountId, hasher(blake2_256) T::ShareId => Option<ShareProfile<T::Share>>;
     }
@@ -161,7 +163,7 @@ decl_module! {
 
         fn issue_shares(origin, owner: T::AccountId, share_id: T::ShareId, shares: T::Share) -> DispatchResult {
             let _ = ensure_signed(origin)?;
-            Self::issue(&owner, share_id, shares.clone())?;
+            Self::issue(&owner, share_id, shares)?;
             Self::deposit_event(RawEvent::Issuance(owner, share_id, shares));
             Ok(())
         }
@@ -195,7 +197,7 @@ impl<T: Trait<I>, I: Instance> IDIsAvailable<T::ShareId> for Module<T, I> {
 
 impl<T: Trait<I>, I: Instance> GenerateUniqueID<T::ShareId> for Module<T, I> {
     fn generate_unique_id(proposed_id: T::ShareId) -> T::ShareId {
-        let generated_id = if !Self::id_is_available(proposed_id) {
+        if !Self::id_is_available(proposed_id) {
             let mut id_counter = <ShareIdCounter<T, I>>::get();
             while <TotalIssuance<T, I>>::get(id_counter).is_some() {
                 // TODO: add overflow check here
@@ -205,8 +207,7 @@ impl<T: Trait<I>, I: Instance> GenerateUniqueID<T::ShareId> for Module<T, I> {
             id_counter
         } else {
             proposed_id
-        };
-        generated_id
+        }
     }
 }
 
