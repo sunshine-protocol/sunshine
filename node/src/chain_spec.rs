@@ -1,7 +1,14 @@
 use grandpa_primitives::AuthorityId as GrandpaId;
 use node_template_runtime::{
-    AccountId, AuraConfig, BalancesConfig, GenesisConfig, GrandpaConfig, Signature, SudoConfig,
-    SystemConfig, WASM_BINARY,
+    AccountId,
+    AuraConfig,
+    BalancesConfig,
+    GenesisConfig,
+    GrandpaConfig, //Share, ShareId, Signal,
+    Signature,
+    SudoConfig,
+    SystemConfig,
+    WASM_BINARY, //VoteId
 };
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::{sr25519, Pair, Public};
@@ -132,6 +139,16 @@ fn testnet_genesis(
                 .map(|k| (k, 1 << 60))
                 .collect(),
         }),
+        // TODO: fix this
+        // shares: Some(SystemConfig {
+        //     membership_shares: endowed_accounts
+        //         .iter()
+        //         .cloned()
+        //         .map(|k| (k, 1, 10))
+        //         .collect(),
+        //     total_issuance: vec![(1, 100)],
+        //     shareholder_membership: vec![1, vec![1, 2, 3]],
+        // }),
         aura: Some(AuraConfig {
             authorities: initial_authorities.iter().map(|x| (x.0.clone())).collect(),
         }),
