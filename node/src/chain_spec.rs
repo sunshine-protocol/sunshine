@@ -4,11 +4,14 @@ use node_template_runtime::{
     AuraConfig,
     BalancesConfig,
     GenesisConfig,
-    GrandpaConfig, //Share, ShareId, Signal,
+    GrandpaConfig,
+    Share,
+    ShareId,
+    SharesConfig,
     Signature,
     SudoConfig,
     SystemConfig,
-    WASM_BINARY, //VoteId
+    WASM_BINARY, // Signal, VoteId
 };
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::{sr25519, Pair, Public};
@@ -59,14 +62,32 @@ impl Alternative {
                 "dev",
                 || {
                     testnet_genesis(
+                        // initial authorities
                         vec![get_authority_keys_from_seed("Alice")],
+                        // root key
                         get_account_id_from_seed::<sr25519::Public>("Alice"),
+                        // endowed accounts
                         vec![
                             get_account_id_from_seed::<sr25519::Public>("Alice"),
                             get_account_id_from_seed::<sr25519::Public>("Bob"),
                             get_account_id_from_seed::<sr25519::Public>("Alice//stash"),
                             get_account_id_from_seed::<sr25519::Public>("Bob//stash"),
                         ],
+                        // membership shares
+                        vec![
+                            (get_account_id_from_seed::<sr25519::Public>("Alice"), 1, 10),
+                            (get_account_id_from_seed::<sr25519::Public>("Bob"), 1, 10),
+                        ],
+                        // total issuance
+                        vec![(1, 20)],
+                        // shareholder membership
+                        vec![(
+                            1,
+                            vec![
+                                get_account_id_from_seed::<sr25519::Public>("Alice"),
+                                get_account_id_from_seed::<sr25519::Public>("Bob"),
+                            ],
+                        )],
                         true,
                     )
                 },
@@ -81,11 +102,14 @@ impl Alternative {
                 "local_testnet",
                 || {
                     testnet_genesis(
+                        // initial authorities
                         vec![
                             get_authority_keys_from_seed("Alice"),
                             get_authority_keys_from_seed("Bob"),
                         ],
+                        // root key
                         get_account_id_from_seed::<sr25519::Public>("Alice"),
+                        // endowed accounts
                         vec![
                             get_account_id_from_seed::<sr25519::Public>("Alice"),
                             get_account_id_from_seed::<sr25519::Public>("Bob"),
@@ -100,6 +124,33 @@ impl Alternative {
                             get_account_id_from_seed::<sr25519::Public>("Eve//stash"),
                             get_account_id_from_seed::<sr25519::Public>("Ferdie//stash"),
                         ],
+                        // membership shares
+                        vec![
+                            (get_account_id_from_seed::<sr25519::Public>("Alice"), 1, 10),
+                            (get_account_id_from_seed::<sr25519::Public>("Bob"), 1, 10),
+                            (
+                                get_account_id_from_seed::<sr25519::Public>("Charlie"),
+                                1,
+                                10,
+                            ),
+                            (get_account_id_from_seed::<sr25519::Public>("Dave"), 1, 10),
+                            (get_account_id_from_seed::<sr25519::Public>("Eve"), 1, 10),
+                            (get_account_id_from_seed::<sr25519::Public>("Ferdie"), 1, 10),
+                        ],
+                        // total issuance
+                        vec![(1, 60)],
+                        // shareholder membership
+                        vec![(
+                            1,
+                            vec![
+                                get_account_id_from_seed::<sr25519::Public>("Alice"),
+                                get_account_id_from_seed::<sr25519::Public>("Bob"),
+                                get_account_id_from_seed::<sr25519::Public>("Charlie"),
+                                get_account_id_from_seed::<sr25519::Public>("Dave"),
+                                get_account_id_from_seed::<sr25519::Public>("Eve"),
+                                get_account_id_from_seed::<sr25519::Public>("Ferdie"),
+                            ],
+                        )],
                         true,
                     )
                 },
@@ -125,6 +176,9 @@ fn testnet_genesis(
     initial_authorities: Vec<(AuraId, GrandpaId)>,
     root_key: AccountId,
     endowed_accounts: Vec<AccountId>,
+    membership_shares: Vec<(AccountId, ShareId, Share)>,
+    total_issuance: Vec<(ShareId, Share)>,
+    shareholder_membership: Vec<(ShareId, Vec<AccountId>)>,
     _enable_println: bool,
 ) -> GenesisConfig {
     GenesisConfig {
@@ -139,16 +193,11 @@ fn testnet_genesis(
                 .map(|k| (k, 1 << 60))
                 .collect(),
         }),
-        // TODO: fix this
-        // shares: Some(SystemConfig {
-        //     membership_shares: endowed_accounts
-        //         .iter()
-        //         .cloned()
-        //         .map(|k| (k, 1, 10))
-        //         .collect(),
-        //     total_issuance: vec![(1, 100)],
-        //     shareholder_membership: vec![1, vec![1, 2, 3]],
-        // }),
+        shares: Some(SharesConfig {
+            membership_shares,
+            total_issuance,
+            shareholder_membership,
+        }),
         aura: Some(AuraConfig {
             authorities: initial_authorities.iter().map(|x| (x.0.clone())).collect(),
         }),

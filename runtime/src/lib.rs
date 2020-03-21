@@ -253,7 +253,7 @@ construct_runtime!(
         TransactionPayment: transaction_payment::{Module, Storage},
         Sudo: sudo::{Module, Call, Config<T>, Storage, Event<T>},
         // My modules
-        Shares: shares::{Module, Call, Storage, Event<T>}, // Config<T>
+        Shares: shares::{Module, Call, Config<T>, Storage, Event<T>},
         VoteYesno: vote_yesno::{Module, Call, Storage, Event<T>},
     }
 );
