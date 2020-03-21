@@ -48,16 +48,6 @@ where
     AccountPublic::from(get_from_seed::<TPublic>(seed)).into_account()
 }
 
-/// Helper function to generate a ShareId from a u64
-pub fn get_share_id_from_u64(value: u64) -> ShareId {
-    value.into()
-}
-
-/// Helper function to generate a Share from a u64
-pub fn get_share_from_u64(value: u64) -> Share {
-    value.into()
-}
-
 /// Helper function to generate an authority key for Aura
 pub fn get_authority_keys_from_seed(s: &str) -> (AuraId, GrandpaId) {
     (get_from_seed::<AuraId>(s), get_from_seed::<GrandpaId>(s))
@@ -85,16 +75,8 @@ impl Alternative {
                         ],
                         // membership shares
                         vec![
-                            (
-                                get_account_id_from_seed::<sr25519::Public>("Alice"),
-                                get_share_id_from_u64(1),
-                                get_share_from_u64(10),
-                            ),
-                            (
-                                get_account_id_from_seed::<sr25519::Public>("Bob"),
-                                get_share_id_from_u64(1),
-                                get_share_from_u64(10),
-                            ),
+                            (get_account_id_from_seed::<sr25519::Public>("Alice"), 1, 10),
+                            (get_account_id_from_seed::<sr25519::Public>("Bob"), 1, 10),
                         ],
                         // total issuance
                         vec![(1, 20)],
@@ -144,36 +126,16 @@ impl Alternative {
                         ],
                         // membership shares
                         vec![
-                            (
-                                get_account_id_from_seed::<sr25519::Public>("Alice"),
-                                get_share_id_from_u64(1),
-                                get_share_from_u64(10),
-                            ),
-                            (
-                                get_account_id_from_seed::<sr25519::Public>("Bob"),
-                                get_share_id_from_u64(1),
-                                get_share_from_u64(10),
-                            ),
+                            (get_account_id_from_seed::<sr25519::Public>("Alice"), 1, 10),
+                            (get_account_id_from_seed::<sr25519::Public>("Bob"), 1, 10),
                             (
                                 get_account_id_from_seed::<sr25519::Public>("Charlie"),
-                                get_share_id_from_u64(1),
-                                get_share_from_u64(10),
+                                1,
+                                10,
                             ),
-                            (
-                                get_account_id_from_seed::<sr25519::Public>("Dave"),
-                                get_share_id_from_u64(1),
-                                get_share_from_u64(10),
-                            ),
-                            (
-                                get_account_id_from_seed::<sr25519::Public>("Eve"),
-                                get_share_id_from_u64(1),
-                                get_share_from_u64(10),
-                            ),
-                            (
-                                get_account_id_from_seed::<sr25519::Public>("Ferdie"),
-                                get_share_id_from_u64(1),
-                                get_share_from_u64(10),
-                            ),
+                            (get_account_id_from_seed::<sr25519::Public>("Dave"), 1, 10),
+                            (get_account_id_from_seed::<sr25519::Public>("Eve"), 1, 10),
+                            (get_account_id_from_seed::<sr25519::Public>("Ferdie"), 1, 10),
                         ],
                         // total issuance
                         vec![(1, 60)],
