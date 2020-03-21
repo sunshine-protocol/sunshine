@@ -6,7 +6,7 @@
 
 ## Onboarding
 
-Interested in contributing and new to Rust?
+New to Rust?
 - [Rust Book](https://doc.rust-lang.org/book/index.html)
 - [More Rust Learning Resources](https://github.com/4meta5/learning-rust)
 
