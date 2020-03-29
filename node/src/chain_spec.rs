@@ -3,6 +3,7 @@ use node_template_runtime::{
     AccountId,
     AuraConfig,
     BalancesConfig,
+    BankConfig,
     GenesisConfig,
     GrandpaConfig,
     Share,
@@ -197,6 +198,9 @@ fn testnet_genesis(
             membership_shares,
             total_issuance,
             shareholder_membership,
+        }),
+        bank: Some(BankConfig {
+            omnipotent_key: root_key.clone(),
         }),
         aura: Some(AuraConfig {
             authorities: initial_authorities.iter().map(|x| (x.0.clone())).collect(),

@@ -22,9 +22,9 @@ use sp_std::{fmt::Debug, prelude::*};
 use util::{
     proposal::ProposalType,
     traits::{
-        ApplyVote, Approved, CalculateVoteThreshold, CheckVoteStatus, GenerateUniqueID,
-        IDIsAvailable, MintableSignal, OpenVote, ReservableProfile, SetThresholdConfig, ShareBank,
-        VoteOnProposal,
+        ApplyVote, Approved, CheckVoteStatus, GenerateUniqueID, GetVoteOutcome, IDIsAvailable,
+        MintableSignal, OpenVote, ReservableProfile, ShareBank, ShareRegistration, VoteOnProposal,
+        VoteThresholdBuilder,
     },
     vote::{Outcome, ThresholdConfig, VoteState, VoteThreshold, VoterYesNoView, YesNoVote},
 };
@@ -64,7 +64,9 @@ pub trait Trait: frame_system::Trait {
         + Debug;
 
     /// An instance of the shares module
-    type ShareData: ReservableProfile<Self::AccountId> + ShareBank<Self::AccountId>;
+    type ShareData: ReservableProfile<Self::AccountId>
+        + ShareBank<Self::AccountId>
+        + ShareRegistration<Self::AccountId>;
 
     /// The default vote length
     type DefaultVoteLength: Get<Self::BlockNumber>;
@@ -97,7 +99,8 @@ decl_error! {
         /// Current time is past the time of the vote expiration so new votes are not accepted
         VotePastExpirationTimeSoVotesNotAccepted,
         NotEnoughSignalToVote,
-        ThresholdConfigNotSetForProposalType,
+        /// Tried to get voting outcome but returned None from storage
+        NoOutcomeAssociatedWithVoteID,
     }
 }
 
@@ -110,19 +113,17 @@ decl_storage! {
         /// - TODO: consider changing `VoteId` for `ProposalType` because I think that's how minting actually happens
         /// although in other modules, this level of specificity may be valuable if signal is configurable per vote_id
         /// ...right now it is only configurable in the context of (ShareId, ProposalType)
-        pub MintedSignal get(minted_signal): double_map hasher(blake2_256) T::AccountId, hasher(blake2_256) T::VoteId  => Option<T::Signal>;
-
-        /// The Collective ThresholdConfig, established through governance via _aggregation_ of individual preferences
-        pub CollectiveThresholdConfig get(fn collective_vote_config): double_map
-            hasher(blake2_256) ShareId<T>,
-            hasher(blake2_256) ProposalType
-            => Option<ThresholdConfig<Permill>>;
+        pub MintedSignal get(minted_signal): double_map
+            hasher(blake2_256) T::AccountId,
+            hasher(blake2_256) T::VoteId  => Option<T::Signal>;
 
         /// The state of a vote (separate from outcome so that this can be purged if Outcome is not Voting)
-        pub VoteStates get(fn vote_states): map hasher(blake2_256) T::VoteId => Option<VoteState<ShareId<T>, T::VoteId, T::Signal, T::BlockNumber>>;
+        pub VoteStates get(fn vote_states): map
+            hasher(blake2_256) T::VoteId => Option<VoteState<ShareId<T>, T::VoteId, T::Signal, T::BlockNumber>>;
 
         /// The outcome of a vote
-        pub VoteOutcome get(fn vote_outcome): map hasher(blake2_256) T::VoteId => Option<Outcome>;
+        pub VoteOutcome get(fn vote_outcome): map
+            hasher(blake2_256) T::VoteId => Option<Outcome>;
     }
 }
 
@@ -136,15 +137,19 @@ decl_module! {
         // I would like this method to be called in a different module, but from an instance of this module
         // - I think I'm going to have to add ProposalId as a type here and it should come from `bank` bc that's where proposals start
         // but does that introduce cyclic dependencies if each of these modules depends on each other
-        fn create_vote(
+        fn create_default_vote(
             origin,
             proposal_type: ProposalType,
             vote_id: T::VoteId,
-            share_id: ShareId<T>
+            share_id: ShareId<T>,
+            passage_threshold_pct: Permill,
+            turnout_threshold_pct: Permill,
         ) -> DispatchResult {
             // TODO: replace with origin check once I give a shit about permissions
             let _ = ensure_signed(origin)?;
-            let new_vote_id = Self::open_vote(vote_id, share_id, proposal_type)?;
+            // default threshold configuration
+            let new_vote_id = Self::open_vote(vote_id, share_id, proposal_type, passage_threshold_pct, turnout_threshold_pct)?;
+            // TODO: add threshold information to the emitted event
             Self::deposit_event(RawEvent::NewVoteStarted(share_id, new_vote_id));
             Ok(())
         }
@@ -158,20 +163,6 @@ decl_module! {
             let voter = ensure_signed(origin)?;
             Self::vote_on_proposal(voter.clone(), vote_id, direction, magnitude)?;
             Self::deposit_event(RawEvent::Voted(voter, vote_id));
-            Ok(())
-        }
-
-        fn set_threshold_requirement(
-            origin,
-            share_id: ShareId<T>,
-            proposal_type: ProposalType,
-            passage_threshold_pct: Permill,
-            turnout_threshold_pct: Permill,
-        ) -> DispatchResult {
-            // TODO: add permissioned check that aligns with share type admin
-            let _ = ensure_signed(origin)?;
-            Self::set_threshold_config(share_id, proposal_type, passage_threshold_pct, turnout_threshold_pct)?;
-            Self::deposit_event(RawEvent::ThresholdRequirementSet(share_id, proposal_type, passage_threshold_pct, turnout_threshold_pct));
             Ok(())
         }
     }
@@ -199,14 +190,14 @@ impl<T: Trait> GenerateUniqueID<T::VoteId> for Module<T> {
     }
 }
 
-impl<T: Trait> MintableSignal<T::AccountId, T::Signal> for Module<T> {
+impl<T: Trait> MintableSignal<T::AccountId, Permill, T::Signal> for Module<T> {
     /// Mints signal based on the conversion rate in storage (uses `SignalConversion` traits)
     /// - the amount parameter is an option such that `None` implies that as many shares as possible
     /// should be reserved in order to mint signal
     fn mint_signal(
         who: T::AccountId,
         vote_id: Self::VoteId,
-        share_id: Self::ShareId,
+        share_id: <Self::ShareRegistrar as ReservableProfile<T::AccountId>>::ShareId,
         amount: Option<T::Signal>,
     ) -> Result<T::Signal, DispatchError> {
         let shares_to_reserve: Option<SharesOf<T>> = if let Some(amt) = amount {
@@ -228,7 +219,7 @@ impl<T: Trait> MintableSignal<T::AccountId, T::Signal> for Module<T> {
     /// the default happy path of reserving as many shares as possible to mint the signal...)
     fn batch_mint_signal(
         vote_id: Self::VoteId,
-        share_id: Self::ShareId,
+        share_id: <Self::ShareRegistrar as ReservableProfile<T::AccountId>>::ShareId,
     ) -> Result<T::Signal, DispatchError> {
         let new_vote_group = T::ShareData::shareholder_membership(share_id)?;
         let mut total_minted_signal: T::Signal = 0.into();
@@ -244,26 +235,11 @@ impl<T: Trait> MintableSignal<T::AccountId, T::Signal> for Module<T> {
     }
 }
 
-impl<T: Trait> SetThresholdConfig<Permill> for Module<T> {
+impl<T: Trait> VoteThresholdBuilder<T::AccountId, T::Signal, Permill> for Module<T> {
     type ThresholdConfig = ThresholdConfig<Permill>;
-
-    // calls to this method should be limited by governance, TODO: preference aggregation
-    fn set_threshold_config(
-        share_id: Self::ShareId,
-        proposal_type: Self::ProposalType,
-        passage_threshold_pct: Permill,
-        turnout_threshold_pct: Permill,
-    ) -> DispatchResult {
-        let threshold_config = ThresholdConfig::new(passage_threshold_pct, turnout_threshold_pct);
-        <CollectiveThresholdConfig<T>>::insert(share_id, proposal_type, threshold_config);
-        Ok(())
-    }
-}
-
-impl<T: Trait> CalculateVoteThreshold<T::Signal, Permill> for Module<T> {
     type VoteThreshold = VoteThreshold<T::Signal, T::BlockNumber>;
 
-    fn calculate_vote_threshold(
+    fn build_vote_threshold(
         threshold_config: Self::ThresholdConfig,
         possible_turnout: T::Signal,
     ) -> Self::VoteThreshold {
@@ -275,15 +251,28 @@ impl<T: Trait> CalculateVoteThreshold<T::Signal, Permill> for Module<T> {
     }
 }
 
-impl<T: Trait> OpenVote for Module<T> {
+impl<T: Trait> GetVoteOutcome for Module<T> {
     type VoteId = T::VoteId;
-    type ShareId = ShareId<T>;
+    type Outcome = Outcome;
+    fn get_vote_outcome(vote_id: Self::VoteId) -> Result<Self::Outcome, DispatchError> {
+        if let Some(outcome) = <VoteOutcome<T>>::get(vote_id) {
+            Ok(outcome)
+        } else {
+            Err(Error::<T>::NoOutcomeAssociatedWithVoteID.into())
+        }
+    }
+}
+
+impl<T: Trait> OpenVote<T::AccountId, Permill> for Module<T> {
+    type ShareRegistrar = T::ShareData;
     type ProposalType = ProposalType;
 
     fn open_vote(
         vote_id: Self::VoteId,
-        share_id: Self::ShareId,
+        share_id: <Self::ShareRegistrar as ReservableProfile<T::AccountId>>::ShareId,
         proposal_type: Self::ProposalType,
+        passage_threshold_pct: Permill,
+        turnout_threshold_pct: Permill,
     ) -> Result<T::VoteId, DispatchError> {
         // need a standardized way to verify that this VoteId doesn't exist (across all maps)
         let new_vote_id = Self::generate_unique_id(vote_id);
@@ -293,10 +282,9 @@ impl<T: Trait> OpenVote for Module<T> {
         let ends = now + T::DefaultVoteLength::get();
         // mint signal for all of shareholders and get total possible turnout
         let total_possible_turnout = Self::batch_mint_signal(vote_id, share_id)?;
-        // get the threshold configuration set in storage
-        let threshold_config = <CollectiveThresholdConfig<T>>::get(share_id, proposal_type)
-            .ok_or(Error::<T>::ThresholdConfigNotSetForProposalType)?;
-        let threshold = Self::calculate_vote_threshold(threshold_config, total_possible_turnout);
+        // calculate the vote threshold from the threshold configuration passed in
+        let threshold_config = ThresholdConfig::new(passage_threshold_pct, turnout_threshold_pct);
+        let threshold = Self::build_vote_threshold(threshold_config, total_possible_turnout);
         // TODO: replace this with a new method
         let new_vote_state = VoteState {
             electorate: share_id,
@@ -312,12 +300,10 @@ impl<T: Trait> OpenVote for Module<T> {
         // insert the VoteState
         <VoteStates<T>>::insert(new_vote_id, new_vote_state);
         // insert the current VoteOutcome (voting)
-        <VoteOutcome<T>>::insert(new_vote_id, Outcome::default());
+        <VoteOutcome<T>>::insert(new_vote_id, Outcome::Voting);
 
         Ok(new_vote_id)
     }
-
-    // fn open_custom_vote() -- more configurable length than the above method
 }
 
 impl<T: Trait> ApplyVote for Module<T> {
@@ -384,7 +370,7 @@ impl<T: Trait> CheckVoteStatus for Module<T> {
     }
 }
 
-impl<T: Trait> VoteOnProposal<T::AccountId> for Module<T> {
+impl<T: Trait> VoteOnProposal<T::AccountId, Permill> for Module<T> {
     type Direction = VoterYesNoView;
     type Magnitude = T::Signal;
 

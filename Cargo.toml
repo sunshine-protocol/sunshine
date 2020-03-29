@@ -7,5 +7,6 @@ members = [
     'modules/util',
     'modules/shares',
     'modules/vote-yesno',
+    'modules/bank',
     'runtime',
 ]
