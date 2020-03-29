@@ -238,6 +238,18 @@ impl vote_yesno::Trait for Runtime {
     type DefaultVoteLength = DefaultVoteLength;
 }
 
+pub use bank;
+pub type OrgId = u64;
+parameter_types! {
+    pub const PollingFrequency: u32 = 10;
+}
+impl bank::Trait for Runtime {
+    type Event = Event;
+    type OrgId = OrgId;
+    type BinaryVoteMachine = VoteYesno;
+    type PollingFrequency = PollingFrequency;
+}
+
 construct_runtime!(
     pub enum Runtime where
         Block = Block,
@@ -255,6 +267,7 @@ construct_runtime!(
         // My modules
         Shares: shares::{Module, Call, Config<T>, Storage, Event<T>},
         VoteYesno: vote_yesno::{Module, Call, Storage, Event<T>},
+        Bank: bank::{Module, Call, Config<T>, Storage, Event<T>},
     }
 );
 

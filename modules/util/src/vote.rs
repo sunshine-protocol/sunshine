@@ -2,6 +2,7 @@ use crate::{proposal::ProposalType, traits::Approved};
 use codec::{Decode, Encode};
 use frame_support::Parameter;
 use sp_runtime::PerThing;
+use sp_std::prelude::*;
 
 #[derive(Clone, Copy, PartialEq, Eq, Encode, Decode, sp_runtime::RuntimeDebug)]
 #[non_exhaustive]
@@ -53,13 +54,6 @@ impl<FineArithmetic: PerThing> ThresholdConfig<FineArithmetic> {
             turnout_threshold_pct,
         }
     }
-
-    // TODO: get this to work later and remove the `pub` parameters on the `ThresholdConfig` struct
-    // pub fn configure_vote_threshold<Signal: Parameter>(&self, possible_turnout: Signal) -> (Signal, Signal) {
-    //     let first = self.passage_threshold_pct * possible_turnout;
-    //     let second = self.turnout_threshold_pct * possible_turnout;
-    //     (first, second)
-    // }
 }
 
 #[derive(Clone, Copy, Default, PartialEq, Eq, Encode, Decode, sp_runtime::RuntimeDebug)]
@@ -137,16 +131,62 @@ impl<
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
 #[non_exhaustive]
-/// The possible outcomes for apply_vote
-/// - should be associated with runtime hooks
+/// The vote's state and outcome
 pub enum Outcome {
+    /// The VoteId in question has been reserved but is not yet open for voting (context is schedule)
+    NotStarted,
+    /// The VoteState associated with the VoteId is open to voting by the given `ShareId`
     Voting,
+    /// The VoteState is approved, thereby unlocking the next `VoteId` if it wraps Some(VoteId)
     Approved,
+    /// The VoteState is rejected and all dependent `VoteId`s are not opened
     Rejected,
 }
 
 impl Default for Outcome {
     fn default() -> Self {
-        Outcome::Voting
+        Outcome::NotStarted
     }
+}
+
+impl Approved for Outcome {
+    fn approved(&self) -> bool {
+        match self {
+            Outcome::Approved => true,
+            _ => false,
+        }
+    }
+}
+
+#[derive(PartialEq, Eq, Default, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
+pub struct ScheduledVote<ShareId, FineArithmetic> {
+    /// Defines the order relative to other `DispatchableVote`s (impl Ordering)
+    pub priority: u32,
+    /// Intended to be frozen for the VoteSchedule since initialization, necessary context for parts of API
+    pub proposal_type: ProposalType,
+    /// The share type that will be used for this vote
+    pub share_type: ShareId,
+    /// The threshold set for this share type in this schedule (TODO: move threshold config out of vote-yesno into here)
+    pub threshold: ThresholdConfig<FineArithmetic>,
+}
+
+impl<VoteId: Parameter, ShareId: Parameter, FineArithmetic: PerThing>
+    From<Vec<ScheduledVote<ShareId, FineArithmetic>>>
+    for VoteSchedule<VoteId, ShareId, FineArithmetic>
+{
+    fn from(schedule: Vec<ScheduledVote<ShareId, FineArithmetic>>) -> Self {
+        let votes_left_including_current: u32 = schedule.len() as u32;
+        VoteSchedule {
+            votes_left_including_current,
+            current_vote: None,
+            schedule,
+        }
+    }
+}
+
+#[derive(PartialEq, Eq, Default, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
+pub struct VoteSchedule<VoteId, ShareId, FineArithmetic> {
+    pub votes_left_including_current: u32,
+    pub current_vote: Option<VoteId>,
+    pub schedule: Vec<ScheduledVote<ShareId, FineArithmetic>>,
 }

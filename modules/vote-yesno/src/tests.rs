@@ -34,18 +34,13 @@ fn votes_created_correctly() {
     new_test_ext().execute_with(|| {
         let one = Origin::signed(1);
 
-        assert_ok!(VoteYesNo::set_threshold_requirement(
-            one.clone(),
-            2,
-            ProposalType::ExecutiveMembership,
-            Permill::from_percent(51),
-            Permill::from_percent(10)
-        ));
-        assert_ok!(VoteYesNo::create_vote(
+        assert_ok!(VoteYesNo::create_default_vote(
             one,
             ProposalType::ExecutiveMembership,
             1,
-            2
+            2,
+            Permill::from_percent(51),
+            Permill::from_percent(10)
         ));
 
         // get vote state
@@ -66,18 +61,13 @@ fn votes_apply_correctly() {
     new_test_ext().execute_with(|| {
         let one = Origin::signed(1);
 
-        assert_ok!(VoteYesNo::set_threshold_requirement(
-            one.clone(),
-            2,
-            ProposalType::ExecutiveMembership,
-            Permill::from_percent(51),
-            Permill::from_percent(10)
-        ));
-        assert_ok!(VoteYesNo::create_vote(
+        assert_ok!(VoteYesNo::create_default_vote(
             one.clone(),
             ProposalType::ExecutiveMembership,
             1,
-            2
+            2,
+            Permill::from_percent(51),
+            Permill::from_percent(10)
         ));
         assert_ok!(VoteYesNo::vote(one, 1, VoterYesNoView::InFavor, None));
 
@@ -85,28 +75,5 @@ fn votes_apply_correctly() {
         let vote_state = VoteYesNo::vote_states(1).unwrap();
         // verify expected defaults -- TODO: verify other fields
         assert_eq!(vote_state.turnout, 5);
-    });
-}
-
-#[test]
-fn threshold_requirement_sets_correctly() {
-    new_test_ext().execute_with(|| {
-        let one = Origin::signed(1);
-        assert_ok!(VoteYesNo::set_threshold_requirement(
-            one,
-            2,
-            ProposalType::ExecutiveMembership,
-            Permill::from_percent(51),
-            Permill::from_percent(10)
-        ));
-
-        let expected_threshold =
-            ThresholdConfig::new(Permill::from_percent(51), Permill::from_percent(10));
-        let config =
-            VoteYesNo::collective_vote_config(2, ProposalType::ExecutiveMembership).unwrap();
-        assert_eq!(config, expected_threshold);
-
-        // TODO: add test to verify that this threshold is enforced
-        // during voting
     });
 }

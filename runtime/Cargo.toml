@@ -41,6 +41,7 @@ std = [
     'transaction-payment/std',
     'shares/std',
     'vote-yesno/std',
+    'bank/std',
 ]
 [dependencies.aura]
 default-features = false
@@ -189,6 +190,12 @@ version = '0.0.1'
 default-features = false
 package = 'vote-yesno'
 path = '../modules/vote-yesno'
+version = '0.0.1'
+
+[dependencies.bank]
+default-features = false
+package = 'bank'
+path = '../modules/bank'
 version = '0.0.1'
 
 [dependencies.timestamp]
