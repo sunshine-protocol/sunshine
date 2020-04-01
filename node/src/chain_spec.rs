@@ -6,6 +6,7 @@ use node_template_runtime::{
     BankConfig,
     GenesisConfig,
     GrandpaConfig,
+    OrgId,
     Share,
     ShareId,
     SharesConfig,
@@ -76,13 +77,19 @@ impl Alternative {
                         ],
                         // membership shares
                         vec![
-                            (get_account_id_from_seed::<sr25519::Public>("Alice"), 1, 10),
-                            (get_account_id_from_seed::<sr25519::Public>("Bob"), 1, 10),
+                            (
+                                1,
+                                1,
+                                get_account_id_from_seed::<sr25519::Public>("Alice"),
+                                10,
+                            ),
+                            (1, 1, get_account_id_from_seed::<sr25519::Public>("Bob"), 10),
                         ],
                         // total issuance
-                        vec![(1, 20)],
+                        vec![(1, 1, 20)],
                         // shareholder membership
                         vec![(
+                            1,
                             1,
                             vec![
                                 get_account_id_from_seed::<sr25519::Public>("Alice"),
@@ -127,21 +134,38 @@ impl Alternative {
                         ],
                         // membership shares
                         vec![
-                            (get_account_id_from_seed::<sr25519::Public>("Alice"), 1, 10),
-                            (get_account_id_from_seed::<sr25519::Public>("Bob"), 1, 10),
                             (
-                                get_account_id_from_seed::<sr25519::Public>("Charlie"),
                                 1,
+                                1,
+                                get_account_id_from_seed::<sr25519::Public>("Alice"),
                                 10,
                             ),
-                            (get_account_id_from_seed::<sr25519::Public>("Dave"), 1, 10),
-                            (get_account_id_from_seed::<sr25519::Public>("Eve"), 1, 10),
-                            (get_account_id_from_seed::<sr25519::Public>("Ferdie"), 1, 10),
+                            (1, 1, get_account_id_from_seed::<sr25519::Public>("Bob"), 10),
+                            (
+                                1,
+                                1,
+                                get_account_id_from_seed::<sr25519::Public>("Charlie"),
+                                10,
+                            ),
+                            (
+                                1,
+                                1,
+                                get_account_id_from_seed::<sr25519::Public>("Dave"),
+                                10,
+                            ),
+                            (1, 1, get_account_id_from_seed::<sr25519::Public>("Eve"), 10),
+                            (
+                                1,
+                                1,
+                                get_account_id_from_seed::<sr25519::Public>("Ferdie"),
+                                10,
+                            ),
                         ],
                         // total issuance
-                        vec![(1, 60)],
+                        vec![(1, 1, 60)],
                         // shareholder membership
                         vec![(
+                            1,
                             1,
                             vec![
                                 get_account_id_from_seed::<sr25519::Public>("Alice"),
@@ -177,9 +201,9 @@ fn testnet_genesis(
     initial_authorities: Vec<(AuraId, GrandpaId)>,
     root_key: AccountId,
     endowed_accounts: Vec<AccountId>,
-    membership_shares: Vec<(AccountId, ShareId, Share)>,
-    total_issuance: Vec<(ShareId, Share)>,
-    shareholder_membership: Vec<(ShareId, Vec<AccountId>)>,
+    membership_shares: Vec<(OrgId, ShareId, AccountId, Share)>,
+    total_issuance: Vec<(OrgId, ShareId, Share)>,
+    shareholder_membership: Vec<(OrgId, ShareId, Vec<AccountId>)>,
     _enable_println: bool,
 ) -> GenesisConfig {
     GenesisConfig {
@@ -194,7 +218,7 @@ fn testnet_genesis(
                 .map(|k| (k, 1 << 60))
                 .collect(),
         }),
-        shares: Some(SharesConfig {
+        shares_atomic: Some(SharesConfig {
             membership_shares,
             total_issuance,
             shareholder_membership,

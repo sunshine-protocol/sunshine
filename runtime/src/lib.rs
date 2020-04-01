@@ -215,13 +215,19 @@ impl sudo::Trait for Runtime {
     type Call = Call;
 }
 
-pub use shares;
-pub type Share = u64;
+pub use shares_atomic;
+pub type OrgId = u64;
 pub type ShareId = u64;
-impl shares::Trait for Runtime {
+pub type Share = u64;
+parameter_types! {
+    pub const ReservationLimit: u32 = 10000;
+}
+impl shares_atomic::Trait for Runtime {
     type Event = Event;
-    type Share = Share;
+    type OrgId = OrgId;
     type ShareId = ShareId;
+    type Share = Share;
+    type ReservationLimit = ReservationLimit;
 }
 
 pub use vote_yesno;
@@ -237,15 +243,13 @@ impl vote_yesno::Trait for Runtime {
     type ShareData = Shares;
     type DefaultVoteLength = DefaultVoteLength;
 }
-
 pub use bank;
-pub type OrgId = u64;
 parameter_types! {
     pub const PollingFrequency: u32 = 10;
 }
 impl bank::Trait for Runtime {
     type Event = Event;
-    type OrgId = OrgId;
+    type ShareData = Shares;
     type BinaryVoteMachine = VoteYesno;
     type PollingFrequency = PollingFrequency;
 }
@@ -265,7 +269,7 @@ construct_runtime!(
         TransactionPayment: transaction_payment::{Module, Storage},
         Sudo: sudo::{Module, Call, Config<T>, Storage, Event<T>},
         // My modules
-        Shares: shares::{Module, Call, Config<T>, Storage, Event<T>},
+        Shares: shares_atomic::{Module, Call, Config<T>, Storage, Event<T>},
         VoteYesno: vote_yesno::{Module, Call, Storage, Event<T>},
         Bank: bank::{Module, Call, Config<T>, Storage, Event<T>},
     }
