@@ -23,7 +23,7 @@ mod bank {
 impl_outer_event! {
     pub enum TestEvent for Test {
         system<T>,
-        shares<T>,
+        shares_atomic<T>,
         vote_yesno<T>,
         bank<T>,
     }
@@ -60,21 +60,26 @@ impl frame_system::Trait for Test {
     type OnNewAccount = ();
     type OnKilledAccount = ();
 }
-impl shares::Trait for Test {
+parameter_types! {
+    pub const ReservationLimit: u32 = 10000;
+}
+impl shares_atomic::Trait for Test {
     type Event = TestEvent;
-    type Share = Share;
+    type OrgId = OrgId;
     type ShareId = ShareId;
+    type Share = Share;
+    type ReservationLimit = ReservationLimit;
 }
 impl vote_yesno::Trait for Test {
     type Event = TestEvent;
     type Signal = Signal;
     type VoteId = VoteId;
-    type ShareData = shares::Module<Test>;
+    type ShareData = shares_atomic::Module<Test>;
     type DefaultVoteLength = DefaultVoteLength;
 }
 impl Trait for Test {
     type Event = TestEvent;
-    type OrgId = OrgId;
+    type ShareData = shares_atomic::Module<Test>;
     type BinaryVoteMachine = VoteYesNo;
     type PollingFrequency = PollingFrequency;
 }

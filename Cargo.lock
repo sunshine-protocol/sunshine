@@ -259,7 +259,7 @@ dependencies = [
  "pallet-balances",
  "parity-scale-codec",
  "serde",
- "shares",
+ "shares-atomic",
  "sp-core",
  "sp-io",
  "sp-runtime",
@@ -2606,7 +2606,7 @@ dependencies = [
  "pallet-transaction-payment",
  "parity-scale-codec",
  "serde",
- "shares",
+ "shares-atomic",
  "sp-api",
  "sp-block-builder",
  "sp-consensus-aura",
@@ -4563,7 +4563,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "shares"
+name = "shares-atomic"
 version = "0.0.1"
 dependencies = [
  "clear_on_drop",
@@ -5999,8 +5999,7 @@ dependencies = [
  "frame-system",
  "pallet-balances",
  "parity-scale-codec",
- "serde",
- "shares",
+ "shares-atomic",
  "sp-core",
  "sp-io",
  "sp-runtime",

@@ -1,4 +1,4 @@
-use crate::{proposal::ProposalType, traits::Approved};
+use crate::traits::{Approved, GetCurrentVoteIdentifiers};
 use codec::{Decode, Encode};
 use frame_support::Parameter;
 use sp_runtime::PerThing;
@@ -95,19 +95,13 @@ impl<Signal: Parameter, BlockNumber: Parameter> VoteThreshold<Signal, BlockNumbe
 
 #[derive(PartialEq, Eq, Default, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
 /// The state of each executive membership proposal's ongoing voting
-pub struct VoteState<ShareId, VoteId, Signal, BlockNumber> {
-    /// The only share_id that can vote in this VoteState
-    pub electorate: ShareId,
-    /// The identifier associated with this `VoteState` (for managing associated state ie `VoterStatus`)
-    pub vote_id: VoteId,
+pub struct VoteState<Signal, BlockNumber> {
     /// Signal in favor
     pub in_favor: Signal,
     /// Signal against
     pub against: Signal,
     /// All signal that votes
     pub turnout: Signal,
-    /// The type of proposal (decides vote algo)
-    pub proposal_type: ProposalType,
     /// The threshold for passage
     pub threshold: VoteThreshold<Signal, BlockNumber>,
     /// The time at which this is initialized (4_TTL_C_l8r)
@@ -116,12 +110,8 @@ pub struct VoteState<ShareId, VoteId, Signal, BlockNumber> {
     pub expires: BlockNumber,
 }
 
-impl<
-        ShareId: Parameter,
-        VoteId: Parameter,
-        Signal: Parameter + PartialOrd,
-        BlockNumber: Parameter,
-    > Approved for VoteState<ShareId, VoteId, Signal, BlockNumber>
+impl<Signal: Parameter + PartialOrd, BlockNumber: Parameter> Approved
+    for VoteState<Signal, BlockNumber>
 {
     fn approved(&self) -> bool {
         self.in_favor > self.threshold.get_passage_threshold()
@@ -161,32 +151,83 @@ impl Approved for Outcome {
 #[derive(PartialEq, Eq, Default, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
 pub struct ScheduledVote<ShareId, FineArithmetic> {
     /// Defines the order relative to other `DispatchableVote`s (impl Ordering)
-    pub priority: u32,
-    /// Intended to be frozen for the VoteSchedule since initialization, necessary context for parts of API
-    pub proposal_type: ProposalType,
+    priority: u32,
     /// The share type that will be used for this vote
-    pub share_type: ShareId,
+    share_group: ShareId,
     /// The threshold set for this share type in this schedule (TODO: move threshold config out of vote-yesno into here)
-    pub threshold: ThresholdConfig<FineArithmetic>,
+    threshold: ThresholdConfig<FineArithmetic>,
 }
 
-impl<VoteId: Parameter, ShareId: Parameter, FineArithmetic: PerThing>
-    From<Vec<ScheduledVote<ShareId, FineArithmetic>>>
-    for VoteSchedule<VoteId, ShareId, FineArithmetic>
-{
-    fn from(schedule: Vec<ScheduledVote<ShareId, FineArithmetic>>) -> Self {
-        let votes_left_including_current: u32 = schedule.len() as u32;
-        VoteSchedule {
-            votes_left_including_current,
-            current_vote: None,
-            schedule,
+impl<ShareId: Parameter + Copy, FineArithmetic: PerThing> ScheduledVote<ShareId, FineArithmetic> {
+    pub fn new(
+        priority: u32,
+        share_group: ShareId,
+        threshold: ThresholdConfig<FineArithmetic>,
+    ) -> Self {
+        Self {
+            priority,
+            share_group,
+            threshold,
         }
+    }
+    // TODO: instead of getters, prefer understanding why the information is gotten and create a method to make
+    // the explicit transformation `=>` these getters are equivalent to just making the parameters public
+    pub fn get_share_id(&self) -> ShareId {
+        self.share_group
+    }
+
+    pub fn get_threshold(&self) -> ThresholdConfig<FineArithmetic> {
+        self.threshold
     }
 }
 
 #[derive(PartialEq, Eq, Default, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
-pub struct VoteSchedule<VoteId, ShareId, FineArithmetic> {
-    pub votes_left_including_current: u32,
-    pub current_vote: Option<VoteId>,
-    pub schedule: Vec<ScheduledVote<ShareId, FineArithmetic>>,
+pub struct VoteSchedule<ShareId, VoteId, FineArithmetic> {
+    votes_left_including_current: u32,
+    current_share_id: ShareId,
+    current_vote_id: VoteId,
+    schedule: Vec<ScheduledVote<ShareId, FineArithmetic>>,
+}
+
+// TODO: are ShareId and VoteId reliably Copy
+impl<ShareId: Parameter + Copy, VoteId: Parameter + Copy, FineArithmetic: PerThing>
+    VoteSchedule<ShareId, VoteId, FineArithmetic>
+{
+    /// Note that this object is designed to only be alive while there is a vote dispatched in the vote module
+    /// - for this reason, the caller must dispatch the current vote before using the associated identifiers
+    /// to instantiate this object
+    pub fn new(
+        current_share_id: ShareId,
+        current_vote_id: VoteId,
+        schedule: Vec<ScheduledVote<ShareId, FineArithmetic>>,
+    ) -> Self {
+        let votes_left_including_current: u32 = (schedule.len() as u32) + 1u32;
+        VoteSchedule {
+            votes_left_including_current,
+            current_share_id,
+            current_vote_id,
+            schedule,
+        }
+    }
+
+    // TODO: instead of getters, prefer understanding why the information is gotten and create a method to make
+    // the explicit transformation `=>` these getters are equivalent to just making the parameters public
+    pub fn get_schedule(self) -> Vec<ScheduledVote<ShareId, FineArithmetic>> {
+        self.schedule
+    }
+    pub fn get_votes_left_including_current(&self) -> u32 {
+        self.votes_left_including_current
+    }
+}
+
+impl<ShareId: Parameter + Copy, VoteId: Parameter + Copy, FineArithmetic: PerThing>
+    GetCurrentVoteIdentifiers<ShareId, VoteId> for VoteSchedule<ShareId, VoteId, FineArithmetic>
+{
+    fn get_current_share_id(&self) -> ShareId {
+        self.current_share_id
+    }
+
+    fn get_current_vote_id(&self) -> VoteId {
+        self.current_vote_id
+    }
 }

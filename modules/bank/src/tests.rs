@@ -6,23 +6,50 @@ fn new_test_ext() -> sp_io::TestExternalities {
     let mut t = frame_system::GenesisConfig::default()
         .build_storage::<Test>()
         .unwrap();
-    shares::GenesisConfig::<Test> {
+    shares_atomic::GenesisConfig::<Test> {
         membership_shares: vec![
-            (1, 1, 3),
-            (2, 1, 3),
-            (3, 1, 3),
-            (4, 1, 3),
-            (5, 1, 3),
-            (1, 2, 5),
-            (2, 2, 5),
-            (7, 2, 5),
-            (8, 2, 5),
-            (9, 2, 5),
+            // org, share_id, account, amount: shares
+            // organization 1
+            (1, 1, 1, 10),
+            (1, 1, 2, 10),
+            (1, 1, 3, 10),
+            (1, 1, 4, 10),
+            (1, 1, 5, 10),
+            (1, 1, 6, 10),
+            (1, 1, 7, 10),
+            (1, 1, 8, 10),
+            (1, 1, 9, 10),
+            (1, 1, 10, 10),
+            (1, 2, 1, 10),
+            (1, 2, 2, 10),
+            (1, 2, 3, 10),
+            (1, 2, 4, 10),
+            (1, 2, 5, 10),
+            (1, 3, 6, 20),
+            (1, 3, 7, 20),
+            (1, 3, 8, 20),
+            (1, 3, 9, 20),
+            (1, 3, 10, 20),
+            // organization 2
+            (2, 1, 11, 10),
+            (2, 1, 12, 10),
+            (2, 1, 13, 10),
+            (2, 1, 14, 10),
+            (2, 1, 15, 10),
+            (2, 1, 16, 10),
+            (2, 1, 17, 10),
+            (2, 1, 18, 10),
+            (2, 1, 19, 10),
         ],
         // must equal sum of above
-        total_issuance: vec![(1, 15), (2, 25)],
+        total_issuance: vec![(1, 1, 100), (1, 2, 50), (1, 3, 100), (2, 1, 90)],
         // must not contradict membership_shares membership
-        shareholder_membership: vec![(1, vec![1, 2, 3, 4, 5]), (2, vec![1, 2, 7, 8, 9])],
+        shareholder_membership: vec![
+            (1, 1, vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10]),
+            (1, 2, vec![1, 2, 3, 4, 5]),
+            (1, 3, vec![6, 7, 8, 9, 10]),
+            (2, 1, vec![11, 12, 13, 14, 15, 16, 17, 18, 19]),
+        ],
     }
     .assimilate_storage(&mut t)
     .unwrap();
@@ -47,18 +74,18 @@ fn organization_registration() {
         assert_ok!(Bank::register_organization(
             one,
             None,
-            1,
+            3, // this parameter is dumb, should be returned through event
+            3, // this parameter is dumb, should be returned through event
+            genesis_allocation,
             constitutional_hash,
-            3,
-            genesis_allocation
         ));
         // check organization count changed as expected
         assert_eq!(Bank::organization_count(), 1);
         // summoner is the summoner as expected
-        let supervisor = Bank::organization_supervisor(1).unwrap();
+        let supervisor = Bank::organization_supervisor(3).unwrap();
         assert_eq!(supervisor, 1);
         // event emitted as expected
-        let expected_event = TestEvent::bank(RawEvent::NewOrganizationRegistered(1, 1, 3));
+        let expected_event = TestEvent::bank(RawEvent::NewOrganizationRegistered(1, 3, 3));
         assert!(System::events().iter().any(|a| a.event == expected_event));
         // TODO: verify all storage changes
         // TODO: error paths and correct errors
@@ -122,31 +149,31 @@ fn change_value_constitution() {
         assert_ok!(Bank::register_organization(
             one.clone(),
             None,
-            1,
+            3, // this parameter is dumb, should be returned through event
+            3, // this parameter is dumb, should be returned through event
+            genesis_allocation,
             constitutional_hash,
-            3,
-            genesis_allocation
         ));
         // now update the constitution from sudo
         assert_ok!(Bank::update_value_constitution(
             one.clone(),
-            1,
+            3,
             new_constitutional_hash
         ));
         // compare it with the storage item
-        let current_value_constitution = Bank::value_constitution(1).unwrap();
+        let current_value_constitution = Bank::value_constitution(3).unwrap();
         assert_eq!(current_value_constitution, new_constitutional_hash);
         // assign a different supervisor
-        let expected_seven = Bank::swap_supervisor(1, 1, 7).unwrap();
+        let expected_seven = Bank::swap_supervisor(3, 1, 7).unwrap();
         assert_eq!(expected_seven, 7);
         // supervisor updates the value constitution
         let seven = Origin::signed(7);
         assert_ok!(Bank::update_value_constitution(
             seven,
-            1,
+            3,
             even_more_new_constitutional_hash
         ));
-        let new_current_value_constitution = Bank::value_constitution(1).unwrap();
+        let new_current_value_constitution = Bank::value_constitution(3).unwrap();
         assert_eq!(
             new_current_value_constitution,
             even_more_new_constitutional_hash
@@ -154,10 +181,10 @@ fn change_value_constitution() {
         // sudo can still update the value constitution
         assert_ok!(Bank::update_value_constitution(
             one,
-            1,
+            3,
             newest_constitutional_hash
         ));
-        let most_current_value_constitution = Bank::value_constitution(1).unwrap();
+        let most_current_value_constitution = Bank::value_constitution(3).unwrap();
         assert_eq!(most_current_value_constitution, newest_constitutional_hash);
     });
 }
@@ -179,16 +206,16 @@ fn share_registration_in_organization() {
         assert_ok!(Bank::register_organization(
             one.clone(),
             None,
-            1,
-            constitutional_hash,
-            3,
+            3, // this parameter is dumb, should be returned through event
+            3, // this parameter is dumb, should be returned through event
             genesis_allocation.clone(),
+            constitutional_hash,
         ));
         assert_ok!(Bank::register_shares_in_organization(
             one,
-            1,
+            3,
             4,
-            genesis_allocation.clone()
+            genesis_allocation
         ));
         // TODO: check to see if the shares module reflects this new registration
         // TODO: check event emittance
@@ -203,7 +230,7 @@ fn most_basic_vote_requirements_setting_works() {
         assert_err!(
             Bank::set_most_basic_vote_requirements(
                 one.clone(),
-                1,
+                3,
                 ProposalType::ExecutiveMembership,
                 required_share_voting_groups.clone()
             ),
@@ -218,20 +245,20 @@ fn most_basic_vote_requirements_setting_works() {
         assert_ok!(Bank::register_organization(
             one.clone(),
             None,
-            1,
-            constitutional_hash,
-            3,
+            3, // this parameter is dumb, should be returned through event
+            3, // this parameter is dumb, should be returned through event
             genesis_allocation.clone(),
+            constitutional_hash,
         ));
         assert_ok!(Bank::set_most_basic_vote_requirements(
             one.clone(),
-            1,
+            3,
             ProposalType::ExecutiveMembership,
             required_share_voting_groups.clone()
         ));
         // check that storage reflects recent change
         let share_approval_order = Bank::proposal_default_share_approval_order_for_organization(
-            1,
+            3,
             ProposalType::ExecutiveMembership,
         )
         .unwrap();
@@ -253,23 +280,22 @@ fn default_build_sequence_works() {
         // next line is registration call
         assert_ok!(Bank::register_organization(
             one.clone(),
-            // no supervisor
             None,
-            1,
+            3, // this parameter is dumb, should be returned through event
+            3, // this parameter is dumb, should be returned through event
+            genesis_allocation.clone(),
             constitutional_hash,
-            3,
-            genesis_allocation.clone()
         ));
         assert_ok!(Bank::register_shares_in_organization(
             one.clone(),
-            1,
+            3,
             4,
             genesis_allocation.clone()
         ));
         assert_ok!(
             Bank::set_organization_share_id_proposal_type_default_threshold(
                 one.clone(),
-                1,
+                3,
                 3,
                 ProposalType::ExecutiveMembership,
                 Permill::from_percent(51),
@@ -279,7 +305,7 @@ fn default_build_sequence_works() {
         assert_ok!(
             Bank::set_organization_share_id_proposal_type_default_threshold(
                 one.clone(),
-                1,
+                3,
                 4,
                 ProposalType::ExecutiveMembership,
                 Permill::from_percent(51),
@@ -289,22 +315,17 @@ fn default_build_sequence_works() {
         let ordered_share_ids = vec![3, 4];
         assert_ok!(Bank::set_most_basic_vote_requirements(
             one.clone(),
-            1,
+            3,
             ProposalType::ExecutiveMembership,
             ordered_share_ids,
         ));
+        let required_share_voting_groups = vec![1, 2];
         // if this passes, then the above scaffolding works
         assert_ok!(Bank::make_proposal(
             one.clone(),
-            1,
+            3,
             ProposalType::ExecutiveMembership,
             None
         ));
     });
-}
-
-#[test]
-fn vote_scheduling_basic_runthrough() {
-    // probably will need a `run_to` method for running `OnFinalize` in system context
-    new_test_ext().execute_with(|| {});
 }

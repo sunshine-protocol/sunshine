@@ -39,7 +39,7 @@ std = [
     'system/std',
     'timestamp/std',
     'transaction-payment/std',
-    'shares/std',
+    'shares-atomic/std',
     'vote-yesno/std',
     'bank/std',
 ]
@@ -180,10 +180,10 @@ package = 'frame-system'
 rev = '013c1ee167354a08283fb69915fda56a62fee943'
 version = '2.0.0-alpha.3'
 
-[dependencies.shares]
+[dependencies.shares-atomic]
 default-features = false
-package = 'shares'
-path = '../modules/shares'
+package = 'shares-atomic'
+path = '../modules/shares-atomic'
 version = '0.0.1'
 
 [dependencies.vote-yesno]

@@ -1,16 +1,28 @@
 use super::*;
-use frame_support::{impl_outer_origin, parameter_types, weights::Weight};
+use frame_support::{impl_outer_event, impl_outer_origin, parameter_types, weights::Weight};
 use sp_core::H256;
 use sp_runtime::{testing::Header, traits::IdentityLookup, Perbill};
 
 // type aliases
 pub type AccountId = u64;
+pub type OrgId = u64;
 pub type Share = u64;
 pub type ShareId = u64;
 pub type BlockNumber = u64;
 
 impl_outer_origin! {
     pub enum Origin for Test where system = frame_system {}
+}
+
+mod shares_atomic {
+    pub use crate::Event;
+}
+
+impl_outer_event! {
+    pub enum TestEvent for Test {
+        system<T>,
+        shares_atomic<T>,
+    }
 }
 
 #[derive(Clone, Eq, PartialEq)]
@@ -42,10 +54,15 @@ impl frame_system::Trait for Test {
     type OnNewAccount = ();
     type OnKilledAccount = ();
 }
-// the humble shares module
+parameter_types! {
+    // pretty random hard limit
+    pub const ReservationLimit: u32 = 100000;
+}
 impl Trait for Test {
     type Event = Event<Test>;
-    type Share = Share;
+    type OrgId = OrgId;
     type ShareId = ShareId;
+    type Share = Share;
+    type ReservationLimit = ReservationLimit;
 }
 pub type Shares = Module<Test>;

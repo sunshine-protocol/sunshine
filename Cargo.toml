@@ -5,7 +5,7 @@ panic = 'unwind'
 members = [
     'node',
     'modules/util',
-    'modules/shares',
+    'modules/shares-atomic',
     'modules/vote-yesno',
     'modules/bank',
     'runtime',

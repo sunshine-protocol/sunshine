@@ -5,10 +5,11 @@ use sp_runtime::{testing::Header, traits::IdentityLookup, Perbill};
 
 // type aliases
 pub type AccountId = u64;
-pub type Share = u64;
+pub type OrgId = u64;
 pub type ShareId = u64;
-pub type Signal = u64;
+pub type Share = u64;
 pub type VoteId = u64;
+pub type Signal = u64;
 pub type BlockNumber = u64;
 
 impl_outer_origin! {
@@ -22,7 +23,6 @@ parameter_types! {
     pub const MaximumBlockWeight: Weight = 1024;
     pub const MaximumBlockLength: u32 = 2 * 1024;
     pub const AvailableBlockRatio: Perbill = Perbill::one();
-    pub const DefaultVoteLength: u64 = 10;
 }
 impl frame_system::Trait for Test {
     type Origin = Origin;
@@ -45,16 +45,24 @@ impl frame_system::Trait for Test {
     type OnNewAccount = ();
     type OnKilledAccount = ();
 }
-impl shares::Trait for Test {
+parameter_types! {
+    pub const ReservationLimit: u32 = 10000;
+}
+impl shares_atomic::Trait for Test {
     type Event = ();
-    type Share = Share;
+    type OrgId = OrgId;
     type ShareId = ShareId;
+    type Share = Share;
+    type ReservationLimit = ReservationLimit;
+}
+parameter_types! {
+    pub const DefaultVoteLength: u64 = 10;
 }
 impl Trait for Test {
     type Event = Event<Test>;
     type Signal = Signal;
     type VoteId = VoteId;
-    type ShareData = shares::Module<Test>;
+    type ShareData = shares_atomic::Module<Test>;
     type DefaultVoteLength = DefaultVoteLength;
 }
 pub type VoteYesNo = Module<Test>;
