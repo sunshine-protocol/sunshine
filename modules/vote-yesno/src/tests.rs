@@ -70,7 +70,7 @@ fn votes_created_correctly() {
         ));
 
         // get vote state
-        let prefix_key = (1, 1);
+        let prefix_key = OrgSharePrefixKey::new(1, 1);
         let vote_state = VoteYesNo::vote_states(prefix_key, 1).unwrap();
         // verify expected defaults -- TODO: verify other fields
         assert_eq!(vote_state.turnout, 0);
@@ -106,7 +106,7 @@ fn votes_apply_correctly() {
         ));
 
         // get vote state
-        let prefix = (1, 1);
+        let prefix = OrgSharePrefixKey::new(1, 1);
         let vote_state = VoteYesNo::vote_states(prefix, 1).unwrap();
         // verify expected defaults -- TODO: verify other fields
         assert_eq!(vote_state.turnout, 10);

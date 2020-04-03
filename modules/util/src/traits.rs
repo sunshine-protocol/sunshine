@@ -155,7 +155,8 @@ pub trait GetVoteOutcome<OrgId, ShareId> {
 
 // For ThresholdConfig to derive the threshold requirement from turnout
 pub trait DeriveThresholdRequirement<Signal> {
-    fn derive_threshold_requirement(&self, turnout: Signal) -> (Signal, Signal);
+    fn derive_support_requirement(&self, turnout: Signal) -> Signal;
+    fn derive_turnout_requirement(&self, turnout: Signal) -> Signal;
 }
 
 use crate::vote::ThresholdConfig;

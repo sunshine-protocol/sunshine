@@ -26,6 +26,7 @@ use util::{
         MintableSignal, OpenVote, ReservableProfile, ShareBank, ShareRegistration, VoteOnProposal,
         VoteThresholdBuilder, VoteVector,
     },
+    uuid::{OrgSharePrefixKey, OrgShareVotePrefixKey},
     vote::{Outcome, ThresholdConfig, VoteState, VoteThreshold, VoterYesNoView, YesNoVote},
 };
 
@@ -122,22 +123,22 @@ decl_storage! {
 
         /// Total signal available for each member for the vote in question
         pub MintedSignal get(minted_signal): double_map
-            hasher(blake2_256) (OrgId<T>, ShareId<T>, T::VoteId),
+            hasher(blake2_256) OrgShareVotePrefixKey<OrgId<T>, ShareId<T>, T::VoteId>,
             hasher(blake2_256) T::AccountId  => Option<T::Signal>;
 
         /// The state of a vote (separate from outcome so that this can be purged if Outcome is not Voting)
         pub VoteStates get(fn vote_states): double_map
-            hasher(blake2_256) (OrgId<T>, ShareId<T>),
+            hasher(blake2_256) OrgSharePrefixKey<OrgId<T>, ShareId<T>>,
             hasher(blake2_256) T::VoteId => Option<VoteState<T::Signal, T::BlockNumber>>;
 
-        /// Tracks the votes and enforce s
+        /// Tracks all votes
         pub VoteLogger get(fn vote_logger): double_map
-        hasher(blake2_256) (OrgId<T>, ShareId<T>, T::VoteId),
+        hasher(blake2_256) OrgShareVotePrefixKey<OrgId<T>, ShareId<T>, T::VoteId>,
         hasher(blake2_256) T::AccountId  => Option<YesNoVote<T::Signal>>;
 
         /// The outcome of a vote
         pub VoteOutcome get(fn vote_outcome): double_map
-            hasher(blake2_256) (OrgId<T>, ShareId<T>),
+            hasher(blake2_256) OrgSharePrefixKey<OrgId<T>, ShareId<T>>,
             hasher(blake2_256) T::VoteId => Option<Outcome>;
     }
 }
@@ -182,24 +183,29 @@ decl_module! {
     }
 }
 
-impl<T: Trait> IDIsAvailable<(OrgId<T>, ShareId<T>, T::VoteId)> for Module<T> {
-    fn id_is_available(id: (OrgId<T>, ShareId<T>, T::VoteId)) -> bool {
-        None == <VoteStates<T>>::get((id.0, id.1), id.2)
+impl<T: Trait> IDIsAvailable<OrgShareVotePrefixKey<OrgId<T>, ShareId<T>, T::VoteId>> for Module<T> {
+    fn id_is_available(id: OrgShareVotePrefixKey<OrgId<T>, ShareId<T>, T::VoteId>) -> bool {
+        None == <VoteStates<T>>::get(id.org_share_prefix(), id.vote())
     }
 }
 
-impl<T: Trait> GenerateUniqueID<(OrgId<T>, ShareId<T>, T::VoteId)> for Module<T> {
+impl<T: Trait> GenerateUniqueID<OrgShareVotePrefixKey<OrgId<T>, ShareId<T>, T::VoteId>>
+    for Module<T>
+{
     fn generate_unique_id(
-        proposed_id: (OrgId<T>, ShareId<T>, T::VoteId),
-    ) -> (OrgId<T>, ShareId<T>, T::VoteId) {
+        proposed_id: OrgShareVotePrefixKey<OrgId<T>, ShareId<T>, T::VoteId>,
+    ) -> OrgShareVotePrefixKey<OrgId<T>, ShareId<T>, T::VoteId> {
+        let organization = proposed_id.org();
+        let share_id = proposed_id.share();
+        let org_share_prefix = proposed_id.org_share_prefix();
         if !Self::id_is_available(proposed_id) {
-            let mut id_counter = <VoteIdCounter<T>>::get(proposed_id.0, proposed_id.1);
-            while <VoteStates<T>>::get((proposed_id.0, proposed_id.1), id_counter).is_some() {
+            let mut id_counter = <VoteIdCounter<T>>::get(organization, share_id);
+            while <VoteStates<T>>::get(org_share_prefix, id_counter).is_some() {
                 // TODO: add overflow check here
                 id_counter += 1.into();
             }
-            <VoteIdCounter<T>>::insert(proposed_id.0, proposed_id.1, id_counter + 1.into());
-            (proposed_id.0, proposed_id.1, id_counter)
+            <VoteIdCounter<T>>::insert(organization, share_id, id_counter + 1.into());
+            OrgShareVotePrefixKey::new(organization, share_id, id_counter)
         } else {
             proposed_id
         }
@@ -219,7 +225,7 @@ impl<T: Trait> MintableSignal<OrgId<T>, ShareId<T>, T::AccountId, Permill> for M
         let shares_reserved = reservation_context.get_magnitude();
         // could add more nuanced conversion logic here; see doc/sharetovote
         let minted_signal: T::Signal = shares_reserved.into();
-        let prefix_key = (organization, share_id, vote_id);
+        let prefix_key = OrgShareVotePrefixKey::new(organization, share_id, vote_id);
         <MintedSignal<T>>::insert(prefix_key, who, minted_signal);
         Ok(minted_signal)
     }
@@ -235,7 +241,7 @@ impl<T: Trait> MintableSignal<OrgId<T>, ShareId<T>, T::AccountId, Permill> for M
         who: &T::AccountId,
         amount: Self::Signal,
     ) -> Result<Self::Signal, DispatchError> {
-        let prefix_key = (organization, share_id, vote_id);
+        let prefix_key = OrgShareVotePrefixKey::new(organization, share_id, vote_id);
         <MintedSignal<T>>::insert(prefix_key, who, amount);
         Ok(amount)
     }
@@ -278,8 +284,8 @@ impl<T: Trait> VoteThresholdBuilder<Permill> for Module<T> {
         threshold_config: Self::ThresholdConfig,
         possible_turnout: Self::Signal,
     ) -> Self::VoteThreshold {
-        let (support_required, turnout_required) =
-            threshold_config.derive_threshold_requirement(possible_turnout);
+        let support_required = threshold_config.derive_support_requirement(possible_turnout);
+        let turnout_required = threshold_config.derive_turnout_requirement(possible_turnout);
         let now = system::Module::<T>::block_number();
         Self::VoteThreshold::new(support_required, turnout_required, now)
     }
@@ -293,7 +299,7 @@ impl<T: Trait> GetVoteOutcome<OrgId<T>, ShareId<T>> for Module<T> {
         share_id: ShareId<T>,
         vote_id: Self::VoteId,
     ) -> Result<Self::Outcome, DispatchError> {
-        let prefix_key = (organization, share_id);
+        let prefix_key = OrgSharePrefixKey::new(organization, share_id);
         if let Some(outcome) = <VoteOutcome<T>>::get(prefix_key, vote_id) {
             Ok(outcome)
         } else {
@@ -316,9 +322,10 @@ impl<T: Trait> OpenVote<OrgId<T>, ShareId<T>, T::AccountId, Permill> for Module<
         } else {
             <VoteIdCounter<T>>::get(organization, share_id) + 1.into()
         };
-        let proposed_joint_id = (organization, share_id, generated_vote_id);
-        let new_joint_id = Self::generate_unique_id(proposed_joint_id);
-        let new_vote_id = new_joint_id.2;
+        let proposed_org_share_vote_id =
+            OrgShareVotePrefixKey::new(organization, share_id, generated_vote_id);
+        let org_share_vote_id = Self::generate_unique_id(proposed_org_share_vote_id);
+        let new_vote_id = org_share_vote_id.vote();
 
         // calculate `initialized` and `expires` fields for vote state
         let now = system::Module::<T>::block_number();
@@ -337,7 +344,7 @@ impl<T: Trait> OpenVote<OrgId<T>, ShareId<T>, T::AccountId, Permill> for Module<
         };
 
         // insert the VoteState
-        let prefix_key = (organization, share_id);
+        let prefix_key = org_share_vote_id.org_share_prefix();
         <VoteStates<T>>::insert(prefix_key, new_vote_id, new_vote_state);
         // insert the current VoteOutcome (voting)
         <VoteOutcome<T>>::insert(prefix_key, new_vote_id, Outcome::Voting);
@@ -525,7 +532,7 @@ impl<T: Trait> VoteOnProposal<OrgId<T>, ShareId<T>, T::AccountId, Permill> for M
         magnitude: Option<Self::Magnitude>,
     ) -> DispatchResult {
         // check that voting is permitted based on current outcome
-        let first_prefix_key = (organization, share_id);
+        let first_prefix_key = OrgSharePrefixKey::new(organization, share_id);
         let current_outcome = <VoteOutcome<T>>::get(first_prefix_key, vote_id)
             .ok_or(Error::<T>::VoteNotInitialized)?;
         ensure!(
@@ -540,7 +547,7 @@ impl<T: Trait> VoteOnProposal<OrgId<T>, ShareId<T>, T::AccountId, Permill> for M
             !Self::check_vote_expired(current_vote_state.clone()),
             Error::<T>::VotePastExpirationTimeSoVotesNotAccepted
         );
-        let second_prefix_key = (organization, share_id, vote_id);
+        let second_prefix_key = OrgShareVotePrefixKey::new(organization, share_id, vote_id);
         let mintable_signal = <MintedSignal<T>>::get(second_prefix_key, voter)
             .ok_or(Error::<T>::NotEnoughSignalToVote)?;
         let minted_signal = if let Some(mag) = magnitude {

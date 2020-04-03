@@ -79,10 +79,11 @@ impl<FineArithmetic: PerThing> ThresholdConfig<FineArithmetic> {
 impl<Signal: Parameter, FineArithmetic: PerThing + sp_std::ops::Mul<Signal, Output = Signal>>
     DeriveThresholdRequirement<Signal> for ThresholdConfig<FineArithmetic>
 {
-    fn derive_threshold_requirement(&self, turnout: Signal) -> (Signal, Signal) {
-        let support_required = self.passage_threshold_pct * turnout.clone();
-        let turnout_required = self.turnout_threshold_pct * turnout;
-        (support_required, turnout_required)
+    fn derive_support_requirement(&self, turnout: Signal) -> Signal {
+        self.passage_threshold_pct * turnout
+    }
+    fn derive_turnout_requirement(&self, turnout: Signal) -> Signal {
+        self.turnout_threshold_pct * turnout
     }
 }
 
