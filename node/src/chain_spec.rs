@@ -1,5 +1,8 @@
 use grandpa_primitives::AuthorityId as GrandpaId;
-use node_template_runtime::{
+use sp_consensus_aura::sr25519::AuthorityId as AuraId;
+use sp_core::{sr25519, Pair, Public};
+use sp_runtime::traits::{IdentifyAccount, Verify};
+use suntime::{
     AccountId,
     AuraConfig,
     BalancesConfig,
@@ -15,9 +18,6 @@ use node_template_runtime::{
     SystemConfig,
     WASM_BINARY, // Signal, VoteId
 };
-use sp_consensus_aura::sr25519::AuthorityId as AuraId;
-use sp_core::{sr25519, Pair, Public};
-use sp_runtime::traits::{IdentifyAccount, Verify};
 
 /// Specialized `ChainSpec`. This is a specialization of the general Substrate ChainSpec type.
 pub type ChainSpec = sc_service::ChainSpec<GenesisConfig>;

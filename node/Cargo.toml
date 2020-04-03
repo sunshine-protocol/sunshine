@@ -13,12 +13,12 @@ build = 'build.rs'
 edition = '2018'
 homepage = 'https://substrate.dev'
 license = 'Unlicense'
-name = 'node-template'
+name = 'sunshine-node'
 repository = 'https://github.com/paritytech/substrate/'
 version = '2.0.0-alpha.3'
 
 [[bin]]
-name = 'node-template'
+name = 'sunshine-node'
 
 [dependencies]
 futures = '0.3.1'
@@ -37,7 +37,7 @@ package = 'sp-finality-grandpa'
 rev = '013c1ee167354a08283fb69915fda56a62fee943'
 version = '2.0.0-alpha.3'
 
-[dependencies.node-template-runtime]
+[dependencies.suntime]
 path = '../runtime'
 version = '2.0.0-alpha.3'
 
