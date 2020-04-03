@@ -3,7 +3,7 @@ authors = ['Anonymous']
 edition = '2018'
 homepage = 'https://substrate.dev'
 license = 'Unlicense'
-name = 'node-template-runtime'
+name = 'suntime'
 repository = 'https://github.com/paritytech/substrate/'
 version = '2.0.0-alpha.3'
 [build-dependencies.wasm-builder-runner]

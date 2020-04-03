@@ -15,6 +15,7 @@ use util::{
         GenerateUniqueID, GetProfile, GroupMembership, IDIsAvailable, LockableProfile,
         ReservableProfile, ShareBank, ShareRegistration, VerifyShape,
     },
+    uuid::OrgSharePrefixKey,
 };
 
 use codec::Codec;
@@ -130,9 +131,10 @@ decl_storage! {
         pub Profile get(fn profile) build(|config: &GenesisConfig<T, I>| {
             config.membership_shares.iter().map(|(org, id, who, shares)| {
                 let share_profile = AtomicShareProfile::new_shares(*shares);
-                ((*org, *id), who.clone(), share_profile)
+                let org_share_id = OrgSharePrefixKey::new(*org, *id);
+                (org_share_id, who.clone(), share_profile)
             }).collect::<Vec<_>>()
-        }): double_map hasher(blake2_256) (T::OrgId, T::ShareId), hasher(blake2_256) T::AccountId => Option<AtomicShareProfile<T::Share>>;
+        }): double_map hasher(blake2_256) OrgSharePrefixKey<T::OrgId, T::ShareId>, hasher(blake2_256) T::AccountId => Option<AtomicShareProfile<T::Share>>;
     }
     add_extra_genesis {
         config(membership_shares): Vec<(T::OrgId, T::ShareId, T::AccountId, T::Share)>;
@@ -220,7 +222,7 @@ decl_module! {
 impl<T: Trait<I>, I: Instance> Module<T, I> {
     /// Set the ShareProfile
     fn set_profile(
-        prefix_key: (T::OrgId, T::ShareId),
+        prefix_key: OrgSharePrefixKey<T::OrgId, T::ShareId>,
         who: &T::AccountId,
         new: &AtomicShareProfile<T::Share>,
     ) -> DispatchResult {
@@ -229,22 +231,31 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
     }
 }
 
-impl<T: Trait<I>, I: Instance> IDIsAvailable<(T::OrgId, T::ShareId)> for Module<T, I> {
-    fn id_is_available(id: (T::OrgId, T::ShareId)) -> bool {
-        None == <TotalIssuance<T, I>>::get(id.0, id.1)
+impl<T: Trait<I>, I: Instance> IDIsAvailable<OrgSharePrefixKey<T::OrgId, T::ShareId>>
+    for Module<T, I>
+{
+    fn id_is_available(id: OrgSharePrefixKey<T::OrgId, T::ShareId>) -> bool {
+        let organization = id.org();
+        let share_id = id.share();
+        None == <TotalIssuance<T, I>>::get(organization, share_id)
     }
 }
 
-impl<T: Trait<I>, I: Instance> GenerateUniqueID<(T::OrgId, T::ShareId)> for Module<T, I> {
-    fn generate_unique_id(proposed_id: (T::OrgId, T::ShareId)) -> (T::OrgId, T::ShareId) {
+impl<T: Trait<I>, I: Instance> GenerateUniqueID<OrgSharePrefixKey<T::OrgId, T::ShareId>>
+    for Module<T, I>
+{
+    fn generate_unique_id(
+        proposed_id: OrgSharePrefixKey<T::OrgId, T::ShareId>,
+    ) -> OrgSharePrefixKey<T::OrgId, T::ShareId> {
         if !Self::id_is_available(proposed_id) {
-            let mut id_counter = <ShareIdCounter<T, I>>::get(proposed_id.0);
-            while <TotalIssuance<T, I>>::get(proposed_id.0, id_counter).is_some() {
+            let organization = proposed_id.org();
+            let mut id_counter = <ShareIdCounter<T, I>>::get(organization);
+            while <TotalIssuance<T, I>>::get(organization, id_counter).is_some() {
                 // TODO: add overflow check here
                 id_counter += 1.into();
             }
-            <ShareIdCounter<T, I>>::insert(proposed_id.0, id_counter + 1.into());
-            (proposed_id.0, id_counter)
+            <ShareIdCounter<T, I>>::insert(organization, id_counter + 1.into());
+            OrgSharePrefixKey::new(organization, id_counter)
         } else {
             proposed_id
         }
@@ -252,7 +263,7 @@ impl<T: Trait<I>, I: Instance> GenerateUniqueID<(T::OrgId, T::ShareId)> for Modu
 }
 
 impl<T: Trait<I>, I: Instance> GroupMembership<T::AccountId> for Module<T, I> {
-    type GroupId = (T::OrgId, T::ShareId);
+    type GroupId = OrgSharePrefixKey<T::OrgId, T::ShareId>;
 
     // constant time membership check for balanced tries ;)
     fn is_member_of_group(group_id: Self::GroupId, who: &T::AccountId) -> bool {
@@ -273,9 +284,9 @@ impl<T: Trait<I>, I: Instance> ShareRegistration<T::AccountId> for Module<T, I> 
         proposed_id: Self::ShareId,
         issuance: Self::GenesisAllocation,
     ) -> Result<Self::ShareId, DispatchError> {
-        let proposed_joint_id = (organization, proposed_id);
+        let proposed_joint_id = OrgSharePrefixKey::new(organization, proposed_id);
         let org_share_id = Self::generate_unique_id(proposed_joint_id);
-        let share_id = org_share_id.1;
+        let share_id = org_share_id.share();
         // TODO: add registration conditions specific to every share_id which might include belonging to an existing share_id
         ensure!(
             issuance.verify_shape(),
@@ -285,7 +296,7 @@ impl<T: Trait<I>, I: Instance> ShareRegistration<T::AccountId> for Module<T, I> 
         for account_share in issuance.account_ownership.iter() {
             let new_profile = AtomicShareProfile::new_shares(account_share.1);
             shareholders.push(account_share.0.clone());
-            let prefix_key = (organization, share_id);
+            let prefix_key = OrgSharePrefixKey::new(organization, share_id);
             Profile::<T, I>::insert(prefix_key, account_share.0.clone(), new_profile);
         }
         // because I'm not using `issue` above and inserting the profile directly, I call issuance directly and separately
@@ -304,7 +315,7 @@ impl<T: Trait<I>, I: Instance> ReservableProfile<T::AccountId> for Module<T, I> 
         who: &T::AccountId,
         amount: Option<Self::ReservationContext>,
     ) -> Result<Self::ReservationContext, DispatchError> {
-        let prefix_key = (organization, share_id);
+        let prefix_key = OrgSharePrefixKey::new(organization, share_id);
         let fetched_profile = Profile::<T, I>::get(prefix_key, who);
         ensure!(
             fetched_profile.is_some(),
@@ -344,7 +355,7 @@ impl<T: Trait<I>, I: Instance> ReservableProfile<T::AccountId> for Module<T, I> 
         who: &T::AccountId,
         amount: Option<Self::ReservationContext>,
     ) -> Result<Self::ReservationContext, DispatchError> {
-        let prefix_key = (organization, share_id);
+        let prefix_key = OrgSharePrefixKey::new(organization, share_id);
         let fetched_profile = Profile::<T, I>::get(prefix_key, who);
         ensure!(
             fetched_profile.is_some(),
@@ -384,7 +395,7 @@ impl<T: Trait<I>, I: Instance> LockableProfile<T::AccountId> for Module<T, I> {
         share_id: Self::ShareId,
         who: &T::AccountId,
     ) -> DispatchResult {
-        let prefix_key = (organization, share_id);
+        let prefix_key = OrgSharePrefixKey::new(organization, share_id);
         let profile = Profile::<T, I>::get(prefix_key, who);
         let locked_profile = if let Some(to_be_locked) = profile {
             to_be_locked.lock()
@@ -401,7 +412,7 @@ impl<T: Trait<I>, I: Instance> LockableProfile<T::AccountId> for Module<T, I> {
         share_id: Self::ShareId,
         who: &T::AccountId,
     ) -> DispatchResult {
-        let prefix_key = (organization, share_id);
+        let prefix_key = OrgSharePrefixKey::new(organization, share_id);
         let profile = Profile::<T, I>::get(prefix_key, who);
         let locked_profile = if let Some(to_be_locked) = profile {
             to_be_locked.unlock()
@@ -446,7 +457,7 @@ impl<T: Trait<I>, I: Instance> ShareBank<T::AccountId> for Module<T, I> {
         let new_amount = current_issuance + amount;
         <TotalIssuance<T, I>>::insert(organization, share_id, new_amount);
         // update the recipient's share profile
-        let prefix_key = (organization, share_id);
+        let prefix_key = OrgSharePrefixKey::new(organization, share_id);
         let old_share_profile = Profile::<T, I>::get(prefix_key, new_owner);
         let new_share_profile = if let Some(old_profile) = old_share_profile {
             // TODO: checked_add
@@ -473,7 +484,7 @@ impl<T: Trait<I>, I: Instance> ShareBank<T::AccountId> for Module<T, I> {
         let current_issuance = <TotalIssuance<T, I>>::get(organization, share_id)
             .ok_or(Error::<T, I>::ShareTypeNotRegistered)?;
         // (2) change owner's profile
-        let prefix_key = (organization, share_id);
+        let prefix_key = OrgSharePrefixKey::new(organization, share_id);
         let profile = Profile::<T, I>::get(prefix_key, old_owner)
             .ok_or(Error::<T, I>::ProfileNotInstantiated)?;
         // enforce invariant that the owner must have these shares to burn them
@@ -503,7 +514,7 @@ impl<T: Trait<I>, I: Instance> GetProfile<T::AccountId> for Module<T, I> {
         share_id: Self::ShareId,
         who: &T::AccountId,
     ) -> Result<Self::Shares, DispatchError> {
-        let prefix_key = (organization, share_id);
+        let prefix_key = OrgSharePrefixKey::new(organization, share_id);
         let wrapped_profile = Profile::<T, I>::get(prefix_key, who);
         if let Some(profile) = wrapped_profile {
             Ok(profile.get_shares())

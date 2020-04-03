@@ -153,12 +153,17 @@ pub trait GetVoteOutcome<OrgId, ShareId> {
     ) -> Result<Self::Outcome, DispatchError>;
 }
 
+// For ThresholdConfig to derive the threshold requirement from turnout
+pub trait DeriveThresholdRequirement<Signal> {
+    fn derive_support_requirement(&self, turnout: Signal) -> Signal;
+    fn derive_turnout_requirement(&self, turnout: Signal) -> Signal;
+}
+
 use crate::vote::ThresholdConfig;
 
 pub trait VoteThresholdBuilder<FineArithmetic> {
     type Signal: AtLeast32Bit + FullCodec + Copy + MaybeSerializeDeserialize + Debug + Default;
-    type ThresholdConfig: Into<ThresholdConfig<FineArithmetic>>
-        + From<ThresholdConfig<FineArithmetic>>;
+    type ThresholdConfig: DeriveThresholdRequirement<Self::Signal>;
     type VoteThreshold;
 
     fn build_vote_threshold(
@@ -226,29 +231,38 @@ pub trait Approved {
     fn approved(&self) -> bool;
 }
 
+pub trait VoteVector<Magnitude, Direction> {
+    fn magnitude(&self) -> Magnitude;
+    fn direction(&self) -> Direction;
+}
+
+use crate::vote::YesNoVote;
 /// For module to apply the vote in the context of the existing module instance
 pub trait ApplyVote {
-    type Vote;
+    type Magnitude;
+    type Direction;
+    // TODO: instead of `From<YesNoVote<Self::Magnitude>>`, we want a trait
+    // that takes Magnitude, Direction and creates a new VoteVector
+    type Vote: From<YesNoVote<Self::Magnitude>> + VoteVector<Self::Magnitude, Self::Direction>;
     type State: Approved;
 
-    fn apply_vote(state: Self::State, vote: Self::Vote) -> Result<Self::State, DispatchError>;
+    fn apply_vote(
+        state: Self::State,
+        new_vote: Self::Vote,
+        old_vote: Option<Self::Vote>,
+    ) -> Result<Self::State, DispatchError>;
 }
 
 /// For the module to check the status of the vote in the context of the existing module instance
-pub trait CheckVoteStatus: ApplyVote {
-    type Outcome;
-
+pub trait CheckVoteStatus<OrgId, ShareId>: ApplyVote + GetVoteOutcome<OrgId, ShareId> {
     fn check_vote_outcome(state: Self::State) -> Result<Self::Outcome, DispatchError>;
     fn check_vote_expired(state: Self::State) -> bool;
 }
 
 /// For module to update vote state
 pub trait VoteOnProposal<OrgId, ShareId, AccountId, FineArithmetic>:
-    OpenVote<OrgId, ShareId, AccountId, FineArithmetic> + CheckVoteStatus
+    OpenVote<OrgId, ShareId, AccountId, FineArithmetic> + CheckVoteStatus<OrgId, ShareId>
 {
-    type Direction;
-    type Magnitude;
-
     fn vote_on_proposal(
         organization: OrgId,
         share_id: ShareId,

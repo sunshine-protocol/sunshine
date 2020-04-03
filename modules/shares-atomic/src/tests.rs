@@ -77,11 +77,11 @@ fn check_membership() {
     // constant time membership lookups
     new_test_ext().execute_with(|| {
         let mut n = 0u64;
-        let first_group_id = (1, 1);
-        let second_group_id = (1, 2);
-        let third_group_id = (1, 3);
+        let first_group_id = OrgSharePrefixKey::new(1, 1);
+        let second_group_id = OrgSharePrefixKey::new(1, 2);
+        let third_group_id = OrgSharePrefixKey::new(1, 3);
         // different organization
-        let second_first_group_id = (2, 1);
+        let second_first_group_id = OrgSharePrefixKey::new(2, 1);
         while n < 19 {
             n += 1;
             if n < 11 {
@@ -120,7 +120,7 @@ fn share_reservation() {
     new_test_ext().execute_with(|| {
         let one = Origin::signed(1);
         assert_ok!(Shares::reserve_shares(one.clone(), 1, 1, 1));
-        let prefix_key = (1, 1);
+        let prefix_key = OrgSharePrefixKey::new(1, 1);
         let profile = Shares::profile(prefix_key, 1).unwrap();
         let first_times_reserved = profile.get_times_reserved();
         // // check that method calculates correctly
@@ -140,13 +140,12 @@ fn share_reservation() {
 
         // check same logic with another member of the first group
         assert_ok!(Shares::reserve_shares(one.clone(), 1, 1, 2));
-        let a_prefix_key = (1, 1);
-        let a_profile = Shares::profile(a_prefix_key, 2).unwrap();
+        let a_profile = Shares::profile(prefix_key, 2).unwrap();
         let a_first_times_reserved = a_profile.get_times_reserved();
         // // check that method calculates correctly
         assert_eq!(a_first_times_reserved, 1);
         assert_ok!(Shares::reserve_shares(one.clone(), 1, 1, 2));
-        let a_second_profile = Shares::profile(a_prefix_key, 2).unwrap();
+        let a_second_profile = Shares::profile(prefix_key, 2).unwrap();
         let a_second_times_reserved = a_second_profile.get_times_reserved();
         assert_eq!(a_second_times_reserved, 2);
         let mut a_n = 0u32;
@@ -154,7 +153,7 @@ fn share_reservation() {
             assert_ok!(Shares::reserve_shares(one.clone(), 1, 1, 2));
             a_n += 1;
         }
-        let a_n_profile = Shares::profile(a_prefix_key, 2).unwrap();
+        let a_n_profile = Shares::profile(prefix_key, 2).unwrap();
         let a_n_times_reserved = a_n_profile.get_times_reserved();
         assert_eq!(a_n_times_reserved, 22);
     });
@@ -165,7 +164,7 @@ fn share_unreservation() {
     new_test_ext().execute_with(|| {
         let one = Origin::signed(1);
         assert_ok!(Shares::reserve_shares(one.clone(), 1, 1, 1));
-        let prefix_key = (1, 1);
+        let prefix_key = OrgSharePrefixKey::new(1, 1);
         let profile = Shares::profile(prefix_key, 1).unwrap();
         let first_times_reserved = profile.get_times_reserved();
         // // check that method calculates correctly
@@ -182,7 +181,7 @@ fn share_unreservation() {
 fn share_lock() {
     new_test_ext().execute_with(|| {
         let one = Origin::signed(1);
-        let prefix_key = (1, 1);
+        let prefix_key = OrgSharePrefixKey::new(1, 1);
         let profile = Shares::profile(prefix_key, 1).unwrap();
         let unlocked = profile.is_unlocked();
         assert_eq!(unlocked, true);
@@ -197,7 +196,7 @@ fn share_lock() {
 fn share_unlock() {
     new_test_ext().execute_with(|| {
         let one = Origin::signed(1);
-        let prefix_key = (1, 1);
+        let prefix_key = OrgSharePrefixKey::new(1, 1);
         let profile = Shares::profile(prefix_key, 1).unwrap();
         let unlocked = profile.is_unlocked();
         assert_eq!(unlocked, true);
@@ -216,7 +215,7 @@ fn share_unlock() {
 fn share_issuance() {
     new_test_ext().execute_with(|| {
         let one = Origin::signed(1);
-        let prefix_key = (1, 1);
+        let prefix_key = OrgSharePrefixKey::new(1, 1);
         let pre_profile = Shares::profile(prefix_key, 10).unwrap();
         let pre_shares = pre_profile.get_shares();
 
@@ -235,7 +234,7 @@ fn share_issuance() {
 fn share_burn() {
     new_test_ext().execute_with(|| {
         let one = Origin::signed(1);
-        let prefix_key = (1, 1);
+        let prefix_key = OrgSharePrefixKey::new(1, 1);
         let pre_profile = Shares::profile(prefix_key, 10).unwrap();
         let pre_shares = pre_profile.get_shares();
 

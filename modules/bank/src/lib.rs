@@ -43,6 +43,7 @@ use util::{
         VoteScheduler,
         VoteThresholdBuilder,
     },
+    uuid::{OrgSharePrefixKey, OrgShareVotePrefixKey},
     vote::{ScheduledVote, ThresholdConfig, VoteSchedule},
 };
 
@@ -72,16 +73,16 @@ pub trait Trait: frame_system::Trait {
         + ReservableProfile<Self::AccountId>
         + LockableProfile<Self::AccountId>
         + ShareBank<Self::AccountId>
-        + IDIsAvailable<(OrgId<Self>, ShareId<Self>)>
-        + GenerateUniqueID<(OrgId<Self>, ShareId<Self>)>;
+        + IDIsAvailable<OrgSharePrefixKey<OrgId<Self>, ShareId<Self>>>
+        + GenerateUniqueID<OrgSharePrefixKey<OrgId<Self>, ShareId<Self>>>;
 
     /// The `vote-yesno` module instance
     type BinaryVoteMachine: GetVoteOutcome<OrgId<Self>, ShareId<Self>>
         + VoteThresholdBuilder<Permill>
         + OpenVote<OrgId<Self>, ShareId<Self>, Self::AccountId, Permill>
         + VoteOnProposal<OrgId<Self>, ShareId<Self>, Self::AccountId, Permill>
-        + IDIsAvailable<(OrgId<Self>, ShareId<Self>, VoteId<Self>)>
-        + GenerateUniqueID<(OrgId<Self>, ShareId<Self>, VoteId<Self>)>;
+        + IDIsAvailable<OrgShareVotePrefixKey<OrgId<Self>, ShareId<Self>, VoteId<Self>>>
+        + GenerateUniqueID<OrgShareVotePrefixKey<OrgId<Self>, ShareId<Self>, VoteId<Self>>>;
 
     /// The number of blocks between the polling of all active proposals for all organizations (see issue #84)
     type PollingFrequency: Get<Self::BlockNumber>;
@@ -184,7 +185,7 @@ decl_storage! {
         /// This storage map encodes the default threshold for share types, proposal types
         /// - this is a helper for building the default stored below
         DefaultThresholdForShareIdProposalType get(fn default_threshold_for_share_id_proposal_type):
-            double_map hasher(blake2_256) (OrgId<T>, ShareId<T>), hasher(blake2_256) ProposalType
+            double_map hasher(blake2_256) OrgSharePrefixKey<OrgId<T>, ShareId<T>>, hasher(blake2_256) ProposalType
             => Option<ThresholdConfig<Permill>>;
 
         /// This is the default approval order for shares for an organization, based on proposal types
@@ -331,8 +332,9 @@ decl_module! {
             let threshold = if let Some(thres_hold) = custom_threshold {
                 thres_hold
             } else {
+                let prefix_key = OrgSharePrefixKey::new(organization, share_id);
                 <DefaultThresholdForShareIdProposalType<T>>::get(
-                    (organization, share_id),
+                    prefix_key,
                     proposal_type,
                 ).ok_or(Error::<T>::DefaultThresholdForShareIdNotSet)?
             };
@@ -420,6 +422,13 @@ decl_module! {
             <ProposalState<T>>::insert(organization, proposal_index, ProposalStage::Voting);
             // add to AllActiveProposalKeys
             <AllActiveProposalKeys<T>>::mutate(|vecc| vecc.push((organization, proposal_index)));
+            // update organization to include this proposal index
+            let old_organization =
+                <OrganizationState<T>>::get(
+                    organization
+                ).ok_or(Error::<T>::NoRegisteredOrganizationWithIDProvided)?;
+            let new_organization = old_organization.add_proposal_index(proposal_index);
+            <OrganizationState<T>>::insert(organization, new_organization);
             // this is the new organization proposal count for the organization
             <ProposalCount<T>>::insert(organization, proposal_index);
             let now = system::Module::<T>::block_number();
@@ -523,7 +532,7 @@ impl<T: Trait> SetDefaultShareIdThreshold<OrgId<T>, ShareId<T>, Permill> for Mod
         proposal_type: Self::ProposalType,
         threshold: ThresholdConfig<Permill>,
     ) -> DispatchResult {
-        let prefix_key = (organization, share_id);
+        let prefix_key = OrgSharePrefixKey::new(organization, share_id);
         <DefaultThresholdForShareIdProposalType<T>>::insert(prefix_key, proposal_type, threshold);
         Ok(())
     }
@@ -545,11 +554,9 @@ impl<T: Trait> VoteScheduleBuilder<OrgId<T>, ShareId<T>, Permill> for Module<T> 
             cthreshold
         } else {
             // else use the default threshold but requires this to be set already
-            <DefaultThresholdForShareIdProposalType<T>>::get(
-                (organization, share_id),
-                proposal_type,
-            )
-            .ok_or(Error::<T>::DefaultThresholdForShareIdNotSet)?
+            let prefix_key = OrgSharePrefixKey::new(organization, share_id);
+            <DefaultThresholdForShareIdProposalType<T>>::get(prefix_key, proposal_type)
+                .ok_or(Error::<T>::DefaultThresholdForShareIdNotSet)?
         };
         Ok(ScheduledVote::new(0u32, share_id, threshold))
     }
@@ -622,11 +629,10 @@ impl<T: Trait> VoteScheduler<OrgId<T>, ShareId<T>, VoteId<T>> for Module<T> {
                 // if first vote, then schedule it now and store the rest in storage
                 if votes_left_including_current == 0 {
                     // open vote with default configuration
-                    let threshold = <DefaultThresholdForShareIdProposalType<T>>::get(
-                        (organization, *share),
-                        proposal_type,
-                    )
-                    .ok_or(Error::<T>::DefaultThresholdForShareIdNotSet)?;
+                    let prefix_key = OrgSharePrefixKey::new(organization, *share);
+                    let threshold =
+                        <DefaultThresholdForShareIdProposalType<T>>::get(prefix_key, proposal_type)
+                            .ok_or(Error::<T>::DefaultThresholdForShareIdNotSet)?;
                     let new_vote_id = <<T as Trait>::BinaryVoteMachine as OpenVote<
                         OrgId<T>,
                         ShareId<T>,
