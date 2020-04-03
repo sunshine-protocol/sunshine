@@ -33,4 +33,13 @@ impl<ShareId: Parameter> Organization<ShareId> {
             ..self
         }
     }
+
+    pub fn add_proposal_index(self, proposal_index: ProposalIndex) -> Self {
+        let mut new_proposals = self.clone().proposals;
+        new_proposals.push(proposal_index);
+        Organization {
+            proposals: new_proposals,
+            ..self
+        }
+    }
 }

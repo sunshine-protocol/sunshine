@@ -15,15 +15,16 @@ use frame_support::{
 };
 use frame_system::{self as system, ensure_signed};
 use sp_runtime::{
-    traits::{AtLeast32Bit, MaybeSerializeDeserialize, Member},
+    traits::{AtLeast32Bit, CheckedSub, MaybeSerializeDeserialize, Member},
     DispatchError, DispatchResult, Permill,
 };
 use sp_std::{fmt::Debug, prelude::*};
 use util::{
     traits::{
-        ApplyVote, Approved, CheckVoteStatus, GenerateUniqueID, GetMagnitude, GetVoteOutcome,
-        GroupMembership, IDIsAvailable, LockableProfile, MintableSignal, OpenVote,
-        ReservableProfile, ShareBank, ShareRegistration, VoteOnProposal, VoteThresholdBuilder,
+        ApplyVote, Approved, CheckVoteStatus, DeriveThresholdRequirement, GenerateUniqueID,
+        GetMagnitude, GetVoteOutcome, GroupMembership, IDIsAvailable, LockableProfile,
+        MintableSignal, OpenVote, ReservableProfile, ShareBank, ShareRegistration, VoteOnProposal,
+        VoteThresholdBuilder, VoteVector,
     },
     vote::{Outcome, ThresholdConfig, VoteState, VoteThreshold, VoterYesNoView, YesNoVote},
 };
@@ -64,6 +65,7 @@ pub trait Trait: frame_system::Trait {
         + MaybeSerializeDeserialize
         + Debug
         + PartialOrd
+        + CheckedSub
         + From<SharesOf<Self>>
         + Into<SharesOf<Self>>;
 
@@ -107,6 +109,7 @@ decl_error! {
         NotEnoughSignalToVote,
         /// Tried to get voting outcome but returned None from storage
         NoOutcomeAssociatedWithVoteID,
+        NewVoteCannotReplaceOldVote,
     }
 }
 
@@ -126,6 +129,11 @@ decl_storage! {
         pub VoteStates get(fn vote_states): double_map
             hasher(blake2_256) (OrgId<T>, ShareId<T>),
             hasher(blake2_256) T::VoteId => Option<VoteState<T::Signal, T::BlockNumber>>;
+
+        /// Tracks the votes and enforce s
+        pub VoteLogger get(fn vote_logger): double_map
+        hasher(blake2_256) (OrgId<T>, ShareId<T>, T::VoteId),
+        hasher(blake2_256) T::AccountId  => Option<YesNoVote<T::Signal>>;
 
         /// The outcome of a vote
         pub VoteOutcome get(fn vote_outcome): double_map
@@ -270,9 +278,8 @@ impl<T: Trait> VoteThresholdBuilder<Permill> for Module<T> {
         threshold_config: Self::ThresholdConfig,
         possible_turnout: Self::Signal,
     ) -> Self::VoteThreshold {
-        // TODO: should add trait bound to ensure that these fields can multiply the possible turnout like this
-        let support_required = threshold_config.passage_threshold_pct * possible_turnout;
-        let turnout_required = threshold_config.turnout_threshold_pct * possible_turnout;
+        let (support_required, turnout_required) =
+            threshold_config.derive_threshold_requirement(possible_turnout);
         let now = system::Module::<T>::block_number();
         Self::VoteThreshold::new(support_required, turnout_required, now)
     }
@@ -340,50 +347,155 @@ impl<T: Trait> OpenVote<OrgId<T>, ShareId<T>, T::AccountId, Permill> for Module<
 }
 
 impl<T: Trait> ApplyVote for Module<T> {
+    type Magnitude = T::Signal;
+    type Direction = VoterYesNoView;
     type Vote = YesNoVote<T::Signal>;
     type State = VoteState<T::Signal, T::BlockNumber>;
 
-    fn apply_vote(state: Self::State, vote: Self::Vote) -> Result<Self::State, DispatchError> {
-        // update VoterStatus (which should wrap the vote for certain options)
-        let new_state = match vote.direction {
-            VoterYesNoView::InFavor => {
-                // TODO: checked adds
-                let new_in_favor = state.in_favor + vote.magnitude;
-                let new_turnout = state.turnout + vote.magnitude;
-                Self::State {
-                    in_favor: new_in_favor,
-                    turnout: new_turnout,
-                    ..state
+    fn apply_vote(
+        state: Self::State,
+        new_vote: Self::Vote,
+        old_vote: Option<Self::Vote>,
+    ) -> Result<Self::State, DispatchError> {
+        let new_state = if let Some(exists_old_vote) = old_vote {
+            match (new_vote.direction(), exists_old_vote.direction()) {
+                (VoterYesNoView::InFavor, VoterYesNoView::InFavor) => {
+                    // choose the newest vote and delete the other vote
+                    let mut new_in_favor = state.in_favor + new_vote.magnitude();
+                    let mut new_turnout = state.turnout + new_vote.magnitude();
+                    // no double counting
+                    new_in_favor -= exists_old_vote.magnitude();
+                    new_turnout -= exists_old_vote.magnitude();
+                    Self::State {
+                        in_favor: new_in_favor,
+                        turnout: new_turnout,
+                        ..state
+                    }
                 }
-            }
-            VoterYesNoView::Against => {
-                // TODO: checked adds
-                let new_against = state.against + vote.magnitude;
-                let new_turnout = state.turnout + vote.magnitude;
-                Self::State {
-                    against: new_against,
-                    turnout: new_turnout,
-                    ..state
+                (VoterYesNoView::InFavor, VoterYesNoView::Against) => {
+                    // choose the newest vote and delete the other vote
+                    let new_in_favor = state.in_favor + new_vote.magnitude();
+                    let mut new_turnout = state.turnout + new_vote.magnitude();
+                    let new_against = state.against - exists_old_vote.magnitude();
+                    new_turnout -= exists_old_vote.magnitude();
+                    Self::State {
+                        in_favor: new_in_favor,
+                        against: new_against,
+                        turnout: new_turnout,
+                        ..state
+                    }
                 }
-            }
-            VoterYesNoView::Abstained => {
-                // TODO: checked adds
-                let new_turnout = state.turnout + vote.magnitude;
-                Self::State {
-                    turnout: new_turnout,
-                    ..state
+                (VoterYesNoView::Against, VoterYesNoView::InFavor) => {
+                    // choose the newest vote and delete the other vote
+                    let new_against = state.against + new_vote.magnitude();
+                    let mut new_turnout = state.turnout + new_vote.magnitude();
+                    let new_in_favor = state.in_favor - exists_old_vote.magnitude();
+                    new_turnout -= exists_old_vote.magnitude();
+                    Self::State {
+                        in_favor: new_in_favor,
+                        against: new_against,
+                        turnout: new_turnout,
+                        ..state
+                    }
                 }
+                (VoterYesNoView::Against, VoterYesNoView::Against) => {
+                    // choose the newest vote and delete the other vote
+                    let mut new_against = state.against + new_vote.magnitude();
+                    let mut new_turnout = state.turnout + new_vote.magnitude();
+                    // no double counting
+                    new_against -= exists_old_vote.magnitude();
+                    new_turnout -= exists_old_vote.magnitude();
+                    Self::State {
+                        against: new_against,
+                        turnout: new_turnout,
+                        ..state
+                    }
+                }
+                (VoterYesNoView::InFavor, VoterYesNoView::Abstained) => {
+                    // choose the newest vote and delete the other vote
+                    let new_against = state.against - exists_old_vote.magnitude();
+                    let mut new_turnout = state.turnout + new_vote.magnitude();
+                    let new_in_favor = state.in_favor + new_vote.magnitude();
+                    new_turnout -= exists_old_vote.magnitude();
+                    Self::State {
+                        in_favor: new_in_favor,
+                        against: new_against,
+                        turnout: new_turnout,
+                        ..state
+                    }
+                }
+                (VoterYesNoView::Against, VoterYesNoView::Abstained) => {
+                    // choose the newest vote and delete the other vote
+                    let new_against = state.against + new_vote.magnitude();
+                    let mut new_turnout = state.turnout + new_vote.magnitude();
+                    new_turnout -= exists_old_vote.magnitude();
+                    Self::State {
+                        against: new_against,
+                        turnout: new_turnout,
+                        ..state
+                    }
+                }
+                (VoterYesNoView::Abstained, VoterYesNoView::InFavor) => {
+                    // choose the newest vote and delete the other vote
+                    let new_in_favor = state.in_favor - exists_old_vote.magnitude();
+                    let mut new_turnout = state.turnout + new_vote.magnitude();
+                    new_turnout -= exists_old_vote.magnitude();
+                    Self::State {
+                        in_favor: new_in_favor,
+                        turnout: new_turnout,
+                        ..state
+                    }
+                }
+                (VoterYesNoView::Abstained, VoterYesNoView::Against) => {
+                    // choose the newest vote and delete the other vote
+                    let new_against = state.against - exists_old_vote.magnitude();
+                    let mut new_turnout = state.turnout + new_vote.magnitude();
+                    new_turnout -= exists_old_vote.magnitude();
+                    Self::State {
+                        against: new_against,
+                        turnout: new_turnout,
+                        ..state
+                    }
+                }
+                _ => return Err(Error::<T>::VoterViewNotAccountedFor.into()),
             }
-            _ => return Err(Error::<T>::VoterViewNotAccountedFor.into()),
+        } else {
+            // no votes yet so this is the first
+            match new_vote.direction() {
+                VoterYesNoView::InFavor => {
+                    let new_turnout = state.turnout + new_vote.magnitude();
+                    let new_in_favor = state.in_favor + new_vote.magnitude();
+                    Self::State {
+                        in_favor: new_in_favor,
+                        turnout: new_turnout,
+                        ..state
+                    }
+                }
+                VoterYesNoView::Against => {
+                    let new_turnout = state.turnout + new_vote.magnitude();
+                    let new_against = state.against + new_vote.magnitude();
+                    Self::State {
+                        against: new_against,
+                        turnout: new_turnout,
+                        ..state
+                    }
+                }
+                VoterYesNoView::Abstained => {
+                    let new_turnout = state.turnout + new_vote.magnitude();
+                    Self::State {
+                        turnout: new_turnout,
+                        ..state
+                    }
+                }
+                _ => return Err(Error::<T>::VoterViewNotAccountedFor.into()),
+            }
         };
         Ok(new_state)
     }
 }
 
 // TODO => if approved, close the vote (and this logic should be associated with outcome)
-impl<T: Trait> CheckVoteStatus for Module<T> {
-    type Outcome = Outcome;
-
+impl<T: Trait> CheckVoteStatus<OrgId<T>, ShareId<T>> for Module<T> {
     // TO SEE IF THE OUTCOME HAS CHANGED
     fn check_vote_outcome(state: Self::State) -> Result<Self::Outcome, DispatchError> {
         // trait bound on Self::State ensures that it implements Approved so that's all we have for now
@@ -404,9 +516,6 @@ impl<T: Trait> CheckVoteStatus for Module<T> {
 }
 
 impl<T: Trait> VoteOnProposal<OrgId<T>, ShareId<T>, T::AccountId, Permill> for Module<T> {
-    type Direction = VoterYesNoView;
-    type Magnitude = T::Signal;
-
     fn vote_on_proposal(
         organization: OrgId<T>,
         share_id: ShareId<T>,
@@ -440,13 +549,15 @@ impl<T: Trait> VoteOnProposal<OrgId<T>, ShareId<T>, T::AccountId, Permill> for M
         } else {
             mintable_signal
         };
-        // form the vote
-        let vote = Self::Vote {
-            direction,
-            magnitude: minted_signal,
-        };
+
+        // form the new vote
+        let new_vote = YesNoVote::new(minted_signal, direction);
+        // check if there is an existing vote and if so whether it should be swapped
+        let old_vote = <VoteLogger<T>>::get(second_prefix_key, voter);
         // get the new state by applying the vote
-        let new_state = Self::apply_vote(current_vote_state, vote)?;
+        let new_state = Self::apply_vote(current_vote_state, new_vote, old_vote)?;
+        // log the vote
+        <VoteLogger<T>>::insert(second_prefix_key, voter, new_vote);
         // place new vote state in storage
         <VoteStates<T>>::insert(first_prefix_key, vote_id, new_state.clone());
         // get the new outcome using the vote_status

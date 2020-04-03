@@ -7,14 +7,6 @@ use sp_runtime::{
 };
 use sp_std::{fmt::Debug, prelude::*};
 
-#[derive(PartialEq, Eq, Copy, Default, Clone, Encode, Decode, RuntimeDebug)]
-/// The share profile stores information regarding share reservation in the context of
-/// collateralized actions
-pub struct ShareProfile<Shares> {
-    pub free: Shares,
-    pub reserved: Shares,
-}
-
 #[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug)]
 /// Atomic share profile reserves the total share amount every time but (might) have a limit on total reservations
 pub struct AtomicShareProfile<Shares> {

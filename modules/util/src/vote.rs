@@ -1,4 +1,4 @@
-use crate::traits::{Approved, GetCurrentVoteIdentifiers};
+use crate::traits::{Approved, DeriveThresholdRequirement, GetCurrentVoteIdentifiers, VoteVector};
 use codec::{Decode, Encode};
 use frame_support::Parameter;
 use sp_runtime::PerThing;
@@ -27,9 +27,29 @@ impl VoterYesNoView {
 
 #[derive(Clone, Copy, PartialEq, Eq, Encode, Decode, sp_runtime::RuntimeDebug)]
 /// Binary vote to express for/against with magnitude
+/// ~ vectors have direction and magnitude, not to be confused with `Vec`
 pub struct YesNoVote<Signal> {
-    pub direction: VoterYesNoView,
-    pub magnitude: Signal,
+    magnitude: Signal,
+    direction: VoterYesNoView,
+}
+
+impl<Signal: Parameter> YesNoVote<Signal> {
+    pub fn new(magnitude: Signal, direction: VoterYesNoView) -> Self {
+        YesNoVote {
+            magnitude,
+            direction,
+        }
+    }
+}
+
+impl<Signal: Parameter + Copy> VoteVector<Signal, VoterYesNoView> for YesNoVote<Signal> {
+    fn magnitude(&self) -> Signal {
+        self.magnitude
+    }
+
+    fn direction(&self) -> VoterYesNoView {
+        self.direction
+    }
 }
 
 #[derive(Clone, Copy, Default, PartialEq, Eq, Encode, Decode, sp_runtime::RuntimeDebug)]
@@ -38,9 +58,9 @@ pub struct YesNoVote<Signal> {
 /// - evaluates passage of vote state
 pub struct ThresholdConfig<FineArithmetic> {
     /// Support threshold
-    pub passage_threshold_pct: FineArithmetic,
+    passage_threshold_pct: FineArithmetic,
     /// Required turnout
-    pub turnout_threshold_pct: FineArithmetic,
+    turnout_threshold_pct: FineArithmetic,
 }
 
 //the trait bound should be std::ops::Mul<N: From<u32>> or something like this
@@ -53,6 +73,16 @@ impl<FineArithmetic: PerThing> ThresholdConfig<FineArithmetic> {
             passage_threshold_pct,
             turnout_threshold_pct,
         }
+    }
+}
+
+impl<Signal: Parameter, FineArithmetic: PerThing + sp_std::ops::Mul<Signal, Output = Signal>>
+    DeriveThresholdRequirement<Signal> for ThresholdConfig<FineArithmetic>
+{
+    fn derive_threshold_requirement(&self, turnout: Signal) -> (Signal, Signal) {
+        let support_required = self.passage_threshold_pct * turnout.clone();
+        let turnout_required = self.turnout_threshold_pct * turnout;
+        (support_required, turnout_required)
     }
 }
 

@@ -319,7 +319,6 @@ fn default_build_sequence_works() {
             ProposalType::ExecutiveMembership,
             ordered_share_ids,
         ));
-        let required_share_voting_groups = vec![1, 2];
         // if this passes, then the above scaffolding works
         assert_ok!(Bank::make_proposal(
             one.clone(),

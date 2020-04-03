@@ -420,6 +420,13 @@ decl_module! {
             <ProposalState<T>>::insert(organization, proposal_index, ProposalStage::Voting);
             // add to AllActiveProposalKeys
             <AllActiveProposalKeys<T>>::mutate(|vecc| vecc.push((organization, proposal_index)));
+            // update organization to include this proposal index
+            let old_organization =
+                <OrganizationState<T>>::get(
+                    organization
+                ).ok_or(Error::<T>::NoRegisteredOrganizationWithIDProvided)?;
+            let new_organization = old_organization.add_proposal_index(proposal_index);
+            <OrganizationState<T>>::insert(organization, new_organization);
             // this is the new organization proposal count for the organization
             <ProposalCount<T>>::insert(organization, proposal_index);
             let now = system::Module::<T>::block_number();
