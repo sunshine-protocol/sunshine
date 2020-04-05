@@ -159,28 +159,21 @@ pub trait DeriveThresholdRequirement<Signal> {
     fn derive_turnout_requirement(&self, turnout: Signal) -> Signal;
 }
 
-use crate::vote::ThresholdConfig;
-
-pub trait VoteThresholdBuilder<FineArithmetic> {
-    type Signal: AtLeast32Bit + FullCodec + Copy + MaybeSerializeDeserialize + Debug + Default;
-    type ThresholdConfig: DeriveThresholdRequirement<Self::Signal>;
-    type VoteThreshold;
-
-    fn build_vote_threshold(
-        threshold_config: Self::ThresholdConfig,
-        possible_turnout: Self::Signal,
-    ) -> Self::VoteThreshold;
-}
+use crate::voteyesno::ThresholdConfig;
 
 pub trait OpenVote<OrgId, ShareId, AccountId, FineArithmetic>:
-    GetVoteOutcome<OrgId, ShareId> + VoteThresholdBuilder<FineArithmetic>
+    GetVoteOutcome<OrgId, ShareId>
 {
+    type Signal: AtLeast32Bit + FullCodec + Copy + MaybeSerializeDeserialize + Debug + Default;
+    type ThresholdConfig: DeriveThresholdRequirement<Self::Signal>
+        + From<ThresholdConfig<FineArithmetic>>;
+
     fn open_vote(
         organization: OrgId,
         share_id: ShareId,
-        // uuid generation should default happen when this is called
+        // uuid generation should default happen when this is called (None is default)
         vote_id: Option<Self::VoteId>,
-        threshold_config: ThresholdConfig<FineArithmetic>,
+        threshold_config: Self::ThresholdConfig,
     ) -> Result<Self::VoteId, DispatchError>;
 }
 
@@ -231,12 +224,21 @@ pub trait Approved {
     fn approved(&self) -> bool;
 }
 
+/// For VoteState to apply a vote
+pub trait Apply<Vote>: Sized {
+    fn apply(&self, vote: Vote) -> Self;
+}
+pub trait Revert<Vote>: Sized {
+    fn revert(&self, vote: Vote) -> Self;
+}
+
+/// For Vote to get necessary params
 pub trait VoteVector<Magnitude, Direction> {
     fn magnitude(&self) -> Magnitude;
     fn direction(&self) -> Direction;
 }
 
-use crate::vote::YesNoVote;
+use crate::voteyesno::YesNoVote;
 /// For module to apply the vote in the context of the existing module instance
 pub trait ApplyVote {
     type Magnitude;
@@ -244,7 +246,7 @@ pub trait ApplyVote {
     // TODO: instead of `From<YesNoVote<Self::Magnitude>>`, we want a trait
     // that takes Magnitude, Direction and creates a new VoteVector
     type Vote: From<YesNoVote<Self::Magnitude>> + VoteVector<Self::Magnitude, Self::Direction>;
-    type State: Approved;
+    type State: Approved + Apply<Self::Vote> + Revert<Self::Vote>;
 
     fn apply_vote(
         state: Self::State,

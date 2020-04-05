@@ -41,10 +41,9 @@ use util::{
         VoteOnProposal, // ScheduleCustomVoteSequence
         VoteScheduleBuilder,
         VoteScheduler,
-        VoteThresholdBuilder,
     },
     uuid::{OrgSharePrefixKey, OrgShareVotePrefixKey},
-    vote::{ScheduledVote, ThresholdConfig, VoteSchedule},
+    voteyesno::{ScheduledVote, ThresholdConfig, VoteSchedule},
 };
 
 /// The organization identifier type
@@ -78,7 +77,6 @@ pub trait Trait: frame_system::Trait {
 
     /// The `vote-yesno` module instance
     type BinaryVoteMachine: GetVoteOutcome<OrgId<Self>, ShareId<Self>>
-        + VoteThresholdBuilder<Permill>
         + OpenVote<OrgId<Self>, ShareId<Self>, Self::AccountId, Permill>
         + VoteOnProposal<OrgId<Self>, ShareId<Self>, Self::AccountId, Permill>
         + IDIsAvailable<OrgShareVotePrefixKey<OrgId<Self>, ShareId<Self>, VoteId<Self>>>
@@ -344,7 +342,7 @@ decl_module! {
                 <T as frame_system::Trait>::AccountId,
                 Permill,
             >>::open_vote(
-                organization, share_id, None, threshold
+                organization, share_id, None, threshold.into()
             )?;
             let now = system::Module::<T>::block_number();
             Self::deposit_event(RawEvent::SingleVoteCreatedForShareGroup(author, organization, share_id, new_vote_id, now));
@@ -639,7 +637,7 @@ impl<T: Trait> VoteScheduler<OrgId<T>, ShareId<T>, VoteId<T>> for Module<T> {
                         <T as frame_system::Trait>::AccountId,
                         Permill,
                     >>::open_vote(
-                        organization, *share, None, threshold
+                        organization, *share, None, threshold.into()
                     )?;
                     first_dispatched_vote_id = new_vote_id;
                     first_share_id = *share;
@@ -678,12 +676,13 @@ impl<T: Trait> VoteScheduler<OrgId<T>, ShareId<T>, VoteId<T>> for Module<T> {
             let share_id = vote_left.get_share_id();
             let threshold = vote_left.get_threshold();
             // open vote with default configuration
-            let new_vote_id = <<T as Trait>::BinaryVoteMachine as OpenVote<
-                OrgId<T>,
-                ShareId<T>,
-                <T as frame_system::Trait>::AccountId,
-                Permill,
-            >>::open_vote(organization, share_id, None, threshold)?;
+            let new_vote_id =
+                <<T as Trait>::BinaryVoteMachine as OpenVote<
+                    OrgId<T>,
+                    ShareId<T>,
+                    <T as frame_system::Trait>::AccountId,
+                    Permill,
+                >>::open_vote(organization, share_id, None, threshold.into())?;
             (share_id, new_vote_id)
         } else {
             // the proposal has passed because there are no votes left on the schedule and the current vote passed
