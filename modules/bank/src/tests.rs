@@ -87,8 +87,6 @@ fn organization_registration() {
         // event emitted as expected
         let expected_event = TestEvent::bank(RawEvent::NewOrganizationRegistered(1, 3, 3));
         assert!(System::events().iter().any(|a| a.event == expected_event));
-        // TODO: verify all storage changes
-        // TODO: error paths and correct errors
     });
 }
 
@@ -217,8 +215,6 @@ fn share_registration_in_organization() {
             4,
             genesis_allocation
         ));
-        // TODO: check to see if the shares module reflects this new registration
-        // TODO: check event emittance
     });
 }
 

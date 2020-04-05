@@ -5,4 +5,4 @@ pub mod proposal;
 pub mod share;
 pub mod traits;
 pub mod uuid;
-pub mod vote;
+pub mod voteyesno;

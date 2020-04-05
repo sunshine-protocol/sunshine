@@ -1,5 +1,5 @@
 use super::*;
-use frame_support::assert_ok; // assert_err, assert_noop
+use frame_support::{assert_err, assert_ok}; //assert_noop
 use mock::*;
 
 fn new_test_ext() -> sp_io::TestExternalities {
@@ -73,13 +73,11 @@ fn votes_created_correctly() {
         let prefix_key = OrgSharePrefixKey::new(1, 1);
         let vote_state = VoteYesNo::vote_states(prefix_key, 1).unwrap();
         // verify expected defaults -- TODO: verify other fields
-        assert_eq!(vote_state.turnout, 0);
+        assert_eq!(vote_state.turnout(), 0);
         // get vote outcome
         let vote_outcome = VoteYesNo::vote_outcome(prefix_key, 1).unwrap();
         // check that it is in the voting stage
         assert_eq!(vote_outcome, Outcome::Voting);
-
-        // TODO: check share reservation amounts (none should be free)
     });
 }
 
@@ -88,6 +86,7 @@ fn votes_apply_correctly() {
     new_test_ext().execute_with(|| {
         let one = Origin::signed(1);
 
+        // 1 creates a vote for share group 1 in organization 1
         assert_ok!(VoteYesNo::create_vote(
             one.clone(),
             1,
@@ -95,8 +94,10 @@ fn votes_apply_correctly() {
             Permill::from_percent(51),
             Permill::from_percent(10)
         ));
+
+        // 1 votes in favor
         assert_ok!(VoteYesNo::submit_vote(
-            one,
+            one.clone(),
             1,
             1,
             1,
@@ -105,10 +106,197 @@ fn votes_apply_correctly() {
             None
         ));
 
-        // get vote state
+        // verify expected vote state
         let prefix = OrgSharePrefixKey::new(1, 1);
         let vote_state = VoteYesNo::vote_states(prefix, 1).unwrap();
-        // verify expected defaults -- TODO: verify other fields
-        assert_eq!(vote_state.turnout, 10);
+        // verify expected defaults
+        assert_eq!(vote_state.turnout(), 10);
+        assert_eq!(vote_state.in_favor(), 10);
+        assert_eq!(vote_state.against(), 0);
+
+        // 11 cannot vote in favor because it is not in the group
+        assert_err!(
+            VoteYesNo::submit_vote(one.clone(), 1, 1, 1, 11, VoterYesNoView::InFavor, None),
+            Error::<Test>::NotEnoughSignalToVote
+        );
+
+        // 2 votes against
+        assert_ok!(VoteYesNo::submit_vote(
+            one.clone(),
+            1,
+            1,
+            1,
+            2,
+            VoterYesNoView::Against,
+            None
+        ));
+
+        // verify expected vote state
+        let new_vote_state = VoteYesNo::vote_states(prefix, 1).unwrap();
+        // verify expected defaults
+        assert_eq!(new_vote_state.turnout(), 20);
+        assert_eq!(new_vote_state.in_favor(), 10);
+        assert_eq!(new_vote_state.against(), 10);
+
+        // 1 changes their vote to against
+        assert_ok!(VoteYesNo::submit_vote(
+            one.clone(),
+            1,
+            1,
+            1,
+            1,
+            VoterYesNoView::Against,
+            None
+        ));
+
+        // verify expected vote state
+        let new_new_vote_state = VoteYesNo::vote_states(prefix, 1).unwrap();
+        // verify expected defaults
+        assert_eq!(new_new_vote_state.turnout(), 20);
+        assert_eq!(new_new_vote_state.in_favor(), 0);
+        assert_eq!(new_new_vote_state.against(), 20);
+
+        // 1 changes their vote to abstain
+        assert_ok!(VoteYesNo::submit_vote(
+            one.clone(),
+            1,
+            1,
+            1,
+            1,
+            VoterYesNoView::Abstain,
+            None
+        ));
+
+        // verify expected vote state
+        let new_new_new_vote_state = VoteYesNo::vote_states(prefix, 1).unwrap();
+        // verify expected defaults
+        assert_eq!(new_new_new_vote_state.turnout(), 20);
+        assert_eq!(new_new_new_vote_state.in_favor(), 0);
+        assert_eq!(new_new_new_vote_state.against(), 10);
+
+        // 2 votes again for against and nothing should change
+        assert_ok!(VoteYesNo::submit_vote(
+            one.clone(),
+            1,
+            1,
+            1,
+            2,
+            VoterYesNoView::Against,
+            None
+        ));
+
+        // verify expected vote state
+        let new_new_new_new_vote_state = VoteYesNo::vote_states(prefix, 1).unwrap();
+        // verify expected defaults
+        assert_eq!(new_new_new_new_vote_state.turnout(), 20);
+        assert_eq!(new_new_new_new_vote_state.in_favor(), 0);
+        assert_eq!(new_new_new_new_vote_state.against(), 10);
+    });
+}
+
+#[test]
+fn vote_threshold_enforced_correctly() {
+    new_test_ext().execute_with(|| {
+        let one = Origin::signed(1);
+
+        // 1 creates a vote for share group 1 in organization 1
+        assert_ok!(VoteYesNo::create_vote(
+            one.clone(),
+            1,
+            1,
+            Permill::from_percent(51),
+            Permill::from_percent(10)
+        ));
+
+        let first_vote_created = TestEvent::vote_yesno(RawEvent::NewVoteStarted(1, 1, 1));
+        assert!(System::events()
+            .iter()
+            .any(|a| a.event == first_vote_created));
+
+        // 6 votes allowed 6/10 is the first vote above 50%
+        for i in 1..7 {
+            // [1, 6] s.t. [] inclusive
+            assert_ok!(VoteYesNo::submit_vote(
+                one.clone(),
+                1,
+                1,
+                1,
+                i,
+                VoterYesNoView::InFavor,
+                None
+            ));
+        }
+        // threshold exceeded
+        assert_err!(
+            VoteYesNo::submit_vote(one.clone(), 1, 1, 1, 7, VoterYesNoView::InFavor, None),
+            Error::<Test>::CanOnlyVoteinVotingOutcome
+        );
+        // check outcome
+        let first_vote_outcome = VoteYesNo::get_vote_outcome(1, 1, 1).unwrap();
+        assert_eq!(first_vote_outcome, Outcome::Approved);
+
+        // 1 creates a vote for share group 2 in organization 1
+        assert_ok!(VoteYesNo::create_vote(
+            one.clone(),
+            1,
+            2,
+            Permill::from_percent(33),
+            Permill::from_percent(10)
+        ));
+
+        let second_vote_created = TestEvent::vote_yesno(RawEvent::NewVoteStarted(1, 2, 1));
+        assert!(System::events()
+            .iter()
+            .any(|a| a.event == second_vote_created));
+
+        for i in 1..3 {
+            assert_ok!(VoteYesNo::submit_vote(
+                one.clone(),
+                1,
+                2,
+                1,
+                i,
+                VoterYesNoView::InFavor,
+                None
+            ));
+        }
+        assert_err!(
+            VoteYesNo::submit_vote(one.clone(), 1, 2, 1, 3, VoterYesNoView::InFavor, None),
+            Error::<Test>::CanOnlyVoteinVotingOutcome
+        );
+        let second_vote_outcome = VoteYesNo::get_vote_outcome(1, 2, 1).unwrap();
+        assert_eq!(second_vote_outcome, Outcome::Approved);
+
+        // 1 creates another vote for share group 1 in organization 1
+        assert_ok!(VoteYesNo::create_vote(
+            one.clone(),
+            1,
+            1,
+            Permill::from_percent(33),
+            Permill::from_percent(10)
+        ));
+
+        let third_vote_created = TestEvent::vote_yesno(RawEvent::NewVoteStarted(1, 1, 2));
+        assert!(System::events()
+            .iter()
+            .any(|a| a.event == third_vote_created));
+
+        for i in 1..5 {
+            assert_ok!(VoteYesNo::submit_vote(
+                one.clone(),
+                1,
+                1,
+                2,
+                i,
+                VoterYesNoView::InFavor,
+                None
+            ));
+        }
+        assert_err!(
+            VoteYesNo::submit_vote(one.clone(), 1, 1, 2, 3, VoterYesNoView::InFavor, None),
+            Error::<Test>::CanOnlyVoteinVotingOutcome
+        );
+        let third_vote_outcome = VoteYesNo::get_vote_outcome(1, 1, 2).unwrap();
+        assert_eq!(third_vote_outcome, Outcome::Approved);
     });
 }

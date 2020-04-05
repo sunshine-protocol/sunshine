@@ -1,5 +1,5 @@
 use super::*;
-use frame_support::{impl_outer_origin, parameter_types, weights::Weight};
+use frame_support::{impl_outer_event, impl_outer_origin, parameter_types, weights::Weight};
 use sp_core::H256;
 use sp_runtime::{testing::Header, traits::IdentityLookup, Perbill};
 
@@ -14,6 +14,18 @@ pub type BlockNumber = u64;
 
 impl_outer_origin! {
     pub enum Origin for Test where system = frame_system {}
+}
+
+mod vote_yesno {
+    pub use crate::Event;
+}
+
+impl_outer_event! {
+    pub enum TestEvent for Test {
+        system<T>,
+        shares_atomic<T>,
+        vote_yesno<T>,
+    }
 }
 
 #[derive(Clone, Eq, PartialEq)]
@@ -34,7 +46,7 @@ impl frame_system::Trait for Test {
     type AccountId = AccountId;
     type Lookup = IdentityLookup<Self::AccountId>;
     type Header = Header;
-    type Event = ();
+    type Event = TestEvent;
     type BlockHashCount = BlockHashCount;
     type MaximumBlockWeight = MaximumBlockWeight;
     type AvailableBlockRatio = AvailableBlockRatio;
@@ -49,7 +61,7 @@ parameter_types! {
     pub const ReservationLimit: u32 = 10000;
 }
 impl shares_atomic::Trait for Test {
-    type Event = ();
+    type Event = TestEvent;
     type OrgId = OrgId;
     type ShareId = ShareId;
     type Share = Share;
@@ -59,10 +71,11 @@ parameter_types! {
     pub const DefaultVoteLength: u64 = 10;
 }
 impl Trait for Test {
-    type Event = Event<Test>;
+    type Event = TestEvent;
     type Signal = Signal;
     type VoteId = VoteId;
     type ShareData = shares_atomic::Module<Test>;
     type DefaultVoteLength = DefaultVoteLength;
 }
 pub type VoteYesNo = Module<Test>;
+pub type System = system::Module<Test>;
