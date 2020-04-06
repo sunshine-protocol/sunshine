@@ -263,7 +263,7 @@ fn most_basic_vote_requirements_setting_works() {
 }
 
 #[test]
-fn default_build_sequence_works() {
+fn make_proposal_starts_the_vote_schedule() {
     new_test_ext().execute_with(|| {
         let one = Origin::signed(1);
         let genesis_allocation = vec![(1, 10), (2, 20), (3, 30), (9, 1), (10, 2)];
@@ -271,9 +271,7 @@ fn default_build_sequence_works() {
         use sp_core::H256;
         use sp_runtime::traits::{BlakeTwo256, Hash};
         let constitutional_hash: H256 = BlakeTwo256::hash(constitution);
-        // no organizations before registration call
-        assert_eq!(Bank::organization_count(), 0);
-        // next line is registration call
+        // Step 1: Register Organization
         assert_ok!(Bank::register_organization(
             one.clone(),
             None,
@@ -282,12 +280,14 @@ fn default_build_sequence_works() {
             genesis_allocation.clone(),
             constitutional_hash,
         ));
+        // Step 2: Register Shares in Organization
         assert_ok!(Bank::register_shares_in_organization(
             one.clone(),
             3,
             4,
             genesis_allocation.clone()
         ));
+        // Step 3: Set default threshold for share_id, proposal type pairs
         assert_ok!(
             Bank::set_organization_share_id_proposal_type_default_threshold(
                 one.clone(),
@@ -309,18 +309,34 @@ fn default_build_sequence_works() {
             )
         );
         let ordered_share_ids = vec![3, 4];
+        // Step 4: Set the basic share approval requirements for a fake membership proposal
         assert_ok!(Bank::set_most_basic_vote_requirements(
             one.clone(),
             3,
             ProposalType::ExecutiveMembership,
             ordered_share_ids,
         ));
-        // if this passes, then the above scaffolding works
+        // Step 5: Make a proposal, which dispatches the vote schedule corresponding to defauls assigned above
+        System::set_block_number(1);
         assert_ok!(Bank::make_proposal(
             one.clone(),
             3,
             ProposalType::ExecutiveMembership,
             None
         ));
+        // verify the parameters above by checking the event
+        let proposal_dispatched =
+            TestEvent::bank(RawEvent::ProposalDispatchedToVote(1, 3, 1, 1, 1));
+        assert!(System::events()
+            .iter()
+            .any(|a| a.event == proposal_dispatched));
+        // TODO: All the Remaining Vote Schedule Steps Need to Be Tested in Integration Tests
+        // - this must be done in the `node` because only it has that context
+        // Step 6: vote on the proposal
+        // Step 7: vote enough to switch to the next vote (overcome thresholds)
+        // Step 8: `run_on` to simulate blocks passing and verify proposal polling
+        // Step 9: check that next vote was started by querying the dispatched vote schedule
+        // Step 10: step 7 but for this vote (overcome threshold)
+        // Step 11: step 8 but check that the `ProposalStage` is changed
     });
 }
