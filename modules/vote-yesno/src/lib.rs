@@ -2,6 +2,7 @@
 #![allow(clippy::redundant_closure_call)]
 #![allow(clippy::type_complexity)]
 #![cfg_attr(not(feature = "std"), no_std)]
+//! back to [`util`](../util/index.html) for all object and trait definitions
 
 #[cfg(test)]
 mod mock;
@@ -41,7 +42,6 @@ pub type ShareId<T> =
 pub type OrgId<T> =
     <<T as Trait>::ShareData as ShareRegistration<<T as frame_system::Trait>::AccountId>>::OrgId;
 
-// TODO: make direct inheritance work
 pub trait Trait: frame_system::Trait {
     type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 

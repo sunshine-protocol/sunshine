@@ -1,7 +1,8 @@
 #![allow(clippy::string_lit_as_bytes)]
 #![allow(clippy::redundant_closure_call)]
-#![allow(clippy::type_complexity)] // noted that I have lots of generics...
+#![allow(clippy::type_complexity)]
 #![cfg_attr(not(feature = "std"), no_std)]
+//! back to [`util`](../util/index.html) for all object and trait definitions
 
 #[cfg(test)]
 mod mock;
@@ -272,7 +273,6 @@ impl<T: Trait<I>, I: Instance> GroupMembership<T::AccountId> for Module<T, I> {
 }
 
 impl<T: Trait<I>, I: Instance> ShareRegistration<T::AccountId> for Module<T, I> {
-    // provide access to these types from other modules
     type OrgId = T::OrgId;
     type ShareId = T::ShareId;
     type Shares = T::Share;

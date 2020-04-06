@@ -1,6 +1,7 @@
 #![allow(clippy::string_lit_as_bytes)]
 #![allow(clippy::redundant_closure_call)]
 #![cfg_attr(not(feature = "std"), no_std)]
+//! back to [`util`](../util/index.html) for all object and trait definitions
 
 #[cfg(test)]
 mod mock;
@@ -19,7 +20,8 @@ use sp_runtime::{
 use sp_std::prelude::*;
 use util::{
     organization::Organization,
-    proposal::{ProposalIndex, ProposalStage, ProposalType, SimplePollingOutcome},
+    proposal::{ProposalIndex, ProposalStage, ProposalType},
+    schedule::{ScheduledVote, SimplePollingOutcome, VoteSchedule},
     traits::{
         Approved,
         GenerateUniqueID,
@@ -43,7 +45,7 @@ use util::{
         VoteScheduler,
     },
     uuid::{OrgSharePrefixKey, OrgShareVotePrefixKey},
-    voteyesno::{ScheduledVote, ThresholdConfig, VoteSchedule},
+    voteyesno::ThresholdConfig,
 };
 
 /// The organization identifier type
@@ -235,7 +237,7 @@ decl_module! {
                                 Self::deposit_event(RawEvent::ProposalPassed(*organization, *proposal_index));
                             },
                         }
-                    } // no error handling for error for now
+                    }
                 });
             }
         }

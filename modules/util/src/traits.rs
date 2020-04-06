@@ -1,4 +1,6 @@
+use crate::voteyesno::{ThresholdConfig, YesNoVote};
 use codec::FullCodec;
+use frame_support::Parameter;
 use sp_runtime::{
     traits::{AtLeast32Bit, MaybeSerializeDeserialize},
     DispatchError, DispatchResult,
@@ -7,11 +9,12 @@ use sp_std::{fmt::Debug, prelude::*};
 
 // === Unique ID Logic, Useful for All Modules ==
 
-// For the module to implement for its id type
+/// For the module to implement for its id type (typically a common double_map prefix key)
 pub trait IDIsAvailable<Id> {
     fn id_is_available(id: Id) -> bool;
 }
 
+/// For the module to implement for its id type (typically a common double_map prefix key)
 pub trait GenerateUniqueID<Id>: IDIsAvailable<Id> {
     // this should be infallible, it returns the generated unique id which may or may not be equal to the original value
     fn generate_unique_id(proposed_id: Id) -> Id;
@@ -19,18 +22,20 @@ pub trait GenerateUniqueID<Id>: IDIsAvailable<Id> {
 
 // ---------- Share Logic ----------
 
+/// Checks that the `total` field is correct by summing all assigned share quantities
 pub trait VerifyShape {
     // required bound on GenesisAllocation
     fn verify_shape(&self) -> bool;
 }
 
+/// Checks that the `AccountId` is a member of a share group in an organization
 pub trait GroupMembership<AccountId> {
     type GroupId;
 
     fn is_member_of_group(group_id: Self::GroupId, who: &AccountId) -> bool;
 }
 
-/// For the module, to encode share registration behavior
+/// Encodes logic for an organization to register a new share identifier
 pub trait ShareRegistration<AccountId>: GroupMembership<AccountId> {
     type OrgId: AtLeast32Bit
         + FullCodec
@@ -56,11 +61,9 @@ pub trait ShareRegistration<AccountId>: GroupMembership<AccountId> {
     ) -> Result<Self::ShareId, DispatchError>;
 }
 
-/// Traits for the ReservationContext object on ReservableProfile
 pub trait GetMagnitude<Shares> {
     fn get_magnitude(self) -> Shares;
 }
-use frame_support::Parameter;
 impl<Shares: Parameter> GetMagnitude<Shares> for (u32, Shares) {
     fn get_magnitude(self) -> Shares {
         self.1
@@ -72,17 +75,17 @@ impl<Shares: Parameter> GetMagnitude<Shares> for Shares {
     }
 }
 
-/// For the module, to abstract the share reservation behavior
+/// Reserve shares for an individual `AccountId`
 pub trait ReservableProfile<AccountId>: ShareRegistration<AccountId> {
     type ReservationContext: GetMagnitude<Self::Shares>;
-    /// Reserves amount iff certain conditions are met wrt existing profile and how it would change
+    /// Reserves amount iff certain conditions are met wrt existing profile and how it will change
     fn reserve(
         organization: Self::OrgId,
         share_id: Self::ShareId,
         who: &AccountId,
         amount: Option<Self::ReservationContext>,
     ) -> Result<Self::ReservationContext, DispatchError>;
-    /// Unreserves amount iff certain conditions are met wrt existing profile and how it would change
+    /// Unreserves amount iff certain conditions are met wrt existing profile and how it will change
     fn unreserve(
         organization: Self::OrgId,
         share_id: Self::ShareId,
@@ -91,6 +94,7 @@ pub trait ReservableProfile<AccountId>: ShareRegistration<AccountId> {
     ) -> Result<Self::ReservationContext, DispatchError>;
 }
 
+/// Lock shares for an individual `AccountId`
 pub trait LockableProfile<AccountId>: ShareRegistration<AccountId> {
     fn lock_profile(
         organization: Self::OrgId,
@@ -104,6 +108,7 @@ pub trait LockableProfile<AccountId>: ShareRegistration<AccountId> {
     ) -> DispatchResult;
 }
 
+/// Get the share profile for an individual `AccountId`
 pub trait GetProfile<AccountId>: ShareRegistration<AccountId> {
     fn get_share_profile(
         organization: Self::OrgId,
@@ -112,10 +117,11 @@ pub trait GetProfile<AccountId>: ShareRegistration<AccountId> {
     ) -> Result<Self::Shares, DispatchError>;
 }
 
-/// For the module, to separate the issuance logic for shares
+/// Issuance logic for existing shares (not new shares)
 pub trait ShareBank<AccountId>: ShareRegistration<AccountId> {
+    /// Gets the total number of shares issued for an organization's share identifier
     fn outstanding_shares(organization: Self::OrgId, id: Self::ShareId) -> Self::Shares;
-    // return membership group associated with a share type
+    /// Returns the entire membership group associated with a share identifier
     fn shareholder_membership(
         organization: Self::OrgId,
         id: Self::ShareId,
@@ -136,6 +142,7 @@ pub trait ShareBank<AccountId>: ShareRegistration<AccountId> {
 
 // ====== Vote Logic ======
 
+/// Retrieves the outcome of a vote associated with the vote identifier `vote_id`
 pub trait GetVoteOutcome<OrgId, ShareId> {
     type VoteId: AtLeast32Bit
         + FullCodec
@@ -153,14 +160,13 @@ pub trait GetVoteOutcome<OrgId, ShareId> {
     ) -> Result<Self::Outcome, DispatchError>;
 }
 
-// For ThresholdConfig to derive the threshold requirement from turnout
+/// Derives the threshold requirement from turnout (for `ThresholdConfig`)
 pub trait DeriveThresholdRequirement<Signal> {
     fn derive_support_requirement(&self, turnout: Signal) -> Signal;
     fn derive_turnout_requirement(&self, turnout: Signal) -> Signal;
 }
 
-use crate::voteyesno::ThresholdConfig;
-
+/// Open a new vote for the organization, share_id and a custom threshold requirement
 pub trait OpenVote<OrgId, ShareId, AccountId, FineArithmetic>:
     GetVoteOutcome<OrgId, ShareId>
 {
@@ -177,7 +183,7 @@ pub trait OpenVote<OrgId, ShareId, AccountId, FineArithmetic>:
     ) -> Result<Self::VoteId, DispatchError>;
 }
 
-// access point for signal
+/// Define the rate at which signal is minted for shares in an organization
 pub trait MintableSignal<OrgId, ShareId, AccountId, FineArithmetic>:
     OpenVote<OrgId, ShareId, AccountId, FineArithmetic>
 {
@@ -188,7 +194,7 @@ pub trait MintableSignal<OrgId, ShareId, AccountId, FineArithmetic>:
         who: &AccountId,
     ) -> Result<Self::Signal, DispatchError>;
 
-    /// WARNING: CALL MUST BE PERMISSIONED
+    // WARNING: CALL MUST BE PERMISSIONED
     fn custom_mint_signal(
         organization: OrgId,
         share_id: ShareId,
@@ -199,7 +205,6 @@ pub trait MintableSignal<OrgId, ShareId, AccountId, FineArithmetic>:
 
     /// Mints signal for all ShareIds
     /// - calls mint_signal_based_on_existing_share_value for every member
-    /// - TODO: add custom_batch_mint_signal
     fn batch_mint_signal(
         organization: OrgId,
         share_id: ShareId,
@@ -207,6 +212,7 @@ pub trait MintableSignal<OrgId, ShareId, AccountId, FineArithmetic>:
     ) -> Result<Self::Signal, DispatchError>;
 }
 
+/// Define the rate at which signal is burned to unreserve shares in an organization
 pub trait BurnableSignal<OrgId, ShareId, AccountId, FineArithmetic>:
     MintableSignal<OrgId, ShareId, AccountId, FineArithmetic>
 {
@@ -219,27 +225,26 @@ pub trait BurnableSignal<OrgId, ShareId, AccountId, FineArithmetic>:
     ) -> DispatchResult;
 }
 
-/// For VoteState, to verify passage
+/// Defines conditions for vote passage (for `VoteState`)
 pub trait Approved {
     fn approved(&self) -> bool;
 }
 
-/// For VoteState to apply a vote
+/// Defines how `Vote`s are applied to the `VoteState`
 pub trait Apply<Vote>: Sized {
     fn apply(&self, vote: Vote) -> Self;
 }
+/// Defines how previous `Vote` to the `VoteState` applications are reverted
 pub trait Revert<Vote>: Sized {
     fn revert(&self, vote: Vote) -> Self;
 }
 
-/// For Vote to get necessary params
 pub trait VoteVector<Magnitude, Direction> {
     fn magnitude(&self) -> Magnitude;
     fn direction(&self) -> Direction;
 }
 
-use crate::voteyesno::YesNoVote;
-/// For module to apply the vote in the context of the existing module instance
+/// Applies vote in the context of the existing module instance
 pub trait ApplyVote {
     type Magnitude;
     type Direction;
@@ -277,12 +282,13 @@ pub trait VoteOnProposal<OrgId, ShareId, AccountId, FineArithmetic>:
 
 // ====== Vote Dispatch Logic (in Bank) ======
 
-// for the VoteSchedule struct (most other traits are for the module itself)
 pub trait GetCurrentVoteIdentifiers<ShareId, VoteId> {
     fn get_current_share_id(&self) -> ShareId;
     fn get_current_vote_id(&self) -> VoteId;
 }
 
+/// Set the default order of share groups for which approval will be required
+/// - the first step to set up a default vote schedule for a proposal type
 pub trait SetDefaultShareApprovalOrder<OrgId, ShareId> {
     type ProposalType;
 
@@ -293,6 +299,8 @@ pub trait SetDefaultShareApprovalOrder<OrgId, ShareId> {
     ) -> DispatchResult;
 }
 
+/// Set the default passage, turnout thresholds for each share group
+/// - the _second_ first step to set up a default vote schedule for a proposal type
 pub trait SetDefaultShareIdThreshold<OrgId, ShareId, FineArithmetic>:
     SetDefaultShareApprovalOrder<OrgId, ShareId>
 {
@@ -304,12 +312,13 @@ pub trait SetDefaultShareIdThreshold<OrgId, ShareId, FineArithmetic>:
     ) -> DispatchResult;
 }
 
+/// Helper methods to define a default VoteSchedule using the default threshold setter and default share approval order setter
 pub trait VoteScheduleBuilder<OrgId, ShareId, FineArithmetic>:
     SetDefaultShareIdThreshold<OrgId, ShareId, FineArithmetic>
 {
     type ScheduledVote;
 
-    // uses the default threshold set above to automatically set threshold
+    /// Uses the default threshold set above to automatically set threshold for share_id
     fn scheduled_vote_from_share_id_proposal_type(
         organization: OrgId,
         share_id: ShareId,
@@ -318,6 +327,8 @@ pub trait VoteScheduleBuilder<OrgId, ShareId, FineArithmetic>:
         custom_threshold: Option<ThresholdConfig<FineArithmetic>>,
     ) -> Result<Self::ScheduledVote, DispatchError>;
 
+    /// Default uses the default share approval order and default threshold setter to set a default vote schedule
+    /// - if `raw_vote_schedule.is_some()` then it uses this custom sequence of scheduled votes instead of the defaults
     fn set_default_vote_schedule_for_proposal_type(
         organization: OrgId,
         proposal_type: Self::ProposalType,
@@ -326,8 +337,7 @@ pub trait VoteScheduleBuilder<OrgId, ShareId, FineArithmetic>:
     ) -> DispatchResult;
 }
 
-/// NOTE: I want to do something similar with `ThresholdConfig` to make the object definition more generic
-/// but without fucking up all the vote scheduling logic
+/// Manages live vote schedules
 pub trait VoteScheduler<OrgId, ShareId, VoteId>:
     SetDefaultShareApprovalOrder<OrgId, ShareId>
 {
@@ -339,13 +349,16 @@ pub trait VoteScheduler<OrgId, ShareId, VoteId>:
         share_ids: Vec<ShareId>,
     ) -> Result<Self::VoteSchedule, DispatchError>;
 
-    // moves the vote schedule to the next scheduled vote in the sequence
+    /// Moves the vote schedule to the next scheduled vote in the sequence
     fn move_to_next_scheduled_vote(
         organization: OrgId,
         schedule: Self::VoteSchedule,
     ) -> Result<Option<Self::VoteSchedule>, DispatchError>;
 }
 
+/// Default uses the default vote schedule configured in `VoteBuilder` to dispatch a `VoteSchedule`
+/// - if `custom_share_ids.is_some()` then this is used as the share approval order instead of the default
+/// share approval order
 pub trait ScheduleVoteSequence<OrgId, ShareId, VoteId, FineArithmetic>:
     VoteScheduleBuilder<OrgId, ShareId, FineArithmetic>
 {
