@@ -1,5 +1,10 @@
 use sp_keyring::AccountKeyring;
-use substrate_subxt::{self, balances::Balances, system::System, ExtrinsicSuccess};
+use substrate_subxt::{
+    self,
+    balances::{AccountData, Balances},
+    system::System,
+    ExtrinsicSuccess,
+};
 // mod vote_yesno;
 // use vote_yesno::{self, *};
 mod shares_atomic;

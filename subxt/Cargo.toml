@@ -1,17 +1,28 @@
 [package]
-name = "substrate-subxt"
-version = "0.5.0"
-authors = ["Parity Technologies <admin@parity.io>"]
+name = "sunshine-subxt"
+version = "0.0.1"
+authors = ["4meta5"]
 edition = "2018"
 
+[[bin]]
+name = 'sunshine-subxt'
+
 [dependencies]
-sp-keyring = { git = "https://github.com/paritytech/substrate.git", version = "2.0.0-alpha.5", rev = 'b14359cf5341a37028996a5002cf731a49312454', default-features = false }
+sp-keyring = { git = "https://github.com/paritytech/substrate.git", version = "2.0.0-alpha.5", default-features = false }
 async-std = "1.2.0"
 env_logger = "0.7"
 codec = { package = "parity-scale-codec", version = "1.2.0", default-features = false, features = ["derive"] }
 substrate-subxt = { git = "https://github.com/paritytech/substrate-subxt/", version = "0.5", default-features=false}
-frame-support = { git = "https://github.com/paritytech/substrate.git", version = "2.0.0-alpha.5", rev = 'b14359cf5341a37028996a5002cf731a49312454', default-features = false }
-sp-core = { git = "https://github.com/paritytech/substrate.git", version = "2.0.0-alpha.5", rev = 'b14359cf5341a37028996a5002cf731a49312454', default-features = false }
-sp-runtime = { git = "https://github.com/paritytech/substrate.git", version = "2.0.0-alpha.5", rev = 'b14359cf5341a37028996a5002cf731a49312454', default-features = false }
+frame-support = { git = "https://github.com/paritytech/substrate.git", version = "2.0.0-alpha.5", default-features = false }
+sp-core = { git = "https://github.com/paritytech/substrate.git", version = "2.0.0-alpha.5", default-features = false }
+sp-runtime = { git = "https://github.com/paritytech/substrate.git", version = "2.0.0-alpha.5", default-features = false }
 util = {path = "../modules/util", default-features=false}
 clear_on_drop = { version = "0.2.3", features = ["no_cc"] }	# https://github.com/paritytech/substrate/issues/4179
+
+[features]
+default = ["std"]
+std = [
+	"codec/std",
+	"sp-runtime/std",
+	"frame-support/std",
+]
