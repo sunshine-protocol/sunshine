@@ -76,7 +76,7 @@ pub fn new_full(config: Configuration) -> Result<impl AbstractService, ServiceEr
     let (role, force_authoring, name, disable_grandpa) = (
         config.role.clone(),
         config.force_authoring,
-        config.name.clone(),
+        config.impl_name.clone(),
         config.disable_grandpa,
     );
 
@@ -99,7 +99,7 @@ pub fn new_full(config: Configuration) -> Result<impl AbstractService, ServiceEr
         })?
         .build()?;
 
-    if let sc_service::config::Role::Authority { sentry_nodes: _ } = &role {
+    if role.is_authority() {
         let proposer =
             sc_basic_authorship::ProposerFactory::new(service.client(), service.transaction_pool());
 
@@ -142,7 +142,7 @@ pub fn new_full(config: Configuration) -> Result<impl AbstractService, ServiceEr
         // FIXME #1578 make this available through chainspec
         gossip_duration: Duration::from_millis(333),
         justification_period: 512,
-        name: Some(name),
+        name: Some(name.to_string()),
         observer_enabled: false,
         keystore,
         is_authority: role.is_network_authority(),
