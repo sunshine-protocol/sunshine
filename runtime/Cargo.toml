@@ -110,7 +110,7 @@ version = '2.0.0-alpha.5'
 default-features = false
 git = 'https://github.com/paritytech/substrate.git'
 rev = 'b14359cf5341a37028996a5002cf731a49312454'
-version = '0.8.0-alpha.3'
+version = '0.8.0-alpha.5'
 
 [dependencies.sp-core]
 default-features = false

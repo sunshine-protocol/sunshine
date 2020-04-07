@@ -1,8 +1,5 @@
 //! Service and ServiceFactory implementation. Specialized wrapper over substrate service.
 
-use grandpa::{
-    self, FinalityProofProvider as GrandpaFinalityProofProvider, StorageAndProofProvider,
-};
 use sc_client::LongestChain;
 use sc_executor::native_executor_instance;
 pub use sc_executor::NativeExecutor;
@@ -11,7 +8,7 @@ use sp_consensus_aura::sr25519::AuthorityPair as AuraPair;
 use sp_inherents::InherentDataProviders;
 use std::sync::Arc;
 use std::time::Duration;
-use suntime::{self, opaque::Block, GenesisConfig, RuntimeApi};
+use suntime::{self, opaque::Block, RuntimeApi};
 
 // Our native executor instance.
 native_executor_instance!(
@@ -102,7 +99,7 @@ pub fn new_full(config: Configuration) -> Result<impl AbstractService, ServiceEr
         })?
         .build()?;
 
-    if let sc_service::config::Role::Authority { sentry_nodes } = &role {
+    if let sc_service::config::Role::Authority { sentry_nodes: _ } = &role {
         let proposer =
             sc_basic_authorship::ProposerFactory::new(service.client(), service.transaction_pool());
 

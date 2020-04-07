@@ -30,9 +30,7 @@ pub fn run(version: VersionInfo) -> sc_cli::Result<()> {
         Some(subcommand) => {
             subcommand.init(&version)?;
             subcommand.update_config(&mut config, chain_spec::load_spec, &version)?;
-            subcommand.run(config, |config: sc_service::Configuration| {
-                Ok(new_full_start!(config).0)
-            })
+            subcommand.run(config, |config: _| Ok(new_full_start!(config).0))
         }
         None => {
             opt.run.init(&version)?;

@@ -1,28 +1,13 @@
-use substrate_subxt::{
-    system::System,
-    Call,
-};
-use codec::{
-    Decode,
-    Encode,
-    Codec,
-};
+use codec::{Codec, Decode, Encode};
 use frame_support::Parameter;
 use sp_runtime::{
-    traits::{
-        AtLeast32Bit,
-        MaybeSerializeDeserialize,
-        Member,
-        Zero,
-    },
+    traits::{AtLeast32Bit, MaybeSerializeDeserialize, Member, Zero},
     Permill,
 };
 use std::fmt::Debug;
-use util::{
-    traits::{
-        GroupMembership, LockableProfile,
-        ReservableProfile, ShareBank, ShareRegistration,
-    }
+use substrate_subxt::{system::System, Call};
+use util::traits::{
+    GroupMembership, LockableProfile, ReservableProfile, ShareBank, ShareRegistration,
 };
 
 /// The subset of the `vote_yesno::Trait` that a client must implement.
@@ -64,5 +49,13 @@ pub fn reserve<T: SharesAtomic>(
     share: T::ShareId,
     account: <T as System>::AccountId,
 ) -> Call<ReserveArgs<T>> {
-    Call::new(MODULE, RESERVE, ReserveArgs { org, share, account })
+    Call::new(
+        MODULE,
+        RESERVE,
+        ReserveArgs {
+            org,
+            share,
+            account,
+        },
+    )
 }

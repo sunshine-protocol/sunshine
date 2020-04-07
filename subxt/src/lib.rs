@@ -1,21 +1,13 @@
-
 use sp_keyring::AccountKeyring;
-use substrate_subxt::{
-    self, 
-    ExtrinsicSuccess,
-    system::System,
-    balances::Balances,
-};
+use substrate_subxt::{self, balances::Balances, system::System, ExtrinsicSuccess};
 // mod vote_yesno;
 // use vote_yesno::{self, *};
 mod shares_atomic;
 use shares_atomic::SharesAtomic;
 use sp_runtime::{
-    Permill, 
-    OpaqueExtrinsic,
     generic::Header,
     traits::{BlakeTwo256, IdentifyAccount, Verify},
-    MultiSignature,
+    MultiSignature, OpaqueExtrinsic, Permill,
 };
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -70,19 +62,23 @@ fn main() {
                     // for any primitive event with no type size registered
                     decoder.register_type_size::<(u64, u64)>("IdentificationTuple")
                 })
-                .submit(shares_atomic::reserve::<Runtime>(1u32, 1u32, checked_account.clone().into()))
+                .submit(shares_atomic::reserve::<Runtime>(
+                    1u32,
+                    1u32,
+                    checked_account.clone().into(),
+                ))
                 .await?;
             Ok(xt_result)
         });
     match result {
         Ok(extrinsic_success) => {
             match extrinsic_success
-                .find_event::<(OrgId, ShareId, AccountId)>(
-                    "SharesAtomic", "Reserve",
-                ) {
-                Some(Ok((org, share, account))) => {
-                    println!("Account {:?} reserved id number {:?} shares for id number {:?} organization", account, share, org)
-                }
+                .find_event::<(OrgId, ShareId, AccountId)>("SharesAtomic", "Reserve")
+            {
+                Some(Ok((org, share, account))) => println!(
+                    "Account {:?} reserved id number {:?} shares for id number {:?} organization",
+                    account, share, org
+                ),
                 Some(Err(err)) => println!("Failed to decode code hash: {}", err),
                 None => println!("Failed to find SharesAtomic::Reserve Event"),
             }
