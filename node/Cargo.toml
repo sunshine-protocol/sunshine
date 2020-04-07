@@ -4,18 +4,18 @@ vergen = '3.0.4'
 [build-dependencies.build-script-utils]
 git = 'https://github.com/paritytech/substrate.git'
 package = 'substrate-build-script-utils'
-rev = '013c1ee167354a08283fb69915fda56a62fee943'
-version = '2.0.0-alpha.3'
+rev = 'b14359cf5341a37028996a5002cf731a49312454'
+version = '2.0.0-alpha.5'
 
 [package]
-authors = ['Anonymous']
+authors = ['4meta5']
 build = 'build.rs'
 edition = '2018'
-homepage = 'https://substrate.dev'
+homepage = 'https://joinsunshine.com'
 license = 'Unlicense'
 name = 'sunshine-node'
 repository = 'https://github.com/paritytech/substrate/'
-version = '2.0.0-alpha.3'
+version = '0.0.1'
 
 [[bin]]
 name = 'sunshine-node'
@@ -28,85 +28,97 @@ structopt = '0.3.8'
 [dependencies.grandpa]
 git = 'https://github.com/paritytech/substrate.git'
 package = 'sc-finality-grandpa'
-rev = '013c1ee167354a08283fb69915fda56a62fee943'
+rev = 'b14359cf5341a37028996a5002cf731a49312454'
 version = '0.8.0-alpha.3'
 
 [dependencies.grandpa-primitives]
 git = 'https://github.com/paritytech/substrate.git'
 package = 'sp-finality-grandpa'
-rev = '013c1ee167354a08283fb69915fda56a62fee943'
-version = '2.0.0-alpha.3'
+rev = 'b14359cf5341a37028996a5002cf731a49312454'
+version = '2.0.0-alpha.5'
+
+[dependencies.node-cli]
+git = 'https://github.com/paritytech/substrate.git'
+package = 'node-cli'
+rev = 'b14359cf5341a37028996a5002cf731a49312454'
+version = '2.0.0-alpha.5'
+
+[dependencies.sc-client-api]
+git = 'https://github.com/paritytech/substrate.git'
+package = 'sc-client-api'
+rev = 'b14359cf5341a37028996a5002cf731a49312454'
+version = '2.0.0-alpha.5'
 
 [dependencies.suntime]
 path = '../runtime'
-version = '2.0.0-alpha.3'
+version = '0.0.1'
 
 [dependencies.sc-basic-authorship]
 git = 'https://github.com/paritytech/substrate.git'
-rev = '013c1ee167354a08283fb69915fda56a62fee943'
+rev = 'b14359cf5341a37028996a5002cf731a49312454'
 version = '0.8.0-alpha.3'
 
 [dependencies.sc-cli]
 git = 'https://github.com/paritytech/substrate.git'
-rev = '013c1ee167354a08283fb69915fda56a62fee943'
+rev = 'b14359cf5341a37028996a5002cf731a49312454'
 version = '0.8.0-alpha.3'
 
 [dependencies.sc-client]
 git = 'https://github.com/paritytech/substrate.git'
-rev = '013c1ee167354a08283fb69915fda56a62fee943'
+rev = 'b14359cf5341a37028996a5002cf731a49312454'
 version = '0.8.0-alpha.3'
 
 [dependencies.sc-consensus-aura]
 git = 'https://github.com/paritytech/substrate.git'
-rev = '013c1ee167354a08283fb69915fda56a62fee943'
+rev = 'b14359cf5341a37028996a5002cf731a49312454'
 version = '0.8.0-alpha.3'
 
 [dependencies.sc-executor]
 git = 'https://github.com/paritytech/substrate.git'
-rev = '013c1ee167354a08283fb69915fda56a62fee943'
+rev = 'b14359cf5341a37028996a5002cf731a49312454'
 version = '0.8.0-alpha.3'
 
 [dependencies.sc-network]
 git = 'https://github.com/paritytech/substrate.git'
-rev = '013c1ee167354a08283fb69915fda56a62fee943'
+rev = 'b14359cf5341a37028996a5002cf731a49312454'
 version = '0.8.0-alpha.3'
 
 [dependencies.sc-service]
 git = 'https://github.com/paritytech/substrate.git'
-rev = '013c1ee167354a08283fb69915fda56a62fee943'
+rev = 'b14359cf5341a37028996a5002cf731a49312454'
 version = '0.8.0-alpha.3'
 
 [dependencies.sc-transaction-pool]
 git = 'https://github.com/paritytech/substrate.git'
-rev = '013c1ee167354a08283fb69915fda56a62fee943'
-version = '2.0.0-alpha.3'
+rev = 'b14359cf5341a37028996a5002cf731a49312454'
+version = '2.0.0-alpha.5'
 
 [dependencies.sp-consensus]
 git = 'https://github.com/paritytech/substrate.git'
-rev = '013c1ee167354a08283fb69915fda56a62fee943'
+rev = 'b14359cf5341a37028996a5002cf731a49312454'
 version = '0.8.0-alpha.3'
 
 [dependencies.sp-consensus-aura]
 git = 'https://github.com/paritytech/substrate.git'
-rev = '013c1ee167354a08283fb69915fda56a62fee943'
+rev = 'b14359cf5341a37028996a5002cf731a49312454'
 version = '0.8.0-alpha.3'
 
 [dependencies.sp-core]
 git = 'https://github.com/paritytech/substrate.git'
-rev = '013c1ee167354a08283fb69915fda56a62fee943'
-version = '2.0.0-alpha.3'
+rev = 'b14359cf5341a37028996a5002cf731a49312454'
+version = '2.0.0-alpha.5'
 
 [dependencies.sp-inherents]
 git = 'https://github.com/paritytech/substrate.git'
-rev = '013c1ee167354a08283fb69915fda56a62fee943'
-version = '2.0.0-alpha.3'
+rev = 'b14359cf5341a37028996a5002cf731a49312454'
+version = '2.0.0-alpha.5'
 
 [dependencies.sp-runtime]
 git = 'https://github.com/paritytech/substrate.git'
-rev = '013c1ee167354a08283fb69915fda56a62fee943'
-version = '2.0.0-alpha.3'
+rev = 'b14359cf5341a37028996a5002cf731a49312454'
+version = '2.0.0-alpha.5'
 
 [dependencies.sp-transaction-pool]
 git = 'https://github.com/paritytech/substrate.git'
-rev = '013c1ee167354a08283fb69915fda56a62fee943'
-version = '2.0.0-alpha.3'
+rev = 'b14359cf5341a37028996a5002cf731a49312454'
+version = '2.0.0-alpha.5'

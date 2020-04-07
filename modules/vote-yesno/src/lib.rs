@@ -12,7 +12,8 @@ mod tests;
 
 use codec::Codec;
 use frame_support::{
-    decl_error, decl_event, decl_module, decl_storage, ensure, traits::Get, Parameter,
+    decl_error, decl_event, decl_module, decl_storage, ensure, traits::Get,
+    weights::SimpleDispatchInfo, Parameter,
 };
 use frame_system::{self as system, ensure_signed};
 use sp_runtime::{
@@ -116,28 +117,28 @@ decl_storage! {
     trait Store for Module<T: Trait> as VoteYesNo {
         /// VoteId storage helper for unique id generation, see issue #62
         pub VoteIdCounter get(vote_id_counter): double_map
-            hasher(blake2_256) OrgId<T>,
-            hasher(blake2_256) ShareId<T>  => T::VoteId;
+            hasher(opaque_blake2_256) OrgId<T>,
+            hasher(opaque_blake2_256) ShareId<T>  => T::VoteId;
 
         /// Total signal available for each member for the vote in question
         pub MintedSignal get(minted_signal): double_map
-            hasher(blake2_256) OrgShareVotePrefixKey<OrgId<T>, ShareId<T>, T::VoteId>,
-            hasher(blake2_256) T::AccountId  => Option<T::Signal>;
+            hasher(opaque_blake2_256) OrgShareVotePrefixKey<OrgId<T>, ShareId<T>, T::VoteId>,
+            hasher(opaque_blake2_256) T::AccountId  => Option<T::Signal>;
 
         /// The state of a vote (separate from outcome so that this can be purged if Outcome is not Voting)
         pub VoteStates get(fn vote_states): double_map
-            hasher(blake2_256) OrgSharePrefixKey<OrgId<T>, ShareId<T>>,
-            hasher(blake2_256) T::VoteId => Option<VoteState<T::Signal, Permill, T::BlockNumber>>;
+            hasher(opaque_blake2_256) OrgSharePrefixKey<OrgId<T>, ShareId<T>>,
+            hasher(opaque_blake2_256) T::VoteId => Option<VoteState<T::Signal, Permill, T::BlockNumber>>;
 
         /// Tracks all votes
         pub VoteLogger get(fn vote_logger): double_map
-        hasher(blake2_256) OrgShareVotePrefixKey<OrgId<T>, ShareId<T>, T::VoteId>,
-        hasher(blake2_256) T::AccountId  => Option<YesNoVote<T::Signal>>;
+        hasher(opaque_blake2_256) OrgShareVotePrefixKey<OrgId<T>, ShareId<T>, T::VoteId>,
+        hasher(opaque_blake2_256) T::AccountId  => Option<YesNoVote<T::Signal>>;
 
         /// The outcome of a vote
         pub VoteOutcome get(fn vote_outcome): double_map
-            hasher(blake2_256) OrgSharePrefixKey<OrgId<T>, ShareId<T>>,
-            hasher(blake2_256) T::VoteId => Option<Outcome>;
+            hasher(opaque_blake2_256) OrgSharePrefixKey<OrgId<T>, ShareId<T>>,
+            hasher(opaque_blake2_256) T::VoteId => Option<Outcome>;
     }
 }
 
@@ -148,7 +149,8 @@ decl_module! {
 
         const DefaultVoteLength: T::BlockNumber = T::DefaultVoteLength::get();
 
-        fn create_vote(
+        #[weight = SimpleDispatchInfo::zero()]
+        pub fn create_vote(
             origin,
             organization: OrgId<T>,
             share_id: ShareId<T>,
@@ -163,7 +165,8 @@ decl_module! {
             Ok(())
         }
 
-        fn submit_vote(
+        #[weight = SimpleDispatchInfo::zero()]
+        pub fn submit_vote(
             origin,
             organization: OrgId<T>,
             share_id: ShareId<T>,

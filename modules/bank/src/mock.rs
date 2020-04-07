@@ -36,6 +36,7 @@ parameter_types! {
     pub const MaximumBlockWeight: Weight = 1024;
     pub const MaximumBlockLength: u32 = 2 * 1024;
     pub const AvailableBlockRatio: Perbill = Perbill::one();
+    pub const ReservationLimit: u32 = 10000;
     pub const DefaultVoteLength: u64 = 10;
     pub const PollingFrequency: u64 = 10;
 }
@@ -59,9 +60,6 @@ impl frame_system::Trait for Test {
     type AccountData = pallet_balances::AccountData<u64>;
     type OnNewAccount = ();
     type OnKilledAccount = ();
-}
-parameter_types! {
-    pub const ReservationLimit: u32 = 10000;
 }
 impl shares_atomic::Trait for Test {
     type Event = TestEvent;
