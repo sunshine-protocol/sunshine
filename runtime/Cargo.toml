@@ -41,12 +41,20 @@ std = [
     'transaction-payment/std',
     'shares-atomic/std',
     'vote-yesno/std',
+    'pallet-indices/std',
     'bank/std',
 ]
 [dependencies.aura]
 default-features = false
 git = 'https://github.com/paritytech/substrate.git'
 package = 'pallet-aura'
+rev='8c1858048148c1c717123b0e4d360f8ad1be5bf2'
+version = '2.0.0-alpha.5'
+
+[dependencies.pallet-indices]
+default-features = false
+git = 'https://github.com/paritytech/substrate.git'
+package = 'pallet-indices'
 rev='8c1858048148c1c717123b0e4d360f8ad1be5bf2'
 version = '2.0.0-alpha.5'
 

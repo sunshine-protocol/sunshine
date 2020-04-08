@@ -12,12 +12,10 @@ use grandpa::AuthorityList as GrandpaAuthorityList;
 use sp_api::impl_runtime_apis;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::OpaqueMetadata;
-use sp_runtime::traits::{
-    BlakeTwo256, Block as BlockT, ConvertInto, IdentifyAccount, IdentityLookup, Verify,
-};
+use sp_runtime::traits::{BlakeTwo256, Block as BlockT, ConvertInto, IdentifyAccount, Verify};
 use sp_runtime::{
-    create_runtime_str, generic, impl_opaque_keys, transaction_validity::TransactionValidity,
-    ApplyExtrinsicResult, MultiSignature,
+    create_runtime_str, generic, impl_opaque_keys, traits::StaticLookup,
+    transaction_validity::TransactionValidity, ApplyExtrinsicResult, MultiSignature,
 };
 use sp_std::prelude::*;
 #[cfg(feature = "std")]
@@ -86,8 +84,8 @@ pub mod opaque {
 
 /// This runtime version.
 pub const VERSION: RuntimeVersion = RuntimeVersion {
-    spec_name: create_runtime_str!("node-template"),
-    impl_name: create_runtime_str!("node-template"),
+    spec_name: create_runtime_str!("sun-spec"),
+    impl_name: create_runtime_str!("sun-time"),
     authoring_version: 1,
     spec_version: 1,
     impl_version: 1,
@@ -126,7 +124,7 @@ impl system::Trait for Runtime {
     /// The aggregated dispatch type that is available for extrinsics.
     type Call = Call;
     /// The lookup mechanism to get account ID from whatever is passed in dispatchers.
-    type Lookup = IdentityLookup<AccountId>;
+    type Lookup = Indices;
     /// The index type for storing how many extrinsics an account has signed.
     type Index = Index;
     /// The index type for blocks.
@@ -169,6 +167,17 @@ impl aura::Trait for Runtime {
 
 impl grandpa::Trait for Runtime {
     type Event = Event;
+}
+
+parameter_types! {
+    pub const IndexDeposit: Balance = 1u128;
+}
+
+impl pallet_indices::Trait for Runtime {
+    type AccountIndex = AccountIndex;
+    type Event = Event;
+    type Currency = Balances;
+    type Deposit = IndexDeposit;
 }
 
 parameter_types! {
@@ -240,7 +249,7 @@ impl vote_yesno::Trait for Runtime {
     type Event = Event;
     type Signal = Signal;
     type VoteId = VoteId;
-    type ShareData = Shares;
+    type ShareData = SharesAtomic;
     type DefaultVoteLength = DefaultVoteLength;
 }
 pub use bank;
@@ -249,8 +258,8 @@ parameter_types! {
 }
 impl bank::Trait for Runtime {
     type Event = Event;
-    type ShareData = Shares;
-    type BinaryVoteMachine = VoteYesno;
+    type ShareData = SharesAtomic;
+    type BinaryVoteMachine = VoteYesNo;
     type PollingFrequency = PollingFrequency;
 }
 
@@ -268,15 +277,16 @@ construct_runtime!(
         Balances: balances::{Module, Call, Storage, Config<T>, Event<T>},
         TransactionPayment: transaction_payment::{Module, Storage},
         Sudo: sudo::{Module, Call, Config<T>, Storage, Event<T>},
+        Indices: pallet_indices::{Module, Call, Storage, Config<T>, Event<T>},
         // My modules
-        Shares: shares_atomic::{Module, Call, Config<T>, Storage, Event<T>},
-        VoteYesno: vote_yesno::{Module, Call, Storage, Event<T>},
+        SharesAtomic: shares_atomic::{Module, Call, Config<T>, Storage, Event<T>},
+        VoteYesNo: vote_yesno::{Module, Call, Storage, Event<T>},
         Bank: bank::{Module, Call, Config<T>, Storage, Event<T>},
     }
 );
 
 /// The address format for describing accounts.
-pub type Address = AccountId;
+pub type Address = <Indices as StaticLookup>::Source;
 /// Block header type as expected by this runtime.
 pub type Header = generic::Header<BlockNumber, BlakeTwo256>;
 /// Block type as expected by this runtime.
@@ -292,10 +302,11 @@ pub type SignedExtra = (
     system::CheckEra<Runtime>,
     system::CheckNonce<Runtime>,
     system::CheckWeight<Runtime>,
-    transaction_payment::ChargeTransactionPayment<Runtime>,
 );
 /// Unchecked extrinsic type as expected by this runtime.
 pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<Address, Call, Signature, SignedExtra>;
+/// The payload being signed in transactions.
+pub type SignedPayload = generic::SignedPayload<Call, SignedExtra>;
 /// Extrinsic type that has already been checked.
 pub type CheckedExtrinsic = generic::CheckedExtrinsic<AccountId, Call, SignedExtra>;
 /// Executive: handles dispatch to the various modules.
