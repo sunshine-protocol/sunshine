@@ -16,18 +16,6 @@ impl_outer_origin! {
     pub enum Origin for Test where system = frame_system {}
 }
 
-mod vote_yesno {
-    pub use crate::Event;
-}
-
-impl_outer_event! {
-    pub enum TestEvent for Test {
-        system<T>,
-        shares_atomic<T>,
-        vote_yesno<T>,
-    }
-}
-
 #[derive(Clone, Eq, PartialEq)]
 pub struct Test;
 parameter_types! {
@@ -77,5 +65,17 @@ impl Trait for Test {
     type ShareData = shares_atomic::Module<Test>;
     type DefaultVoteLength = DefaultVoteLength;
 }
+
+mod vote_yesno {
+    pub use crate::Event;
+}
+
+impl_outer_event! {
+    pub enum TestEvent for Test {
+        system<T>,
+        shares_atomic<T>,
+        vote_yesno<T>,
+    }
+}
+
 pub type VoteYesNo = Module<Test>;
-pub type System = system::Module<Test>;

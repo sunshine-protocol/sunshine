@@ -328,10 +328,6 @@ impl_runtime_apis! {
             Executive::apply_extrinsic(extrinsic)
         }
 
-        fn apply_trusted_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyExtrinsicResult {
-            Executive::apply_trusted_extrinsic(extrinsic)
-        }
-
         fn finalize_block() -> <Block as BlockT>::Header {
             Executive::finalize_block()
         }
@@ -353,8 +349,8 @@ impl_runtime_apis! {
     }
 
     impl sp_transaction_pool::runtime_api::TaggedTransactionQueue<Block> for Runtime {
-        fn validate_transaction(tx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
-            Executive::validate_transaction(tx)
+        fn validate_transaction(source: sp_runtime::transaction_validity::TransactionSource, uxt: <Block as BlockT>::Extrinsic) -> TransactionValidity {
+            Executive::validate_transaction(source, uxt)
         }
     }
 

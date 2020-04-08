@@ -1,6 +1,7 @@
 #![allow(clippy::string_lit_as_bytes)]
 #![allow(clippy::redundant_closure_call)]
 #![cfg_attr(not(feature = "std"), no_std)]
+//! back to [`util`](../util/index.html) for all object and trait definitions
 
 #[cfg(test)]
 mod mock;
@@ -8,7 +9,10 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-use frame_support::{decl_error, decl_event, decl_module, decl_storage, ensure, traits::Get};
+use frame_support::{
+    decl_error, decl_event, decl_module, decl_storage, ensure, traits::Get,
+    weights::SimpleDispatchInfo,
+};
 use frame_system::{self as system, ensure_signed};
 use sp_runtime::{
     traits::Zero,
@@ -19,7 +23,8 @@ use sp_runtime::{
 use sp_std::prelude::*;
 use util::{
     organization::Organization,
-    proposal::{ProposalIndex, ProposalStage, ProposalType, SimplePollingOutcome},
+    proposal::{ProposalIndex, ProposalStage, ProposalType},
+    schedule::{ScheduledVote, SimplePollingOutcome, VoteSchedule},
     traits::{
         Approved,
         GenerateUniqueID,
@@ -43,7 +48,7 @@ use util::{
         VoteScheduler,
     },
     uuid::{OrgSharePrefixKey, OrgShareVotePrefixKey},
-    voteyesno::{ScheduledVote, ThresholdConfig, VoteSchedule},
+    voteyesno::ThresholdConfig,
 };
 
 /// The organization identifier type
@@ -153,7 +158,7 @@ decl_storage! {
         /// The account that can change the constitution
         /// - by default the summoner
         OrganizationSupervisor get(fn organization_supervisor):
-            map hasher(blake2_256) OrgId<T> => Option<T::AccountId>;
+            map hasher(opaque_blake2_256) OrgId<T> => Option<T::AccountId>;
 
         /// The identity generator nonce for OrgId<T>
         OrganizationIdentityNonce get(fn organization_identity_nonce): OrgId<T>;
@@ -162,15 +167,15 @@ decl_storage! {
         OrganizationCount get(fn organization_count): u32;
 
         OrganizationState get(fn organization_state): map
-            hasher(blake2_256) OrgId<T> => Option<Organization<ShareId<T>>>;
+            hasher(opaque_blake2_256) OrgId<T> => Option<Organization<ShareId<T>>>;
 
         /// This constitution should be used to guide voting
         /// - it is also the main anchor for any organization and therefore defines registration
         ValueConstitution get(fn value_constitution):
-            map hasher(blake2_256) OrgId<T> => Option<T::Hash>;
+            map hasher(opaque_blake2_256) OrgId<T> => Option<T::Hash>;
 
         /// The total number of proposals for an organization, also used as the nonce
-        ProposalCount get(fn proposal_count): map hasher(blake2_256) OrgId<T> => ProposalIndex;
+        ProposalCount get(fn proposal_count): map hasher(opaque_blake2_256) OrgId<T> => ProposalIndex;
 
         /// Every time a proposal is added, it should be added to this
         /// - this storage item is used in on_finalize to poll all active proposals (see `PollActiveProposal` trait)
@@ -178,31 +183,31 @@ decl_storage! {
 
         /// Content associated with a specific proposal
         ProposalContentHash get(fn proposal_content_hash):
-            double_map hasher(blake2_256) OrgId<T>, hasher(blake2_256) ProposalIndex => Option<T::Hash>;
+            double_map hasher(opaque_blake2_256) OrgId<T>, hasher(opaque_blake2_256) ProposalIndex => Option<T::Hash>;
 
         /// This storage map encodes the default threshold for share types, proposal types
         /// - this is a helper for building the default stored below
         DefaultThresholdForShareIdProposalType get(fn default_threshold_for_share_id_proposal_type):
-            double_map hasher(blake2_256) OrgSharePrefixKey<OrgId<T>, ShareId<T>>, hasher(blake2_256) ProposalType
+            double_map hasher(opaque_blake2_256) OrgSharePrefixKey<OrgId<T>, ShareId<T>>, hasher(opaque_blake2_256) ProposalType
             => Option<ThresholdConfig<Permill>>;
 
         /// This is the default approval order for shares for an organization, based on proposal types
         /// - this should not be used by itself for scheduling vote sequences, but allows us to easily build the other defaults
         ProposalDefaultShareApprovalOrderForOrganization get(fn proposal_default_share_approval_order_for_organization):
-            double_map hasher(blake2_256) OrgId<T>, hasher(blake2_256) ProposalType => Option<Vec<ShareId<T>>>;
+            double_map hasher(opaque_blake2_256) OrgId<T>, hasher(opaque_blake2_256) ProposalType => Option<Vec<ShareId<T>>>;
 
         /// This default may use the above default to set the default vote schedule for an organization
         ProposalDefaultVoteSchedule get(fn proposal_default_vote_schedule_for_organization):
-            double_map hasher(blake2_256) OrgId<T>, hasher(blake2_256) ProposalType => Option<Vec<ScheduledVote<ShareId<T>, Permill>>>;
+            double_map hasher(opaque_blake2_256) OrgId<T>, hasher(opaque_blake2_256) ProposalType => Option<Vec<ScheduledVote<ShareId<T>, Permill>>>;
 
         /// TODO: replace with VoteSchedule for codomain
         LiveVoteSequences get(fn live_vote_sequences):
-            double_map hasher(blake2_256) OrgId<T>, hasher(blake2_256) ProposalIndex => Option<VoteSchedule<ShareId<T>, VoteId<T>, Permill>>;
+            double_map hasher(opaque_blake2_256) OrgId<T>, hasher(opaque_blake2_256) ProposalIndex => Option<VoteSchedule<ShareId<T>, VoteId<T>, Permill>>;
 
         /// Track the state of a proposal for a given organization
         /// TODO: replace with OutcomeContext
         ProposalState get(fn proposal_state):
-            double_map hasher(blake2_256) OrgId<T>, hasher(blake2_256) ProposalIndex => Option<ProposalStage>;
+            double_map hasher(opaque_blake2_256) OrgId<T>, hasher(opaque_blake2_256) ProposalIndex => Option<ProposalStage>;
     }
     add_extra_genesis {
         config(omnipotent_key): T::AccountId;
@@ -235,11 +240,12 @@ decl_module! {
                                 Self::deposit_event(RawEvent::ProposalPassed(*organization, *proposal_index));
                             },
                         }
-                    } // no error handling for error for now
+                    }
                 });
             }
         }
 
+        #[weight = SimpleDispatchInfo::zero()]
         fn register_organization(
             origin,
             initial_supervisor: Option<T::AccountId>,
@@ -279,6 +285,7 @@ decl_module! {
         }
 
         /// Update the value constitution from the organization's constitution's controller account
+        #[weight = SimpleDispatchInfo::zero()]
         fn update_value_constitution(
             origin,
             organization: OrgId<T>,
@@ -294,6 +301,7 @@ decl_module! {
             Ok(())
         }
 
+        #[weight = SimpleDispatchInfo::zero()]
         fn register_shares_in_organization(
             origin,
             organization: OrgId<T>,
@@ -315,6 +323,7 @@ decl_module! {
             Ok(())
         }
 
+        #[weight = SimpleDispatchInfo::zero()]
         fn create_single_vote_for_existing_share_group_in_organization(
             origin,
             organization: OrgId<T>,
@@ -349,6 +358,7 @@ decl_module! {
             Ok(())
         }
 
+        #[weight = SimpleDispatchInfo::zero()]
         fn set_organization_share_id_proposal_type_default_threshold(
             origin,
             organization: OrgId<T>,
@@ -381,7 +391,8 @@ decl_module! {
             Ok(())
         }
 
-        // minimal vote-based configuration for the proposal_type
+        /// Minimal vote-based configuration for the proposal_type
+        #[weight = SimpleDispatchInfo::zero()]
         fn set_most_basic_vote_requirements(
             origin,
             organization: OrgId<T>,
@@ -398,6 +409,7 @@ decl_module! {
             Ok(())
         }
 
+        #[weight = SimpleDispatchInfo::zero()]
         fn make_proposal(
             origin,
             organization: OrgId<T>,

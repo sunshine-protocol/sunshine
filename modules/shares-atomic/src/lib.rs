@@ -1,7 +1,8 @@
 #![allow(clippy::string_lit_as_bytes)]
 #![allow(clippy::redundant_closure_call)]
-#![allow(clippy::type_complexity)] // noted that I have lots of generics...
+#![allow(clippy::type_complexity)]
 #![cfg_attr(not(feature = "std"), no_std)]
+//! back to [`util`](../util/index.html) for all object and trait definitions
 
 #[cfg(test)]
 mod mock;
@@ -20,7 +21,8 @@ use util::{
 
 use codec::Codec;
 use frame_support::{
-    decl_error, decl_event, decl_module, decl_storage, ensure, traits::Get, Parameter,
+    decl_error, decl_event, decl_module, decl_storage, ensure, traits::Get,
+    weights::SimpleDispatchInfo, Parameter,
 };
 use frame_system::{self as system, ensure_signed};
 use sp_runtime::{
@@ -114,18 +116,18 @@ decl_error! {
 decl_storage! {
     trait Store for Module<T: Trait<I>, I: Instance=DefaultInstance> as Shares {
         pub ShareIdCounter get(share_id_counter):
-            map hasher(blake2_256) T::OrgId => T::ShareId;
+            map hasher(opaque_blake2_256) T::OrgId => T::ShareId;
 
         /// Total share issuance for the share type with `ShareId`
         /// also the main point of registration for (OrgId, ShareId) pairs (see `GenerateUniqueId`)
         pub TotalIssuance get(fn total_issuance) build(|config: &GenesisConfig<T, I>| {
             config.total_issuance.clone()
-        }): double_map hasher(blake2_256) T::OrgId, hasher(blake2_256) T::ShareId => Option<T::Share>;
+        }): double_map hasher(opaque_blake2_256) T::OrgId, hasher(opaque_blake2_256) T::ShareId => Option<T::Share>;
 
         /// The total shareholders; must be kept in sync with `Profile` and `TotalIssuance`
         pub ShareHolders get(fn share_holders) build(|config: &GenesisConfig<T, I>| {
             config.shareholder_membership.clone()
-        }): double_map hasher(blake2_256) T::OrgId, hasher(blake2_256) T::ShareId => Option<Vec<T::AccountId>>;
+        }): double_map hasher(opaque_blake2_256) T::OrgId, hasher(opaque_blake2_256) T::ShareId => Option<Vec<T::AccountId>>;
 
         /// The ShareProfile (use module type once `StoredMap` is added in #4820)
         pub Profile get(fn profile) build(|config: &GenesisConfig<T, I>| {
@@ -134,7 +136,7 @@ decl_storage! {
                 let org_share_id = OrgSharePrefixKey::new(*org, *id);
                 (org_share_id, who.clone(), share_profile)
             }).collect::<Vec<_>>()
-        }): double_map hasher(blake2_256) OrgSharePrefixKey<T::OrgId, T::ShareId>, hasher(blake2_256) T::AccountId => Option<AtomicShareProfile<T::Share>>;
+        }): double_map hasher(opaque_blake2_256) OrgSharePrefixKey<T::OrgId, T::ShareId>, hasher(opaque_blake2_256) T::AccountId => Option<AtomicShareProfile<T::Share>>;
     }
     add_extra_genesis {
         config(membership_shares): Vec<(T::OrgId, T::ShareId, T::AccountId, T::Share)>;
@@ -154,6 +156,7 @@ decl_module! {
 
         // WARNING
         // access needs to be permissioned, never callable in production by anyone
+        #[weight = SimpleDispatchInfo::zero()]
         fn register_shares(origin, organization: T::OrgId, share_id: T::ShareId, genesis: Vec<(T::AccountId, T::Share)>) -> DispatchResult {
             let _ = ensure_signed(origin)?;
             let assigned_share_id = Self::register(organization, share_id, genesis.into())?;
@@ -163,6 +166,7 @@ decl_module! {
 
         // WARNING
         // access needs to be permissioned, never callable in production by anyone
+        #[weight = SimpleDispatchInfo::zero()]
         fn lock_shares(origin, organization: T::OrgId, share_id: T::ShareId, who: T::AccountId) -> DispatchResult {
             let _ = ensure_signed(origin)?;
             Self::lock_profile(organization, share_id, &who)?;
@@ -172,6 +176,7 @@ decl_module! {
 
         // WARNING
         // access needs to be permissioned, never callable in production by anyone
+        #[weight = SimpleDispatchInfo::zero()]
         fn unlock_shares(origin, organization: T::OrgId, share_id: T::ShareId, who: T::AccountId) -> DispatchResult {
             let _ = ensure_signed(origin)?;
             Self::unlock_profile(organization, share_id, &who)?;
@@ -181,6 +186,7 @@ decl_module! {
 
         // WARNING
         // access needs to be permissioned, never callable in production by anyone
+        #[weight = SimpleDispatchInfo::zero()]
         fn reserve_shares(origin, organization: T::OrgId, share_id: T::ShareId, who: T::AccountId) -> DispatchResult {
             let _ = ensure_signed(origin)?;
             let reservation_context = Self::reserve(organization, share_id, &who, None)?;
@@ -191,6 +197,7 @@ decl_module! {
 
         // WARNING
         // access needs to be permissioned, never callable in production by anyone
+        #[weight = SimpleDispatchInfo::zero()]
         fn unreserve_shares(origin, organization: T::OrgId, share_id: T::ShareId, who: T::AccountId) -> DispatchResult {
             let _ = ensure_signed(origin)?;
             let reservation_context = Self::unreserve(organization, share_id, &who, None)?;
@@ -201,6 +208,7 @@ decl_module! {
 
         // WARNING
         // access needs to be permissioned, never callable in production by anyone
+        #[weight = SimpleDispatchInfo::zero()]
         fn issue_shares(origin, organization: T::OrgId, share_id: T::ShareId, who: T::AccountId, shares: T::Share) -> DispatchResult {
             let _ = ensure_signed(origin)?;
             Self::issue(organization, share_id, &who, shares)?;
@@ -210,6 +218,7 @@ decl_module! {
 
         // WARNING
         // access needs to be permissioned, never callable in production by anyone
+        #[weight = SimpleDispatchInfo::zero()]
         fn burn_shares(origin, organization: T::OrgId, share_id: T::ShareId, who: T::AccountId, shares: T::Share) -> DispatchResult {
             let _ = ensure_signed(origin)?;
             Self::burn(organization, share_id, &who, shares)?;
@@ -272,7 +281,6 @@ impl<T: Trait<I>, I: Instance> GroupMembership<T::AccountId> for Module<T, I> {
 }
 
 impl<T: Trait<I>, I: Instance> ShareRegistration<T::AccountId> for Module<T, I> {
-    // provide access to these types from other modules
     type OrgId = T::OrgId;
     type ShareId = T::ShareId;
     type Shares = T::Share;

@@ -1,6 +1,5 @@
 //! Service and ServiceFactory implementation. Specialized wrapper over substrate service.
 
-use grandpa::{self, FinalityProofProvider as GrandpaFinalityProofProvider};
 use sc_client::LongestChain;
 use sc_executor::native_executor_instance;
 pub use sc_executor::NativeExecutor;
@@ -9,7 +8,7 @@ use sp_consensus_aura::sr25519::AuthorityPair as AuraPair;
 use sp_inherents::InherentDataProviders;
 use std::sync::Arc;
 use std::time::Duration;
-use suntime::{self, opaque::Block, GenesisConfig, RuntimeApi};
+use suntime::{self, opaque::Block, RuntimeApi};
 
 // Our native executor instance.
 native_executor_instance!(
@@ -24,6 +23,7 @@ native_executor_instance!(
 /// be able to perform chain operations.
 macro_rules! new_full_start {
     ($config:expr) => {{
+        use std::sync::Arc;
         let mut import_setup = None;
         let inherent_data_providers = sp_inherents::InherentDataProviders::new();
 
@@ -46,7 +46,7 @@ macro_rules! new_full_start {
                 .ok_or_else(|| sc_service::Error::SelectChainRequired)?;
 
             let (grandpa_block_import, grandpa_link) =
-                grandpa::block_import(client.clone(), &*client, select_chain)?;
+                grandpa::block_import(client.clone(), &(client.clone() as Arc<_>), select_chain)?;
 
             let aura_block_import = sc_consensus_aura::AuraBlockImport::<_, _, _, AuraPair>::new(
                 grandpa_block_import.clone(),
@@ -72,20 +72,20 @@ macro_rules! new_full_start {
 }
 
 /// Builds a new service for a full client.
-pub fn new_full(
-    config: Configuration<GenesisConfig>,
-) -> Result<impl AbstractService, ServiceError> {
-    let is_authority = config.roles.is_authority();
-    let force_authoring = config.force_authoring;
-    let name = config.name.clone();
-    let disable_grandpa = config.disable_grandpa;
+pub fn new_full(config: Configuration) -> Result<impl AbstractService, ServiceError> {
+    let (role, force_authoring, name, disable_grandpa) = (
+        config.role.clone(),
+        config.force_authoring,
+        config.impl_name.clone(),
+        config.disable_grandpa,
+    );
+
+    let (builder, mut import_setup, inherent_data_providers) = new_full_start!(config);
 
     // sentry nodes announce themselves as authorities to the network
     // and should run the same protocols authorities do, but it should
     // never actively participate in any consensus process.
-    let participates_in_consensus = is_authority && !config.sentry_mode;
-
-    let (builder, mut import_setup, inherent_data_providers) = new_full_start!(config);
+    // let participates_in_consensus = is_authority && !config.sentry_mode;
 
     let (block_import, grandpa_link) = import_setup.take().expect(
         "Link Half and Block Import are present for Full Services or setup failed before. qed",
@@ -93,11 +93,13 @@ pub fn new_full(
 
     let service = builder
         .with_finality_proof_provider(|client, backend| {
-            Ok(Arc::new(GrandpaFinalityProofProvider::new(backend, client)) as _)
+            // GenesisAuthoritySetProvider is implemented for StorageAndProofProvider
+            let provider = client as Arc<dyn grandpa::StorageAndProofProvider<_, _>>;
+            Ok(Arc::new(grandpa::FinalityProofProvider::new(backend, provider)) as _)
         })?
         .build()?;
 
-    if participates_in_consensus {
+    if role.is_authority() {
         let proposer =
             sc_basic_authorship::ProposerFactory::new(service.client(), service.transaction_pool());
 
@@ -106,6 +108,7 @@ pub fn new_full(
             .select_chain()
             .ok_or(ServiceError::SelectChainRequired)?;
 
+        use sc_client_api::ExecutorProvider;
         let can_author_with =
             sp_consensus::CanAuthorWithNativeVersion::new(client.executor().clone());
 
@@ -129,7 +132,7 @@ pub fn new_full(
 
     // if the node isn't actively participating in consensus then it doesn't
     // need a keystore, regardless of which protocol we use below.
-    let keystore = if participates_in_consensus {
+    let keystore = if role.is_authority() {
         Some(service.keystore())
     } else {
         None
@@ -139,10 +142,10 @@ pub fn new_full(
         // FIXME #1578 make this available through chainspec
         gossip_duration: Duration::from_millis(333),
         justification_period: 512,
-        name: Some(name),
+        name: Some(name.to_string()),
         observer_enabled: false,
         keystore,
-        is_authority,
+        is_authority: role.is_network_authority(),
     };
 
     let enable_grandpa = !disable_grandpa;
@@ -158,9 +161,9 @@ pub fn new_full(
             link: grandpa_link,
             network: service.network(),
             inherent_data_providers,
-            on_exit: service.on_exit(),
             telemetry_on_connect: Some(service.telemetry_on_connect_stream()),
             voting_rule: grandpa::VotingRulesBuilder::default().build(),
+            prometheus_registry: service.prometheus_registry(),
         };
 
         // the GRANDPA voter task is considered infallible, i.e.
@@ -178,9 +181,7 @@ pub fn new_full(
 }
 
 /// Builds a new service for a light client.
-pub fn new_light(
-    config: Configuration<GenesisConfig>,
-) -> Result<impl AbstractService, ServiceError> {
+pub fn new_light(config: Configuration) -> Result<impl AbstractService, ServiceError> {
     let inherent_data_providers = InherentDataProviders::new();
 
     ServiceBuilder::new_light::<Block, RuntimeApi, Executor>(config)?
@@ -207,7 +208,7 @@ pub fn new_light(
                 let grandpa_block_import = grandpa::light_block_import(
                     client.clone(),
                     backend,
-                    &*client.clone(),
+                    &(client.clone() as Arc<_>),
                     Arc::new(fetch_checker),
                 )?;
                 let finality_proof_import = grandpa_block_import.clone();
@@ -227,7 +228,9 @@ pub fn new_light(
             },
         )?
         .with_finality_proof_provider(|client, backend| {
-            Ok(Arc::new(GrandpaFinalityProofProvider::new(backend, client)) as _)
+            // GenesisAuthoritySetProvider is implemented for StorageAndProofProvider
+            let provider = client as Arc<dyn grandpa::StorageAndProofProvider<_, _>>;
+            Ok(Arc::new(grandpa::FinalityProofProvider::new(backend, provider)) as _)
         })?
         .build()
 }

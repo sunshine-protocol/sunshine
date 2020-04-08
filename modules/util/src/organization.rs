@@ -5,12 +5,13 @@ use sp_runtime::RuntimeDebug;
 use sp_std::prelude::*;
 
 #[derive(PartialEq, Eq, Default, Clone, Encode, Decode, RuntimeDebug)]
+/// The struct to track the `ShareId`s and `ProposalIndex` associated with an organization
 pub struct Organization<ShareId> {
     /// The shares registered by this organization
     shares: Vec<ShareId>,
     /// The proposals that are under consideration for this organization
     proposals: Vec<ProposalIndex>,
-} // could add more share group distinctions
+}
 
 impl<ShareId: Parameter> Organization<ShareId> {
     pub fn new(admin_share_id: ShareId) -> Self {
@@ -34,6 +35,8 @@ impl<ShareId: Parameter> Organization<ShareId> {
         }
     }
 
+    /// Consumes the existing organization and outputs a new organization that
+    /// includes the new proposal index
     pub fn add_proposal_index(self, proposal_index: ProposalIndex) -> Self {
         let mut new_proposals = self.clone().proposals;
         new_proposals.push(proposal_index);
