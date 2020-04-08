@@ -4,7 +4,6 @@ panic = 'unwind'
 [workspace]
 members = [
     'node',
-    'subxt',
     'modules/util',
     'modules/shares-atomic',
     'modules/vote-yesno',
