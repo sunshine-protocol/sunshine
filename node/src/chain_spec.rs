@@ -14,8 +14,8 @@ use suntime::{
     Share,
     ShareId,
     SharesAtomicConfig,
-    SudoConfig,
     Signature,
+    SudoConfig,
     SystemConfig,
     WASM_BINARY, // Signal, VoteId
 };
