@@ -9,10 +9,11 @@ use suntime::{
     BankConfig,
     GenesisConfig,
     GrandpaConfig,
+    IndicesConfig,
     OrgId,
     Share,
     ShareId,
-    SharesConfig,
+    SharesAtomicConfig,
     Signature,
     SudoConfig,
     SystemConfig,
@@ -197,7 +198,8 @@ pub fn testnet_genesis(
                 .map(|k| (k, 1 << 60))
                 .collect(),
         }),
-        shares_atomic: Some(SharesConfig {
+        pallet_indices: Some(IndicesConfig { indices: vec![] }),
+        shares_atomic: Some(SharesAtomicConfig {
             membership_shares,
             total_issuance,
             shareholder_membership,
