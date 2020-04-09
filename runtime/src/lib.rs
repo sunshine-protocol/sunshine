@@ -12,10 +12,12 @@ use grandpa::AuthorityList as GrandpaAuthorityList;
 use sp_api::impl_runtime_apis;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::OpaqueMetadata;
-use sp_runtime::traits::{BlakeTwo256, Block as BlockT, ConvertInto, IdentifyAccount, Verify};
+use sp_runtime::traits::{
+    BlakeTwo256, Block as BlockT, ConvertInto, Extrinsic, IdentifyAccount, StaticLookup, Verify,
+};
 use sp_runtime::{
-    create_runtime_str, generic, impl_opaque_keys, traits::StaticLookup,
-    transaction_validity::TransactionValidity, ApplyExtrinsicResult, MultiSignature,
+    create_runtime_str, generic, impl_opaque_keys, transaction_validity::TransactionValidity,
+    ApplyExtrinsicResult, MultiSignature, SaturatedConversion,
 };
 use sp_std::prelude::*;
 #[cfg(feature = "std")]
@@ -25,7 +27,7 @@ use sp_version::RuntimeVersion;
 // A few exports that help ease life for downstream crates.
 pub use balances::Call as BalancesCall;
 pub use frame_support::{
-    construct_runtime, parameter_types, traits::Randomness, weights::Weight, StorageValue,
+    construct_runtime, debug, parameter_types, traits::Randomness, weights::Weight, StorageValue,
 };
 #[cfg(any(feature = "std", test))]
 pub use sp_runtime::BuildStorage;
@@ -82,11 +84,56 @@ pub mod opaque {
     }
 }
 
+/// Submits transaction with the node's public and signature type. Adheres to the signed extension
+/// format of the chain.
+impl system::offchain::CreateTransaction<Runtime, UncheckedExtrinsic> for Runtime {
+    type Public = <Signature as Verify>::Signer;
+    type Signature = Signature;
+
+    fn create_transaction<TSigner: system::offchain::Signer<Self::Public, Self::Signature>>(
+        call: Call,
+        public: Self::Public,
+        account: AccountId,
+        index: Index,
+    ) -> Option<(Call, <UncheckedExtrinsic as Extrinsic>::SignaturePayload)> {
+        // take the biggest period possible.
+        let period = BlockHashCount::get()
+            .checked_next_power_of_two()
+            .map(|c| c / 2)
+            .unwrap_or(2) as u64;
+        let current_block = System::block_number()
+            .saturated_into::<u64>()
+            // The `System::block_number` is initialized with `n+1`,
+            // so the actual block number is `n`.
+            .saturating_sub(1);
+        let extra: SignedExtra = (
+            system::CheckVersion::<Runtime>::new(),
+            system::CheckGenesis::<Runtime>::new(),
+            system::CheckEra::<Runtime>::from(generic::Era::mortal(period, current_block)),
+            system::CheckNonce::<Runtime>::from(index),
+            system::CheckWeight::<Runtime>::new(),
+        );
+        let raw_payload = SignedPayload::new(call, extra)
+            .map_err(|e| {
+                debug::warn!("Unable to create signed payload: {:?}", e);
+            })
+            .ok()?;
+        let signature = TSigner::sign(public, &raw_payload)?;
+        let address = Indices::unlookup(account);
+        let (call, extra, _) = raw_payload.deconstruct();
+        Some((call, (address, signature, extra)))
+    }
+}
+
 /// This runtime version.
 pub const VERSION: RuntimeVersion = RuntimeVersion {
     spec_name: create_runtime_str!("sun-spec"),
     impl_name: create_runtime_str!("sun-time"),
     authoring_version: 1,
+    // Per convention: if the runtime behavior changes, increment spec_version
+    // and set impl_version to 0. If only runtime
+    // implementation changes and behavior does not, then leave spec_version as
+    // is and increment impl_version.
     spec_version: 1,
     impl_version: 1,
     apis: RUNTIME_API_VERSIONS,
