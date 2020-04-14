@@ -3,6 +3,7 @@ panic = 'unwind'
 
 [workspace]
 members = [
+    'client',
     'node',
     'modules/util',
     'modules/shares-atomic',
@@ -10,3 +11,18 @@ members = [
     'modules/bank',
     'runtime',
 ]
+
+[patch.crates-io]
+frame-metadata = { git = "https://github.com/paritytech/substrate.git", rev = "8c1858048148c1c717123b0e4d360f8ad1be5bf2" }
+frame-support = { git = "https://github.com/paritytech/substrate.git", rev = "8c1858048148c1c717123b0e4d360f8ad1be5bf2" }
+frame-system = { git = "https://github.com/paritytech/substrate.git", rev = "8c1858048148c1c717123b0e4d360f8ad1be5bf2" }
+pallet-balances = { git = "https://github.com/paritytech/substrate.git", rev = "8c1858048148c1c717123b0e4d360f8ad1be5bf2" }
+pallet-indices = { git = "https://github.com/paritytech/substrate.git", rev = "8c1858048148c1c717123b0e4d360f8ad1be5bf2" }
+sp-core = { git = "https://github.com/paritytech/substrate.git", rev = "8c1858048148c1c717123b0e4d360f8ad1be5bf2" }
+sp-io = { git = "https://github.com/paritytech/substrate.git", rev = "8c1858048148c1c717123b0e4d360f8ad1be5bf2" }
+sp-keyring = { git = "https://github.com/paritytech/substrate.git", rev = "8c1858048148c1c717123b0e4d360f8ad1be5bf2" }
+sp-rpc = { git = "https://github.com/paritytech/substrate.git", rev = "8c1858048148c1c717123b0e4d360f8ad1be5bf2" }
+sp-runtime = { git = "https://github.com/paritytech/substrate.git", rev = "8c1858048148c1c717123b0e4d360f8ad1be5bf2" }
+sp-std = { git = "https://github.com/paritytech/substrate.git", rev = "8c1858048148c1c717123b0e4d360f8ad1be5bf2" }
+sp-transaction-pool = { git = "https://github.com/paritytech/substrate.git", rev = "8c1858048148c1c717123b0e4d360f8ad1be5bf2" }
+sp-version = { git = "https://github.com/paritytech/substrate.git", rev = "8c1858048148c1c717123b0e4d360f8ad1be5bf2" }
