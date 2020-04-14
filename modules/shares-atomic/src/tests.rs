@@ -1,5 +1,5 @@
 use super::*;
-use frame_support::assert_ok; // assert_err, assert_noop
+use frame_support::{assert_err, assert_ok}; // assert_noop
 use mock::*;
 
 fn new_test_ext() -> sp_io::TestExternalities {
@@ -7,6 +7,7 @@ fn new_test_ext() -> sp_io::TestExternalities {
         .build_storage::<Test>()
         .unwrap();
     GenesisConfig::<Test> {
+        omnipotent_key: 1,
         membership_shares: vec![
             // org, share_id, account, amount: shares
             // organization 1
@@ -77,11 +78,11 @@ fn check_membership() {
     // constant time membership lookups
     new_test_ext().execute_with(|| {
         let mut n = 0u64;
-        let first_group_id = OrgSharePrefixKey::new(1, 1);
-        let second_group_id = OrgSharePrefixKey::new(1, 2);
-        let third_group_id = OrgSharePrefixKey::new(1, 3);
+        let first_group_id = OrgItemPrefixKey::new(1, 1);
+        let second_group_id = OrgItemPrefixKey::new(1, 2);
+        let third_group_id = OrgItemPrefixKey::new(1, 3);
         // different organization
-        let second_first_group_id = OrgSharePrefixKey::new(2, 1);
+        let second_first_group_id = OrgItemPrefixKey::new(2, 1);
         while n < 19 {
             n += 1;
             if n < 11 {
@@ -120,7 +121,7 @@ fn share_reservation() {
     new_test_ext().execute_with(|| {
         let one = Origin::signed(1);
         assert_ok!(Shares::reserve_shares(one.clone(), 1, 1, 1));
-        let prefix_key = OrgSharePrefixKey::new(1, 1);
+        let prefix_key = OrgItemPrefixKey::new(1, 1);
         let profile = Shares::profile(prefix_key, 1).unwrap();
         let first_times_reserved = profile.get_times_reserved();
         // // check that method calculates correctly
@@ -164,7 +165,7 @@ fn share_unreservation() {
     new_test_ext().execute_with(|| {
         let one = Origin::signed(1);
         assert_ok!(Shares::reserve_shares(one.clone(), 1, 1, 1));
-        let prefix_key = OrgSharePrefixKey::new(1, 1);
+        let prefix_key = OrgItemPrefixKey::new(1, 1);
         let profile = Shares::profile(prefix_key, 1).unwrap();
         let first_times_reserved = profile.get_times_reserved();
         // // check that method calculates correctly
@@ -181,7 +182,7 @@ fn share_unreservation() {
 fn share_lock() {
     new_test_ext().execute_with(|| {
         let one = Origin::signed(1);
-        let prefix_key = OrgSharePrefixKey::new(1, 1);
+        let prefix_key = OrgItemPrefixKey::new(1, 1);
         let profile = Shares::profile(prefix_key, 1).unwrap();
         let unlocked = profile.is_unlocked();
         assert_eq!(unlocked, true);
@@ -196,7 +197,7 @@ fn share_lock() {
 fn share_unlock() {
     new_test_ext().execute_with(|| {
         let one = Origin::signed(1);
-        let prefix_key = OrgSharePrefixKey::new(1, 1);
+        let prefix_key = OrgItemPrefixKey::new(1, 1);
         let profile = Shares::profile(prefix_key, 1).unwrap();
         let unlocked = profile.is_unlocked();
         assert_eq!(unlocked, true);
@@ -215,7 +216,7 @@ fn share_unlock() {
 fn share_issuance() {
     new_test_ext().execute_with(|| {
         let one = Origin::signed(1);
-        let prefix_key = OrgSharePrefixKey::new(1, 1);
+        let prefix_key = OrgItemPrefixKey::new(1, 1);
         let pre_profile = Shares::profile(prefix_key, 10).unwrap();
         let pre_shares = pre_profile.get_shares();
 
@@ -234,7 +235,7 @@ fn share_issuance() {
 fn share_burn() {
     new_test_ext().execute_with(|| {
         let one = Origin::signed(1);
-        let prefix_key = OrgSharePrefixKey::new(1, 1);
+        let prefix_key = OrgItemPrefixKey::new(1, 1);
         let pre_profile = Shares::profile(prefix_key, 10).unwrap();
         let pre_shares = pre_profile.get_shares();
 
@@ -252,5 +253,38 @@ fn share_burn() {
         let post_shares = post_profile.get_shares();
 
         assert_eq!(post_shares, 10);
+    });
+}
+
+#[test]
+fn supervisor_selection_governance_works_as_expected() {
+    // very centralized as is the current design
+    new_test_ext().execute_with(|| {
+        // 1 can assign 7 as the supervisor for this organization
+        let new_supervisor = Shares::swap_supervisor(1, 1, 7).unwrap();
+        let check_new_supervisor = Shares::organization_supervisor(1).unwrap();
+        assert_eq!(check_new_supervisor, 7);
+        assert_eq!(check_new_supervisor, new_supervisor);
+        // 7 can assign 9
+        let new_supervisor_seven_to_nine = Shares::swap_supervisor(1, 7, 9).unwrap();
+        let check_new_supervisor_seven_to_nine = Shares::organization_supervisor(1).unwrap();
+        assert_eq!(check_new_supervisor_seven_to_nine, 9);
+        assert_eq!(
+            check_new_supervisor_seven_to_nine,
+            new_supervisor_seven_to_nine
+        );
+        // 7 can't assign because 9 has the power
+        assert_err!(
+            Shares::swap_supervisor(1, 7, 11),
+            Error::<Test, DefaultInstance>::UnAuthorizedRequestToSwapSupervisor
+        );
+        // 1 can reassign to 7 despite not being 9 because it is sudo
+        let new_supervisor_nine_to_seven = Shares::swap_supervisor(1, 1, 7).unwrap();
+        let check_new_supervisor_nine_to_seven = Shares::organization_supervisor(1).unwrap();
+        assert_eq!(check_new_supervisor_nine_to_seven, 7);
+        assert_eq!(
+            check_new_supervisor_nine_to_seven,
+            new_supervisor_nine_to_seven
+        );
     });
 }

@@ -1,12 +1,30 @@
 use crate::traits::{
-    Apply, Approved, DeriveThresholdRequirement, GetCurrentVoteIdentifiers, Revert, VoteVector,
+    Apply, Approved, ConsistentThresholdStructure, DeriveThresholdRequirement, Revert, VoteVector,
 };
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, FullCodec};
 use frame_support::Parameter;
 use sp_runtime::PerThing;
 use sp_std::prelude::*;
 
 #[derive(Clone, Copy, PartialEq, Eq, Encode, Decode, sp_runtime::RuntimeDebug)]
+/// The types of vote weightings supported by default in `vote-yesno`
+pub enum SupportedVoteTypes<Signal> {
+    /// 1 account 1 vote
+    OneAccountOneVote,
+    /// Defaults to share weights
+    ShareWeighted,
+    /// WARNING: this has no restrictions and shouldn't be exposed in any public API
+    Custom(Signal),
+}
+
+impl<Signal: Parameter> Default for SupportedVoteTypes<Signal> {
+    fn default() -> SupportedVoteTypes<Signal> {
+        SupportedVoteTypes::ShareWeighted
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Encode, Decode, sp_runtime::RuntimeDebug)]
+/// The vote-yesno voter options (direction)
 pub enum VoterYesNoView {
     /// Voted in favor
     InFavor,
@@ -14,16 +32,6 @@ pub enum VoterYesNoView {
     Against,
     /// Acknowledged but abstained
     Abstain,
-}
-
-impl VoterYesNoView {
-    /// Helper method to tell us if a vote is in favor
-    pub fn is_in_favor(self) -> bool {
-        match self {
-            VoterYesNoView::InFavor => true,
-            _ => false,
-        }
-    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Encode, Decode, sp_runtime::RuntimeDebug)]
@@ -53,33 +61,105 @@ impl<Signal: Parameter + Copy> VoteVector<Signal, VoterYesNoView> for YesNoVote<
     }
 }
 
-#[derive(Clone, Copy, Default, PartialEq, Eq, Encode, Decode, sp_runtime::RuntimeDebug)]
-/// This is the threshold configuration
-/// - weights votes when they are applied to vote state
-/// - evaluates passage of vote state
-pub struct ThresholdConfig<FineArithmetic> {
-    /// Support threshold
-    passage_threshold_pct: FineArithmetic,
-    /// Required turnout
-    turnout_threshold_pct: FineArithmetic,
+#[derive(Clone, Copy, PartialEq, Eq, Encode, Decode, sp_runtime::RuntimeDebug)]
+/// The type for the threshold
+pub enum ThresholdType<Signal, FineArithmetic>
+where
+    Signal: FullCodec + Parameter,
+    FineArithmetic: PerThing,
+{
+    Count(Signal),
+    Percentage(FineArithmetic),
 }
 
-//the trait bound should be std::ops::Mul<N: From<u32>> or something like this
-impl<FineArithmetic: PerThing> ThresholdConfig<FineArithmetic> {
-    pub fn new(
-        passage_threshold_pct: FineArithmetic,
-        turnout_threshold_pct: FineArithmetic,
+impl<Signal: Parameter + From<u32>, FineArithmetic: PerThing> Default
+    for ThresholdType<Signal, FineArithmetic>
+{
+    fn default() -> ThresholdType<Signal, FineArithmetic> {
+        ThresholdType::Count(0u32.into())
+    }
+}
+
+#[derive(Clone, Copy, Default, PartialEq, Eq, Encode, Decode, sp_runtime::RuntimeDebug)]
+/// This is the threshold configuration
+/// - evaluates passage of vote state
+pub struct ThresholdConfig<Signal, FineArithmetic>
+where
+    Signal: FullCodec + Parameter + From<u32>,
+    FineArithmetic: PerThing,
+{
+    /// Support threshold
+    support_required: ThresholdType<Signal, FineArithmetic>,
+    /// Required turnout
+    turnout_required: ThresholdType<Signal, FineArithmetic>,
+}
+
+impl<Signal: FullCodec + Parameter + From<u32>, FineArithmetic: PerThing>
+    ThresholdConfig<Signal, FineArithmetic>
+{
+    pub fn new_signal_count_threshold(support_required: Signal, turnout_required: Signal) -> Self {
+        ThresholdConfig {
+            support_required: ThresholdType::Count(support_required),
+            turnout_required: ThresholdType::Count(turnout_required),
+        }
+    }
+    pub fn new_percentage_threshold(
+        support_required: FineArithmetic,
+        turnout_required: FineArithmetic,
     ) -> Self {
         ThresholdConfig {
-            passage_threshold_pct,
-            turnout_threshold_pct,
+            support_required: ThresholdType::Percentage(support_required),
+            turnout_required: ThresholdType::Percentage(turnout_required),
+        }
+    }
+}
+
+impl<Signal: FullCodec + Parameter + From<u32> + Copy, FineArithmetic: PerThing + Copy>
+    ConsistentThresholdStructure for ThresholdConfig<Signal, FineArithmetic>
+{
+    fn is_percentage_threshold(&self) -> bool {
+        match (self.support_required, self.turnout_required) {
+            (ThresholdType::Percentage(_), ThresholdType::Percentage(_)) => true,
+            _ => false,
+        }
+    }
+    fn is_count_threshold(&self) -> bool {
+        match (self.support_required, self.turnout_required) {
+            (ThresholdType::Count(_), ThresholdType::Count(_)) => true,
+            _ => false,
+        }
+    }
+    fn has_consistent_structure(&self) -> bool {
+        Self::is_percentage_threshold(self) || Self::is_count_threshold(self)
+    }
+}
+
+impl<
+        Signal: Parameter + sp_std::ops::Mul<Signal, Output = Signal> + From<u32>,
+        FineArithmetic: PerThing + sp_std::ops::Mul<Signal, Output = Signal>,
+    > DeriveThresholdRequirement<Signal> for ThresholdConfig<Signal, FineArithmetic>
+{
+    fn derive_support_requirement(&self, turnout: Signal) -> Signal {
+        match self.clone().support_required {
+            ThresholdType::Count(signal) => signal,
+            ThresholdType::Percentage(signal) => signal * turnout,
+        }
+    }
+    fn derive_turnout_requirement(&self, turnout: Signal) -> Signal {
+        match self.clone().turnout_required {
+            ThresholdType::Count(signal) => signal,
+            ThresholdType::Percentage(signal) => signal * turnout,
         }
     }
 }
 
 #[derive(PartialEq, Eq, Default, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
-/// The state of each executive membership proposal's ongoing voting
-pub struct VoteState<Signal, Permill, BlockNumber> {
+/// The state of an ongoing vote
+pub struct VoteState<Signal, FineArithmetic, BlockNumber>
+where
+    Signal: FullCodec + Parameter + From<u32>,
+    FineArithmetic: PerThing,
+{
     /// Signal in favor
     in_favor: Signal,
     /// Signal against
@@ -89,17 +169,19 @@ pub struct VoteState<Signal, Permill, BlockNumber> {
     /// All signal that could vote
     all_possible_turnout: Signal,
     /// The threshold configuration for passage
-    threshold: ThresholdConfig<Permill>,
+    threshold: ThresholdConfig<Signal, FineArithmetic>,
     /// The time at which this is initialized (4_TTL_C_l8r)
     initialized: BlockNumber,
-    /// The time at which this vote state expired
-    expires: BlockNumber,
+    /// The time at which this vote state expired, now an Option
+    expires: Option<BlockNumber>,
 }
 
 impl<
         Signal: Parameter
             + Default
+            + FullCodec
             + Copy
+            + From<u32>
             + sp_std::ops::Add<Signal, Output = Signal>
             + sp_std::ops::Sub<Signal, Output = Signal>,
         FineArithmetic: PerThing + Default,
@@ -108,9 +190,9 @@ impl<
 {
     pub fn new(
         all_possible_turnout: Signal,
-        threshold: ThresholdConfig<FineArithmetic>,
+        threshold: ThresholdConfig<Signal, FineArithmetic>,
         initialized: BlockNumber,
-        expires: BlockNumber,
+        expires: Option<BlockNumber>,
     ) -> VoteState<Signal, FineArithmetic, BlockNumber> {
         VoteState {
             all_possible_turnout,
@@ -132,11 +214,13 @@ impl<
     pub fn all_possible_turnout(&self) -> Signal {
         self.all_possible_turnout
     }
-    pub fn expires(&self) -> BlockNumber {
+    pub fn expires(&self) -> Option<BlockNumber> {
         self.expires
     }
+    pub fn threshold(&self) -> ThresholdConfig<Signal, FineArithmetic> {
+        self.threshold
+    }
 
-    // and turnout
     pub fn add_in_favor_vote(&self, magnitude: Signal) -> Self {
         let new_turnout = self.turnout() + magnitude;
         let new_in_favor = self.in_favor() + magnitude;
@@ -146,7 +230,6 @@ impl<
             ..self.clone()
         }
     }
-    // and turnout
     pub fn add_against_vote(&self, magnitude: Signal) -> Self {
         let new_turnout = self.turnout() + magnitude;
         let new_against = self.against() + magnitude;
@@ -156,7 +239,6 @@ impl<
             ..self.clone()
         }
     }
-    // add abstained
     pub fn add_abstention(&self, magnitude: Signal) -> Self {
         let new_turnout = self.turnout() + magnitude;
         VoteState {
@@ -164,7 +246,6 @@ impl<
             ..self.clone()
         }
     }
-    // remove turnout
     pub fn remove_in_favor_vote(&self, magnitude: Signal) -> Self {
         let new_turnout = self.turnout() - magnitude;
         let new_in_favor = self.in_favor() - magnitude;
@@ -174,7 +255,6 @@ impl<
             ..self.clone()
         }
     }
-    // remove turnout
     pub fn remove_against_vote(&self, magnitude: Signal) -> Self {
         let new_turnout = self.turnout() - magnitude;
         let new_against = self.against() - magnitude;
@@ -184,7 +264,6 @@ impl<
             ..self.clone()
         }
     }
-    // remove abstained
     pub fn remove_abstention(&self, magnitude: Signal) -> Self {
         let new_turnout = self.turnout() - magnitude;
         VoteState {
@@ -195,23 +274,11 @@ impl<
 }
 
 impl<
-        Signal: Parameter + sp_std::ops::Mul<Signal, Output = Signal>,
-        FineArithmetic: PerThing + sp_std::ops::Mul<Signal, Output = Signal>,
-    > DeriveThresholdRequirement<Signal> for ThresholdConfig<FineArithmetic>
-{
-    fn derive_support_requirement(&self, turnout: Signal) -> Signal {
-        self.passage_threshold_pct * turnout
-    }
-    fn derive_turnout_requirement(&self, turnout: Signal) -> Signal {
-        self.turnout_threshold_pct * turnout
-    }
-}
-
-impl<
         Signal: Parameter
             + PartialOrd
             + Default
             + Copy
+            + From<u32>
             + sp_std::ops::Add<Signal, Output = Signal>
             + sp_std::ops::Sub<Signal, Output = Signal>
             + sp_std::ops::Mul<Signal, Output = Signal>,
@@ -235,6 +302,7 @@ impl<
         Signal: Parameter
             + Copy
             + Default
+            + From<u32>
             + sp_std::ops::Sub<Signal, Output = Signal>
             + sp_std::ops::Add<Signal, Output = Signal>,
         FineArithmetic: PerThing + Default,
@@ -254,6 +322,7 @@ impl<
         Signal: Parameter
             + Copy
             + Default
+            + From<u32>
             + sp_std::ops::Sub<Signal, Output = Signal>
             + sp_std::ops::Add<Signal, Output = Signal>,
         FineArithmetic: PerThing + Default,
@@ -295,89 +364,5 @@ impl Approved for Outcome {
             Outcome::Approved => true,
             _ => false,
         }
-    }
-}
-
-#[derive(PartialEq, Eq, Default, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
-pub struct ScheduledVote<ShareId, FineArithmetic> {
-    /// Defines the order relative to other `DispatchableVote`s (impl Ordering)
-    priority: u32,
-    /// The share type that will be used for this vote
-    share_group: ShareId,
-    /// The threshold set for this share type in this schedule (TODO: move threshold config out of vote-yesno into here)
-    threshold: ThresholdConfig<FineArithmetic>,
-}
-
-impl<ShareId: Parameter + Copy, FineArithmetic: PerThing> ScheduledVote<ShareId, FineArithmetic> {
-    pub fn new(
-        priority: u32,
-        share_group: ShareId,
-        threshold: ThresholdConfig<FineArithmetic>,
-    ) -> Self {
-        Self {
-            priority,
-            share_group,
-            threshold,
-        }
-    }
-    // TODO: instead of getters, prefer understanding why the information is gotten and create a method to make
-    // the explicit transformation `=>` these getters are equivalent to just making the parameters public
-    pub fn get_share_id(&self) -> ShareId {
-        self.share_group
-    }
-
-    pub fn get_threshold(&self) -> ThresholdConfig<FineArithmetic> {
-        self.threshold
-    }
-}
-
-#[derive(PartialEq, Eq, Default, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
-pub struct VoteSchedule<ShareId, VoteId, FineArithmetic> {
-    votes_left_including_current: u32,
-    current_share_id: ShareId,
-    current_vote_id: VoteId,
-    schedule: Vec<ScheduledVote<ShareId, FineArithmetic>>,
-}
-
-// TODO: are ShareId and VoteId reliably Copy
-impl<ShareId: Parameter + Copy, VoteId: Parameter + Copy, FineArithmetic: PerThing>
-    VoteSchedule<ShareId, VoteId, FineArithmetic>
-{
-    /// Note that this object is designed to only be alive while there is a vote dispatched in the vote module
-    /// - for this reason, the caller must dispatch the current vote before using the associated identifiers
-    /// to instantiate this object
-    pub fn new(
-        current_share_id: ShareId,
-        current_vote_id: VoteId,
-        schedule: Vec<ScheduledVote<ShareId, FineArithmetic>>,
-    ) -> Self {
-        let votes_left_including_current: u32 = (schedule.len() as u32) + 1u32;
-        VoteSchedule {
-            votes_left_including_current,
-            current_share_id,
-            current_vote_id,
-            schedule,
-        }
-    }
-
-    // TODO: instead of getters, prefer understanding why the information is gotten and create a method to make
-    // the explicit transformation `=>` these getters are equivalent to just making the parameters public
-    pub fn get_schedule(self) -> Vec<ScheduledVote<ShareId, FineArithmetic>> {
-        self.schedule
-    }
-    pub fn get_votes_left_including_current(&self) -> u32 {
-        self.votes_left_including_current
-    }
-}
-
-impl<ShareId: Parameter + Copy, VoteId: Parameter + Copy, FineArithmetic: PerThing>
-    GetCurrentVoteIdentifiers<ShareId, VoteId> for VoteSchedule<ShareId, VoteId, FineArithmetic>
-{
-    fn get_current_share_id(&self) -> ShareId {
-        self.current_share_id
-    }
-
-    fn get_current_vote_id(&self) -> VoteId {
-        self.current_vote_id
     }
 }

@@ -6,7 +6,6 @@ use suntime::{
     AccountId,
     AuraConfig,
     BalancesConfig,
-    BankConfig,
     GenesisConfig,
     GrandpaConfig,
     IndicesConfig,
@@ -200,12 +199,10 @@ pub fn testnet_genesis(
         }),
         pallet_indices: Some(IndicesConfig { indices: vec![] }),
         shares_atomic: Some(SharesAtomicConfig {
+            omnipotent_key: root_key.clone(),
             membership_shares,
             total_issuance,
             shareholder_membership,
-        }),
-        bank: Some(BankConfig {
-            omnipotent_key: root_key.clone(),
         }),
         aura: Some(AuraConfig {
             authorities: initial_authorities.iter().map(|x| (x.0.clone())).collect(),

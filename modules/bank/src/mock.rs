@@ -37,7 +37,6 @@ parameter_types! {
     pub const MaximumBlockLength: u32 = 2 * 1024;
     pub const AvailableBlockRatio: Perbill = Perbill::one();
     pub const ReservationLimit: u32 = 10000;
-    pub const DefaultVoteLength: u64 = 10;
     pub const PollingFrequency: u64 = 10;
 }
 impl frame_system::Trait for Test {
@@ -73,7 +72,6 @@ impl vote_yesno::Trait for Test {
     type Signal = Signal;
     type VoteId = VoteId;
     type ShareData = shares_atomic::Module<Test>;
-    type DefaultVoteLength = DefaultVoteLength;
 }
 impl Trait for Test {
     type Event = TestEvent;
@@ -82,5 +80,6 @@ impl Trait for Test {
     type PollingFrequency = PollingFrequency;
 }
 pub type System = frame_system::Module<Test>;
+pub type Shares = shares_atomic::Module<Test>;
 pub type VoteYesNo = vote_yesno::Module<Test>;
 pub type Bank = Module<Test>;

@@ -289,15 +289,11 @@ impl shares_atomic::Trait for Runtime {
 pub use vote_yesno;
 pub type Signal = u64;
 pub type VoteId = u64;
-parameter_types! {
-    pub const DefaultVoteLength: u32 = 10;
-}
 impl vote_yesno::Trait for Runtime {
     type Event = Event;
     type Signal = Signal;
     type VoteId = VoteId;
     type ShareData = SharesAtomic;
-    type DefaultVoteLength = DefaultVoteLength;
 }
 pub use bank;
 parameter_types! {
@@ -328,7 +324,7 @@ construct_runtime!(
         // My modules
         SharesAtomic: shares_atomic::{Module, Call, Config<T>, Storage, Event<T>},
         VoteYesNo: vote_yesno::{Module, Call, Storage, Event<T>},
-        Bank: bank::{Module, Call, Config<T>, Storage, Event<T>},
+        Bank: bank::{Module, Call, Storage, Event<T>},
     }
 );
 

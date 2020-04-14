@@ -55,15 +55,11 @@ impl shares_atomic::Trait for Test {
     type Share = Share;
     type ReservationLimit = ReservationLimit;
 }
-parameter_types! {
-    pub const DefaultVoteLength: u64 = 10;
-}
 impl Trait for Test {
     type Event = TestEvent;
     type Signal = Signal;
     type VoteId = VoteId;
     type ShareData = shares_atomic::Module<Test>;
-    type DefaultVoteLength = DefaultVoteLength;
 }
 
 mod vote_yesno {

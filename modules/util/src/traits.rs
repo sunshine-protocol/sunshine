@@ -1,13 +1,13 @@
-use crate::voteyesno::{ThresholdConfig, YesNoVote};
+use crate::voteyesno::{SupportedVoteTypes, ThresholdConfig, YesNoVote};
 use codec::FullCodec;
 use frame_support::Parameter;
 use sp_runtime::{
     traits::{AtLeast32Bit, MaybeSerializeDeserialize},
-    DispatchError, DispatchResult,
+    DispatchError, DispatchResult, PerThing,
 };
 use sp_std::{fmt::Debug, prelude::*};
 
-// === Unique ID Logic, Useful for All Modules ==
+// === Unique ID Logic, Useful for All Modules ===
 
 /// For the module to implement for its id type (typically a common double_map prefix key)
 pub trait IDIsAvailable<Id> {
@@ -166,55 +166,58 @@ pub trait DeriveThresholdRequirement<Signal> {
     fn derive_turnout_requirement(&self, turnout: Signal) -> Signal;
 }
 
+/// Checks that the `ThresholdConfig` that impls this method has both fields with the same `ThresholdType` variant
+pub trait ConsistentThresholdStructure {
+    fn is_percentage_threshold(&self) -> bool;
+    fn is_count_threshold(&self) -> bool;
+    fn has_consistent_structure(&self) -> bool;
+}
+
 /// Open a new vote for the organization, share_id and a custom threshold requirement
-pub trait OpenVote<OrgId, ShareId, AccountId, FineArithmetic>:
+pub trait OpenVote<OrgId, ShareId, AccountId, BlockNumber, FineArithmetic: PerThing>:
     GetVoteOutcome<OrgId, ShareId>
 {
     type Signal: AtLeast32Bit + FullCodec + Copy + MaybeSerializeDeserialize + Debug + Default;
     type ThresholdConfig: DeriveThresholdRequirement<Self::Signal>
-        + From<ThresholdConfig<FineArithmetic>>;
+        + ConsistentThresholdStructure
+        + From<ThresholdConfig<Self::Signal, FineArithmetic>>; // NOTE: this forces FineArithmetic generic parameter for traits and all inherited
+    type VoteType: Default + From<SupportedVoteTypes<Self::Signal>>;
 
     fn open_vote(
         organization: OrgId,
         share_id: ShareId,
         // uuid generation should default happen when this is called (None is default)
         vote_id: Option<Self::VoteId>,
+        vote_type: Self::VoteType,
         threshold_config: Self::ThresholdConfig,
+        duration: Option<BlockNumber>,
     ) -> Result<Self::VoteId, DispatchError>;
 }
 
 /// Define the rate at which signal is minted for shares in an organization
-pub trait MintableSignal<OrgId, ShareId, AccountId, FineArithmetic>:
-    OpenVote<OrgId, ShareId, AccountId, FineArithmetic>
+pub trait MintableSignal<OrgId, ShareId, AccountId, BlockNumber, FineArithmetic: PerThing>:
+    OpenVote<OrgId, ShareId, AccountId, BlockNumber, FineArithmetic>
 {
-    fn mint_signal_based_on_existing_share_value(
+    fn mint_custom_signal_for_account(
         organization: OrgId,
         share_id: ShareId,
         vote_id: Self::VoteId,
         who: &AccountId,
-    ) -> Result<Self::Signal, DispatchError>;
+        signal: Self::Signal,
+    );
 
-    // WARNING: CALL MUST BE PERMISSIONED
-    fn custom_mint_signal(
-        organization: OrgId,
-        share_id: ShareId,
-        vote_id: Self::VoteId,
-        who: &AccountId,
-        amount: Self::Signal,
-    ) -> Result<Self::Signal, DispatchError>;
-
-    /// Mints signal for all ShareIds
-    /// - calls mint_signal_based_on_existing_share_value for every member
+    /// Mints signal for all accounts participating in the vote
     fn batch_mint_signal(
         organization: OrgId,
         share_id: ShareId,
         vote_id: Self::VoteId,
+        vote_type: Self::VoteType,
     ) -> Result<Self::Signal, DispatchError>;
 }
 
 /// Define the rate at which signal is burned to unreserve shares in an organization
-pub trait BurnableSignal<OrgId, ShareId, AccountId, FineArithmetic>:
-    MintableSignal<OrgId, ShareId, AccountId, FineArithmetic>
+pub trait BurnableSignal<OrgId, ShareId, AccountId, BlockNumber, FineArithmetic: PerThing>:
+    MintableSignal<OrgId, ShareId, AccountId, BlockNumber, FineArithmetic>
 {
     fn burn_signal(
         organization: OrgId,
@@ -267,8 +270,8 @@ pub trait CheckVoteStatus<OrgId, ShareId>: ApplyVote + GetVoteOutcome<OrgId, Sha
 }
 
 /// For module to update vote state
-pub trait VoteOnProposal<OrgId, ShareId, AccountId, FineArithmetic>:
-    OpenVote<OrgId, ShareId, AccountId, FineArithmetic> + CheckVoteStatus<OrgId, ShareId>
+pub trait VoteOnProposal<OrgId, ShareId, AccountId, BlockNumber, FineArithmetic: PerThing>:
+    OpenVote<OrgId, ShareId, AccountId, BlockNumber, FineArithmetic> + CheckVoteStatus<OrgId, ShareId>
 {
     fn vote_on_proposal(
         organization: OrgId,
@@ -301,21 +304,21 @@ pub trait SetDefaultShareApprovalOrder<OrgId, ShareId> {
 
 /// Set the default passage, turnout thresholds for each share group
 /// - the _second_ first step to set up a default vote schedule for a proposal type
-pub trait SetDefaultShareIdThreshold<OrgId, ShareId, FineArithmetic>:
+pub trait SetDefaultShareIdThreshold<OrgId, ShareId>:
     SetDefaultShareApprovalOrder<OrgId, ShareId>
 {
+    type ThresholdConfig;
+
     fn set_share_id_proposal_type_to_threshold(
         organization: OrgId,
         share_id: ShareId,
         proposal_type: Self::ProposalType,
-        threshold: ThresholdConfig<FineArithmetic>,
+        threshold: Self::ThresholdConfig,
     ) -> DispatchResult;
 }
 
 /// Helper methods to define a default VoteSchedule using the default threshold setter and default share approval order setter
-pub trait VoteScheduleBuilder<OrgId, ShareId, FineArithmetic>:
-    SetDefaultShareIdThreshold<OrgId, ShareId, FineArithmetic>
-{
+pub trait VoteScheduleBuilder<OrgId, ShareId>: SetDefaultShareIdThreshold<OrgId, ShareId> {
     type ScheduledVote;
 
     /// Uses the default threshold set above to automatically set threshold for share_id
@@ -324,7 +327,7 @@ pub trait VoteScheduleBuilder<OrgId, ShareId, FineArithmetic>:
         share_id: ShareId,
         proposal_type: Self::ProposalType,
         // if None, use default set further above
-        custom_threshold: Option<ThresholdConfig<FineArithmetic>>,
+        custom_threshold: Option<Self::ThresholdConfig>,
     ) -> Result<Self::ScheduledVote, DispatchError>;
 
     /// Default uses the default share approval order and default threshold setter to set a default vote schedule
@@ -359,8 +362,8 @@ pub trait VoteScheduler<OrgId, ShareId, VoteId>:
 /// Default uses the default vote schedule configured in `VoteBuilder` to dispatch a `VoteSchedule`
 /// - if `custom_share_ids.is_some()` then this is used as the share approval order instead of the default
 /// share approval order
-pub trait ScheduleVoteSequence<OrgId, ShareId, VoteId, FineArithmetic>:
-    VoteScheduleBuilder<OrgId, ShareId, FineArithmetic>
+pub trait ScheduleVoteSequence<OrgId, ShareId, VoteId>:
+    VoteScheduleBuilder<OrgId, ShareId>
 {
     type ProposalIndex;
 
@@ -376,8 +379,8 @@ pub trait ScheduleVoteSequence<OrgId, ShareId, VoteId, FineArithmetic>:
 
 /// Checks the progress of a scheduled vote sequence and pushes the schedule along
 /// - this should be called every `T::PollingFrequency::get()` number of blocks in `on_finalize`
-pub trait PollActiveProposal<OrgId, ShareId, VoteId, FineArithmetic>:
-    ScheduleVoteSequence<OrgId, ShareId, VoteId, FineArithmetic>
+pub trait PollActiveProposal<OrgId, ShareId, VoteId>:
+    ScheduleVoteSequence<OrgId, ShareId, VoteId>
 {
     type PollingOutcome;
     // This method checks the outcome of the current vote and moves the schedule to the next one when the threshold is met
@@ -388,7 +391,7 @@ pub trait PollActiveProposal<OrgId, ShareId, VoteId, FineArithmetic>:
     ) -> Result<Self::PollingOutcome, DispatchError>;
 }
 
-// ====== Permissions ACL (in Bank) ======
+// ====== Permissions ACL (in Shares) ======
 
 pub trait SudoKeyManagement<AccountId> {
     fn is_sudo_key(who: &AccountId) -> bool;
@@ -396,11 +399,24 @@ pub trait SudoKeyManagement<AccountId> {
     fn swap_sudo_key(old_key: AccountId, new_key: AccountId) -> Result<AccountId, DispatchError>;
 }
 
-pub trait SupervisorKeyManagement<OrgId, AccountId>: SudoKeyManagement<AccountId> {
+pub trait OrgSupervisorKeyManagement<OrgId, AccountId>: SudoKeyManagement<AccountId> {
     fn is_organization_supervisor(organization: OrgId, who: &AccountId) -> bool;
     // cas, but also include the sudo as the possible old_key input for acl purposes
     fn swap_supervisor(
         organization: OrgId,
+        old_key: AccountId,
+        new_key: AccountId,
+    ) -> Result<AccountId, DispatchError>;
+}
+
+pub trait OrgItemSupervisorKeyManagement<OrgId, ItemId, AccountId>:
+    OrgSupervisorKeyManagement<OrgId, AccountId>
+{
+    fn is_item_supervisor(organization: OrgId, item_id: ItemId, who: &AccountId) -> bool;
+    // cas, but also include the sudo as the possible old_key input for acl purposes
+    fn swap_supervisor(
+        organization: OrgId,
+        item_id: ItemId,
         old_key: AccountId,
         new_key: AccountId,
     ) -> Result<AccountId, DispatchError>;
