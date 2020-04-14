@@ -9,125 +9,31 @@ repository = 'https://joinsunshine.com'
 version = '0.0.1'
 
 [build-dependencies]
-vergen = '3.0.4'
-
-[build-dependencies.build-script-utils]
-git = "https://github.com/paritytech/substrate.git"
-package = 'substrate-build-script-utils'
-rev='8c1858048148c1c717123b0e4d360f8ad1be5bf2'
-version = '2.0.0-alpha.5'
+substrate-build-script-utils = "2.0.0-alpha.6"
+vergen = "3.1.0"
 
 [dependencies]
-futures = '0.3.1'
-log = '0.4.8'
-structopt = '0.3.8'
-
-[dependencies.grandpa]
-default-features = false
-git = "https://github.com/paritytech/substrate.git"
-package = 'sc-finality-grandpa'
-rev='8c1858048148c1c717123b0e4d360f8ad1be5bf2'
-version = '0.8.0-alpha.5'
-
-[dependencies.grandpa-primitives]
-default-features = false
-git = "https://github.com/paritytech/substrate.git"
-package = 'sp-finality-grandpa'
-rev='8c1858048148c1c717123b0e4d360f8ad1be5bf2'
-version = '2.0.0-alpha.5'
-
-[dependencies.suntime]
-path = '../runtime'
-version = '0.0.1'
-
-[dependencies.sc-basic-authorship]
-default-features = false
-git = "https://github.com/paritytech/substrate.git"
-rev='8c1858048148c1c717123b0e4d360f8ad1be5bf2'
-version = '0.8.0-alpha.5'
-
-[dependencies.sc-cli]
-default-features = false
-git = "https://github.com/paritytech/substrate.git"
-rev='8c1858048148c1c717123b0e4d360f8ad1be5bf2'
-version = '0.8.0-alpha.5'
-
-[dependencies.sc-client]
-default-features = false
-git = "https://github.com/paritytech/substrate.git"
-rev='8c1858048148c1c717123b0e4d360f8ad1be5bf2'
-version = '0.8.0-alpha.5'
-
-[dependencies.sc-client-api]
-default-features = false
-git = "https://github.com/paritytech/substrate.git"
-rev='8c1858048148c1c717123b0e4d360f8ad1be5bf2'
-version = '2.0.0-alpha.5'
-
-[dependencies.sc-consensus-aura]
-default-features = false
-git = "https://github.com/paritytech/substrate.git"
-rev='8c1858048148c1c717123b0e4d360f8ad1be5bf2'
-version = '0.8.0-alpha.5'
-
-[dependencies.sc-executor]
-default-features = false
-git = "https://github.com/paritytech/substrate.git"
-rev='8c1858048148c1c717123b0e4d360f8ad1be5bf2'
-version = '0.8.0-alpha.5'
-
-[dependencies.sc-network]
-default-features = false
-git = "https://github.com/paritytech/substrate.git"
-rev='8c1858048148c1c717123b0e4d360f8ad1be5bf2'
-version = '0.8.0-alpha.5'
-
-[dependencies.sc-service]
-git = "https://github.com/paritytech/substrate.git"
-rev='8c1858048148c1c717123b0e4d360f8ad1be5bf2'
-version = '0.8.0-alpha.5'
-
-[dependencies.sc-transaction-pool]
-default-features = false
-git = "https://github.com/paritytech/substrate.git"
-rev='8c1858048148c1c717123b0e4d360f8ad1be5bf2'
-version = '2.0.0-alpha.5'
-
-[dependencies.sp-consensus]
-default-features = false
-git = "https://github.com/paritytech/substrate.git"
-rev='8c1858048148c1c717123b0e4d360f8ad1be5bf2'
-version = '0.8.0-alpha.5'
-
-[dependencies.sp-consensus-aura]
-default-features = false
-git = "https://github.com/paritytech/substrate.git"
-rev='8c1858048148c1c717123b0e4d360f8ad1be5bf2'
-version = '0.8.0-alpha.5'
-
-[dependencies.sp-core]
-default-features = false
-git = "https://github.com/paritytech/substrate.git"
-rev='8c1858048148c1c717123b0e4d360f8ad1be5bf2'
-version = '2.0.0-alpha.5'
-
-[dependencies.sp-inherents]
-default-features = false
-git = "https://github.com/paritytech/substrate.git"
-rev='8c1858048148c1c717123b0e4d360f8ad1be5bf2'
-version = '2.0.0-alpha.5'
-
-[dependencies.sp-runtime]
-default-features = false
-git = "https://github.com/paritytech/substrate.git"
-rev='8c1858048148c1c717123b0e4d360f8ad1be5bf2'
-version = '2.0.0-alpha.5'
-
-[dependencies.sp-transaction-pool]
-default-features = false
-git = "https://github.com/paritytech/substrate.git"
-rev='8c1858048148c1c717123b0e4d360f8ad1be5bf2'
-version = '2.0.0-alpha.5'
+futures = "0.3.4"
+log = "0.4.8"
+sc-basic-authorship = { version = "0.8.0-alpha.6", default-features = false }
+sc-cli = { version = "0.8.0-alpha.6", default-features = false }
+sc-client = { version = "0.8.0-alpha.6", default-features = false }
+sc-client-api = { version = "2.0.0-alpha.6", default-features = false }
+sc-consensus-aura = { version = "0.8.0-alpha.6", default-features = false }
+sc-executor = { version = "0.8.0-alpha.6", default-features = false }
+sc-finality-grandpa = { version = "0.8.0-alpha.6", default-features = false }
+sc-network = { version = "0.8.0-alpha.6", default-features = false }
+sc-service = { version = "0.8.0-alpha.6", default-features = false }
+sc-transaction-pool = { version = "2.0.0-alpha.6", default-features = false }
+sp-consensus = { version = "0.8.0-alpha.6", default-features = false }
+sp-consensus-aura = { version = "0.8.0-alpha.6", default-features = false }
+sp-core = { version = "2.0.0-alpha.6", default-features = false }
+sp-finality-grandpa = { version = "2.0.0-alpha.6", default-features = false }
+sp-inherents = { version = "2.0.0-alpha.6", default-features = false }
+sp-runtime = { version = "2.0.0-alpha.6", default-features = false }
+sp-transaction-pool = { version = "2.0.0-alpha.6", default-features = false }
+suntime = { path = "../runtime" }
+structopt = "0.3.13"
 
 [[bin]]
 name = 'sunshine-node'

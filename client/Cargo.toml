@@ -11,15 +11,14 @@ keywords = ["parity", "substrate", "blockchain", "sunshine"]
 
 [dependencies]
 codec = { version = "1.2", package = "parity-scale-codec", default-features = false, features = ["derive", "full"] }
-frame-support = "2.0.0-alpha.5"
-pallet-indices = "2.0.0-alpha.5"
-#substrate-subxt = { git = "https://github.com/paritytech/substrate-subxt" }
-substrate-subxt = { path = "../../substrate-subxt" }
-sp-core = "2.0.0-alpha.5"
-sp-runtime = "2.0.0-alpha.5"
+frame-support = "2.0.0-alpha.6"
+pallet-indices = "2.0.0-alpha.6"
+substrate-subxt = "0.5.0 "
+sp-core = "2.0.0-alpha.6"
+sp-runtime = "2.0.0-alpha.6"
 util = { path = "../modules/util", default-features = false }
 
 [dev-dependencies]
 async-std = "1.5.0"
 env_logger = "0.7.1"
-sp-keyring = "2.0.0-alpha.5"
+sp-keyring = "2.0.0-alpha.6"
