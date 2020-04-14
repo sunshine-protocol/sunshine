@@ -17,6 +17,7 @@ fn new_test_ext() -> sp_io::TestExternalities {
         .build_storage::<Test>()
         .unwrap();
     shares_atomic::GenesisConfig::<Test> {
+        omnipotent_key: 1,
         membership_shares: vec![
             // org, share_id, account, amount: shares
             // organization 1
@@ -63,9 +64,6 @@ fn new_test_ext() -> sp_io::TestExternalities {
     }
     .assimilate_storage(&mut t)
     .unwrap();
-    GenesisConfig::<Test> { omnipotent_key: 1 }
-        .assimilate_storage(&mut t)
-        .unwrap();
     t.into()
 }
 
@@ -91,45 +89,9 @@ fn organization_registration() {
         ));
         // check organization count changed as expected
         assert_eq!(Bank::organization_count(), 1);
-        // summoner is the summoner as expected
-        let supervisor = Bank::organization_supervisor(3).unwrap();
-        assert_eq!(supervisor, 1);
         // // event emitted as expected
         // let expected_event = TestEvent::bank(RawEvent::NewOrganizationRegistered(1, 3, 3));
         // assert!(System::events().iter().any(|a| a.event == expected_event));
-    });
-}
-
-#[test]
-fn supervisor_selection_governance_works_as_expected() {
-    // very centralized as is the current design
-    new_test_ext().execute_with(|| {
-        // 1 can assign 7 as the supervisor for this organization
-        let new_supervisor = Bank::swap_supervisor(1, 1, 7).unwrap();
-        let check_new_supervisor = Bank::organization_supervisor(1).unwrap();
-        assert_eq!(check_new_supervisor, 7);
-        assert_eq!(check_new_supervisor, new_supervisor);
-        // 7 can assign 9
-        let new_supervisor_seven_to_nine = Bank::swap_supervisor(1, 7, 9).unwrap();
-        let check_new_supervisor_seven_to_nine = Bank::organization_supervisor(1).unwrap();
-        assert_eq!(check_new_supervisor_seven_to_nine, 9);
-        assert_eq!(
-            check_new_supervisor_seven_to_nine,
-            new_supervisor_seven_to_nine
-        );
-        // 7 can't assign because 9 has the power
-        assert_err!(
-            Bank::swap_supervisor(1, 7, 11),
-            Error::<Test>::UnAuthorizedRequestToSwapSupervisor
-        );
-        // 1 can reassign to 7 despite not being 9 because it is sudo
-        let new_supervisor_nine_to_seven = Bank::swap_supervisor(1, 1, 7).unwrap();
-        let check_new_supervisor_nine_to_seven = Bank::organization_supervisor(1).unwrap();
-        assert_eq!(check_new_supervisor_nine_to_seven, 7);
-        assert_eq!(
-            check_new_supervisor_nine_to_seven,
-            new_supervisor_nine_to_seven
-        );
     });
 }
 
@@ -172,7 +134,7 @@ fn change_value_constitution() {
         let current_value_constitution = Bank::value_constitution(3).unwrap();
         assert_eq!(current_value_constitution, new_constitutional_hash);
         // assign a different supervisor
-        let expected_seven = Bank::swap_supervisor(3, 1, 7).unwrap();
+        let expected_seven = Shares::swap_supervisor(3, 1, 7).unwrap();
         assert_eq!(expected_seven, 7);
         // supervisor updates the value constitution
         let seven = Origin::signed(7);
@@ -351,7 +313,7 @@ fn make_proposal_starts_the_vote_schedule() {
             None,
         ));
         // verify expected vote state
-        let prefix = OrgSharePrefixKey::new(3, 3);
+        let prefix = OrgItemPrefixKey::new(3, 3);
         let vote_state = VoteYesNo::vote_states(prefix, 1).unwrap();
         // verify expected defaults
         assert_eq!(vote_state.turnout(), 10);
