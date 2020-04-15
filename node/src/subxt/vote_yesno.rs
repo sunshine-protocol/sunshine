@@ -57,6 +57,7 @@ const CREATE_SHARE_WEIGHTED_PERCENTAGE_VOTE_NO_EXPIRY: &str =
     "create_share_weighted_percentage_threshold_vote";
 const CREATE_SHARE_WEIGHTED_COUNT_VOTE_NO_EXPIRY: &str =
     "create_share_weighted_count_threshold_vote";
+const CREATE_1P1V_PERCENTAGE_VOTE_NO_EXPIRY: &str = "create_1p1v_share_weighted_threshold_vote";
 const CREATE_1P1V_COUNT_VOTE_NO_EXPIRY: &str = "create_1p1v_count_threshold_vote";
 const SUBMIT_VOTE: &str = "submit_vote";
 
@@ -65,8 +66,8 @@ const SUBMIT_VOTE: &str = "submit_vote";
 pub struct CreateShareWeightedPercentageVoteArgs<T: VoteYesNo> {
     organization: OrgId<T>,
     share_id: ShareId<T>,
-    passage_threshold_pct: Permill,
-    turnout_threshold_pct: Permill,
+    support_requirement: Permill,
+    turnout_requirement: Permill,
 }
 
 /// Arguments for creating a share weighted vote with thresholds based on signal amounts
@@ -76,6 +77,15 @@ pub struct CreateShareWeightedCountVoteArgs<T: VoteYesNo> {
     share_id: ShareId<T>,
     support_requirement: T::Signal,
     turnout_requirement: T::Signal,
+}
+
+/// Arguments for creating a 1p1v vote with thresholds based on signal amounts
+#[derive(codec::Encode)]
+pub struct Create1P1VPercentageVoteArgs<T: VoteYesNo> {
+    organization: OrgId<T>,
+    share_id: ShareId<T>,
+    support_requirement: Permill,
+    turnout_requirement: Permill,
 }
 
 /// Arguments for creating a 1p1v vote with thresholds based on signal amounts
@@ -102,8 +112,8 @@ pub struct SubmitVoteArgs<T: VoteYesNo> {
 pub fn create_share_weighted_percentage_vote<T: VoteYesNo>(
     organization: OrgId<T>,
     share_id: ShareId<T>,
-    passage_threshold_pct: Permill,
-    turnout_threshold_pct: Permill,
+    support_requirement: Permill,
+    turnout_requirement: Permill,
 ) -> Call<CreateShareWeightedPercentageVoteArgs<T>> {
     Call::new(
         MODULE,
@@ -111,8 +121,8 @@ pub fn create_share_weighted_percentage_vote<T: VoteYesNo>(
         CreateShareWeightedPercentageVoteArgs {
             organization,
             share_id,
-            passage_threshold_pct,
-            turnout_threshold_pct,
+            support_requirement,
+            turnout_requirement,
         },
     )
 }
@@ -128,6 +138,25 @@ pub fn create_share_weighted_count_vote<T: VoteYesNo>(
         MODULE,
         CREATE_SHARE_WEIGHTED_COUNT_VOTE_NO_EXPIRY,
         CreateShareWeightedCountVoteArgs {
+            organization,
+            share_id,
+            support_requirement,
+            turnout_requirement,
+        },
+    )
+}
+
+/// Create share weighted count threshold vote in the context of an organizational share group
+pub fn create_1p1v_percentage_vote<T: VoteYesNo>(
+    organization: OrgId<T>,
+    share_id: ShareId<T>,
+    support_requirement: T::Signal,
+    turnout_requirement: T::Signal,
+) -> Call<Create1P1VPercentageVoteArgs<T>> {
+    Call::new(
+        MODULE,
+        CREATE_1P1V_PERCENTAGE_VOTE_NO_EXPIRY,
+        Create1P1VPercentageVoteArgs {
             organization,
             share_id,
             support_requirement,
