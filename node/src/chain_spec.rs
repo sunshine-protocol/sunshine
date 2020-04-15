@@ -1,6 +1,7 @@
-use grandpa_primitives::AuthorityId as GrandpaId;
+use sc_service::ChainType;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::{sr25519, Pair, Public};
+use sp_finality_grandpa::AuthorityId as GrandpaId;
 use sp_runtime::traits::{IdentifyAccount, Verify};
 use suntime::{
     AccountId,
@@ -48,6 +49,7 @@ pub fn development_config() -> ChainSpec {
     ChainSpec::from_genesis(
         "Development",
         "dev",
+        ChainType::Development,
         || {
             testnet_genesis(
                 // initial authorities
@@ -97,6 +99,7 @@ pub fn local_testnet_config() -> ChainSpec {
     ChainSpec::from_genesis(
         "Local Testnet",
         "local_testnet",
+        ChainType::Local,
         || {
             testnet_genesis(
                 // initial authorities
@@ -186,11 +189,11 @@ pub fn testnet_genesis(
     _enable_println: bool,
 ) -> GenesisConfig {
     GenesisConfig {
-        system: Some(SystemConfig {
+        frame_system: Some(SystemConfig {
             code: WASM_BINARY.to_vec(),
             changes_trie_config: Default::default(),
         }),
-        balances: Some(BalancesConfig {
+        pallet_balances: Some(BalancesConfig {
             balances: endowed_accounts
                 .iter()
                 .cloned()
@@ -204,15 +207,15 @@ pub fn testnet_genesis(
             total_issuance,
             shareholder_membership,
         }),
-        aura: Some(AuraConfig {
+        pallet_aura: Some(AuraConfig {
             authorities: initial_authorities.iter().map(|x| (x.0.clone())).collect(),
         }),
-        grandpa: Some(GrandpaConfig {
+        pallet_grandpa: Some(GrandpaConfig {
             authorities: initial_authorities
                 .iter()
                 .map(|x| (x.1.clone(), 1))
                 .collect(),
         }),
-        sudo: Some(SudoConfig { key: root_key }),
+        pallet_sudo: Some(SudoConfig { key: root_key }),
     }
 }

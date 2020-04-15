@@ -12,8 +12,13 @@ use std::marker::PhantomData;
 use substrate_subxt::{
     balances::{AccountData, Balances},
     system::System,
-    CheckEra, CheckGenesis, CheckNonce, CheckVersion, CheckWeight, SignedExtra,
-    EventsDecoder, EventsError, Metadata,
+    CheckEra,
+    CheckGenesis,
+    CheckNonce,
+    CheckVersion,
+    CheckWeight,
+    SignedExtra,
+    //EventsDecoder, EventsError, Metadata,
 };
 
 /// Concrete type definitions compatible w/ sunshine's runtime aka `suntime`
@@ -84,14 +89,13 @@ impl<T: System + Balances + Send + Sync> SignedExtension for Extra<T> {
     type Call = ();
     type AdditionalSigned = <<Self as SignedExtra<T>>::Extra as SignedExtension>::AdditionalSigned;
     type Pre = ();
-    type DispatchInfo = ();
 
     fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
         self.extra().additional_signed()
     }
 }
 
-impl TryFrom<Metadata> for EventsDecoder<Runtime> {
+/*impl TryFrom<Metadata> for EventsDecoder<Runtime> {
     type Error = EventsError;
 
     fn try_from(metadata: Metadata) -> Result<Self, Self::Error> {
@@ -123,4 +127,4 @@ impl TryFrom<Metadata> for EventsDecoder<Runtime> {
 
         Ok(decoder)
     }
-}
+}*/
