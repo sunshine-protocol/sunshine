@@ -63,13 +63,8 @@ fn vote_1p1v_created_correctly() {
     new_test_ext().execute_with(|| {
         let one = Origin::signed(1);
 
-        let one_person_one_vote = SupportedVoteTypes::OneAccountOneVote;
-        assert_ok!(VoteYesNo::create_count_threshold_vote(
-            one,
-            1,
-            1,
-            one_person_one_vote,
-            3u64, // just requires 3 votes in favor
+        assert_ok!(VoteYesNo::create_1p1v_count_threshold_vote(
+            one, 1, 1, 3u64, // just requires 3 votes in favor
             0u64,
         ));
 
@@ -93,11 +88,10 @@ fn vote_1p1v_apply_correctly() {
         let one = Origin::signed(1);
 
         // 1 creates a vote for share group 1 in organization 1
-        assert_ok!(VoteYesNo::create_count_threshold_vote(
+        assert_ok!(VoteYesNo::create_1p1v_count_threshold_vote(
             one.clone(),
             1,
             1,
-            SupportedVoteTypes::OneAccountOneVote,
             3u64, // just requires 3 votes in favor
             0u64,
         ));
@@ -207,11 +201,10 @@ fn vote_1p1v_threshold_enforced_correctly() {
         let one = Origin::signed(1);
 
         // 1 creates a vote for share group 1 in organization 1
-        assert_ok!(VoteYesNo::create_count_threshold_vote(
+        assert_ok!(VoteYesNo::create_1p1v_count_threshold_vote(
             one.clone(),
             1,
             1,
-            SupportedVoteTypes::OneAccountOneVote,
             5u64,
             0u64,
         ));
@@ -244,11 +237,10 @@ fn vote_1p1v_threshold_enforced_correctly() {
         assert_eq!(first_vote_outcome, Outcome::Approved);
 
         // 1 creates a vote for share group 2 in organization 1
-        assert_ok!(VoteYesNo::create_count_threshold_vote(
+        assert_ok!(VoteYesNo::create_1p1v_count_threshold_vote(
             one.clone(),
             1,
             2,
-            SupportedVoteTypes::OneAccountOneVote,
             1,
             0,
         ));
@@ -279,11 +271,10 @@ fn vote_1p1v_threshold_enforced_correctly() {
         assert_eq!(second_vote_outcome, Outcome::Approved);
 
         // 1 creates another vote for share group 1 in organization 1
-        assert_ok!(VoteYesNo::create_count_threshold_vote(
+        assert_ok!(VoteYesNo::create_1p1v_count_threshold_vote(
             one.clone(),
             1,
             1,
-            SupportedVoteTypes::OneAccountOneVote,
             3,
             0,
         ));
@@ -318,12 +309,10 @@ fn vote_share_weighted_created_correctly() {
     new_test_ext().execute_with(|| {
         let one = Origin::signed(1);
 
-        let share_weighted_vote = SupportedVoteTypes::ShareWeighted;
-        assert_ok!(VoteYesNo::create_percentage_threshold_vote(
+        assert_ok!(VoteYesNo::create_share_weighted_percentage_threshold_vote(
             one,
             1,
             1,
-            share_weighted_vote,
             Permill::from_percent(51),
             Permill::from_percent(10)
         ));
@@ -348,11 +337,10 @@ fn vote_share_weighted_apply_correctly() {
         let one = Origin::signed(1);
 
         // 1 creates a vote for share group 1 in organization 1
-        assert_ok!(VoteYesNo::create_percentage_threshold_vote(
+        assert_ok!(VoteYesNo::create_share_weighted_percentage_threshold_vote(
             one.clone(),
             1,
             1,
-            SupportedVoteTypes::ShareWeighted,
             Permill::from_percent(51),
             Permill::from_percent(10)
         ));
@@ -462,11 +450,10 @@ fn vote_share_weighted_threshold_enforced_correctly() {
         let one = Origin::signed(1);
 
         // 1 creates a vote for share group 1 in organization 1
-        assert_ok!(VoteYesNo::create_percentage_threshold_vote(
+        assert_ok!(VoteYesNo::create_share_weighted_percentage_threshold_vote(
             one.clone(),
             1,
             1,
-            SupportedVoteTypes::ShareWeighted,
             Permill::from_percent(51),
             Permill::from_percent(10)
         ));
@@ -499,11 +486,10 @@ fn vote_share_weighted_threshold_enforced_correctly() {
         assert_eq!(first_vote_outcome, Outcome::Approved);
 
         // 1 creates a vote for share group 2 in organization 1
-        assert_ok!(VoteYesNo::create_percentage_threshold_vote(
+        assert_ok!(VoteYesNo::create_share_weighted_percentage_threshold_vote(
             one.clone(),
             1,
             2,
-            SupportedVoteTypes::ShareWeighted,
             Permill::from_percent(33),
             Permill::from_percent(10)
         ));
@@ -532,11 +518,10 @@ fn vote_share_weighted_threshold_enforced_correctly() {
         assert_eq!(second_vote_outcome, Outcome::Approved);
 
         // 1 creates another vote for share group 1 in organization 1
-        assert_ok!(VoteYesNo::create_percentage_threshold_vote(
+        assert_ok!(VoteYesNo::create_share_weighted_percentage_threshold_vote(
             one.clone(),
             1,
             1,
-            SupportedVoteTypes::ShareWeighted,
             Permill::from_percent(33),
             Permill::from_percent(10)
         ));

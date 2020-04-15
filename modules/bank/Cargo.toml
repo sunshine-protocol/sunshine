@@ -5,31 +5,32 @@ authors = ["4meta5"]
 edition = "2018"
 
 [dependencies]
-serde = { version = "1.0.104", optional = true }
+serde = { version = "1.0.106", optional = true }
 codec = { package = "parity-scale-codec", version = "1.2.0", default-features = false, features = ["derive"] }
-sp-std = { git = "https://github.com/paritytech/substrate.git", version = "2.0.0-alpha.5", rev = '8c1858048148c1c717123b0e4d360f8ad1be5bf2', default-features = false }
-sp-runtime = { git = "https://github.com/paritytech/substrate.git", version = "2.0.0-alpha.5", rev = '8c1858048148c1c717123b0e4d360f8ad1be5bf2', default-features = false }
-frame-support = { git = "https://github.com/paritytech/substrate.git", version = "2.0.0-alpha.5", rev = '8c1858048148c1c717123b0e4d360f8ad1be5bf2', default-features = false }
-frame-system = { git = "https://github.com/paritytech/substrate.git", version = "2.0.0-alpha.5", rev = '8c1858048148c1c717123b0e4d360f8ad1be5bf2', default-features = false }
-pallet-balances = { git = "https://github.com/paritytech/substrate.git", version = "2.0.0-alpha.5", rev = '8c1858048148c1c717123b0e4d360f8ad1be5bf2', default-features = false }
-util = { path = "../util", default-features=false}
-shares-atomic = { path = "../shares-atomic", default-features=false}
-vote-yesno = { path = "../vote-yesno", default-features=false}
-clear_on_drop = { version = "0.2.3", features = ["no_cc"] }	# https://github.com/paritytech/substrate/issues/4179
+
+sp-std = { version = "2.0.0-alpha.6", default-features = false }
+sp-runtime = { version = "2.0.0-alpha.6", default-features = false }
+frame-support = { version = "2.0.0-alpha.6", default-features = false }
+frame-system = { version = "2.0.0-alpha.6", default-features = false }
+pallet-balances = { version = "2.0.0-alpha.6", default-features = false }
+util = { path = "../util", default-features = false }
+shares-atomic = { path = "../shares-atomic", default-features = false}
+vote-yesno = { path = "../vote-yesno", default-features = false}
+clear_on_drop = { version = "0.2.3", features = ["no_cc"] } # https://github.com/paritytech/substrate/issues/4179
 
 [dev-dependencies]
-sp-io = { git = "https://github.com/paritytech/substrate.git", version = "2.0.0-alpha.5", rev = '8c1858048148c1c717123b0e4d360f8ad1be5bf2', default-features = false }
-sp-core = { git = "https://github.com/paritytech/substrate.git", version = "2.0.0-alpha.5", rev = '8c1858048148c1c717123b0e4d360f8ad1be5bf2', default-features = false }
+sp-io = { version = "2.0.0-alpha.6", default-features = false }
+sp-core = { version = "2.0.0-alpha.6", default-features = false }
 
 [features]
 default = ["std"]
 std = [
-	"serde",
-	"codec/std",
-	"sp-std/std",
-	"sp-runtime/std",
-	"frame-support/std",
-	"frame-system/std",
-	"pallet-balances/std",
-	"shares-atomic/std",
+    "serde",
+    "codec/std",
+    "sp-std/std",
+    "sp-runtime/std",
+    "frame-support/std",
+    "frame-system/std",
+    "pallet-balances/std",
+    "shares-atomic/std",
 ]
