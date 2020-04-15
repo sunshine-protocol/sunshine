@@ -13,7 +13,6 @@ members = [
 ]
 
 [patch.crates-io]
-substrate-subxt = { path = "../substrate-subxt" }
 #frame-executive = { git = "https://github.com/paritytech/substrate.git", rev = "8c1858048148c1c717123b0e4d360f8ad1be5bf2" }
 #frame-metadata = { git = "https://github.com/paritytech/substrate.git", rev = "8c1858048148c1c717123b0e4d360f8ad1be5bf2" }
 #frame-support = { git = "https://github.com/paritytech/substrate.git", rev = "8c1858048148c1c717123b0e4d360f8ad1be5bf2" }

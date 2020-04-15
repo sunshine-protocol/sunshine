@@ -23,7 +23,7 @@ sc-consensus-aura = { version = "0.8.0-alpha.6", default-features = false }
 sc-executor = { version = "0.8.0-alpha.6", default-features = false }
 sc-finality-grandpa = { version = "0.8.0-alpha.6", default-features = false }
 sc-network = { version = "0.8.0-alpha.6", default-features = false }
-sc-service = { version = "0.8.0-alpha.6", default-features = false }
+sc-service = { version = "0.8.0-alpha.6", default-features = false, features = ["rocksdb"] }
 sc-transaction-pool = { version = "2.0.0-alpha.6", default-features = false }
 sp-consensus = { version = "0.8.0-alpha.6", default-features = false }
 sp-consensus-aura = { version = "0.8.0-alpha.6", default-features = false }
