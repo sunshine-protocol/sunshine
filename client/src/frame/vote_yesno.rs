@@ -57,7 +57,7 @@ const CREATE_SHARE_WEIGHTED_PERCENTAGE_VOTE_NO_EXPIRY: &str =
     "create_share_weighted_percentage_threshold_vote";
 const CREATE_SHARE_WEIGHTED_COUNT_VOTE_NO_EXPIRY: &str =
     "create_share_weighted_count_threshold_vote";
-const CREATE_1P1V_PERCENTAGE_VOTE_NO_EXPIRY: &str = "create_1p1v_share_weighted_threshold_vote";
+const CREATE_1P1V_PERCENTAGE_VOTE_NO_EXPIRY: &str = "create_1p1v_percentage_threshold_vote";
 const CREATE_1P1V_COUNT_VOTE_NO_EXPIRY: &str = "create_1p1v_count_threshold_vote";
 const SUBMIT_VOTE: &str = "submit_vote";
 
