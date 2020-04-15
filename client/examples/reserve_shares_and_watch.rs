@@ -34,7 +34,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             reserves_alices_shares.clone().into(),
         ))
         .await?;
-    let event =  extrinsic_success
+    let event = extrinsic_success
         .find_event::<(OrgId, ShareId, AccountId, u32)>("SharesAtomic", "SharesReserved");
     match event {
         Some(Ok((org, share, account, amt))) => println!(

@@ -10,12 +10,7 @@ use std::marker::PhantomData;
 use substrate_subxt::{
     balances::{AccountData, Balances},
     system::System,
-    CheckEra,
-    CheckGenesis,
-    CheckNonce,
-    CheckVersion,
-    CheckWeight,
-    SignedExtra,
+    CheckEra, CheckGenesis, CheckNonce, CheckVersion, CheckWeight, SignedExtra,
 };
 
 /// Concrete type definitions compatible w/ sunshine's runtime aka `suntime`
