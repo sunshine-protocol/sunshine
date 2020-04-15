@@ -153,11 +153,10 @@ decl_module! {
         fn deposit_event() = default;
 
         #[weight = SimpleDispatchInfo::zero()]
-        pub fn create_percentage_threshold_vote(
+        pub fn create_share_weighted_percentage_threshold_vote(
             origin,
             organization: OrgId<T>,
             share_id: ShareId<T>,
-            vote_type: SupportedVoteTypes<T::Signal>,
             passage_threshold_pct: Permill,
             turnout_threshold_pct: Permill,
         ) -> DispatchResult {
@@ -173,18 +172,17 @@ decl_module! {
             ensure!(authentication, Error::<T>::NotAuthorizedToCreateVoteForOrganization);
             let threshold_config = ThresholdConfig::new_percentage_threshold(passage_threshold_pct, turnout_threshold_pct);
             // default share weighted
-            let new_vote_id = Self::open_vote(organization, share_id, None, vote_type, threshold_config, None)?;
+            let new_vote_id = Self::open_vote(organization, share_id, None, SupportedVoteTypes::ShareWeighted, threshold_config, None)?;
             // emit event
             Self::deposit_event(RawEvent::NewVoteStarted(organization, share_id, new_vote_id));
             Ok(())
         }
 
         #[weight = SimpleDispatchInfo::zero()]
-        pub fn create_count_threshold_vote(
+        pub fn create_share_weighted_count_threshold_vote(
             origin,
             organization: OrgId<T>,
             share_id: ShareId<T>,
-            vote_type: SupportedVoteTypes<T::Signal>,
             support_requirement: T::Signal,
             turnout_requirement: T::Signal,
         ) -> DispatchResult {
@@ -199,8 +197,34 @@ decl_module! {
             >>::is_sudo_key(&vote_creator);
             ensure!(authentication, Error::<T>::NotAuthorizedToCreateVoteForOrganization);
             let threshold_config = ThresholdConfig::new_signal_count_threshold(support_requirement, turnout_requirement);
-            // default share weighted
-            let new_vote_id = Self::open_vote(organization, share_id, None, vote_type, threshold_config, None)?;
+            // share weighted count threshold
+            let new_vote_id = Self::open_vote(organization, share_id, None, SupportedVoteTypes::ShareWeighted, threshold_config, None)?;
+            // emit event
+            Self::deposit_event(RawEvent::NewVoteStarted(organization, share_id, new_vote_id));
+            Ok(())
+        }
+
+        #[weight = SimpleDispatchInfo::zero()]
+        pub fn create_1p1v_count_threshold_vote(
+            origin,
+            organization: OrgId<T>,
+            share_id: ShareId<T>,
+            support_requirement: T::Signal,
+            turnout_requirement: T::Signal,
+        ) -> DispatchResult {
+            let vote_creator = ensure_signed(origin)?;
+            // default authentication is organization supervisor or sudo key
+            let authentication: bool = <<T as Trait>::ShareData as OrgSupervisorKeyManagement<
+                OrgId<T>,
+                <T as frame_system::Trait>::AccountId,
+            >>::is_organization_supervisor(organization, &vote_creator) ||
+            <<T as Trait>::ShareData as SudoKeyManagement<
+                <T as frame_system::Trait>::AccountId,
+            >>::is_sudo_key(&vote_creator);
+            ensure!(authentication, Error::<T>::NotAuthorizedToCreateVoteForOrganization);
+            let threshold_config = ThresholdConfig::new_signal_count_threshold(support_requirement, turnout_requirement);
+            // one account one vote as per the API
+            let new_vote_id = Self::open_vote(organization, share_id, None, SupportedVoteTypes::OneAccountOneVote, threshold_config, None)?;
             // emit event
             Self::deposit_event(RawEvent::NewVoteStarted(organization, share_id, new_vote_id));
             Ok(())
