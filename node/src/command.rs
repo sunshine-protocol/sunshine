@@ -5,32 +5,31 @@ use sp_consensus_aura::sr25519::AuthorityPair as AuraPair;
 
 impl SubstrateCli for Cli {
     fn impl_name() -> &'static str {
-        "Sunshine Node"
+        crate::IMPL_NAME
     }
 
     fn impl_version() -> &'static str {
-        // env!("SUBSTRATE_CLI_IMPL_VERSION")
-        env!("CARGO_PKG_DESCRIPTION")
+        crate::IMPL_VERSION
     }
 
     fn description() -> &'static str {
-        env!("CARGO_PKG_DESCRIPTION")
+        crate::DESCRIPTION
     }
 
     fn author() -> &'static str {
-        env!("CARGO_PKG_AUTHORS")
+        crate::AUTHOR
     }
 
     fn support_url() -> &'static str {
-        "https://joinsunshine.com"
+        crate::SUPPORT_URL
     }
 
     fn copyright_start_year() -> i32 {
-        2020
+        crate::COPYRIGHT_START_YEAR
     }
 
     fn executable_name() -> &'static str {
-        env!("CARGO_PKG_NAME")
+        crate::EXECUTABLE_NAME
     }
 
     fn load_spec(&self, id: &str) -> Result<Box<dyn sc_service::ChainSpec>, String> {
