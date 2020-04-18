@@ -1,7 +1,7 @@
 use sp_keyring::AccountKeyring;
 use sunshine_client::shares_atomic::{reserve_shares, SharesAtomic};
 use sunshine_client::system::System;
-use sunshine_client::{ClientBuilder, Runtime};
+use sunshine_client::Runtime;
 
 type AccountId = <Runtime as System>::AccountId;
 type OrgId = <Runtime as SharesAtomic>::OrgId;
@@ -10,16 +10,15 @@ type ShareId = <Runtime as SharesAtomic>::ShareId;
 #[async_std::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
-
-    let alice_the_signer = AccountKeyring::Alice.pair();
-
-    let reserves_alices_shares = AccountKeyring::Alice.to_account_id();
+    let alice_the_signer = AccountKeyring::Eve.pair();
+    let reserves_alices_shares = AccountKeyring::Eve.to_account_id();
 
     let organization: OrgId = 1u64;
     let share_id: ShareId = 1u64;
 
-    let cli = ClientBuilder::new().build().await?;
-    let xt = cli.xt(alice_the_signer, None).await?;
+    let client = sunshine_client::build_client().await?;
+    let xt = client.xt(alice_the_signer, None).await?;
+
     let extrinsic_success = xt
         .watch()
         .events_decoder(|decoder| {
