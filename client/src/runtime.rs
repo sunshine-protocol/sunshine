@@ -36,6 +36,7 @@ impl Balances for Runtime {
 impl SharesAtomic for Runtime {
     type OrgId = u64;
     type ShareId = u64;
+    type Share = u64;
 }
 
 pub type RuntimeExtra = Extra<Runtime>;

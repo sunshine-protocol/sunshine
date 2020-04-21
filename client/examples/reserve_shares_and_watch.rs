@@ -1,47 +1,38 @@
+use sp_core::crypto::Pair;
 use sp_keyring::AccountKeyring;
-use sunshine_client::shares_atomic::{reserve_shares, SharesAtomic};
+use sunshine_client::shares_atomic::*;
 use sunshine_client::system::System;
 use sunshine_client::Runtime;
-
-type AccountId = <Runtime as System>::AccountId;
-type OrgId = <Runtime as SharesAtomic>::OrgId;
-type ShareId = <Runtime as SharesAtomic>::ShareId;
 
 #[async_std::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
-    let alice_the_signer = AccountKeyring::Eve.pair();
-    let reserves_alices_shares = AccountKeyring::Eve.to_account_id();
-
-    let organization: OrgId = 1u64;
-    let share_id: ShareId = 1u64;
-
+    let signer = AccountKeyring::Eve.pair();
     let client = sunshine_client::build_client().await?;
-    let xt = client.xt(alice_the_signer, None).await?;
+    let xt = client.xt(signer.clone(), None).await?;
+
+    let org = 1;
+    let share = 1;
+    let account = signer.public().into();
+    let reserved = client
+        .profile(&org, &share, &account)
+        .await?
+        .get_times_reserved();
 
     let extrinsic_success = xt
         .watch()
-        .events_decoder(|decoder| {
-            // for any primitive event with no type size registered
-            decoder.register_type_size::<u64>("OrgId")?;
-            decoder.register_type_size::<u64>("ShareId")?;
-            decoder.register_type_size::<(u64, u64, u64)>("IdentificationTuple")
-        })
-        .submit(reserve_shares::<Runtime>(
-            organization,
-            share_id,
-            reserves_alices_shares.clone().into(),
-        ))
+        .with_shares_atomic()
+        .submit(reserve_shares::<Runtime>(org, share, account.clone()))
         .await?;
-    let event = extrinsic_success
-        .find_event::<(OrgId, ShareId, AccountId, u32)>("SharesAtomic", "SharesReserved");
-    match event {
-        Some(Ok((org, share, account, amt))) => println!(
-            "Account {:?} reserved {:?} shares with share id {:?} for organization id {:?}",
-            account, amt, share, org
-        ),
-        Some(Err(err)) => println!("Failed to decode code hash: {}", err),
-        None => println!("Failed to find SharesAtomic::Reserve Event"),
-    }
+    let res = extrinsic_success.shares_reserved().unwrap()?;
+
+    assert_eq!((org, share, account, reserved + 1), res);
+
+    let (org, share, account, reserved) = res;
+    println!(
+        "Account {:?} reserved {:?} shares with share id {:?} for organization {:?}",
+        account, reserved, share, org,
+    );
+
     Ok(())
 }

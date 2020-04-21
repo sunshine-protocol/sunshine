@@ -15,6 +15,7 @@ light-client = ["substrate-subxt-light-client", "sunshine-node"]
 [dependencies]
 codec = { version = "1.2", package = "parity-scale-codec", default-features = false, features = ["derive", "full"] }
 frame-support = "2.0.0-alpha.6"
+futures = "0.3.4"
 pallet-indices = "2.0.0-alpha.6"
 substrate-subxt = "0.6.0"
 substrate-subxt-light-client = { version = "0.1.0", optional = true }

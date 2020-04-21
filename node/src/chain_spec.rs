@@ -59,7 +59,10 @@ impl Org {
         (
             self.org_id,
             self.share_id,
-            self.members.iter().map(|(account, _)| account.clone()).collect(),
+            self.members
+                .iter()
+                .map(|(account, _)| account.clone())
+                .collect(),
         )
     }
 
