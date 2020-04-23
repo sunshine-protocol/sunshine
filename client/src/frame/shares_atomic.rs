@@ -175,7 +175,7 @@ mod tests {
     #[ignore]
     async fn test_reserve_shares() {
         env_logger::init();
-        let signer = AccountKeyring::Alice.pair();
+        let signer = AccountKeyring::Eve.pair();
         let client = crate::build_client().await.unwrap();
         let xt = client.xt(signer.clone(), None).await.unwrap();
 
