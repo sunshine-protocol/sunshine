@@ -1,8 +1,6 @@
 use sp_core::crypto::Pair;
 use sp_keyring::AccountKeyring;
 use sunshine_client::shares_atomic::*;
-use sunshine_client::system::System;
-use sunshine_client::Runtime;
 
 #[async_std::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -15,23 +13,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let share = 1;
     let account = signer.public().into();
     let reserved = client
-        .profile(&org, &share, &account)
+        .profile(&(&org, &share), &account)
         .await?
         .get_times_reserved();
 
     let extrinsic_success = xt
         .watch()
         .with_shares_atomic()
-        .submit(reserve_shares::<Runtime>(org, share, account.clone()))
+        .reserve_shares(org, share, account.clone())
         .await?;
-    let res = extrinsic_success.shares_reserved().unwrap()?;
+    let event = extrinsic_success.shares_reserved().unwrap()?;
 
-    assert_eq!((org, share, account, reserved + 1), res);
+    assert_eq!(reserved + 1, event.reserved);
 
-    let (org, share, account, reserved) = res;
     println!(
         "Account {:?} reserved {:?} shares with share id {:?} for organization {:?}",
-        account, reserved, share, org,
+        event.account, event.reserved, event.share, event.org,
     );
 
     Ok(())
