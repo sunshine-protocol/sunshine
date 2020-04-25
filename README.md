@@ -51,3 +51,14 @@ Start a development chain with:
 ```
 
 Detailed logs may be shown by running the node with the following environment variables set: `RUST_LOG=debug RUST_BACKTRACE=1 cargo run -- --dev`.
+
+### Run dev chain with [pm2][pm2]
+
+```
+pm2 start scripts/daemon.json
+```
+
+The will raise a `sunsine-node` process background on yor machine, to checkout the `sunshine-node` outputs, run `pm2 log sunshine-node`.
+
+
+[pm2]: https://pm2.keymetrics.io/

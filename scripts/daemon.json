@@ -1,0 +1,8 @@
+{
+  "apps": [
+    {
+      "name": "sunshine-node",
+      "script": "target/debug/sunshine-node --dev"
+    }
+  ]
+}
