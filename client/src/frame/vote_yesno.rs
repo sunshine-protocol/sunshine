@@ -8,12 +8,14 @@ use sp_runtime::{
 };
 use std::fmt::Debug;
 use substrate_subxt::{system::System, Call};
+use substrate_subxt_proc_macro::*;
 use util::{
     traits::{GroupMembership, LockableProfile, ReservableProfile, ShareBank, ShareRegistration},
     voteyesno::VoterYesNoView,
 };
 
 /// The subset of the `vote_yesno::Trait` that a client must implement.
+#[module]
 pub trait VoteYesNo: System {
     /// The identifier for each vote; ProposalId => Vec<VoteId> s.t. sum(VoteId::Outcomes) => ProposalId::Outcome
     type VoteId: Parameter

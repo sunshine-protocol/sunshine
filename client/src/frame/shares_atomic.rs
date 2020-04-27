@@ -39,71 +39,84 @@ pub trait SharesAtomic: System {
         + Zero;
 }
 
-#[storage]
-pub trait SharesAtomicStore<T: SharesAtomic> {
-    fn share_id_counter(org: &T::OrgId) -> T::ShareId;
+#[derive(Encode, Store)]
+pub struct ShareIdCounterStore<T: SharesAtomic> {
+    #[store(returns = T::ShareId)]
+    pub org: T::OrgId,
+}
 
-    fn total_issuance(org: &T::OrgId, share: &T::ShareId) -> T::Share;
+#[derive(Encode, Store)]
+pub struct TotalIssuanceStore<T: SharesAtomic> {
+    #[store(returns = T::Share)]
+    pub org: T::OrgId,
+    pub share: T::ShareId,
+}
 
-    fn share_holders(org: &T::OrgId, share: &T::ShareId) -> Vec<<T as System>::AccountId>;
+#[derive(Encode, Store)]
+pub struct ShareHoldersStore<T: SharesAtomic> {
+    #[store(returns = Vec<<T as System>::AccountId>)]
+    pub org: T::OrgId,
+    pub share: T::ShareId,
+}
 
-    fn profile(
-        prefix: &(&T::OrgId, &T::ShareId),
-        account_id: &<T as System>::AccountId,
-    ) -> AtomicShareProfile<T::Share>;
+#[derive(Encode, Store)]
+pub struct ProfileStore<'a, T: SharesAtomic> {
+    #[store(returns = AtomicShareProfile<T::Share>)]
+    pub prefix: (T::OrgId, T::ShareId),
+    pub account_id: &'a <T as System>::AccountId,
 }
 
 /// Register shares.
 #[derive(Call, Debug, Encode)]
-pub struct RegisterSharesCall<T: SharesAtomic> {
-    organization: T::OrgId,
-    share_id: T::ShareId,
-    genesis: Vec<(T::AccountId, T::Share)>,
+pub struct RegisterSharesCall<'a, T: SharesAtomic> {
+    pub org: T::OrgId,
+    pub share: T::ShareId,
+    pub genesis: &'a [(T::AccountId, T::Share)],
 }
 
 #[derive(Call, Debug, Encode)]
-pub struct LockSharesCall<T: SharesAtomic> {
-    organization: T::OrgId,
-    share_id: T::ShareId,
-    who: <T as System>::AccountId,
+pub struct LockSharesCall<'a, T: SharesAtomic> {
+    pub org: T::OrgId,
+    pub share: T::ShareId,
+    pub who: &'a <T as System>::AccountId,
 }
 
 #[derive(Call, Debug, Encode)]
-pub struct UnlockSharesCall<T: SharesAtomic> {
-    organization: T::OrgId,
-    share_id: T::ShareId,
-    who: <T as System>::AccountId,
+pub struct UnlockSharesCall<'a, T: SharesAtomic> {
+    pub org: T::OrgId,
+    pub share: T::ShareId,
+    pub who: &'a <T as System>::AccountId,
 }
 
 /// Request the share reservation.
 #[derive(Call, Debug, Encode)]
-pub struct ReserveSharesCall<T: SharesAtomic> {
-    organization: T::OrgId,
-    share_id: T::ShareId,
-    who: <T as System>::AccountId,
+pub struct ReserveSharesCall<'a, T: SharesAtomic> {
+    pub org: T::OrgId,
+    pub share: T::ShareId,
+    pub who: &'a <T as System>::AccountId,
 }
 
 #[derive(Call, Debug, Encode)]
-pub struct UnreserveSharesCall<T: SharesAtomic> {
-    organization: T::OrgId,
-    share_id: T::ShareId,
-    who: <T as System>::AccountId,
+pub struct UnreserveSharesCall<'a, T: SharesAtomic> {
+    pub org: T::OrgId,
+    pub share: T::ShareId,
+    pub who: &'a <T as System>::AccountId,
 }
 
 #[derive(Call, Debug, Encode)]
-pub struct IssueSharesCall<T: SharesAtomic> {
-    organization: T::OrgId,
-    share_id: T::ShareId,
-    who: <T as System>::AccountId,
-    shares: T::Share,
+pub struct IssueSharesCall<'a, T: SharesAtomic> {
+    pub org: T::OrgId,
+    pub share: T::ShareId,
+    pub who: &'a <T as System>::AccountId,
+    pub amount: T::Share,
 }
 
 #[derive(Call, Debug, Encode)]
-pub struct BurnSharesCall<T: SharesAtomic> {
-    organization: T::OrgId,
-    share_id: T::ShareId,
-    who: <T as System>::AccountId,
-    shares: T::Share,
+pub struct BurnSharesCall<'a, T: SharesAtomic> {
+    pub org: T::OrgId,
+    pub share: T::ShareId,
+    pub who: &'a <T as System>::AccountId,
+    pub amount: T::Share,
 }
 
 #[derive(Debug, Decode, Eq, Event, PartialEq)]
@@ -168,41 +181,164 @@ pub struct TotalSharesIssuedEvent<T: SharesAtomic> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sp_core::crypto::Pair;
-    use sp_keyring::AccountKeyring;
+    use crate::{Runtime, RuntimeExtra};
 
-    #[async_std::test]
-    #[ignore]
-    async fn test_reserve_shares() {
-        env_logger::init();
-        let signer = AccountKeyring::Eve.pair();
-        let client = crate::build_client().await.unwrap();
-        let xt = client.xt(signer.clone(), None).await.unwrap();
+    subxt_test!({
+        name: register_shares,
+        runtime: Runtime,
+        extra: RuntimeExtra,
+        step: {
+            state: {
+                counter: ShareIdCounterStore {
+                    org: 1,
+                },
+            },
+            call: RegisterSharesCall {
+                org: 1,
+                share: 1,
+                genesis: &[(alice.clone(), 10), (bob.clone(), 10)],
+            },
+            event: NewShareTypeEvent {
+                org: 1,
+                share: pre.counter,
+            },
+            assert: {
+                assert_eq!(pre.counter + 1, post.counter);
+            },
+        },
+    });
 
-        let org = 1;
-        let share = 1;
-        let account = signer.public().into();
-        let reserved = client
-            .profile(&(&org, &share), &account)
-            .await
-            .unwrap()
-            .get_times_reserved();
+    subxt_test!({
+        name: reserve_shares,
+        runtime: Runtime,
+        extra: RuntimeExtra,
+        state: {
+            profile: ProfileStore {
+                prefix: (1, 1),
+                account_id: &alice,
+            },
+        },
+        step: {
+            call: ReserveSharesCall {
+                org: 1,
+                share: 1,
+                who: &alice,
+            },
+            event: SharesReservedEvent {
+                org: 1,
+                share: 1,
+                account: alice.clone(),
+                reserved: pre.profile.get_times_reserved() + 1,
+            },
+            assert: {
+                assert_eq!(pre.profile.get_times_reserved() + 1, post.profile.get_times_reserved());
+            },
+        },
+        step: {
+            call: UnreserveSharesCall {
+                org: 1,
+                share: 1,
+                who: &alice,
+            },
+            event: SharesUnReservedEvent {
+                org: 1,
+                share: 1,
+                account: alice.clone(),
+                reserved: pre.profile.get_times_reserved() - 1,
+            },
+            assert: {
+                assert_eq!(pre.profile.get_times_reserved() - 1, post.profile.get_times_reserved());
+            },
+        }
+    });
 
-        let extrinsic_success = xt
-            .watch()
-            .with_shares_atomic()
-            .reserve_shares(org, share, account.clone())
-            .await
-            .unwrap();
-        let event = extrinsic_success.shares_reserved().unwrap().unwrap();
-        assert_eq!(
-            event,
-            SharesReservedEvent {
-                org,
-                share,
-                account,
-                reserved: reserved + 1
-            }
-        );
-    }
+    subxt_test!({
+        name: lock_shares,
+        runtime: Runtime,
+        extra: RuntimeExtra,
+        state: {
+            profile: ProfileStore {
+                prefix: (1, 1),
+                account_id: &alice,
+            },
+        },
+        step: {
+            call: LockSharesCall {
+                org: 1,
+                share: 1,
+                who: &alice,
+            },
+            event: SharesLockedEvent {
+                org: 1,
+                share: 1,
+                account: alice.clone(),
+            },
+            assert: {
+                assert_eq!(pre.profile.is_unlocked(), true);
+                assert_eq!(post.profile.is_unlocked(), false);
+            },
+        },
+        step: {
+            call: UnlockSharesCall {
+                org: 1,
+                share: 1,
+                who: &alice,
+            },
+            event: SharesUnlockedEvent {
+                org: 1,
+                share: 1,
+                account: alice.clone(),
+            },
+            assert: {
+                assert_eq!(pre.profile.is_unlocked(), false);
+                assert_eq!(post.profile.is_unlocked(), true);
+            },
+        }
+    });
+
+    subxt_test!({
+        name: issue_shares,
+        runtime: Runtime,
+        extra: RuntimeExtra,
+        state: {
+            issuance: TotalIssuanceStore {
+                org: 1,
+                share: 1,
+            },
+        },
+        step: {
+            call: IssueSharesCall {
+                org: 1,
+                share: 1,
+                who: &alice,
+                amount: 10,
+            },
+            event: IssuanceEvent {
+                org: 1,
+                share: 1,
+                account: alice.clone(),
+                amount: 10,
+            },
+            assert: {
+                assert_eq!(pre.issuance + 10, post.issuance);
+            },
+        },
+        step: {
+            call: BurnSharesCall {
+                org: 1,
+                share: 1,
+                who: &alice,
+                amount: 10,
+            },
+            event: BurnEvent {
+                org: 1,
+                share: 1,
+                account: alice.clone(),
+                amount: 10,
+            },
+            assert: {
+                assert_eq!(pre.issuance - 10, post.issuance);
+            },
+        }
+    });
 }

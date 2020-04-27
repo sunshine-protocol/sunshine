@@ -13,16 +13,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let share = 1;
     let account = signer.public().into();
     let reserved = client
-        .profile(&(&org, &share), &account)
+        .profile((org, share), &account)
         .await?
+        .unwrap()
         .get_times_reserved();
 
     let extrinsic_success = xt
         .watch()
-        .with_shares_atomic()
-        .reserve_shares(org, share, account.clone())
+        .reserve_shares(org, share, &account)
         .await?;
-    let event = extrinsic_success.shares_reserved().unwrap()?;
+    let event = extrinsic_success.shares_reserved()?.unwrap();
 
     assert_eq!(reserved + 1, event.reserved);
 
