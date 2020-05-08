@@ -39,7 +39,7 @@ sc-cli = { version = "0.8.0-alpha.7", default-features = false, optional = true 
 structopt = { version = "0.3.14", optional = true }
 
 [features]
-default = ["sc-service/rocksdb"]
+default = ["sc-service/db"]
 cli = ["sc-cli", "structopt"]
 
 [[bin]]
