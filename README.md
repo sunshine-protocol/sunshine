@@ -1,7 +1,4 @@
-<p align="center"> 
-<a href ="https://joinsunshine.com/"><img src="./art/sunset.jpg"></a>
-</p>
-
+![sunset](https://user-images.githubusercontent.com/741807/81438174-95909f00-916c-11ea-9bb2-ca677781069f.jpg)
 > "Over time, all the components of the DAO are likely to be upgraded using its own mechanisms...Given the high requirements for stability, **self-improvement will be critical to the survival of any DAO-based democratic system.**" ~[DAOs, Democracy and Governance](http://merkle.com/papers/DAOdemocracyDraft.pdf) by Ralph Merkle
 
 ## Onboarding
