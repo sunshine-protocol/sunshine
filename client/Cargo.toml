@@ -11,14 +11,14 @@ keywords = ["parity", "substrate", "blockchain", "sunshine"]
 
 [dependencies]
 codec = { version = "1.2", package = "parity-scale-codec", default-features = false, features = ["derive", "full"] }
-frame-support = "2.0.0-alpha.6"
-pallet-indices = "2.0.0-alpha.6"
+frame-support = "2.0.0-alpha.7"
+pallet-indices = "2.0.0-alpha.7"
 substrate-subxt = "0.6.0"
-sp-core = "2.0.0-alpha.6"
-sp-runtime = "2.0.0-alpha.6"
+sp-core = "2.0.0-alpha.7"
+sp-runtime = "2.0.0-alpha.7"
 util = { path = "../modules/util", default-features = false }
 
 [dev-dependencies]
-async-std = { version = "1.5.0", features = ["attributes"] }
+async-std = { version = "1.6.0-beta.1", features = ["attributes"] }
 env_logger = "0.7.1"
-sp-keyring = "2.0.0-alpha.6"
+sp-keyring = "2.0.0-alpha.7"
