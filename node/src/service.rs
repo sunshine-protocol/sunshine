@@ -1,6 +1,5 @@
 //! Service and ServiceFactory implementation. Specialized wrapper over substrate service.
 
-use sc_client::LongestChain;
 use sc_executor::native_executor_instance;
 pub use sc_executor::NativeExecutor;
 use sc_service::{error::Error as ServiceError, AbstractService, Configuration, ServiceBuilder};
@@ -32,43 +31,48 @@ macro_rules! new_full_start {
             suntime::RuntimeApi,
             crate::service::Executor,
         >($config)?
-        .with_select_chain(|_config, backend| Ok(sc_client::LongestChain::new(backend.clone())))?
-        .with_transaction_pool(|config, client, _fetcher| {
+        .with_select_chain(|_config, backend| Ok(sc_consensus::LongestChain::new(backend.clone())))?
+        .with_transaction_pool(|config, client, _fetcher, prometheus_registry| {
             let pool_api = sc_transaction_pool::FullChainApi::new(client.clone());
             Ok(sc_transaction_pool::BasicPool::new(
                 config,
                 std::sync::Arc::new(pool_api),
+                prometheus_registry,
             ))
         })?
-        .with_import_queue(|_config, client, mut select_chain, _transaction_pool| {
-            let select_chain = select_chain
-                .take()
-                .ok_or_else(|| sc_service::Error::SelectChainRequired)?;
+        .with_import_queue(
+            |_config, client, mut select_chain, _transaction_pool, spawn_task_handle| {
+                let select_chain = select_chain
+                    .take()
+                    .ok_or_else(|| sc_service::Error::SelectChainRequired)?;
 
-            let (grandpa_block_import, grandpa_link) = sc_finality_grandpa::block_import(
-                client.clone(),
-                &(client.clone() as Arc<_>),
-                select_chain,
-            )?;
+                let (grandpa_block_import, grandpa_link) = sc_finality_grandpa::block_import(
+                    client.clone(),
+                    &(client.clone() as Arc<_>),
+                    select_chain,
+                )?;
 
-            let aura_block_import = sc_consensus_aura::AuraBlockImport::<_, _, _, AuraPair>::new(
-                grandpa_block_import.clone(),
-                client.clone(),
-            );
+                let aura_block_import =
+                    sc_consensus_aura::AuraBlockImport::<_, _, _, AuraPair>::new(
+                        grandpa_block_import.clone(),
+                        client.clone(),
+                    );
 
-            let import_queue = sc_consensus_aura::import_queue::<_, _, _, AuraPair>(
-                sc_consensus_aura::slot_duration(&*client)?,
-                aura_block_import,
-                Some(Box::new(grandpa_block_import.clone())),
-                None,
-                client,
-                inherent_data_providers.clone(),
-            )?;
+                let import_queue = sc_consensus_aura::import_queue::<_, _, _, AuraPair, _>(
+                    sc_consensus_aura::slot_duration(&*client)?,
+                    aura_block_import,
+                    Some(Box::new(grandpa_block_import.clone())),
+                    None,
+                    client,
+                    inherent_data_providers.clone(),
+                    spawn_task_handle,
+                )?;
 
-            import_setup = Some((grandpa_block_import, grandpa_link));
+                import_setup = Some((grandpa_block_import, grandpa_link));
 
-            Ok(import_queue)
-        })?;
+                Ok(import_queue)
+            },
+        )?;
 
         (builder, import_setup, inherent_data_providers)
     }};
@@ -169,6 +173,7 @@ pub fn new_full(config: Configuration) -> Result<impl AbstractService, ServiceEr
             telemetry_on_connect: Some(service.telemetry_on_connect_stream()),
             voting_rule: sc_finality_grandpa::VotingRulesBuilder::default().build(),
             prometheus_registry: service.prometheus_registry(),
+            shared_voter_state: sc_finality_grandpa::SharedVoterState::empty(),
         };
 
         // the GRANDPA voter task is considered infallible, i.e.
@@ -193,8 +198,8 @@ pub fn new_light(config: Configuration) -> Result<impl AbstractService, ServiceE
     let inherent_data_providers = InherentDataProviders::new();
 
     ServiceBuilder::new_light::<Block, RuntimeApi, Executor>(config)?
-        .with_select_chain(|_config, backend| Ok(LongestChain::new(backend.clone())))?
-        .with_transaction_pool(|config, client, fetcher| {
+        .with_select_chain(|_config, backend| Ok(sc_consensus::LongestChain::new(backend.clone())))?
+        .with_transaction_pool(|config, client, fetcher, prometheus_registry| {
             let fetcher = fetcher
                 .ok_or_else(|| "Trying to start light transaction pool without active fetcher")?;
 
@@ -202,12 +207,13 @@ pub fn new_light(config: Configuration) -> Result<impl AbstractService, ServiceE
             let pool = sc_transaction_pool::BasicPool::with_revalidation_type(
                 config,
                 Arc::new(pool_api),
+                prometheus_registry,
                 sc_transaction_pool::RevalidationType::Light,
             );
             Ok(pool)
         })?
         .with_import_queue_and_fprb(
-            |_config, client, backend, fetcher, _select_chain, _tx_pool| {
+            |_config, client, backend, fetcher, _select_chain, _tx_pool, spawn_task_handle| {
                 let fetch_checker = fetcher
                     .map(|fetcher| fetcher.checker().clone())
                     .ok_or_else(|| {
@@ -223,13 +229,14 @@ pub fn new_light(config: Configuration) -> Result<impl AbstractService, ServiceE
                 let finality_proof_request_builder =
                     finality_proof_import.create_finality_proof_request_builder();
 
-                let import_queue = sc_consensus_aura::import_queue::<_, _, _, AuraPair>(
+                let import_queue = sc_consensus_aura::import_queue::<_, _, _, AuraPair, _>(
                     sc_consensus_aura::slot_duration(&*client)?,
                     grandpa_block_import,
                     None,
                     Some(Box::new(finality_proof_import)),
                     client,
                     inherent_data_providers.clone(),
+                    spawn_task_handle,
                 )?;
 
                 Ok((import_queue, finality_proof_request_builder))

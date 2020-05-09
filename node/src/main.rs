@@ -1,4 +1,6 @@
 //! Node CLI
+#![allow(clippy::too_many_arguments)]
+#![allow(clippy::clone_double_ref)]
 #![warn(missing_docs)]
 
 mod chain_spec;
