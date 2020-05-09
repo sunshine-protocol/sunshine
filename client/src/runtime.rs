@@ -1,5 +1,6 @@
-use crate::frame::shares_atomic::SharesAtomic;
+use crate::srml::shares_atomic::SharesAtomic;
 use codec::{Decode, Encode};
+use core::fmt::Debug;
 use sp_runtime::{
     generic::{Era, Header},
     traits::{BlakeTwo256, IdentifyAccount, SignedExtension, Verify},
@@ -12,6 +13,11 @@ use substrate_subxt::{
     system::System,
     CheckEra, CheckGenesis, CheckNonce, CheckVersion, CheckWeight, SignedExtra,
 };
+
+pub type Pair = sp_core::sr25519::Pair;
+pub type ClientBuilder = substrate_subxt::ClientBuilder<Runtime, MultiSignature, RuntimeExtra>;
+pub type Client = substrate_subxt::Client<Runtime, MultiSignature, RuntimeExtra>;
+pub type XtBuilder = substrate_subxt::XtBuilder<Runtime, Pair, MultiSignature, RuntimeExtra>;
 
 /// Concrete type definitions compatible w/ sunshine's runtime aka `suntime`
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -34,8 +40,9 @@ impl Balances for Runtime {
 }
 
 impl SharesAtomic for Runtime {
-    type OrgId = u64;
-    type ShareId = u64;
+    type OrgId = u32;
+    type ShareId = u32;
+    type Shares = u64;
 }
 
 pub type RuntimeExtra = Extra<Runtime>;
@@ -47,7 +54,7 @@ pub struct Extra<T: System> {
     genesis_hash: T::Hash,
 }
 
-impl<T: System + Balances + Send + Sync> SignedExtra<T> for Extra<T> {
+impl<T: System + Balances + Clone + Debug + Eq + Send + Sync> SignedExtra<T> for Extra<T> {
     type Extra = (
         CheckVersion<T>,
         CheckGenesis<T>,
@@ -75,7 +82,7 @@ impl<T: System + Balances + Send + Sync> SignedExtra<T> for Extra<T> {
     }
 }
 
-impl<T: System + Balances + Send + Sync> SignedExtension for Extra<T> {
+impl<T: System + Balances + Clone + Debug + Eq + Send + Sync> SignedExtension for Extra<T> {
     const IDENTIFIER: &'static str = "DefaultExtra";
     type AccountId = T::AccountId;
     type Call = ();

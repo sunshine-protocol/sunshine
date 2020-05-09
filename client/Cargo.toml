@@ -9,13 +9,23 @@ readme = "README.md"
 description = "Submit extrinsics (transactions) to the sunshine node via RPC"
 keywords = ["sunshine", "substrate", "blockchain"]
 
+[features]
+light-client = ["sp-database", "substrate-subxt-light-client", "sunshine-node"]
+
 [dependencies]
 codec = { version = "1.3.0", package = "parity-scale-codec", default-features = false, features = ["derive", "full"] }
 frame-support = "2.0.0-alpha.7"
+ipld-block-builder = "0.1.0"
+ipfs-embed = { git = "https://github.com/ipfs-rust/ipfs-embed" }
 pallet-indices = "2.0.0-alpha.7"
-substrate-subxt = "0.6.0"
+sled = { git = "https://github.com/spacejam/sled" }
 sp-core = "2.0.0-alpha.7"
+sp-database = { version = "2.0.0-alpha.7", optional = true }
 sp-runtime = "2.0.0-alpha.7"
+substrate-subxt = { git = "https://github.com/dvc94ch/substrate-subxt", branch = "lightclient" }
+substrate-subxt-light-client = { git = "https://github.com/dvc94ch/substrate-subxt", branch = "lightclient", optional = true }
+sunshine-node = { path = "../node", default-features = false, optional = true }
+thiserror = "1.0.16"
 util = { package = "sunshine-util", path = "../modules/util", default-features = false }
 
 [dev-dependencies]

@@ -1,30 +1,18 @@
-use sp_core::crypto::Pair;
 use sp_keyring::AccountKeyring;
-use sunshine_client::shares_atomic::*;
+#[cfg(feature = "light-client")]
+use sunshine_client::ChainType;
+use sunshine_client::{Error, Sunshine};
 
 #[async_std::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> Result<(), Error> {
     env_logger::init();
-    let signer = AccountKeyring::Eve.pair();
-    let client = sunshine_client::build_client().await?;
-    let xt = client.xt(signer.clone(), None).await?;
+    let signer = AccountKeyring::Alice.pair();
+    #[cfg(not(feature = "light-client"))]
+    let client = Sunshine::new("/tmp/db", signer).await?;
+    #[cfg(feature = "light-client")]
+    let client = Sunshine::new("/tmp/db", signer, ChainType::Development).await?;
 
-    let org = 1;
-    let share = 1;
-    let account = signer.public().into();
-    let reserved = client
-        .profile((org, share), &account)
-        .await?
-        .unwrap()
-        .get_times_reserved();
-
-    let extrinsic_success = xt
-        .watch()
-        .reserve_shares(org, share, &account)
-        .await?;
-    let event = extrinsic_success.shares_reserved()?.unwrap();
-
-    assert_eq!(reserved + 1, event.reserved);
+    let event = client.reserve_shares(1, 1).await?;
 
     println!(
         "Account {:?} reserved {:?} shares with share id {:?} for organization {:?}",
