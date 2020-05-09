@@ -17,13 +17,14 @@ sp-std = { version = "2.0.0-alpha.7", default-features = false }
 sp-runtime = { version = "2.0.0-alpha.7", default-features = false }
 frame-support = { version = "2.0.0-alpha.7", default-features = false }
 frame-system = { version = "2.0.0-alpha.7", default-features = false }
-util = { package = "sunshine-util", version = "0.0.2", default-features = false }
-membership = { package = "sunshine-membership", version = "0.0.1", default-features = false }
-shares-membership = { package = "sunshine-shares-membership", version = "0.0.1", default-features = false }
-shares-atomic = { package = "sunshine-shares-atomic", version = "0.0.1", default-features = false }
-vote-yesno = { package = "sunshine-vote-yesno", version = "0.0.1", default-features = false}
-vote-petition = { package = "sunshine-vote-petition", version = "0.0.1", default-features=false}
-clear_on_drop = { version = "0.2.3", features = ["no_cc"] } # https://github.com/paritytech/substrate/issues/4179
+util = { package = "sunshine-util", version = "0.0.2", default-features = false, path = "../util" }
+membership = { package = "sunshine-membership", version = "0.0.1", default-features = false, path = "../membership" }
+shares-membership = { package = "sunshine-shares-membership", version = "0.0.1", default-features = false, path = "../shares-membership" }
+shares-atomic = { package = "sunshine-shares-atomic", version = "0.0.1", default-features = false, path = "../shares-atomic" }
+vote-yesno = { package = "sunshine-vote-yesno", version = "0.0.1", default-features = false, path = "../vote-yesno" }
+vote-petition = { package = "sunshine-vote-petition", version = "0.0.1", default-features = false, path = "../vote-petition" }
+# https://github.com/paritytech/substrate/issues/4179
+clear_on_drop = { version = "0.2.3", features = ["no_cc"] }
 
 [dev-dependencies]
 pallet-balances = { version = "2.0.0-alpha.7", default-features = false }

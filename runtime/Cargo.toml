@@ -70,10 +70,45 @@ sp-std = { version = "2.0.0-alpha.7", default-features = false }
 sp-transaction-pool = { version = "2.0.0-alpha.7", default-features = false }
 sp-version = { version = "2.0.0-alpha.7", default-features = false }
 serde = { version = "1.0.106", features = ["derive"], optional = true }
-util = { package = "sunshine-util", version = "0.0.2", default-features = false }
-membership = { package = "sunshine-membership", version = "0.0.1", default-features = false }
-shares-membership = { package = "sunshine-shares-membership", version = "0.0.1", default-features = false }
-shares-atomic = { package = "sunshine-shares-atomic", version = "0.0.1", default-features = false }
-vote-yesno = { package = "sunshine-vote-yesno", version = "0.0.1", default-features = false}
-vote-petition = { package = "sunshine-vote-petition", version = "0.0.1", default-features=false}
-bank = { package = "sunshine-bank", version = "0.0.2", default-features=false}
+
+[dependencies.util]
+package = "sunshine-util"
+version = "0.0.2"
+default-features = false
+path = "../modules/util"
+
+[dependencies.membership]
+package = "sunshine-membership"
+version = "0.0.1"
+default-features = false
+path = "../modules/membership"
+
+[dependencies.shares-membership]
+package = "sunshine-shares-membership"
+version = "0.0.1"
+default-features = false
+path = "../modules/shares-membership"
+
+[dependencies.shares-atomic]
+package = "sunshine-shares-atomic"
+version = "0.0.1"
+default-features = false
+path = "../modules/shares-atomic"
+
+[dependencies.vote-yesno]
+package = "sunshine-vote-yesno"
+version = "0.0.1"
+default-features = false
+path = "../modules/vote-yesno"
+
+[dependencies.vote-petition]
+package = "sunshine-vote-petition"
+version = "0.0.1"
+default-features = false
+path = "../modules/vote-petition"
+
+[dependencies.bank]
+package = "sunshine-bank"
+version = "0.0.2"
+default-features = false
+path = "../modules/bank"

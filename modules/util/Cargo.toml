@@ -14,7 +14,8 @@ codec = { package = "parity-scale-codec", version = "1.2.0", default-features = 
 sp-std = { version = "2.0.0-alpha.7", default-features = false }
 sp-runtime = { version = "2.0.0-alpha.7", default-features = false }
 frame-support = { version = "2.0.0-alpha.7", default-features = false }
-clear_on_drop = { version = "0.2.3", features = ["no_cc"] } # https://github.com/paritytech/substrate/issues/4179
+# https://github.com/paritytech/substrate/issues/4179
+clear_on_drop = { version = "0.2.3", features = ["no_cc"] }
 sp-core = { version = "2.0.0-alpha.7", default-features = false }
 
 [dev-dependencies]
