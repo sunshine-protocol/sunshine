@@ -9,7 +9,7 @@ use sp_runtime::{
 use std::fmt::Debug;
 use substrate_subxt::{system::System, Call};
 use util::{
-    traits::{GroupMembership, LockableProfile, ReservableProfile, ShareBank, ShareRegistration},
+    traits::{GroupMembership, LockableProfile, ReservableProfile, ShareBank},
     voteyesno::VoterYesNoView,
 };
 
@@ -38,14 +38,14 @@ pub trait VoteYesNo: System {
 
     /// An instance of the shares module
     type ShareData: GroupMembership<Self::AccountId>
-        + ShareRegistration<Self::AccountId>
+        + RegisterShareGroup<Self::AccountId>
         + ReservableProfile<Self::AccountId>
         + LockableProfile<Self::AccountId>
         + ShareBank<Self::AccountId>;
 }
 
 /// The share identifier type
-pub type ShareId<T> =
+pub type Shares<T> =
     <<T as VoteYesNo>::ShareData as ShareRegistration<<T as System>::AccountId>>::ShareId;
 
 /// The organization identifier type

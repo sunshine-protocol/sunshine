@@ -1,8 +1,6 @@
 use codec::{Decode, Encode};
 use sp_runtime::RuntimeDebug;
 
-pub type ProposalIndex = u32;
-
 #[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug)]
 #[non_exhaustive]
 /// The proposal type taxonomy

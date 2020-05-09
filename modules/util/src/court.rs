@@ -2,52 +2,23 @@ use codec::{Decode, Encode};
 use sp_runtime::RuntimeDebug;
 use sp_std::prelude::*;
 
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-pub struct Evidence<Hash> {
-    /// The hash chain (see adapter::HashChain)
-    evidence: Vec<Hash>,
-    /// Reset every time a hash is added to the hash chain
+#[derive(PartialEq, Eq, Default, Clone, Encode, Decode, RuntimeDebug)]
+pub struct Evidence<AccountId, Hash> {
+    poster: AccountId,
+    evidence: Hash,
     acknowledge_by_all_parties: bool,
 }
 
-impl<Hash> Default for Evidence<Hash> {
-    fn default() -> Evidence<Hash> {
+impl<AccountId, Hash> Evidence<AccountId, Hash> {
+    pub fn new(poster: AccountId, evidence: Hash) -> Evidence<AccountId, Hash> {
         Evidence {
-            evidence: Vec::<Hash>::new(),
-            acknowledge_by_all_parties: true,
+            poster,
+            evidence,
+            acknowledge_by_all_parties: false,
         }
     }
-}
-
-impl<Hash> Evidence<Hash> {
-    // fn new_with_history(evidence: Vec<Hash>) -> Evidence<Hash> {
-    //     Evidence {
-    //         evidence,
-    //         acknowledge_by_all_parties: false,
-    //     }
-    // }
-    pub fn check_acknowledged_by_all_parties(&self) -> bool {
+    pub fn was_acknowledged_by_all_parties(&self) -> bool {
         self.acknowledge_by_all_parties
-    }
-
-    /// Must be called after any change the evidence chain until acknowledgements are met
-    pub fn set_not_acknowledged_by_all_parties(&mut self) {
-        self.acknowledge_by_all_parties = false;
-    }
-
-    /// Can only be called in a specific context in which all required acknowledgers have acknowledged
-    pub fn set_acknowledged_by_all_parties(&mut self) {
-        self.acknowledge_by_all_parties = true;
-    }
-
-    // TODO: move these into an `Append<Hash>` trait bound on this object
-    pub fn append(&mut self, hash: Hash) {
-        self.evidence.push(hash);
-        self.set_not_acknowledged_by_all_parties();
-    }
-    pub fn append_vec(&mut self, mut hashes: Vec<Hash>) {
-        self.evidence.append(&mut hashes);
-        self.set_not_acknowledged_by_all_parties();
     }
 }
 

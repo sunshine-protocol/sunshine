@@ -5,21 +5,20 @@ use sp_runtime::{testing::Header, traits::IdentityLookup, Perbill};
 
 // type aliases
 pub type AccountId = u64;
-pub type Shares = u64;
 pub type BlockNumber = u64;
 
 impl_outer_origin! {
     pub enum Origin for Test where system = frame_system {}
 }
 
-mod shares_atomic {
+mod shares_membership {
     pub use crate::Event;
 }
 
 impl_outer_event! {
     pub enum TestEvent for Test {
         system<T>,
-        shares_atomic<T>,
+        shares_membership<T>,
     }
 }
 
@@ -55,17 +54,11 @@ impl frame_system::Trait for Test {
     type OnNewAccount = ();
     type OnKilledAccount = ();
 }
-parameter_types! {
-    // pretty random hard limit
-    pub const ReservationLimit: u32 = 100000;
-}
 impl membership::Trait for Test {
     type Event = ();
 }
 impl Trait for Test {
     type Event = Event<Test>;
     type OrgData = membership::Module<Test>;
-    type Shares = Shares;
-    type ReservationLimit = ReservationLimit;
 }
-pub type AtomicShares = Module<Test>;
+pub type SharesMembership = Module<Test>;

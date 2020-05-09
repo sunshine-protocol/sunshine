@@ -1,25 +1,32 @@
 
 [package]
-name = "vote-yesno"
+name = "sunshine-vote-yesno"
 version = "0.0.1"
-authors = ["4meta5"]
+authors = ["Amar Singh <asinghchrony@protonmail.com>"]
 edition = "2018"
+
+license = "GPL-3.0"
+repository = "https://github.com/web3garden/sunshine-runtime-module-library"
+description = "vote module with separate threshold configs for participation and passage"
+keywords = ["sunshine", "substrate", "blockchain"]
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "1.2.0", default-features = false, features = ["derive"] }
 
-sp-std = { version = "2.0.0-alpha.6", default-features = false }
-sp-runtime = { version = "2.0.0-alpha.6", default-features = false }
-frame-support = { version = "2.0.0-alpha.6", default-features = false }
-frame-system = { version = "2.0.0-alpha.6", default-features = false }
-pallet-balances = { version = "2.0.0-alpha.6", default-features = false }
-util = { path = "../util", default-features = false }
-shares-atomic = { path = "../shares-atomic", default-features = false }
+sp-std = { version = "2.0.0-alpha.7", default-features = false }
+sp-runtime = { version = "2.0.0-alpha.7", default-features = false }
+frame-support = { version = "2.0.0-alpha.7", default-features = false }
+frame-system = { version = "2.0.0-alpha.7", default-features = false }
+pallet-balances = { version = "2.0.0-alpha.7", default-features = false }
+util = { package = "sunshine-util", version = "0.0.2", default-features = false }
+membership = { package = "sunshine-membership", version = "0.0.1", default-features = false }
+shares-membership = { package = "sunshine-shares-membership", version = "0.0.1", default-features = false }
+shares-atomic = { package = "sunshine-shares-atomic", version = "0.0.1", default-features = false }
 clear_on_drop = { version = "0.2.3", features = ["no_cc"] } # https://github.com/paritytech/substrate/issues/4179
 
 [dev-dependencies]
-sp-io = { version = "2.0.0-alpha.6", default-features = false }
-sp-core = { version = "2.0.0-alpha.6", default-features = false }
+sp-io = { version = "2.0.0-alpha.7", default-features = false }
+sp-core = { version = "2.0.0-alpha.7", default-features = false }
 
 [features]
 default = ["std"]
@@ -31,4 +38,6 @@ std = [
     "frame-system/std",
     "pallet-balances/std",
     "shares-atomic/std",
+    "shares-membership/std",
+    "membership/std",
 ]

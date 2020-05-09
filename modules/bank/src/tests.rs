@@ -1,383 +1,385 @@
 use super::*;
-use frame_support::traits::OnFinalize;
-use frame_support::{assert_err, assert_ok}; // assert_err, assert_noop
+use frame_support::{assert_noop, assert_ok};
 use mock::*;
-use util::voteyesno::VoterYesNoView;
 
-/// Auxiliary method for simulating block time passing
-fn run_to_block(n: u64) {
-    while System::block_number() < n {
-        Bank::on_finalize(System::block_number());
-        System::set_block_number(System::block_number() + 1);
-    }
+fn get_last_event() -> RawEvent<u64, u64> {
+    System::events()
+        .into_iter()
+        .map(|r| r.event)
+        .filter_map(|e| {
+            if let TestEvent::bank(inner) = e {
+                Some(inner)
+            } else {
+                None
+            }
+        })
+        .last()
+        .unwrap()
 }
 
 fn new_test_ext() -> sp_io::TestExternalities {
     let mut t = frame_system::GenesisConfig::default()
         .build_storage::<Test>()
         .unwrap();
-    shares_atomic::GenesisConfig::<Test> {
-        omnipotent_key: 1,
-        membership_shares: vec![
-            // org, share_id, account, amount: shares
-            // organization 1
-            (1, 1, 1, 10),
-            (1, 1, 2, 10),
-            (1, 1, 3, 10),
-            (1, 1, 4, 10),
-            (1, 1, 5, 10),
-            (1, 1, 6, 10),
-            (1, 1, 7, 10),
-            (1, 1, 8, 10),
-            (1, 1, 9, 10),
-            (1, 1, 10, 10),
-            (1, 2, 1, 10),
-            (1, 2, 2, 10),
-            (1, 2, 3, 10),
-            (1, 2, 4, 10),
-            (1, 2, 5, 10),
-            (1, 3, 6, 20),
-            (1, 3, 7, 20),
-            (1, 3, 8, 20),
-            (1, 3, 9, 20),
-            (1, 3, 10, 20),
-            // organization 2
-            (2, 1, 11, 10),
-            (2, 1, 12, 10),
-            (2, 1, 13, 10),
-            (2, 1, 14, 10),
-            (2, 1, 15, 10),
-            (2, 1, 16, 10),
-            (2, 1, 17, 10),
-            (2, 1, 18, 10),
-            (2, 1, 19, 10),
-        ],
-        // must equal sum of above
-        total_issuance: vec![(1, 1, 100), (1, 2, 50), (1, 3, 100), (2, 1, 90)],
-        // must not contradict membership_shares membership
-        shareholder_membership: vec![
-            (1, 1, vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10]),
-            (1, 2, vec![1, 2, 3, 4, 5]),
-            (1, 3, vec![6, 7, 8, 9, 10]),
-            (2, 1, vec![11, 12, 13, 14, 15, 16, 17, 18, 19]),
-        ],
+    pallet_balances::GenesisConfig::<Test> {
+        balances: vec![(1, 100), (2, 98), (3, 200), (4, 75), (5, 10), (6, 69)],
     }
     .assimilate_storage(&mut t)
     .unwrap();
-    t.into()
+    membership::GenesisConfig::<Test> {
+        omnipotent_key: 1,
+        membership: None,
+    }
+    .assimilate_storage(&mut t)
+    .unwrap();
+    shares_membership::GenesisConfig::<Test> {
+        share_supervisors: None,
+        shareholder_membership: None,
+    }
+    .assimilate_storage(&mut t)
+    .unwrap();
+    shares_atomic::GenesisConfig::<Test> {
+        share_supervisors: None,
+        shareholder_membership: None,
+    }
+    .assimilate_storage(&mut t)
+    .unwrap();
+    GenesisConfig::<Test> {
+        first_organization_supervisor: 1,
+        first_organization_value_constitution: b"build cool shit".to_vec(),
+        first_organization_flat_membership: vec![1, 2, 3, 4, 5, 6],
+    }
+    .assimilate_storage(&mut t)
+    .unwrap();
+    let mut ext: sp_io::TestExternalities = t.into();
+    ext.execute_with(|| System::set_block_number(1));
+    ext
+}
+
+#[test]
+fn genesis_config_works() {
+    new_test_ext().execute_with(|| {
+        assert_eq!(Bank::organization_counter(), 1);
+        let constitution = b"build cool shit".to_vec();
+        let expected_organization = Organization::new(ShareID::Flat(1u32), constitution.clone());
+        let org_in_storage = Bank::organization_states(1u32).unwrap();
+        assert_eq!(expected_organization, org_in_storage);
+        // check membership from membership module
+        for i in 1u64..7u64 {
+            assert!(OrgMembership::is_member_of_group(1u32, &i));
+        }
+        // I guess the events are empty at genesis despite our use of the module's runtime methods for build() in extra genesis
+        assert!(System::events().is_empty());
+    });
 }
 
 #[test]
 fn organization_registration() {
     new_test_ext().execute_with(|| {
         let one = Origin::signed(1);
-        let genesis_allocation = vec![(1, 10), (2, 20), (3, 30), (9, 1), (10, 2)];
-        let constitution: &[u8] = b"my rule here";
-        use sp_core::H256;
-        use sp_runtime::traits::{BlakeTwo256, Hash};
-        let constitutional_hash: H256 = BlakeTwo256::hash(constitution);
-        // no organizations before registration call
-        assert_eq!(Bank::organization_count(), 0);
+        let accounts = vec![1, 2, 3, 9, 10];
+        let constitution: &[u8] = b"no talking about fight club";
         // next line is registration call
-        assert_ok!(Bank::register_organization(
-            one,
-            None,
-            3, // this parameter is dumb, should be returned through event
-            3, // this parameter is dumb, should be returned through event
-            genesis_allocation,
-            constitutional_hash,
+        assert_ok!(Bank::register_organization_from_accounts(
+            one.clone(),
+            constitution.clone().to_vec(),
+            accounts,
+            Some(1),
         ));
         // check organization count changed as expected
-        assert_eq!(Bank::organization_count(), 1);
-        // // event emitted as expected
-        // let expected_event = TestEvent::bank(RawEvent::NewOrganizationRegistered(1, 3, 3));
-        // assert!(System::events().iter().any(|a| a.event == expected_event));
-    });
-}
-
-#[test]
-fn change_value_constitution() {
-    new_test_ext().execute_with(|| {
-        let one = Origin::signed(1);
-        let genesis_allocation = vec![(1, 10), (2, 20), (3, 30), (9, 1), (10, 2)];
-        use sp_core::H256;
-        use sp_runtime::traits::{BlakeTwo256, Hash};
-        let constitution: &[u8] = b"my rule here";
-        let new_constitution: &[u8] = b"newer rule here";
-        let even_more_new_constitution: &[u8] = b"even more new rule here";
-        let newest_constitution: &[u8] = b"newest rule here";
-        let constitutional_hash: H256 = BlakeTwo256::hash(constitution);
-        let new_constitutional_hash: H256 = BlakeTwo256::hash(new_constitution);
-        let even_more_new_constitutional_hash: H256 = BlakeTwo256::hash(even_more_new_constitution);
-        let newest_constitutional_hash: H256 = BlakeTwo256::hash(newest_constitution);
-        // can't update without a registered organization
-        assert_err!(
-            Bank::update_value_constitution(one.clone(), 1, new_constitutional_hash),
-            Error::<Test>::NoExistingValueConstitution
-        );
-        // properly register the organization first
-        assert_ok!(Bank::register_organization(
-            one.clone(),
-            None,
-            3, // this parameter is dumb, should be returned through event
-            3, // this parameter is dumb, should be returned through event
-            genesis_allocation,
-            constitutional_hash,
-        ));
-        // now update the constitution from sudo
-        assert_ok!(Bank::update_value_constitution(
-            one.clone(),
-            3,
-            new_constitutional_hash
-        ));
-        // compare it with the storage item
-        let current_value_constitution = Bank::value_constitution(3).unwrap();
-        assert_eq!(current_value_constitution, new_constitutional_hash);
-        // assign a different supervisor
-        let expected_seven = Shares::swap_supervisor(3, 1, 7).unwrap();
-        assert_eq!(expected_seven, 7);
-        // supervisor updates the value constitution
-        let seven = Origin::signed(7);
-        assert_ok!(Bank::update_value_constitution(
-            seven,
-            3,
-            even_more_new_constitutional_hash
-        ));
-        let new_current_value_constitution = Bank::value_constitution(3).unwrap();
+        assert_eq!(Bank::organization_counter(), 2);
+        // Event Emittance in Tests Consistently Fails -- this mystery needs to be solved in order to test...
         assert_eq!(
-            new_current_value_constitution,
-            even_more_new_constitutional_hash
+            get_last_event(),
+            RawEvent::NewOrganizationRegistered(1, 2, ShareID::Flat(1), constitution.to_vec()),
         );
-        // sudo can still update the value constitution
-        assert_ok!(Bank::update_value_constitution(
-            one,
-            3,
-            newest_constitutional_hash
-        ));
-        let most_current_value_constitution = Bank::value_constitution(3).unwrap();
-        assert_eq!(most_current_value_constitution, newest_constitutional_hash);
-    });
-}
-
-#[test]
-fn share_registration_in_organization() {
-    new_test_ext().execute_with(|| {
-        let one = Origin::signed(1);
-        let genesis_allocation = vec![(1, 10), (2, 20), (3, 30), (9, 1), (10, 2)];
-        assert_err!(
-            Bank::register_shares_in_organization(one.clone(), 1, 4, genesis_allocation.clone()),
-            Error::<Test>::NoRegisteredOrganizationWithIDProvided
-        );
-        let constitution: &[u8] = b"my rule here";
-        use sp_core::H256;
-        use sp_runtime::traits::{BlakeTwo256, Hash};
-        let constitutional_hash: H256 = BlakeTwo256::hash(constitution);
-        // registration call
-        assert_ok!(Bank::register_organization(
+        let third_org_accounts = vec![1, 2, 3, 9, 10];
+        let third_org_constitution: &[u8] = b"no talking about fight club";
+        // next line is registration call
+        assert_ok!(Bank::register_organization_from_accounts(
             one.clone(),
-            None,
-            3, // this parameter is dumb, should be returned through event
-            3, // this parameter is dumb, should be returned through event
-            genesis_allocation.clone(),
-            constitutional_hash,
+            third_org_constitution.clone().to_vec(),
+            third_org_accounts,
+            Some(1),
         ));
-        assert_ok!(Bank::register_shares_in_organization(
-            one,
-            3,
-            4,
-            genesis_allocation
-        ));
-    });
-}
-
-#[test]
-fn most_basic_vote_requirements_setting_works() {
-    new_test_ext().execute_with(|| {
-        let one = Origin::signed(1);
-        let required_share_voting_groups = vec![1, 2];
-        assert_err!(
-            Bank::set_most_basic_vote_requirements(
-                one.clone(),
+        // check organization count changed as expected
+        assert_eq!(Bank::organization_counter(), 3);
+        // Event Emittance in Tests Consistently Fails -- this mystery needs to be solved in order to test...
+        assert_eq!(
+            get_last_event(),
+            RawEvent::NewOrganizationRegistered(
+                1,
                 3,
-                ProposalType::ExecutiveMembership,
-                required_share_voting_groups.clone()
+                ShareID::Flat(1),
+                third_org_constitution.to_vec()
             ),
-            Error::<Test>::NoRegisteredOrganizationWithIDProvided
         );
-        let genesis_allocation = vec![(1, 10), (2, 20), (3, 30), (9, 1), (10, 2)];
-        let constitution: &[u8] = b"my rule here";
-        use sp_core::H256;
-        use sp_runtime::traits::{BlakeTwo256, Hash};
-        let constitutional_hash: H256 = BlakeTwo256::hash(constitution);
-        // registration call
-        assert_ok!(Bank::register_organization(
-            one.clone(),
-            None,
-            3, // this parameter is dumb, should be returned through event
-            3, // this parameter is dumb, should be returned through event
-            genesis_allocation.clone(),
-            constitutional_hash,
-        ));
-        assert_ok!(Bank::set_most_basic_vote_requirements(
-            one.clone(),
-            3,
-            ProposalType::ExecutiveMembership,
-            required_share_voting_groups.clone()
-        ));
-        // check that storage reflects recent change
-        let share_approval_order = Bank::proposal_default_share_approval_order_for_organization(
-            3,
-            ProposalType::ExecutiveMembership,
-        )
-        .unwrap();
-        assert_eq!(required_share_voting_groups, share_approval_order);
     });
 }
 
 #[test]
-fn make_proposal_starts_the_vote_schedule() {
+fn flat_inner_share_registration_in_organization() {
     new_test_ext().execute_with(|| {
         let one = Origin::signed(1);
-        let genesis_allocation = vec![(1, 10), (2, 20), (3, 30), (9, 1), (10, 2)];
-        let constitution: &[u8] = b"my rule here";
-        use sp_core::H256;
-        use sp_runtime::traits::{BlakeTwo256, Hash};
-        let constitutional_hash: H256 = BlakeTwo256::hash(constitution);
-        // Step 1: Register Organization
-        assert_ok!(Bank::register_organization(
+        let accounts = vec![1, 2, 3, 9, 10];
+        assert_ok!(Bank::register_inner_flat_share_group_for_organization(
             one.clone(),
-            None,
-            3, // this parameter is dumb, should be returned through event, TODO: remove it by default and prefer event notification
-            3, // this parameter is dumb, should be returned through event
-            genesis_allocation.clone(),
-            constitutional_hash,
+            1u32,
+            accounts
         ));
-        // Step 2: Register Shares in Organization
-        assert_ok!(Bank::register_shares_in_organization(
-            one.clone(),
-            3,
-            4,
-            genesis_allocation.clone()
-        ));
-        // Step 3: Set default threshold for share_id, proposal type pairs
-        assert_ok!(
-            Bank::set_organization_share_id_proposal_type_default_threshold(
-                one.clone(),
-                3,
-                3,
-                ProposalType::ExecutiveMembership,
-                Permill::from_percent(51),
-                Permill::from_percent(10),
-            )
+        // check if the share group was registered
+        assert_eq!(
+            get_last_event(),
+            RawEvent::FlatInnerShareGroupAddedToOrg(1, 1, ShareID::Flat(2)),
         );
-        assert_ok!(
-            Bank::set_organization_share_id_proposal_type_default_threshold(
-                one.clone(),
-                3,
-                4,
-                ProposalType::ExecutiveMembership,
-                Permill::from_percent(51),
-                Permill::from_percent(10),
-            )
+        let second_share_group = vec![1, 2, 3, 9, 10, 11, 12, 13, 14];
+        assert_ok!(Bank::register_inner_flat_share_group_for_organization(
+            one.clone(),
+            1u32,
+            second_share_group
+        ));
+        assert_eq!(
+            get_last_event(),
+            RawEvent::FlatInnerShareGroupAddedToOrg(1, 1, ShareID::Flat(3)),
         );
-        let ordered_share_ids = vec![3, 4];
-        // Step 4: Set the basic share approval requirements for a fake membership proposal
-        assert_ok!(Bank::set_most_basic_vote_requirements(
-            one.clone(),
-            3,
-            ProposalType::ExecutiveMembership,
-            ordered_share_ids,
+        let third_share_group = vec![1, 2, 3, 9, 10, 11, 12, 13, 14, 17, 18, 19, 30];
+        assert_ok!(Bank::register_inner_flat_share_group_for_organization(
+            one,
+            1u32,
+            third_share_group
         ));
-        // Step 5: Make a proposal, which dispatches the vote schedule corresponding to defauls assigned above
-        System::set_block_number(1);
-        assert_ok!(Bank::make_proposal(
-            one.clone(),
-            3,
-            ProposalType::ExecutiveMembership,
-            None
-        ));
-        // // verify the parameters above by checking the event
-        // let proposal_dispatched =
-        //     TestEvent::bank(RawEvent::ProposalDispatchedToVote(1, 3, 1, 1, 1));
-        // assert!(System::events()
-        //     .iter()
-        //     .any(|a| a.event == proposal_dispatched));
-        // Step 6: vote on the proposal
-        assert_ok!(VoteYesNo::submit_vote(
-            one.clone(),
-            3,
-            3,
-            1,
-            1,
-            VoterYesNoView::InFavor,
-            None,
-        ));
-        // verify expected vote state
-        let prefix = OrgItemPrefixKey::new(3, 3);
-        let vote_state = VoteYesNo::vote_states(prefix, 1).unwrap();
-        // verify expected defaults
-        assert_eq!(vote_state.turnout(), 10);
-        assert_eq!(vote_state.in_favor(), 10);
-        assert_eq!(vote_state.against(), 0);
-        // 10 + 30 = 40/60
-        assert_ok!(VoteYesNo::submit_vote(
-            one.clone(),
-            3,
-            3,
-            1,
-            3,
-            VoterYesNoView::InFavor,
-            None,
-        ));
-        // Step 7: vote enough to switch to the next vote (overcome thresholds)
-        let expected_dispatch_error = DispatchError::Module {
-            index: 0,
-            error: 5,
-            message: Some("CanOnlyVoteinVotingOutcome"),
-        };
-        assert_err!(
-            VoteYesNo::submit_vote(one.clone(), 3, 3, 1, 2, VoterYesNoView::InFavor, None,),
-            expected_dispatch_error
+        assert_eq!(
+            get_last_event(),
+            RawEvent::FlatInnerShareGroupAddedToOrg(1, 1, ShareID::Flat(4)),
         );
-        // check that the next vote hasn't started yet because polling hasn't happened yet
-        let too_soon_dispatch_error = DispatchError::Module {
-            index: 0,
-            error: 4,
-            message: Some("VoteNotInitialized"),
-        };
-        assert_err!(
-            VoteYesNo::submit_vote(one.clone(), 3, 4, 1, 10, VoterYesNoView::InFavor, None,),
-            too_soon_dispatch_error
-        );
-        // Step 8: `run_on` to simulate blocks passing and verify proposal polling
-        run_to_block(11);
-        // Step 9: check that the next vote was started by voting in it
-        assert_ok!(VoteYesNo::submit_vote(
+        // check these share groups existence
+        for i in 1u32..5u32 {
+            assert!(Bank::organization_inner_shares(1, ShareID::Flat(i)));
+        }
+        // check that some members are in each group as expected
+        let two_prefix = UUID2::new(1u32, 2u32);
+        let three_prefix = UUID2::new(1u32, 3u32);
+        let four_prefix = UUID2::new(1u32, 4u32);
+        assert!(FlatShareData::is_member_of_group(two_prefix, &10u64));
+        assert!(FlatShareData::is_member_of_group(three_prefix, &14u64));
+        assert!(FlatShareData::is_member_of_group(four_prefix, &30u64));
+    });
+}
+
+#[test]
+fn weighted_inner_share_registration_for_organization() {
+    new_test_ext().execute_with(|| {
+        let one = Origin::signed(1);
+        let weighted_accounts = vec![(1, 10), (2, 10), (3, 20), (9, 20), (10, 40)];
+        assert_ok!(Bank::register_inner_weighted_share_group_for_organization(
             one.clone(),
-            3,
-            4,
-            1,
-            1,
-            VoterYesNoView::InFavor,
-            None,
+            1u32,
+            weighted_accounts
         ));
-        // Step 10: step 7 but for this vote (overcome threshold)
-        assert_ok!(VoteYesNo::submit_vote(
-            one.clone(),
-            3,
-            4,
-            1,
-            3,
-            VoterYesNoView::InFavor,
-            None,
-        ));
-        assert_err!(
-            VoteYesNo::submit_vote(one.clone(), 3, 4, 1, 2, VoterYesNoView::InFavor, None,),
-            expected_dispatch_error
+        // check if the share group was registered
+        assert_eq!(
+            get_last_event(),
+            RawEvent::WeightedInnerShareGroupAddedToOrg(1, 1, ShareID::WeightedAtomic(1)),
         );
-        // Step 11: step 8 but check that the `ProposalStage` is changed
-        run_to_block(30);
-        let proposal_stage = Bank::proposal_state(3, 1).unwrap();
-        assert_eq!(proposal_stage, ProposalStage::Voting); // TODO: refactor
+        let second_weighted_accounts = vec![(16, 10), (23, 10), (42, 20), (99, 20), (101, 40)];
+        assert_ok!(Bank::register_inner_weighted_share_group_for_organization(
+            one.clone(),
+            1u32,
+            second_weighted_accounts
+        ));
+        // check if the share group was registered
+        assert_eq!(
+            get_last_event(),
+            RawEvent::WeightedInnerShareGroupAddedToOrg(1, 1, ShareID::WeightedAtomic(2)),
+        );
+        let third_weighted_accounts =
+            vec![(12, 10), (19, 10), (73, 20), (77, 20), (79, 40), (81, 100)];
+        assert_ok!(Bank::register_inner_weighted_share_group_for_organization(
+            one.clone(),
+            1u32,
+            third_weighted_accounts
+        ));
+        // check if the share group was registered
+        assert_eq!(
+            get_last_event(),
+            RawEvent::WeightedInnerShareGroupAddedToOrg(1, 1, ShareID::WeightedAtomic(3)),
+        );
+        let fourth_weighted_accounts = vec![(1, 10), (2, 10), (3, 20), (4, 20), (5, 40), (6, 100)];
+        assert_ok!(Bank::register_inner_weighted_share_group_for_organization(
+            one.clone(),
+            1u32,
+            fourth_weighted_accounts
+        ));
+        // check if the share group was registered
+        assert_eq!(
+            get_last_event(),
+            RawEvent::WeightedInnerShareGroupAddedToOrg(1, 1, ShareID::WeightedAtomic(4)),
+        );
+        // check that some members are in each group as expected
+        assert_eq!(
+            WeightedShareData::get_share_profile(1u32, 1u32, &9u64).unwrap(),
+            20u64
+        );
+        assert_eq!(
+            WeightedShareData::get_share_profile(1u32, 2u32, &101u64).unwrap(),
+            40u64
+        );
+        assert_eq!(
+            WeightedShareData::get_share_profile(1u32, 3u32, &73u64).unwrap(),
+            20u64
+        );
+        assert_eq!(
+            WeightedShareData::get_share_profile(1u32, 4u32, &6u64).unwrap(),
+            100u64
+        );
+    });
+} // TODO: weighted_outer_share_registration (I assume it works because the other two do and it's the same logic)
+
+#[test]
+fn offchain_bank_functionality() {
+    new_test_ext().execute_with(|| {
+        // check if it works for the first group
+        let one = Origin::signed(1);
+        assert_ok!(Bank::register_offchain_bank_account_for_organization(
+            one.clone(),
+            1u32
+        ));
+        assert_eq!(
+            get_last_event(),
+            RawEvent::NewOffChainTreasuryRegisteredForOrg(1, 1),
+        );
+        // an account in the org uses it to log a payment
+        let six = Origin::signed(6);
+        let sixtynine = Origin::signed(69);
+        assert_noop!(
+            Bank::use_offchain_bank_account_to_claim_payment_sent(sixtynine.clone(), 1, 69, 69),
+            Error::<Test>::MustBeAMemberToUseOffChainBankAccountToClaimPaymentSent
+        );
+        assert_ok!(Bank::use_offchain_bank_account_to_claim_payment_sent(
+            six, 1, 69, 69
+        ));
+        assert_eq!(
+            get_last_event(),
+            RawEvent::SenderClaimsPaymentSent(1, 6, 69, 69, 0),
+        );
+        // note how this error is returned because one is NOT the recipient
+        assert_noop!(
+            Bank::use_offchain_bank_account_to_confirm_payment_received(one, 1, 0, 6, 69),
+            Error::<Test>::SenderMustClaimPaymentSentForRecipientToConfirm
+        );
+        assert_ok!(Bank::use_offchain_bank_account_to_confirm_payment_received(
+            sixtynine, 1, 0, 6, 69
+        ));
+        assert_eq!(
+            get_last_event(),
+            RawEvent::RecipientConfirmsPaymentReceived(1, 6, 69, 69, 0),
+        );
+    });
+}
+
+#[test]
+fn on_chain_bank_functionality_sudo_permissions() {
+    new_test_ext().execute_with(|| {
+        // traditional bank account ACL
+        let one = Origin::signed(1);
+        let sixtynine = Origin::signed(69);
+        assert_noop!(
+            Bank::register_on_chain_bank_account_with_sudo_permissions(sixtynine, 20, 2),
+            Error::<Test>::MustHaveCertainAuthorityToRegisterOnChainBankAccount
+        );
+        assert_noop!(
+            Bank::register_on_chain_bank_account_with_sudo_permissions(one.clone(), 120, 2),
+            DispatchError::Module {
+                index: 0,
+                error: 3,
+                message: Some("InsufficientBalance",),
+            }
+        );
+        assert_ok!(Bank::register_on_chain_bank_account_with_sudo_permissions(
+            one.clone(),
+            20,
+            2
+        ));
+        assert_eq!(
+            get_last_event(),
+            RawEvent::NewOnChainTreasuryRegisteredWithSudoPermissions(
+                OnChainTreasuryID([0u8; 8]),
+                2
+            ),
+        );
+        assert_ok!(Bank::register_on_chain_bank_account_with_sudo_permissions(
+            one.clone(),
+            20,
+            3
+        ));
+        assert_eq!(
+            get_last_event(),
+            RawEvent::NewOnChainTreasuryRegisteredWithSudoPermissions(
+                OnChainTreasuryID([0, 0, 0, 0, 0, 0, 0, 1]),
+                3
+            ),
+        );
+        assert_ok!(Bank::register_on_chain_bank_account_with_sudo_permissions(
+            one.clone(),
+            20,
+            4
+        ));
+        assert_eq!(
+            get_last_event(),
+            RawEvent::NewOnChainTreasuryRegisteredWithSudoPermissions(
+                OnChainTreasuryID([0, 0, 0, 0, 0, 0, 0, 2]),
+                4
+            ),
+        );
+        // sudo withdrawals
+        let two = Origin::signed(2);
+        let three = Origin::signed(3);
+        assert_noop!(
+            Bank::sudo_withdrawal_from_on_chain_bank_account(
+                two.clone(),
+                OnChainTreasuryID([1u8; 8]),
+                2,
+                20
+            ),
+            Error::<Test>::CannotWithdrawIfOnChainBankDNE
+        );
+        assert_noop!(
+            Bank::sudo_withdrawal_from_on_chain_bank_account(
+                three.clone(),
+                OnChainTreasuryID([0u8; 8]),
+                2,
+                20
+            ),
+            Error::<Test>::BankAccountEitherNotSudoOrCallerIsNotDesignatedSudo
+        );
+        assert_noop!(
+            Bank::sudo_withdrawal_from_on_chain_bank_account(
+                two.clone(),
+                OnChainTreasuryID([0u8; 8]),
+                2,
+                21
+            ),
+            Error::<Test>::WithdrawalRequestExceedsFundsAvailableForSpend
+        );
+        assert_ok!(Bank::sudo_withdrawal_from_on_chain_bank_account(
+            two.clone(),
+            OnChainTreasuryID([0u8; 8]),
+            2,
+            20
+        ));
+        assert_eq!(
+            get_last_event(),
+            RawEvent::SudoWithdrawalFromOnChainBankAccount(
+                OnChainTreasuryID([0, 0, 0, 0, 0, 0, 0, 0]),
+                2,
+                20
+            ),
+        );
+        // check the bank's balance
+        let bank_id = OnChainTreasuryID([0u8; 8]);
+        let bank_account = Bank::on_chain_treasury_ids(bank_id).unwrap();
+        assert_eq!(bank_account.savings(), 0);
+        assert_eq!(bank_account.reserved_for_spends(), 0);
+        // TODO: consider what state gc policy for bank accounts with 0
     });
 }

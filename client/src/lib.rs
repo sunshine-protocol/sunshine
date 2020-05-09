@@ -1,8 +1,8 @@
-mod frame;
 mod runtime;
+mod srml;
 
-pub use frame::*;
 pub use runtime::{Runtime, RuntimeExtra};
+pub use srml::*;
 pub use substrate_subxt::{balances, system, ExtrinsicSuccess};
 
 use sp_runtime::MultiSignature;

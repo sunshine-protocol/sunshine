@@ -1,7 +1,7 @@
 use crate::traits::{
     Apply, Approved, ConsistentThresholdStructure, DeriveThresholdRequirement, Revert, VoteVector,
 };
-use codec::{Decode, Encode, FullCodec};
+use codec::{Decode, Encode};
 use frame_support::Parameter;
 use sp_runtime::PerThing;
 use sp_std::prelude::*;
@@ -17,7 +17,7 @@ pub enum SupportedVoteTypes<Signal> {
     Custom(Signal),
 }
 
-impl<Signal: Parameter> Default for SupportedVoteTypes<Signal> {
+impl<Signal> Default for SupportedVoteTypes<Signal> {
     fn default() -> SupportedVoteTypes<Signal> {
         SupportedVoteTypes::ShareWeighted
     }
@@ -37,21 +37,27 @@ pub enum VoterYesNoView {
 #[derive(Clone, Copy, PartialEq, Eq, Encode, Decode, sp_runtime::RuntimeDebug)]
 /// Binary vote to express for/against with magnitude
 /// ~ vectors have direction and magnitude, not to be confused with `Vec`
-pub struct YesNoVote<Signal> {
+pub struct YesNoVote<Signal, Hash> {
     magnitude: Signal,
     direction: VoterYesNoView,
+    justification: Option<Hash>,
 }
 
-impl<Signal: Parameter> YesNoVote<Signal> {
-    pub fn new(magnitude: Signal, direction: VoterYesNoView) -> Self {
+impl<Signal, Hash: Clone> YesNoVote<Signal, Hash> {
+    pub fn new(magnitude: Signal, direction: VoterYesNoView, justification: Option<Hash>) -> Self {
         YesNoVote {
             magnitude,
             direction,
+            justification,
         }
+    }
+
+    pub fn justification(&self) -> Option<Hash> {
+        self.justification.clone()
     }
 }
 
-impl<Signal: Parameter + Copy> VoteVector<Signal, VoterYesNoView> for YesNoVote<Signal> {
+impl<Signal: Copy, Hash: Clone> VoteVector<Signal, VoterYesNoView> for YesNoVote<Signal, Hash> {
     fn magnitude(&self) -> Signal {
         self.magnitude
     }
@@ -65,14 +71,13 @@ impl<Signal: Parameter + Copy> VoteVector<Signal, VoterYesNoView> for YesNoVote<
 /// The type for the threshold
 pub enum ThresholdType<Signal, FineArithmetic>
 where
-    Signal: FullCodec + Parameter,
     FineArithmetic: PerThing,
 {
     Count(Signal),
     Percentage(FineArithmetic),
 }
 
-impl<Signal: Parameter + From<u32>, FineArithmetic: PerThing> Default
+impl<Signal: From<u32>, FineArithmetic: PerThing> Default
     for ThresholdType<Signal, FineArithmetic>
 {
     fn default() -> ThresholdType<Signal, FineArithmetic> {
@@ -85,7 +90,7 @@ impl<Signal: Parameter + From<u32>, FineArithmetic: PerThing> Default
 /// - evaluates passage of vote state
 pub struct ThresholdConfig<Signal, FineArithmetic>
 where
-    Signal: FullCodec + Parameter + From<u32>,
+    Signal: From<u32>,
     FineArithmetic: PerThing,
 {
     /// Support threshold
@@ -94,9 +99,35 @@ where
     turnout_required: ThresholdType<Signal, FineArithmetic>,
 }
 
-impl<Signal: FullCodec + Parameter + From<u32>, FineArithmetic: PerThing>
-    ThresholdConfig<Signal, FineArithmetic>
+use crate::schedule::{ThresholdConfigBuilder, ThresholdTypeBuilder};
+// local extension
+impl<Signal: From<u32>, FineArithmetic: PerThing> From<ThresholdTypeBuilder<FineArithmetic>>
+    for ThresholdType<Signal, FineArithmetic>
 {
+    fn from(
+        threshold_type_builder: ThresholdTypeBuilder<FineArithmetic>,
+    ) -> ThresholdType<Signal, FineArithmetic> {
+        match threshold_type_builder {
+            ThresholdTypeBuilder::Count(count) => ThresholdType::Count(count.into()), // From<u32>
+            ThresholdTypeBuilder::Percentage(percent) => ThresholdType::Percentage(percent),
+        }
+    }
+}
+// local extension
+impl<Signal: From<u32>, FineArithmetic: PerThing> From<ThresholdConfigBuilder<FineArithmetic>>
+    for ThresholdConfig<Signal, FineArithmetic>
+{
+    fn from(
+        threshold_config_builder: ThresholdConfigBuilder<FineArithmetic>,
+    ) -> ThresholdConfig<Signal, FineArithmetic> {
+        ThresholdConfig {
+            support_required: threshold_config_builder.support_required.into(),
+            turnout_required: threshold_config_builder.turnout_required.into(),
+        }
+    }
+}
+
+impl<Signal: From<u32>, FineArithmetic: PerThing> ThresholdConfig<Signal, FineArithmetic> {
     pub fn new_signal_count_threshold(support_required: Signal, turnout_required: Signal) -> Self {
         ThresholdConfig {
             support_required: ThresholdType::Count(support_required),
@@ -114,8 +145,8 @@ impl<Signal: FullCodec + Parameter + From<u32>, FineArithmetic: PerThing>
     }
 }
 
-impl<Signal: FullCodec + Parameter + From<u32> + Copy, FineArithmetic: PerThing + Copy>
-    ConsistentThresholdStructure for ThresholdConfig<Signal, FineArithmetic>
+impl<Signal: From<u32> + Copy, FineArithmetic: PerThing + Copy> ConsistentThresholdStructure
+    for ThresholdConfig<Signal, FineArithmetic>
 {
     fn is_percentage_threshold(&self) -> bool {
         match (self.support_required, self.turnout_required) {
@@ -135,18 +166,18 @@ impl<Signal: FullCodec + Parameter + From<u32> + Copy, FineArithmetic: PerThing 
 }
 
 impl<
-        Signal: Parameter + sp_std::ops::Mul<Signal, Output = Signal> + From<u32>,
+        Signal: From<u32> + Copy,
         FineArithmetic: PerThing + sp_std::ops::Mul<Signal, Output = Signal>,
     > DeriveThresholdRequirement<Signal> for ThresholdConfig<Signal, FineArithmetic>
 {
     fn derive_support_requirement(&self, turnout: Signal) -> Signal {
-        match self.clone().support_required {
+        match self.support_required {
             ThresholdType::Count(signal) => signal,
             ThresholdType::Percentage(signal) => signal * turnout,
         }
     }
     fn derive_turnout_requirement(&self, turnout: Signal) -> Signal {
-        match self.clone().turnout_required {
+        match self.turnout_required {
             ThresholdType::Count(signal) => signal,
             ThresholdType::Percentage(signal) => signal * turnout,
         }
@@ -157,12 +188,12 @@ impl<
 /// The state of an ongoing vote
 pub struct VoteState<Signal, FineArithmetic, BlockNumber>
 where
-    Signal: FullCodec + Parameter + From<u32>,
+    Signal: From<u32>,
     FineArithmetic: PerThing,
 {
-    /// Signal in favor
+    /// u32 in favor
     in_favor: Signal,
-    /// Signal against
+    /// u32 against
     against: Signal,
     /// All signal that votes
     turnout: Signal,
@@ -177,13 +208,11 @@ where
 }
 
 impl<
-        Signal: Parameter
-            + Default
-            + FullCodec
-            + Copy
+        Signal: Copy
             + From<u32>
-            + sp_std::ops::Add<Signal, Output = Signal>
-            + sp_std::ops::Sub<Signal, Output = Signal>,
+            + Default
+            + sp_std::ops::Add<Output = Signal>
+            + sp_std::ops::Sub<Output = Signal>,
         FineArithmetic: PerThing + Default,
         BlockNumber: Parameter + Copy + Default,
     > VoteState<Signal, FineArithmetic, BlockNumber>
@@ -275,13 +304,12 @@ impl<
 
 impl<
         Signal: Parameter
-            + PartialOrd
-            + Default
             + Copy
             + From<u32>
-            + sp_std::ops::Add<Signal, Output = Signal>
-            + sp_std::ops::Sub<Signal, Output = Signal>
-            + sp_std::ops::Mul<Signal, Output = Signal>,
+            + Default
+            + PartialOrd
+            + sp_std::ops::Add<Output = Signal>
+            + sp_std::ops::Sub<Output = Signal>,
         FineArithmetic: PerThing + Default + sp_std::ops::Mul<Signal, Output = Signal>,
         BlockNumber: Parameter + Copy + Default,
     > Approved for VoteState<Signal, FineArithmetic, BlockNumber>
@@ -301,15 +329,19 @@ impl<
 impl<
         Signal: Parameter
             + Copy
-            + Default
             + From<u32>
-            + sp_std::ops::Sub<Signal, Output = Signal>
-            + sp_std::ops::Add<Signal, Output = Signal>,
+            + Default
+            + sp_std::ops::Add<Output = Signal>
+            + sp_std::ops::Sub<Output = Signal>,
+        Hash: Clone,
         FineArithmetic: PerThing + Default,
         BlockNumber: Parameter + Copy + Default,
-    > Apply<YesNoVote<Signal>> for VoteState<Signal, FineArithmetic, BlockNumber>
+    > Apply<YesNoVote<Signal, Hash>> for VoteState<Signal, FineArithmetic, BlockNumber>
 {
-    fn apply(&self, vote: YesNoVote<Signal>) -> VoteState<Signal, FineArithmetic, BlockNumber> {
+    fn apply(
+        &self,
+        vote: YesNoVote<Signal, Hash>,
+    ) -> VoteState<Signal, FineArithmetic, BlockNumber> {
         match vote.direction() {
             VoterYesNoView::InFavor => self.add_in_favor_vote(vote.magnitude()),
             VoterYesNoView::Against => self.add_against_vote(vote.magnitude()),
@@ -321,15 +353,19 @@ impl<
 impl<
         Signal: Parameter
             + Copy
-            + Default
             + From<u32>
-            + sp_std::ops::Sub<Signal, Output = Signal>
-            + sp_std::ops::Add<Signal, Output = Signal>,
+            + Default
+            + sp_std::ops::Add<Output = Signal>
+            + sp_std::ops::Sub<Output = Signal>,
+        Hash: Clone,
         FineArithmetic: PerThing + Default,
         BlockNumber: Parameter + Copy + Default,
-    > Revert<YesNoVote<Signal>> for VoteState<Signal, FineArithmetic, BlockNumber>
+    > Revert<YesNoVote<Signal, Hash>> for VoteState<Signal, FineArithmetic, BlockNumber>
 {
-    fn revert(&self, vote: YesNoVote<Signal>) -> VoteState<Signal, FineArithmetic, BlockNumber> {
+    fn revert(
+        &self,
+        vote: YesNoVote<Signal, Hash>,
+    ) -> VoteState<Signal, FineArithmetic, BlockNumber> {
         match vote.direction() {
             VoterYesNoView::InFavor => self.remove_in_favor_vote(vote.magnitude()),
             VoterYesNoView::Against => self.remove_against_vote(vote.magnitude()),

@@ -40,9 +40,20 @@ impl<Hash: Parameter, Currency: Parameter> BountyInformation<Hash, Currency> {
 }
 
 #[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug)]
+/// Set this alongside ShareId to define these governance structures with the allocation defined in the ShareId registration
+pub enum VoteConfig<FineArithmetic> {
+    /// (OrgId, ShareId, Support Percentage Threshold, Turnout Percentage Threshold)
+    CreateShareWeightedPercentageThresholdVote(u32, u32, FineArithmetic, FineArithmetic),
+    /// (OrgId, ShareId, Support Count Threshold, Turnout Percentage Threshold)
+    CreateShareWeightedCountThresholdVote(u32, u32, u32, u32),
+    /// (OrgId, ShareId, Support 1P1V Count Threshold, Turnout 1P1V Count Threshold)
+    Create1P1VCountThresholdVote(u32, u32, u32, u32),
+}
+
+#[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug)]
 /// Each task
 /// - TODO: add accountability such that there is some subset of the membership group
-/// assigned to this task
+/// assigned to this task?
 pub struct Task<Hash> {
     id: TaskId,
     description: Hash,
@@ -76,26 +87,31 @@ impl<Currency: Copy> MilestoneSchedule<Currency> {
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 /// (OrgId, BountyId), ApplicationId => BountyApplication<AccountId, Shares, Currency, Hash>
-pub struct BountyApplication<AccountId, Shares, Currency, Hash> {
+pub struct BountyApplication<AccountId, Currency, Hash> {
     /// The description that goes
     description: Hash,
     /// The milestone proposed by the applying team, hashes need to be authenticated with data off-chain
     proposed_milestone_schedule: MilestoneSchedule<Currency>,
     /// The terms of agreement that must agreed to by all members before the bounty execution starts
-    basic_terms_of_agreement: TermsOfAgreement<AccountId, Shares>,
+    basic_terms_of_agreement: TermsOfAgreement<AccountId>,
 }
 
-impl<AccountId, Shares, Currency, Hash> BountyApplication<AccountId, Shares, Currency, Hash> {
+impl<AccountId: Clone, Currency, Hash> BountyApplication<AccountId, Currency, Hash> {
     pub fn new(
         description: Hash,
         proposed_milestone_schedule: MilestoneSchedule<Currency>,
-        basic_terms_of_agreement: TermsOfAgreement<AccountId, Shares>,
-    ) -> BountyApplication<AccountId, Shares, Currency, Hash> {
+        basic_terms_of_agreement: TermsOfAgreement<AccountId>,
+    ) -> BountyApplication<AccountId, Currency, Hash> {
         BountyApplication {
             description,
             proposed_milestone_schedule,
             basic_terms_of_agreement,
         }
+    }
+
+    // TODO: make this a trait on BountyApplication object more generally once traitifying Bounty to make it more configurable
+    pub fn terms(&self) -> TermsOfAgreement<AccountId> {
+        self.basic_terms_of_agreement.clone()
     }
 }
 
@@ -119,9 +135,9 @@ pub struct BountyPaymentTracker<Currency> {
 /// This vote metadata describes the review of the milestone
 /// - first the shareholder acknowledge the submission with submission hash
 /// - then a vote is dispatched as per the review process
-pub struct MilestoneReview<OrgId, ShareId> {
-    organization: OrgId,
-    share_id: ShareId,
+pub struct MilestoneReview {
+    organization: u32,
+    share_id: u32,
     support_requirement: u32,
     veto_rights: bool,
 }

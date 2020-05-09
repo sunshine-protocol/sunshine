@@ -5,9 +5,11 @@
 //! - [`vote-yesno`](../vote_yesno/index.html)
 //! - [`bank`](../bank/index.html)
 
+pub mod bank;
 pub mod bounty;
 pub mod court;
 pub mod organization;
+pub mod petition;
 pub mod proposal;
 pub mod schedule;
 pub mod share;

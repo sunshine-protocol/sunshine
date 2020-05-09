@@ -7,13 +7,14 @@ use suntime::{
     AccountId,
     AuraConfig,
     BalancesConfig,
+    BankConfig,
     GenesisConfig,
     GrandpaConfig,
     IndicesConfig,
-    OrgId,
-    Share,
-    ShareId,
+    MembershipConfig,
+    Shares,
     SharesAtomicConfig,
+    SharesMembershipConfig,
     Signature,
     SudoConfig,
     SystemConfig,
@@ -63,27 +64,23 @@ pub fn development_config() -> ChainSpec {
                     get_account_id_from_seed::<sr25519::Public>("Alice//stash"),
                     get_account_id_from_seed::<sr25519::Public>("Bob//stash"),
                 ],
-                // membership shares
+                // org membership
+                None,
+                // flat share supervisors
+                None,
+                // flat share membership
+                None,
+                // weighted share supervisors
+                None,
+                // weighted share membership
+                None,
+                // first org value constitution
+                b"build cool shit".to_vec(),
+                // flat share membership
                 vec![
-                    (
-                        1,
-                        1,
-                        get_account_id_from_seed::<sr25519::Public>("Alice"),
-                        10,
-                    ),
-                    (1, 1, get_account_id_from_seed::<sr25519::Public>("Bob"), 10),
+                    get_account_id_from_seed::<sr25519::Public>("Alice"),
+                    get_account_id_from_seed::<sr25519::Public>("Bob"),
                 ],
-                // total issuance
-                vec![(1, 1, 20)],
-                // shareholder membership
-                vec![(
-                    1,
-                    1,
-                    vec![
-                        get_account_id_from_seed::<sr25519::Public>("Alice"),
-                        get_account_id_from_seed::<sr25519::Public>("Bob"),
-                    ],
-                )],
                 true,
             )
         },
@@ -124,50 +121,27 @@ pub fn local_testnet_config() -> ChainSpec {
                     get_account_id_from_seed::<sr25519::Public>("Eve//stash"),
                     get_account_id_from_seed::<sr25519::Public>("Ferdie//stash"),
                 ],
-                // membership shares
+                // org membership
+                None,
+                // flat share supervisors
+                None,
+                // flat share membership
+                None,
+                // weighted share supervisors
+                None,
+                // weighted share membership
+                None,
+                // first org value constitution
+                b"build cool shit".to_vec(),
+                // first org flat membership
                 vec![
-                    (
-                        1,
-                        1,
-                        get_account_id_from_seed::<sr25519::Public>("Alice"),
-                        10,
-                    ),
-                    (1, 1, get_account_id_from_seed::<sr25519::Public>("Bob"), 10),
-                    (
-                        1,
-                        1,
-                        get_account_id_from_seed::<sr25519::Public>("Charlie"),
-                        10,
-                    ),
-                    (
-                        1,
-                        1,
-                        get_account_id_from_seed::<sr25519::Public>("Dave"),
-                        10,
-                    ),
-                    (1, 1, get_account_id_from_seed::<sr25519::Public>("Eve"), 10),
-                    (
-                        1,
-                        1,
-                        get_account_id_from_seed::<sr25519::Public>("Ferdie"),
-                        10,
-                    ),
+                    get_account_id_from_seed::<sr25519::Public>("Alice"),
+                    get_account_id_from_seed::<sr25519::Public>("Bob"),
+                    get_account_id_from_seed::<sr25519::Public>("Charlie"),
+                    get_account_id_from_seed::<sr25519::Public>("Dave"),
+                    get_account_id_from_seed::<sr25519::Public>("Eve"),
+                    get_account_id_from_seed::<sr25519::Public>("Ferdie"),
                 ],
-                // total issuance
-                vec![(1, 1, 60)],
-                // shareholder membership
-                vec![(
-                    1,
-                    1,
-                    vec![
-                        get_account_id_from_seed::<sr25519::Public>("Alice"),
-                        get_account_id_from_seed::<sr25519::Public>("Bob"),
-                        get_account_id_from_seed::<sr25519::Public>("Charlie"),
-                        get_account_id_from_seed::<sr25519::Public>("Dave"),
-                        get_account_id_from_seed::<sr25519::Public>("Eve"),
-                        get_account_id_from_seed::<sr25519::Public>("Ferdie"),
-                    ],
-                )],
                 true,
             )
         },
@@ -183,9 +157,13 @@ pub fn testnet_genesis(
     initial_authorities: Vec<(AuraId, GrandpaId)>,
     root_key: AccountId,
     endowed_accounts: Vec<AccountId>,
-    membership_shares: Vec<(OrgId, ShareId, AccountId, Share)>,
-    total_issuance: Vec<(OrgId, ShareId, Share)>,
-    shareholder_membership: Vec<(OrgId, ShareId, Vec<AccountId>)>,
+    org_membership: Option<Vec<(u32, AccountId, bool)>>,
+    flat_share_supervisors: Option<Vec<(u32, u32, AccountId)>>,
+    flat_share_membership: Option<Vec<(u32, u32, AccountId, bool)>>,
+    weighted_share_supervisors: Option<Vec<(u32, u32, AccountId)>>,
+    weighted_share_membership: Option<Vec<(u32, u32, AccountId, Shares)>>,
+    first_org_value_constitution: Vec<u8>,
+    first_org_flat_membership: Vec<AccountId>,
     _enable_println: bool,
 ) -> GenesisConfig {
     GenesisConfig {
@@ -201,11 +179,22 @@ pub fn testnet_genesis(
                 .collect(),
         }),
         pallet_indices: Some(IndicesConfig { indices: vec![] }),
-        shares_atomic: Some(SharesAtomicConfig {
+        membership: Some(MembershipConfig {
             omnipotent_key: root_key.clone(),
-            membership_shares,
-            total_issuance,
-            shareholder_membership,
+            membership: org_membership,
+        }),
+        shares_membership: Some(SharesMembershipConfig {
+            share_supervisors: flat_share_supervisors,
+            shareholder_membership: flat_share_membership,
+        }),
+        shares_atomic: Some(SharesAtomicConfig {
+            share_supervisors: weighted_share_supervisors,
+            shareholder_membership: weighted_share_membership,
+        }),
+        bank: Some(BankConfig {
+            first_organization_supervisor: root_key.clone(),
+            first_organization_value_constitution: first_org_value_constitution,
+            first_organization_flat_membership: first_org_flat_membership,
         }),
         pallet_aura: Some(AuraConfig {
             authorities: initial_authorities.iter().map(|x| (x.0.clone())).collect(),

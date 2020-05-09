@@ -1,13 +1,10 @@
-use crate::traits::VerifyShape;
-use codec::{Decode, Encode, FullCodec};
+use crate::traits::{AccessGenesis, VerifyShape};
+use codec::{Decode, Encode};
 use frame_support::Parameter;
-use sp_runtime::{
-    traits::{AtLeast32Bit, MaybeSerializeDeserialize, Member, Zero},
-    RuntimeDebug,
-};
-use sp_std::{fmt::Debug, prelude::*};
+use sp_runtime::{traits::Zero, RuntimeDebug};
+use sp_std::prelude::*;
 
-#[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug)]
+#[derive(PartialEq, Eq, Default, Copy, Clone, Encode, Decode, RuntimeDebug)]
 /// Atomic share profile reserves the total share amount every time but (might) have a limit on total reservations
 pub struct AtomicShareProfile<Shares> {
     /// The total number of shares owned by this participant
@@ -19,44 +16,24 @@ pub struct AtomicShareProfile<Shares> {
 }
 
 impl<
-        Shares: Parameter
-            + Member
-            + AtLeast32Bit
-            + FullCodec
+        Shares: Copy
             + Default
-            + Copy
-            + MaybeSerializeDeserialize
-            + Debug
-            + Zero,
-    > Default for AtomicShareProfile<Shares>
-{
-    fn default() -> Self {
-        AtomicShareProfile {
-            total: 0u32.into(),
-            times_reserved: 0u32,
-            locked: false,
-        }
-    }
-}
-
-impl<
-        Shares: Parameter
-            + Member
-            + AtLeast32Bit
-            + FullCodec
-            + Default
-            + Copy
-            + MaybeSerializeDeserialize
-            + Debug
+            + Parameter
+            + sp_std::ops::Add<Output = Shares>
+            + sp_std::ops::Sub<Output = Shares>
             + Zero,
     > AtomicShareProfile<Shares>
 {
-    pub fn get_shares(&self) -> Shares {
+    pub fn total(&self) -> Shares {
         self.total
     }
 
-    pub fn get_times_reserved(&self) -> u32 {
+    pub fn times_reserved(&self) -> u32 {
         self.times_reserved
+    }
+
+    pub fn is_zero(&self) -> bool {
+        self.total == Shares::zero()
     }
 
     pub fn new_shares(total: Shares) -> AtomicShareProfile<Shares> {
@@ -114,33 +91,48 @@ impl<
 #[derive(PartialEq, Eq, Default, Clone, Encode, Decode, RuntimeDebug)]
 /// The account ownership for the share genesis
 pub struct SimpleShareGenesis<AccountId, Shares> {
-    pub total: Shares,
-    pub account_ownership: Vec<(AccountId, Shares)>,
+    total: Shares,
+    account_ownership: Vec<(AccountId, Shares)>,
 }
 
-impl<AccountId: Parameter, Shares: Parameter + Zero> From<Vec<(AccountId, Shares)>>
+impl<AccountId: Clone, Shares: Parameter + From<u32>> AccessGenesis<AccountId, Shares>
     for SimpleShareGenesis<AccountId, Shares>
 {
+    fn total(&self) -> Shares {
+        self.total.clone()
+    }
+    fn account_ownership(&self) -> Vec<(AccountId, Shares)> {
+        self.account_ownership.clone()
+    }
+}
+
+impl<AccountId: Parameter, Shares: Parameter + From<u32> + sp_std::ops::AddAssign>
+    From<Vec<(AccountId, Shares)>> for SimpleShareGenesis<AccountId, Shares>
+{
     fn from(genesis: Vec<(AccountId, Shares)>) -> SimpleShareGenesis<AccountId, Shares> {
-        let mut total = Shares::zero();
-        for account_shares in genesis.clone() {
-            total = total + account_shares.1.clone();
+        let mut total: Shares = 0u32.into();
+        let mut dedup_genesis = genesis;
+        dedup_genesis.dedup(); // deduplicated
+        for account_shares in dedup_genesis.clone() {
+            total += account_shares.1;
         }
         SimpleShareGenesis {
             total,
-            account_ownership: genesis,
+            account_ownership: dedup_genesis,
         }
     }
 }
 
-impl<AccountId: Parameter, Shares: Parameter + Zero> VerifyShape
-    for SimpleShareGenesis<AccountId, Shares>
+impl<
+        AccountId: Parameter,
+        Shares: Copy + Parameter + From<u32> + sp_std::ops::Add<Output = Shares>,
+    > VerifyShape for SimpleShareGenesis<AccountId, Shares>
 {
     fn verify_shape(&self) -> bool {
         // TODO: clean up and optimize
-        let mut sum = Shares::zero();
+        let mut sum: Shares = 0u32.into();
         for ac in self.account_ownership.iter() {
-            sum = sum + ac.1.clone()
+            sum = sum + ac.1
         }
         sum == self.total
     }

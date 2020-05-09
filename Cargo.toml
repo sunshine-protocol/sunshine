@@ -3,13 +3,16 @@ panic = "unwind"
 
 [workspace]
 members = [
-    "client",
-    "node",
     "modules/util",
+    "modules/membership",
+    "modules/shares-membership",
     "modules/shares-atomic",
+    "modules/vote-petition",
     "modules/vote-yesno",
     "modules/bank",
     "runtime",
+    "client",
+    "node",
 ]
 
 [patch.crates-io]

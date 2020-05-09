@@ -5,22 +5,10 @@ use sp_runtime::{testing::Header, traits::IdentityLookup, Perbill};
 
 // type aliases
 pub type AccountId = u64;
-pub type Shares = u64;
 pub type BlockNumber = u64;
 
 impl_outer_origin! {
     pub enum Origin for Test where system = frame_system {}
-}
-
-mod shares_atomic {
-    pub use crate::Event;
-}
-
-impl_outer_event! {
-    pub enum TestEvent for Test {
-        system<T>,
-        shares_atomic<T>,
-    }
 }
 
 #[derive(Clone, Eq, PartialEq)]
@@ -41,7 +29,7 @@ impl frame_system::Trait for Test {
     type AccountId = AccountId;
     type Lookup = IdentityLookup<Self::AccountId>;
     type Header = Header;
-    type Event = ();
+    type Event = TestEvent;
     type BlockHashCount = BlockHashCount;
     type MaximumBlockWeight = MaximumBlockWeight;
     type DbWeight = ();
@@ -56,16 +44,32 @@ impl frame_system::Trait for Test {
     type OnKilledAccount = ();
 }
 parameter_types! {
-    // pretty random hard limit
-    pub const ReservationLimit: u32 = 100000;
+    pub const ReservationLimit: u32 = 10000;
 }
 impl membership::Trait for Test {
-    type Event = ();
+    type Event = TestEvent;
+}
+impl shares_membership::Trait for Test {
+    type Event = TestEvent;
+    type OrgData = membership::Module<Test>;
 }
 impl Trait for Test {
-    type Event = Event<Test>;
+    type Event = TestEvent;
     type OrgData = membership::Module<Test>;
-    type Shares = Shares;
-    type ReservationLimit = ReservationLimit;
+    type ShareData = shares_membership::Module<Test>;
 }
-pub type AtomicShares = Module<Test>;
+
+mod vote_petition {
+    pub use crate::Event;
+}
+
+impl_outer_event! {
+    pub enum TestEvent for Test {
+        system<T>,
+        membership<T>,
+        shares_membership<T>,
+        vote_petition<T>,
+    }
+}
+// pub type System = system::Module<Test>; // necessary to test event emission
+pub type VotePetition = Module<Test>;

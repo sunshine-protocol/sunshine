@@ -1,27 +1,26 @@
-use crate::bounty::{BountyId, MilestoneId};
-use crate::proposal::ProposalIndex;
 use codec::{Decode, Encode};
-use frame_support::Parameter;
 use sp_runtime::RuntimeDebug;
 use sp_std::prelude::*;
 
 #[derive(PartialEq, Eq, Default, Clone, Encode, Decode, RuntimeDebug)]
 /// Static terms of agreement, define how the enforced payout structure for grants
-pub struct TermsOfAgreement<AccountId, Shares> {
+pub struct TermsOfAgreement<AccountId> {
+    /// If Some(account), then account is the sudo for the duration of the grant
     supervisor: Option<AccountId>,
-    share_metadata: Vec<(AccountId, Shares)>,
+    /// The share allocation for metadata
+    share_metadata: Vec<(AccountId, u32)>,
 }
 
 #[derive(PartialEq, Eq, Default, Clone, Encode, Decode, RuntimeDebug)]
 /// Defined paths for how the terms of agreement can change
-pub struct FullTermsOfAgreement<OrgId, ShareId, AccountId, Shares> {
+pub struct FullTermsOfAgreement<AccountId> {
     /// The starting state for the group
-    basic_terms: TermsOfAgreement<AccountId, Shares>,
+    basic_terms: TermsOfAgreement<AccountId>,
     /// This represents the metagovernance configuration, how the group can coordinate changes
     allowed_changes: Vec<(
         Catalyst<AccountId>,
-        Option<RequiredVote<OrgId, ShareId>>,
-        Option<EnforcedOutcome<OrgId, ShareId, AccountId>>,
+        Option<RequiredVote>,
+        Option<EnforcedOutcome<AccountId>>,
     )>,
 }
 
@@ -36,70 +35,104 @@ pub enum Catalyst<AccountId> {
 } // TODO: upgrade path from suborganization to separate organization
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-pub enum RequiredVote<OrgId, ShareId> {
+/// TODO: Add VoteConfig = enum { 1p1v_count, 1p1v_percentage, share_weighted_count, share_weighted_percentage }
+/// - each of which has two thresholds!
+pub enum RequiredVote {
     /// Only one supervisor approval is required but everyone has veto rights
-    OneSupervisorApprovalWithVetoRights(OrgId, ShareId),
+    OneSupervisorApprovalWithVetoRights(u32, u32),
     /// Two supervisor approvals is required but everyone has veto rights
-    TwoSupervisorsApprovalWithVetoRights(OrgId, ShareId),
+    TwoSupervisorsApprovalWithVetoRights(u32, u32),
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-pub enum EnforcedOutcome<OrgId, ShareId, AccountId> {
+pub enum EnforcedOutcome<AccountId> {
     /// Grant paid out as per bounty (hosting org, bounty recipient, milestone in question)
-    GrantPayoutBasedOnShareDistribution(OrgId, ShareId, BountyId, MilestoneId),
+    /// (OrgId, ShareId, BountyId, MilestoneId)
+    GrantPayoutBasedOnShareDistribution(u32, u32, u32, u32),
     /// Remove member for unacceptable behavior
-    RemoveMemberForBadBehavior(OrgId, ShareId, AccountId),
+    /// (OrgId, ShareId)
+    RemoveMemberForBadBehavior(u32, u32, AccountId),
     /// Swap the first account for the second account in the same role for a grant team
-    SwapRoleOnGrantTeam(OrgId, ShareId, AccountId, AccountId),
+    /// (OrgId, ShareId)
+    SwapRoleOnGrantTeam(u32, u32, AccountId, AccountId),
+}
+
+#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug)]
+// make it easy to verify existence in the context of Bank
+pub enum ShareID {
+    Flat(u32),
+    WeightedAtomic(u32),
+} // TODO: add `DivisibleShares` => Ranked Choice Voting
+
+impl Default for ShareID {
+    fn default() -> Self {
+        ShareID::Flat(0u32)
+    }
 }
 
 #[derive(PartialEq, Eq, Default, Clone, Encode, Decode, RuntimeDebug)]
 /// The struct to track the `ShareId`s and `ProposalIndex` associated with an organization
-pub struct Organization<ShareId> {
-    /// The shares registered by this organization
-    inner_shares: Vec<ShareId>,
-    /// The suborganizations completing ongoing bounties
-    funded_teams: Vec<ShareId>,
-    /// The proposals that are under consideration for this organization
-    /// TODO: consider adding share group context so that vote schedules are available to every share group to make decisions
-    /// - the constraints on the votes that can be included in the vote schedule are derived from the actor
-    /// and their relationships
-    proposals: Vec<ProposalIndex>,
+/// TODO: in the future, each of these should be separate maps
+pub struct Organization<Hash> {
+    /// The supervising ShareId for the organization, like a Board of Directors
+    admin_id: ShareID,
+    /// The constitution
+    constitution: Hash,
 }
 
-impl<ShareId: Parameter> Organization<ShareId> {
-    pub fn new(admin_share_id: ShareId) -> Self {
-        let mut inner_shares = Vec::<ShareId>::new();
-        let funded_teams = inner_shares.clone();
-        inner_shares.push(admin_share_id);
+impl<Hash: Clone> Organization<Hash> {
+    pub fn new(admin_id: ShareID, constitution: Hash) -> Self {
         Organization {
-            inner_shares,
-            funded_teams,
-            proposals: Vec::new(),
+            admin_id,
+            constitution,
         }
     }
+    pub fn admin_id(&self) -> ShareID {
+        self.admin_id
+    }
+    pub fn constitution(&self) -> Hash {
+        self.constitution.clone()
+    }
+}
 
-    /// Consumes the existing organization and outputs a new organization that
-    /// includes the new share group identifier
-    /// TODO: split into two methods, one for bounty and one for governance
-    pub fn add_new_inner_share_group(self, new_share_id: ShareId) -> Self {
-        // could do this more efficiently
-        let mut new_shares = self.clone().inner_shares;
-        new_shares.push(new_share_id);
-        Organization {
-            inner_shares: new_shares,
-            ..self
+#[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug)]
+/// These are the types of formed and registered organizations in the `bank` module
+pub enum FormedOrganization {
+    FlatOrg(u32),
+    FlatShares(u32, u32),
+    WeightedShares(u32, u32),
+}
+
+impl From<u32> for FormedOrganization {
+    fn from(other: u32) -> FormedOrganization {
+        FormedOrganization::FlatOrg(other)
+    }
+}
+
+impl From<(u32, ShareID)> for FormedOrganization {
+    fn from(other: (u32, ShareID)) -> FormedOrganization {
+        match other.1 {
+            ShareID::Flat(share_id) => FormedOrganization::FlatShares(other.0, share_id),
+            ShareID::WeightedAtomic(share_id) => {
+                FormedOrganization::WeightedShares(other.0, share_id)
+            }
         }
     }
+}
 
-    /// Consumes the existing organization and outputs a new organization that
-    /// includes the new proposal index
-    pub fn add_proposal_index(self, proposal_index: ProposalIndex) -> Self {
-        let mut new_proposals = self.clone().proposals;
-        new_proposals.push(proposal_index);
-        Organization {
-            proposals: new_proposals,
-            ..self
-        }
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+/// The pieces of information used to register an organization in `bank`
+pub enum OrganizationSource<AccountId, Shares> {
+    /// Will be initialized as an organization with a single ShareId and equal governance strength from all members
+    Accounts(Vec<AccountId>),
+    /// "" weighted governance strength by Shares
+    AccountsWeighted(Vec<(AccountId, Shares)>),
+    /// References a share group registering to become an organization (OrgId, ShareId)
+    SpinOffShareGroup(u32, ShareID),
+}
+
+impl<AccountId, Shares> Default for OrganizationSource<AccountId, Shares> {
+    fn default() -> OrganizationSource<AccountId, Shares> {
+        OrganizationSource::Accounts(Vec::new())
     }
 }

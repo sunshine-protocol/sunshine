@@ -1,63 +1,75 @@
 use codec::{Decode, Encode};
-use frame_support::Parameter;
 use sp_runtime::RuntimeDebug;
 use sp_std::prelude::*;
 
 #[derive(PartialEq, Eq, Default, Copy, Clone, Encode, Decode, RuntimeDebug)]
-pub struct OrgItemPrefixKey<OrgId, FirstIdentifier> {
-    org: OrgId,
-    first_id: FirstIdentifier,
-}
+pub struct UUID(u32);
 
-impl<OrgId: Parameter + Copy, FirstIdentifier: From<u32> + Copy>
-    OrgItemPrefixKey<OrgId, FirstIdentifier>
-{
-    pub fn new(org: OrgId, first_id: FirstIdentifier) -> OrgItemPrefixKey<OrgId, FirstIdentifier> {
-        OrgItemPrefixKey { org, first_id }
+#[derive(PartialEq, Eq, Default, Copy, Clone, Encode, Decode, RuntimeDebug)]
+pub struct UUID2(u32, u32);
+
+// impl From<(u32, u32)> for UUID2 {
+//     fn from(other: (u32, u32)) -> UUID2 {
+//         UUID2::new(other.1, other.2)
+//     }
+// }
+
+impl UUID2 {
+    pub fn new(one: u32, two: u32) -> UUID2 {
+        UUID2(one, two)
     }
-    pub fn org(&self) -> OrgId {
-        self.org
+    pub fn one(&self) -> u32 {
+        self.0
     }
-    pub fn first_id(&self) -> FirstIdentifier {
-        self.first_id
+    pub fn two(&self) -> u32 {
+        self.1
     }
 }
 
 #[derive(PartialEq, Eq, Default, Copy, Clone, Encode, Decode, RuntimeDebug)]
-/// Used in vote and bounty to track relevant state for votes and bounties in each
-pub struct OrgTwoItemPrefixKey<OrgId, FirstIdentifier, SecondIdentifier> {
-    org: OrgId,
-    first_id: FirstIdentifier,
-    second_id: SecondIdentifier,
+pub struct UUID3(u32, u32, u32);
+
+impl UUID3 {
+    pub fn new(one: u32, two: u32, three: u32) -> UUID3 {
+        UUID3(one, two, three)
+    }
+    pub fn one_two(&self) -> UUID2 {
+        UUID2::new(self.0, self.1)
+    }
+    pub fn one(&self) -> u32 {
+        self.0
+    }
+    pub fn two(&self) -> u32 {
+        self.1
+    }
+    pub fn three(&self) -> u32 {
+        self.2
+    }
 }
 
-impl<
-        OrgId: Parameter + Copy,
-        FirstIdentifier: From<u32> + Copy,
-        SecondIdentifier: From<u32> + Copy,
-    > OrgTwoItemPrefixKey<OrgId, FirstIdentifier, SecondIdentifier>
-{
-    pub fn new(
-        org: OrgId,
-        first_id: FirstIdentifier,
-        second_id: SecondIdentifier,
-    ) -> OrgTwoItemPrefixKey<OrgId, FirstIdentifier, SecondIdentifier> {
-        OrgTwoItemPrefixKey {
-            org,
-            first_id,
-            second_id,
-        }
+#[derive(PartialEq, Eq, Default, Copy, Clone, Encode, Decode, RuntimeDebug)]
+pub struct UUID4(u32, u32, u32, u32);
+
+impl UUID4 {
+    pub fn new(one: u32, two: u32, three: u32, four: u32) -> UUID4 {
+        UUID4(one, two, three, four)
     }
-    pub fn org_item_prefix(&self) -> OrgItemPrefixKey<OrgId, FirstIdentifier> {
-        OrgItemPrefixKey::new(self.org, self.first_id)
+    pub fn one_two_three(&self) -> UUID3 {
+        UUID3::new(self.0, self.1, self.2)
     }
-    pub fn org(&self) -> OrgId {
-        self.org
+    pub fn one_two(&self) -> UUID2 {
+        UUID2::new(self.0, self.1)
     }
-    pub fn first_id(&self) -> FirstIdentifier {
-        self.first_id
+    pub fn one(&self) -> u32 {
+        self.0
     }
-    pub fn second_id(&self) -> SecondIdentifier {
-        self.second_id
+    pub fn two(&self) -> u32 {
+        self.1
+    }
+    pub fn three(&self) -> u32 {
+        self.2
+    }
+    pub fn four(&self) -> u32 {
+        self.3
     }
 }

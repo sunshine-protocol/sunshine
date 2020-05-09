@@ -5,10 +5,7 @@ use sp_runtime::{testing::Header, traits::IdentityLookup, Perbill};
 
 // type aliases
 pub type AccountId = u64;
-pub type OrgId = u64;
-pub type ShareId = u64;
-pub type Share = u64;
-pub type VoteId = u64;
+pub type Shares = u64;
 pub type Signal = u64;
 pub type BlockNumber = u64;
 
@@ -37,6 +34,9 @@ impl frame_system::Trait for Test {
     type Event = TestEvent;
     type BlockHashCount = BlockHashCount;
     type MaximumBlockWeight = MaximumBlockWeight;
+    type DbWeight = ();
+    type BlockExecutionWeight = ();
+    type ExtrinsicBaseWeight = ();
     type AvailableBlockRatio = AvailableBlockRatio;
     type MaximumBlockLength = MaximumBlockLength;
     type Version = ();
@@ -48,18 +48,25 @@ impl frame_system::Trait for Test {
 parameter_types! {
     pub const ReservationLimit: u32 = 10000;
 }
+impl membership::Trait for Test {
+    type Event = TestEvent;
+}
+impl shares_membership::Trait for Test {
+    type Event = TestEvent;
+    type OrgData = membership::Module<Test>;
+}
 impl shares_atomic::Trait for Test {
     type Event = TestEvent;
-    type OrgId = OrgId;
-    type ShareId = ShareId;
-    type Share = Share;
+    type OrgData = membership::Module<Test>;
+    type Shares = Shares;
     type ReservationLimit = ReservationLimit;
 }
 impl Trait for Test {
     type Event = TestEvent;
     type Signal = Signal;
-    type VoteId = VoteId;
-    type ShareData = shares_atomic::Module<Test>;
+    type OrgData = membership::Module<Test>;
+    type FlatShareData = shares_membership::Module<Test>;
+    type WeightedShareData = shares_atomic::Module<Test>;
 }
 
 mod vote_yesno {
@@ -69,6 +76,8 @@ mod vote_yesno {
 impl_outer_event! {
     pub enum TestEvent for Test {
         system<T>,
+        membership<T>,
+        shares_membership<T>,
         shares_atomic<T>,
         vote_yesno<T>,
     }

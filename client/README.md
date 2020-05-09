@@ -9,7 +9,7 @@ fork of [paritytech/substrate-subxt](https://github.com/paritytech/substrate-sub
 # from root of the sunshine-node
 $ cargo build --release
 ```
-2. Run the single chain deveopment mode for the node
+2. Run the single chain development mode for the node
 ```bash
 # from root of the sunshine-node
 $ ./target/release/sunshine-node --dev
