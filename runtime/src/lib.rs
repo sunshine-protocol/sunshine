@@ -7,13 +7,14 @@
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
+use codec::Encode;
 use pallet_grandpa::fg_primitives;
 use pallet_grandpa::AuthorityList as GrandpaAuthorityList;
 use sp_api::impl_runtime_apis;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::OpaqueMetadata;
 use sp_runtime::traits::{
-    BlakeTwo256, Block as BlockT, ConvertInto, Extrinsic, IdentifyAccount, StaticLookup, Verify,
+    BlakeTwo256, Block as BlockT, ConvertInto, IdentifyAccount, StaticLookup, Verify,
 };
 use sp_runtime::{
     create_runtime_str, generic, impl_opaque_keys, transaction_validity::TransactionValidity,
@@ -26,13 +27,19 @@ use sp_version::RuntimeVersion;
 
 // A few exports that help ease life for downstream crates.
 pub use frame_support::{
-    construct_runtime, debug, parameter_types, traits::Randomness, weights::Weight, StorageValue,
+    construct_runtime, debug, parameter_types,
+    traits::Randomness,
+    weights::{
+        constants::{BlockExecutionWeight, ExtrinsicBaseWeight, RocksDbWeight, WEIGHT_PER_SECOND},
+        Weight,
+    },
+    StorageValue,
 };
 pub use pallet_balances::Call as BalancesCall;
 pub use pallet_timestamp::Call as TimestampCall;
 #[cfg(any(feature = "std", test))]
 pub use sp_runtime::BuildStorage;
-pub use sp_runtime::{Perbill, Permill};
+pub use sp_runtime::{traits, Perbill, Permill};
 
 /// An index to a block.
 pub type BlockNumber = u32;
@@ -84,20 +91,19 @@ pub mod opaque {
     }
 }
 
-/// Submits transaction with the node's public and signature type. Adheres to the signed extension
-/// format of the chain.
-impl frame_system::offchain::CreateTransaction<Runtime, UncheckedExtrinsic> for Runtime {
-    type Public = <Signature as Verify>::Signer;
-    type Signature = Signature;
-
-    fn create_transaction<
-        TSigner: frame_system::offchain::Signer<Self::Public, Self::Signature>,
-    >(
+impl<LocalCall> frame_system::offchain::CreateSignedTransaction<LocalCall> for Runtime
+where
+    Call: From<LocalCall>,
+{
+    fn create_transaction<C: frame_system::offchain::AppCrypto<Self::Public, Self::Signature>>(
         call: Call,
-        public: Self::Public,
+        public: <Signature as traits::Verify>::Signer,
         account: AccountId,
-        index: Index,
-    ) -> Option<(Call, <UncheckedExtrinsic as Extrinsic>::SignaturePayload)> {
+        nonce: Index,
+    ) -> Option<(
+        Call,
+        <UncheckedExtrinsic as traits::Extrinsic>::SignaturePayload,
+    )> {
         // take the biggest period possible.
         let period = BlockHashCount::get()
             .checked_next_power_of_two()
@@ -112,7 +118,7 @@ impl frame_system::offchain::CreateTransaction<Runtime, UncheckedExtrinsic> for 
             frame_system::CheckVersion::<Runtime>::new(),
             frame_system::CheckGenesis::<Runtime>::new(),
             frame_system::CheckEra::<Runtime>::from(generic::Era::mortal(period, current_block)),
-            frame_system::CheckNonce::<Runtime>::from(index),
+            frame_system::CheckNonce::<Runtime>::from(nonce),
             frame_system::CheckWeight::<Runtime>::new(),
         );
         let raw_payload = SignedPayload::new(call, extra)
@@ -120,11 +126,24 @@ impl frame_system::offchain::CreateTransaction<Runtime, UncheckedExtrinsic> for 
                 debug::warn!("Unable to create signed payload: {:?}", e);
             })
             .ok()?;
-        let signature = TSigner::sign(public, &raw_payload)?;
+        let signature = raw_payload.using_encoded(|payload| C::sign(payload, public))?;
         let address = Indices::unlookup(account);
         let (call, extra, _) = raw_payload.deconstruct();
-        Some((call, (address, signature, extra)))
+        Some((call, (address, signature.into(), extra)))
     }
+}
+
+impl frame_system::offchain::SigningTypes for Runtime {
+    type Public = <Signature as traits::Verify>::Signer;
+    type Signature = Signature;
+}
+
+impl<C> frame_system::offchain::SendTransactionTypes<C> for Runtime
+where
+    Call: From<C>,
+{
+    type OverarchingCall = Call;
+    type Extrinsic = UncheckedExtrinsic;
 }
 
 /// This runtime version.
@@ -138,6 +157,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
     // is and increment impl_version.
     spec_version: 1,
     impl_version: 1,
+    transaction_version: 1,
     apis: RUNTIME_API_VERSIONS,
 };
 
@@ -161,7 +181,8 @@ pub fn native_version() -> NativeVersion {
 
 parameter_types! {
     pub const BlockHashCount: BlockNumber = 250;
-    pub const MaximumBlockWeight: Weight = 1_000_000_000;
+    /// We allow for 2 seconds of compute with a 6 second average block time.
+    pub const MaximumBlockWeight: Weight = 2 * WEIGHT_PER_SECOND;
     pub const AvailableBlockRatio: Perbill = Perbill::from_percent(75);
     pub const MaximumBlockLength: u32 = 5 * 1024 * 1024;
     pub const Version: RuntimeVersion = VERSION;
@@ -196,6 +217,14 @@ impl frame_system::Trait for Runtime {
     type MaximumBlockLength = MaximumBlockLength;
     /// Portion of the block weight that is available to all normal transactions.
     type AvailableBlockRatio = AvailableBlockRatio;
+    /// The weight of the overhead invoked on the block import process, independent of the
+    /// extrinsics included in that block.
+    type BlockExecutionWeight = BlockExecutionWeight;
+    /// The weight of database operations that the runtime can invoke.
+    type DbWeight = RocksDbWeight;
+    /// The base weight of any extrinsic processed by the runtime, independent of the
+    /// logic of that extrinsic. (Signature verification, nonce increment, fee, etc...)
+    type ExtrinsicBaseWeight = ExtrinsicBaseWeight;
     /// Version of the runtime.
     type Version = Version;
     /// Converts a module to the index of the module in `construct_runtime!`.
@@ -255,57 +284,65 @@ impl pallet_balances::Trait for Runtime {
 }
 
 parameter_types! {
-    pub const TransactionBaseFee: Balance = 0;
     pub const TransactionByteFee: Balance = 1;
 }
 
 impl pallet_transaction_payment::Trait for Runtime {
     type Currency = pallet_balances::Module<Runtime>;
     type OnTransactionPayment = ();
-    type TransactionBaseFee = TransactionBaseFee;
     type TransactionByteFee = TransactionByteFee;
     type WeightToFee = ConvertInto;
     type FeeMultiplierUpdate = ();
 }
-
 impl pallet_sudo::Trait for Runtime {
     type Event = Event;
     type Call = Call;
 }
-
+pub use membership;
+impl membership::Trait for Runtime {
+    type Event = Event;
+}
+pub use shares_membership::Trait;
+impl shares_membership::Trait for Runtime {
+    type Event = Event;
+    type OrgData = Membership;
+}
 pub use shares_atomic;
-pub type OrgId = u64;
-pub type ShareId = u64;
-pub type Share = u64;
+pub type Shares = u64;
 parameter_types! {
     pub const ReservationLimit: u32 = 10000;
 }
 impl shares_atomic::Trait for Runtime {
     type Event = Event;
-    type OrgId = OrgId;
-    type ShareId = ShareId;
-    type Share = Share;
+    type OrgData = Membership;
+    type Shares = Shares;
     type ReservationLimit = ReservationLimit;
 }
-
+pub use vote_petition;
+impl vote_petition::Trait for Runtime {
+    type Event = Event;
+    type OrgData = Membership;
+    type ShareData = SharesMembership;
+}
 pub use vote_yesno;
 pub type Signal = u64;
 pub type VoteId = u64;
 impl vote_yesno::Trait for Runtime {
     type Event = Event;
     type Signal = Signal;
-    type VoteId = VoteId;
-    type ShareData = SharesAtomic;
+    type OrgData = Membership;
+    type FlatShareData = SharesMembership;
+    type WeightedShareData = SharesAtomic;
 }
 pub use bank;
-parameter_types! {
-    pub const PollingFrequency: u32 = 10;
-}
 impl bank::Trait for Runtime {
     type Event = Event;
-    type ShareData = SharesAtomic;
-    type BinaryVoteMachine = VoteYesNo;
-    type PollingFrequency = PollingFrequency;
+    type Currency = Balances;
+    type OrgData = Membership;
+    type FlatShareData = SharesMembership;
+    type VotePetition = VotePetition;
+    type WeightedShareData = SharesAtomic;
+    type VoteYesNo = VoteYesNo;
 }
 
 construct_runtime!(
@@ -323,10 +360,13 @@ construct_runtime!(
         TransactionPayment: pallet_transaction_payment::{Module, Storage},
         Sudo: pallet_sudo::{Module, Call, Config<T>, Storage, Event<T>},
         Indices: pallet_indices::{Module, Call, Storage, Config<T>, Event<T>},
-        // My modules
+        // sunshine modules
+        Membership: membership::{Module, Call, Config<T>, Storage, Event<T>},
+        SharesMembership: shares_membership::{Module, Call, Config<T>, Storage, Event<T>},
         SharesAtomic: shares_atomic::{Module, Call, Config<T>, Storage, Event<T>},
+        VotePetition: vote_petition::{Module, Call, Storage, Event<T>},
         VoteYesNo: vote_yesno::{Module, Call, Storage, Event<T>},
-        Bank: bank::{Module, Call, Storage, Event<T>},
+        Bank: bank::{Module, Call, Config<T>, Storage, Event<T>},
     }
 );
 
