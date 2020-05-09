@@ -1,71 +1,90 @@
-use crate::organization::TermsOfAgreement;
+use crate::{bank::OnChainTreasuryID, organization::TermsOfAgreement, uuid::UUID2};
 use codec::{Decode, Encode};
 use frame_support::Parameter;
-use sp_runtime::RuntimeDebug;
+use sp_runtime::{PerThing, RuntimeDebug};
 use sp_std::prelude::*;
 
-/*
-An experiment to reduce the total number of generics by just type aliasing identifiers
-instead of setting them as the module's associated type:
-*/
-pub type BountyId = u32;
-pub type ApplicationId = u32;
 pub type MilestoneId = u32;
-pub type TaskId = u32;
 
 #[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug)]
 pub struct Requirements;
 // impl some traits on this and use them to check the team's application
 
-#[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 /// The on-chain information for a bounty with keys (OrgId, BountyId)
-pub struct BountyInformation<Hash, Currency> {
+pub struct BountyInformation<Hash, Currency, FineArithmetic> {
+    // Storage cid
     description: Hash,
+    // How the acceptance committee evaluates applications
     team_requirements: Option<Requirements>,
-    pot: Currency,
+    // Committee metadata for approving an application
+    acceptance_committee: VoteConfig<FineArithmetic>,
+    // Committee metadata for approving milestones
+    // -- if None, same as acceptance_committee by default
+    supervision_committee: Option<VoteConfig<FineArithmetic>>,
+    // On chain bank account associated with this bounty
+    bank_account: OnChainTreasuryID,
+    // Collateral amount in the bank account (TODO: refresh method for syncing balance)
+    collateral: Currency,
+    // Amount claimed to have on hand to fund projects related to the bounty
+    // - used to derive the collateral ratio for this bounty, which must be above the module lower bound
+    amount_promised: Currency,
 }
 
-impl<Hash: Parameter, Currency: Parameter> BountyInformation<Hash, Currency> {
+impl<Hash: Parameter, Currency: Parameter, FineArithmetic: PerThing>
+    BountyInformation<Hash, Currency, FineArithmetic>
+{
     pub fn new(
         description: Hash,
         team_requirements: Option<Requirements>,
-        pot: Currency,
-    ) -> BountyInformation<Hash, Currency> {
+        acceptance_committee: VoteConfig<FineArithmetic>,
+        supervision_committee: Option<VoteConfig<FineArithmetic>>,
+        bank_account: OnChainTreasuryID,
+        collateral: Currency,
+        amount_promised: Currency,
+    ) -> BountyInformation<Hash, Currency, FineArithmetic> {
         BountyInformation {
             description,
             team_requirements,
-            pot,
+            acceptance_committee,
+            supervision_committee,
+            bank_account,
+            collateral,
+            amount_promised,
         }
     }
 }
 
 #[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug)]
-/// Set this alongside ShareId to define these governance structures with the allocation defined in the ShareId registration
+/// Metadata to be used to dispatch votes among share groups and/or request specific approval
 pub enum VoteConfig<FineArithmetic> {
+    /// (OrgId, ShareId) for all reviewers, (OrgId, ShareId) for SuperVoters (w/ veto power)
+    PetitionReview(UUID2, UUID2),
     /// (OrgId, ShareId, Support Percentage Threshold, Turnout Percentage Threshold)
-    CreateShareWeightedPercentageThresholdVote(u32, u32, FineArithmetic, FineArithmetic),
+    YesNoPercentageThresholdVote(UUID2, FineArithmetic, FineArithmetic),
     /// (OrgId, ShareId, Support Count Threshold, Turnout Percentage Threshold)
-    CreateShareWeightedCountThresholdVote(u32, u32, u32, u32),
+    YesNoCountThresholdVote(UUID2, u32, u32),
     /// (OrgId, ShareId, Support 1P1V Count Threshold, Turnout 1P1V Count Threshold)
-    Create1P1VCountThresholdVote(u32, u32, u32, u32),
+    YesNo1P1VCountThresholdVote(UUID2, u32, u32),
 }
 
 #[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug)]
-/// Each task
-/// - TODO: add accountability such that there is some subset of the membership group
-/// assigned to this task?
 pub struct Task<Hash> {
-    id: TaskId,
+    salt: u32,
     description: Hash,
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-/// (OrgId, BountyId, MilestoneId) => Milestone
-pub struct Milestone<Currency, Hash> {
-    id: MilestoneId,
-    description: Hash,
+/// (BountyId, MilestoneId), Milestone => bool
+/// - consider Option<Vec<Task<Hash>>> as value
+pub struct Milestone<Hash, Currency> {
+    team_id: UUID2, // org_id, share_id
+    requirements: Hash,
+    submission: Option<Hash>,
     reward: Currency,
-    tasks: Vec<Task<Hash>>,
+    // replace with some STATE but need to be able to filter approved, waiting and done milestones
+    // and to track payout specifically
+    approved: bool,
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
@@ -76,42 +95,55 @@ pub struct MilestoneSchedule<Currency> {
     /// The sum of the rewards for all milestones in the other field
     total_reward: Currency,
     /// All the milestone identifiers for this MilestoneSchedule
-    milestones: Vec<MilestoneId>,
+    /// - not instantiated and added until they are approved
+    milestones: Option<Vec<u32>>,
 }
 
-impl<Currency: Copy> MilestoneSchedule<Currency> {
+impl<Currency: Clone> MilestoneSchedule<Currency> {
     pub fn reward(&self) -> Currency {
-        self.total_reward
+        self.total_reward.clone()
     }
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-/// (OrgId, BountyId), ApplicationId => BountyApplication<AccountId, Shares, Currency, Hash>
-pub struct BountyApplication<AccountId, Currency, Hash> {
-    /// The description that goes
-    description: Hash,
-    /// The milestone proposed by the applying team, hashes need to be authenticated with data off-chain
-    proposed_milestone_schedule: MilestoneSchedule<Currency>,
-    /// The terms of agreement that must agreed to by all members before the bounty execution starts
-    basic_terms_of_agreement: TermsOfAgreement<AccountId>,
+pub enum ApplicationState {
+    SubmittedAwaitingResponse,
+    // however many individuals are left that need to consent
+    ApprovedByFoundationAwaitingTeamConsent,
+    // current milestone
+    ApprovedAndLive(u32),
+    // closed for some reason
+    Closed,
 }
 
-impl<AccountId: Clone, Currency, Hash> BountyApplication<AccountId, Currency, Hash> {
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+/// BountyId, GrantApplication => Option<ApplicationState>
+pub struct GrantApplication<AccountId, Currency, Hash> {
+    /// The ipfs reference to the application information
+    description: Hash,
+    /// The milestone proposed by the applying team, hashes need to be authenticated with data off-chain
+    milestone_schedule: MilestoneSchedule<Currency>,
+    /// The terms of agreement that must agreed to by all members before the bounty execution starts
+    terms_of_agreement: TermsOfAgreement<AccountId>,
+}
+
+impl<AccountId: Clone, Currency: Clone, Hash> GrantApplication<AccountId, Currency, Hash> {
     pub fn new(
         description: Hash,
-        proposed_milestone_schedule: MilestoneSchedule<Currency>,
-        basic_terms_of_agreement: TermsOfAgreement<AccountId>,
-    ) -> BountyApplication<AccountId, Currency, Hash> {
-        BountyApplication {
+        milestone_schedule: MilestoneSchedule<Currency>,
+        terms_of_agreement: TermsOfAgreement<AccountId>,
+    ) -> GrantApplication<AccountId, Currency, Hash> {
+        GrantApplication {
             description,
-            proposed_milestone_schedule,
-            basic_terms_of_agreement,
+            milestone_schedule,
+            terms_of_agreement,
         }
     }
-
-    // TODO: make this a trait on BountyApplication object more generally once traitifying Bounty to make it more configurable
+    pub fn milestones(&self) -> MilestoneSchedule<Currency> {
+        self.milestone_schedule.clone()
+    }
     pub fn terms(&self) -> TermsOfAgreement<AccountId> {
-        self.basic_terms_of_agreement.clone()
+        self.terms_of_agreement.clone()
     }
 }
 
@@ -122,7 +154,7 @@ pub struct BountyPaymentTracker<Currency> {
     /// received the payment
     due: Currency,
     /// Completed milestones
-    completed: Vec<MilestoneId>,
+    completed: Vec<u32>,
     /// Milestones left
     schedule: MilestoneSchedule<Currency>,
 }
