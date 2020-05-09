@@ -10,6 +10,7 @@ members = [
     "modules/vote-petition",
     "modules/vote-yesno",
     "modules/bank",
+    "modules/bounty",
     "runtime",
     "client",
     "node",
