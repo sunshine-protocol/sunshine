@@ -151,10 +151,14 @@ decl_storage! {
 
         /// Total share issuance for the share type with `ShareId`
         /// also the main point of registration for (OrgId, ShareId) pairs (see `GenerateUniqueId`)
-        TotalIssuance get(fn total_issuance): double_map hasher(opaque_blake2_256) OrgId, hasher(opaque_blake2_256) ShareId => Option<T::Shares>;
+        TotalIssuance get(fn total_issuance): double_map
+            hasher(opaque_blake2_256) OrgId,
+            hasher(opaque_blake2_256) ShareId => Option<T::Shares>;
 
         /// The ShareProfile (set as an associated type for the module's Trait aka `DoubleStoredMap` #4820)
-        Profile get(fn profile): double_map hasher(blake2_128_concat) UUID2, hasher(blake2_128_concat) T::AccountId => Option<AtomicShareProfile<T::Shares>>;
+        Profile get(fn profile): double_map
+            hasher(blake2_128_concat) UUID2,
+            hasher(blake2_128_concat) T::AccountId => Option<AtomicShareProfile<T::Shares>>;
 
         /// The number of accounts in the share group
         ShareGroupSize get(fn share_group_size): double_map

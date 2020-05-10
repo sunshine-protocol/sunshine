@@ -10,17 +10,17 @@ description = "manage flat share groups"
 keywords = ["sunshine", "substrate", "blockchain"]
 
 [dependencies]
-serde = { version = "1.0.106", optional = true }
+serde = { version = "1.0.107", optional = true }
 codec = { package = "parity-scale-codec", version = "1.2.0", default-features = false, features = ["derive"] }
-
 sp-std = { version = "2.0.0-alpha.7", default-features = false }
 sp-runtime = { version = "2.0.0-alpha.7", default-features = false }
 frame-support = { version = "2.0.0-alpha.7", default-features = false }
 frame-system = { version = "2.0.0-alpha.7", default-features = false }
 pallet-balances = { version = "2.0.0-alpha.7", default-features = false }
-util = { package = "sunshine-util", version = "0.0.2", default-features = false }
-membership = { package = "sunshine-membership", version = "0.0.1", default-features = false }
-clear_on_drop = { version = "0.2.3", features = ["no_cc"] } # https://github.com/paritytech/substrate/issues/4179
+util = { package = "sunshine-util", version = "0.0.2", default-features = false, path = "../util" }
+membership = { package = "sunshine-membership", version = "0.0.1", default-features = false, path = "../membership" }
+# https://github.com/paritytech/substrate/issues/4179
+clear_on_drop = { version = "0.2.3", features = ["no_cc"] }
 
 [dev-dependencies]
 sp-io = { version = "2.0.0-alpha.7", default-features = false }
