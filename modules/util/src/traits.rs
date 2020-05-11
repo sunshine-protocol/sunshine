@@ -516,10 +516,26 @@ pub trait PollActiveProposal: ScheduleVoteSequence {
     ) -> Result<Self::PollingOutcome, DispatchError>;
 }
 
-// ~~~~~~~~ Bank Module ~~~~~~~~
+// ~~~~~~~~ Org Module ~~~~~~~~
 
-pub trait RegisterShareGroup<AccountId, Shares> {
-    type MultiShareIdentifier;
+// helpers, they are just abstractions over inherited functions
+pub trait OrgChecks<OrgId, AccountId> {
+    fn check_org_existence(org: OrgId) -> bool;
+    fn check_membership_in_org(org: OrgId, account: &AccountId) -> bool;
+}
+
+// helpers, they are just abstractions over inherited functions
+pub trait ShareGroupChecks<OrgId, AccountId> {
+    type MultiShareIdentifier; // organization::ShareID
+    fn check_share_group_existence(org: OrgId, share_group: Self::MultiShareIdentifier) -> bool;
+    fn check_membership_in_share_group(
+        org: OrgId,
+        share_group: Self::MultiShareIdentifier,
+        account: &AccountId,
+    ) -> bool;
+}
+
+pub trait RegisterShareGroup<OrgId, AccountId, Shares>: ShareGroupChecks<OrgId, AccountId> {
     fn register_inner_flat_share_group(
         organization: u32,
         group: Vec<AccountId>,
@@ -538,21 +554,23 @@ pub trait RegisterShareGroup<AccountId, Shares> {
     ) -> Result<Self::MultiShareIdentifier, DispatchError>;
 }
 
-pub trait OrganizationDNS<AccountId, Hash> {
+pub trait OrganizationDNS<OrgId, AccountId, Hash>: OrgChecks<OrgId, AccountId> {
     type OrgSrc;
     type OrganizationState;
     // called to form the organization in the method below
     fn organization_from_src(
         src: Self::OrgSrc,
-        org_id: u32,
+        org_id: OrgId,
         value_constitution: Hash,
     ) -> Result<Self::OrganizationState, DispatchError>;
     fn register_organization(
         source: Self::OrgSrc,
         value_constitution: Hash,
         supervisor: Option<AccountId>,
-    ) -> Result<(u32, Self::OrganizationState), DispatchError>; // returns OrgId in this module's context
+    ) -> Result<(OrgId, Self::OrganizationState), DispatchError>; // returns OrgId in this module's context
 }
+
+// ~~~~~~~~ Bank Module ~~~~~~~~
 
 pub trait SupportedOrganizationShapes {
     type FormedOrgId; // see crate::organization::FormedOrganization
@@ -612,7 +630,7 @@ pub trait ChangeBankBalances<Currency, FineArithmetic> {
 }
 
 pub trait OnChainBank<AccountId, Hash, Currency, FineArithmetic>:
-    OrganizationDNS<AccountId, Hash> + RegisterOnChainBankAccount<AccountId, Currency, FineArithmetic>
+    RegisterOnChainBankAccount<AccountId, Currency, FineArithmetic>
 {
     fn deposit_currency_into_on_chain_bank_account(
         from: AccountId,

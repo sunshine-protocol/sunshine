@@ -4,17 +4,22 @@ use frame_support::Parameter;
 use sp_runtime::{PerThing, RuntimeDebug};
 use sp_std::prelude::*;
 
-pub type MilestoneId = u32;
-
 #[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug)]
 pub struct Requirements;
-// impl some traits on this and use them to check the team's application
+// TODO: impl some traits on this and use them to check the team's application
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-/// The on-chain information for a bounty with keys (OrgId, BountyId)
+/// The information most often read after a specific bounty is GOT
 pub struct BountyInformation<Hash, Currency, FineArithmetic> {
     // Storage cid
     description: Hash,
+    // On chain bank account associated with this bounty
+    bank_account: OnChainTreasuryID,
+    // Collateral amount in the bank account (TODO: refresh method for syncing balance)
+    funding_reserved: Currency,
+    // Amount claimed to have on hand to fund projects related to the bounty
+    // - used to derive the collateral ratio for this bounty, which must be above the module lower bound
+    claimed_funding_available: Currency,
     // How the acceptance committee evaluates applications
     team_requirements: Option<Requirements>,
     // Committee metadata for approving an application
@@ -22,13 +27,6 @@ pub struct BountyInformation<Hash, Currency, FineArithmetic> {
     // Committee metadata for approving milestones
     // -- if None, same as acceptance_committee by default
     supervision_committee: Option<VoteConfig<FineArithmetic>>,
-    // On chain bank account associated with this bounty
-    bank_account: OnChainTreasuryID,
-    // Collateral amount in the bank account (TODO: refresh method for syncing balance)
-    collateral: Currency,
-    // Amount claimed to have on hand to fund projects related to the bounty
-    // - used to derive the collateral ratio for this bounty, which must be above the module lower bound
-    amount_promised: Currency,
 }
 
 impl<Hash: Parameter, Currency: Parameter, FineArithmetic: PerThing>
@@ -36,21 +34,21 @@ impl<Hash: Parameter, Currency: Parameter, FineArithmetic: PerThing>
 {
     pub fn new(
         description: Hash,
+        bank_account: OnChainTreasuryID,
+        funding_reserved: Currency,
+        claimed_funding_available: Currency,
         team_requirements: Option<Requirements>,
         acceptance_committee: VoteConfig<FineArithmetic>,
         supervision_committee: Option<VoteConfig<FineArithmetic>>,
-        bank_account: OnChainTreasuryID,
-        collateral: Currency,
-        amount_promised: Currency,
     ) -> BountyInformation<Hash, Currency, FineArithmetic> {
         BountyInformation {
             description,
+            bank_account,
+            funding_reserved,
+            claimed_funding_available,
             team_requirements,
             acceptance_committee,
             supervision_committee,
-            bank_account,
-            collateral,
-            amount_promised,
         }
     }
 }
@@ -68,23 +66,15 @@ pub enum VoteConfig<FineArithmetic> {
     YesNo1P1VCountThresholdVote(UUID2, u32, u32),
 }
 
-#[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug)]
-pub struct Task<Hash> {
-    salt: u32,
-    description: Hash,
-}
-
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 /// (BountyId, MilestoneId), Milestone => bool
 /// - consider Option<Vec<Task<Hash>>> as value
 pub struct Milestone<Hash, Currency> {
     team_id: UUID2, // org_id, share_id
+    // these are a reference to subjective information
     requirements: Hash,
-    submission: Option<Hash>,
     reward: Currency,
-    // replace with some STATE but need to be able to filter approved, waiting and done milestones
-    // and to track payout specifically
-    approved: bool,
+    submission: Option<Hash>,
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
@@ -168,8 +158,6 @@ pub struct BountyPaymentTracker<Currency> {
 /// - first the shareholder acknowledge the submission with submission hash
 /// - then a vote is dispatched as per the review process
 pub struct MilestoneReview {
-    organization: u32,
-    share_id: u32,
-    support_requirement: u32,
-    veto_rights: bool,
+    // vote config for supervising committee, specified in `BountyInformation`
+// - think about the process for changing supervisors
 }

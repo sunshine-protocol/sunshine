@@ -13,10 +13,10 @@ use sp_std::prelude::*;
 use util::{
     bank::{OffChainTreasuryID, OnChainTreasuryID},
     bounty::{
-        ApplicationId, BountyApplication, BountyId, BountyInformation, BountyPaymentTracker,
-        Milestone, MilestoneId, MilestoneReview, MilestoneSchedule, TaskId,
+        BountyInformation, BountyPaymentTracker, GrantApplication, Milestone, MilestoneReview,
+        MilestoneSchedule,
     },
-    organization::TermsOfAgreement,
+    organization::{FormedOrganization, TermsOfAgreement},
     traits::{
         AccessGenesis, ApplyVote, ChangeBankBalances, ChangeGroupMembership, CheckVoteStatus,
         DepositWithdrawalOps, EmpowerWithVeto, GenerateUniqueID, GetDepositsByAccountForBank,
@@ -35,6 +35,8 @@ use util::{
 pub type IpfsReference = Vec<u8>;
 /// The organization identfier
 pub type OrgId = u32;
+/// The bounty identifier
+pub type BountyId = u32;
 /// The weighted shares
 pub type SharesOf<T> = <<T as Trait>::WeightedShareData as WeightedShareGroup<
     <T as frame_system::Trait>::AccountId,
@@ -122,7 +124,7 @@ decl_event!(
     {
         PlaceHolder(AccountId), // delete this
         BountyPosted(AccountId, OrgId, BountyId, Currency),
-        BountyApplicationSubmitted(AccountId, OrgId, BountyId, ApplicationId, Currency),
+        GrantApplicationSubmitted(AccountId, OrgId, BountyId, Currency),
     }
 );
 
@@ -135,6 +137,21 @@ decl_error! {
 decl_storage! {
     trait Store for Module<T: Trait> as Court {
         pub PlaceHolderStorageValue get(fn place_holder_storage_value): u32;
+
+        // TODO: ensure that the FormedOrganization is the controller for the bank account during registration of bounty
+        FoundationSponsoredBounties get(fn foundation_sponsored_bounties): double_map
+            hasher(opaque_blake2_256) FormedOrganization,
+            hasher(opaque_blake2_256) BountyId => Option<BountyInformation<IpfsReference, BalanceOf<T>, Permill>>;
+
+        // TODO: push notifications should ping all supervisors when this submission occurs
+        // - optionally: request their acknowledgement before starting the supervision vote according to the VoteConfig (could be part of the VoteConfig)
+        MilestoneSubmissions get(fn milestone_submissions): double_map
+            hasher(opaque_blake2_256) FormedOrgUUID23<BountyId>, // FormedOrganization, BountyId
+            hasher(opaque_blake2_256) Milestone => Option<MilestoneReview>;
+
+        BountyApplications get(fn bounty_applications): double_map
+            hasher(opaque_blake2_256) FormedOrgUUID23<BountyId>, // FormedOrganization, BountyId
+            hasher(opaque_blake2_256) GrantApplication<T::AccountId, BalanceOf<T>, IpfsReference> => bool;
     }
 }
 

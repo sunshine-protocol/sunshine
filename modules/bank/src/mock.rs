@@ -21,11 +21,7 @@ impl_outer_event! {
     pub enum TestEvent for Test {
         system<T>,
         pallet_balances<T>,
-        membership<T>,
-        shares_membership<T>,
-        shares_atomic<T>,
-        vote_yesno<T>,
-        vote_petition<T>,
+        org<T>,
         bank<T>,
     }
 }

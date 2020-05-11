@@ -103,6 +103,13 @@ pub enum FormedOrganization {
     WeightedShares(u32, u32),
 }
 
+impl Default for FormedOrganization {
+    fn default() -> FormedOrganization {
+        // The organization that controls the chain
+        FormedOrganization::FlatOrg(1u32)
+    }
+}
+
 impl From<u32> for FormedOrganization {
     fn from(other: u32) -> FormedOrganization {
         FormedOrganization::FlatOrg(other)

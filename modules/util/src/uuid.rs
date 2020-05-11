@@ -73,3 +73,12 @@ impl UUID4 {
         self.3
     }
 }
+
+use crate::organization::FormedOrganization;
+
+#[derive(PartialEq, Eq, Default, Copy, Clone, Encode, Decode, RuntimeDebug)]
+// intended usage is FormedOrg + BountyId prefix for other storage items in `bounty`
+pub struct FormedOrgUUID23<T> {
+    org: FormedOrganization,
+    id: T,
+}
