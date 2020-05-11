@@ -25,9 +25,9 @@ use util::{
         IDIsAvailable, LockableProfile, MintableSignal, OffChainBank, OnChainBank,
         OnChainWithdrawalFilters, OpenPetition, OpenShareGroupVote, OrganizationDNS,
         RegisterOffChainBankAccount, RegisterOnChainBankAccount, RegisterShareGroup,
-        RequestChanges, ReservableProfile, ShareBank, SignPetition, SubSupervisorKeyManagement,
-        SudoKeyManagement, SupervisorKeyManagement, SupportedOrganizationShapes, UpdatePetition,
-        VoteOnProposal, WeightedShareGroup,
+        RequestChanges, ReservableProfile, ShareBank, SignPetition,
+        SupervisorPermissions, SupportedOrganizationShapes, UpdatePetition,
+        VoteOnProposal, WeightedShareGroup, WeightedShareBankWrapper, OrgChecks, ShareGroupChecks,
     },
     uuid::{UUID2, UUID3},
 };
@@ -64,7 +64,9 @@ pub trait Trait: system::Trait {
 
     type Organization: OrgChecks<u32, Self::AccountId>
         + ShareGroupChecks<u32, Self::AccountId>
-        + RegisterShareGroup<u32, Self::AccountId, SharesOf<Self>>
+        + SupervisorPermissions<u32, Self::AccountId>
+        + WeightedShareBankWrapper<u32, u32, Self::AccountId>
+        + RegisterShareGroup<u32, u32, Self::AccountId, SharesOf<Self>>
         + OrganizationDNS<u32, Self::AccountId, IpfsReference>;
 }
 

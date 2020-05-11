@@ -26,33 +26,61 @@ pub trait GenerateUniqueID<Id>: IDIsAvailable<Id> {
 
 // ====== Permissions ACL ======
 
-pub trait SudoKeyManagement<AccountId> {
+pub trait ChainSudoPermissions<AccountId> {
     fn is_sudo_key(who: &AccountId) -> bool;
-    // cas
-    fn swap_sudo_key(old_key: AccountId, new_key: AccountId) -> Result<AccountId, DispatchError>;
+    // infallible, unguarded
+    fn put_sudo_key(who: AccountId);
+    // fallible, cas by default
+    fn set_sudo_key(old_key: &AccountId, new_key: AccountId) -> DispatchResult;
 }
 
-// ...impl HierarchicalMngmt
-
-pub trait SupervisorKeyManagement<AccountId> {
-    fn is_organization_supervisor(uuid: u32, who: &AccountId) -> bool;
-    fn set_supervisor(uuid: u32, supervisor: AccountId) -> DispatchResult;
-    fn swap_supervisor(
-        uuid: u32,
-        old_key: AccountId,
-        new_key: AccountId,
-    ) -> Result<AccountId, DispatchError>;
+pub trait OrganizationSupervisorPermissions<OrgId, AccountId> {
+    fn is_organization_supervisor(org: OrgId, who: &AccountId) -> bool;
+    // infallible
+    fn put_organization_supervisor(org: OrgId, who: AccountId);
+    // fallible, cas by default
+    fn set_organization_supervisor(
+        org: OrgId,
+        old_supervisor: &AccountId,
+        new_supervisor: AccountId,
+    ) -> DispatchResult;
 }
 
-pub trait SubSupervisorKeyManagement<AccountId> {
-    fn is_sub_organization_supervisor(uuid: u32, uuid2: u32, who: &AccountId) -> bool;
-    fn set_sub_supervisor(uuid: u32, uuid2: u32, supervisor: AccountId) -> DispatchResult;
-    fn swap_sub_supervisor(
-        uuid: u32,
-        uuid2: u32,
-        old_key: AccountId,
-        new_key: AccountId,
-    ) -> Result<AccountId, DispatchError>;
+pub trait SubGroupSupervisorPermissions<OrgId, S1, AccountId> {
+    fn is_sub_group_supervisor(org: OrgId, sub_group: S1, who: &AccountId) -> bool;
+    // infallible
+    fn put_sub_group_supervisor(org: OrgId, sub_group: S1, who: AccountId);
+    // fallible, case by default
+    fn set_sub_group_supervisor(
+        org: OrgId,
+        sub_group: S1,
+        old_supervisor: &AccountId,
+        new_supervisor: AccountId,
+    ) -> DispatchResult;
+}
+
+pub trait SubSubGroupSupervisorPermissions<OrgId, S1, S2, AccountId> {
+    fn is_sub_sub_group_organization_supervisor(
+        org: OrgId,
+        sub_group: S1,
+        sub_sub_group: S2,
+        who: &AccountId,
+    ) -> bool;
+    // infallible
+    fn put_sub_sub_group_organization_supervisor(
+        org: OrgId,
+        sub_group: S1,
+        sub_sub_group: S2,
+        who: AccountId,
+    );
+    // fallible, cas by default
+    fn set_sub_sub_group_supervisor(
+        org: OrgId,
+        sub_group: S1,
+        sub_sub_group: S2,
+        old_supervisor: &AccountId,
+        new_supervisor: AccountId,
+    ) -> DispatchResult;
 }
 
 // ---------- Membership Logic ----------
@@ -535,7 +563,69 @@ pub trait ShareGroupChecks<OrgId, AccountId> {
     ) -> bool;
 }
 
-pub trait RegisterShareGroup<OrgId, AccountId, Shares>: ShareGroupChecks<OrgId, AccountId> {
+pub trait SupervisorPermissions<OrgId, AccountId>: ShareGroupChecks<OrgId, AccountId> {
+    fn is_sudo_account(who: &AccountId) -> bool;
+    fn is_organization_supervisor(organization: OrgId, who: &AccountId) -> bool;
+    fn is_share_supervisor(
+        organization: OrgId,
+        share_id: Self::MultiShareIdentifier,
+        who: &AccountId,
+    ) -> bool;
+    // infallible, not protected in any way
+    fn put_sudo_account(who: AccountId);
+    fn put_organization_supervisor(organization: OrgId, who: AccountId);
+    fn put_share_group_supervisor(organization: OrgId, share_id: Self::MultiShareIdentifier, who: AccountId);
+    // CAS by default to enforce existing permissions and isolate logic
+    fn set_sudo_account(setter: &AccountId, new: AccountId) -> DispatchResult;
+    fn set_organization_supervisor(
+        organization: OrgId,
+        setter: &AccountId,
+        new: AccountId,
+    ) -> DispatchResult;
+    fn set_share_supervisor(
+        organization: OrgId,
+        share_id: Self::MultiShareIdentifier,
+        setter: &AccountId,
+        new: AccountId,
+    ) -> DispatchResult;
+}
+
+// TODO: make `ShareGroupChecks` inherit this and whatever utilities are required for `FlatShareId`
+pub trait WeightedShareBankWrapper<OrgId, WeightedShareId, AccountId> {
+    type Shares; // exists only to pass inheritance to modules that inherit org
+    type Genesis;
+    type Portion; // enum for Shares or Percent for the last method
+    fn get_weighted_shares_for_member(
+        organization: OrgId,
+        share_id: WeightedShareId,
+        member: &AccountId,
+    ) -> Result<Self::Shares, DispatchError>;
+    fn get_weighted_share_group(
+        organization: OrgId,
+        share_id: WeightedShareId,
+    ) -> Result<Self::Genesis, DispatchError>;
+    fn get_outstanding_weighted_shares(
+        organization: OrgId,
+        share_id: WeightedShareId,
+    ) -> Result<Self::Shares, DispatchError>;
+    fn generate_unique_weighted_share_id(organization: OrgId) -> WeightedShareId;
+    fn issue_weighted_shares_from_accounts(
+        organization: OrgId,
+        members: Vec<(AccountId, Self::Shares)>,
+    ) -> Result<WeightedShareId, DispatchError>;
+    // TODO: add issue for_member like this
+    fn burn_weighted_shares_for_member(
+        organization: OrgId,
+        share_id: WeightedShareId,
+        account: AccountId,
+        amount_to_burn: Option<Self::Portion>,
+    ) -> DispatchResult;
+}
+
+// TODO: FlatShareGroup utilities
+pub trait RegisterShareGroup<OrgId, WeightedShareId, AccountId, Shares>:
+    ShareGroupChecks<OrgId, AccountId> + WeightedShareBankWrapper<OrgId, WeightedShareId, AccountId>
+{
     fn register_inner_flat_share_group(
         organization: u32,
         group: Vec<AccountId>,

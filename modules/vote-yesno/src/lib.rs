@@ -21,11 +21,11 @@ use sp_runtime::{
 use sp_std::{fmt::Debug, prelude::*};
 use util::{
     traits::{
-        AccessGenesis, Apply, ApplyVote, Approved, ChangeGroupMembership, CheckVoteStatus,
-        GenerateUniqueID, GetFlatShareGroup, GetGroupSize, GetMagnitude, GetVoteOutcome,
-        GroupMembership, IDIsAvailable, LockableProfile, MintableSignal, OpenShareGroupVote,
-        ReservableProfile, Revert, ShareBank, SubSupervisorKeyManagement, SudoKeyManagement,
-        SupervisorKeyManagement, VoteOnProposal, WeightedShareGroup,
+        AccessGenesis, Apply, ApplyVote, Approved, ChainSudoPermissions, ChangeGroupMembership,
+        CheckVoteStatus, GenerateUniqueID, GetFlatShareGroup, GetGroupSize, GetMagnitude,
+        GetVoteOutcome, GroupMembership, IDIsAvailable, LockableProfile, MintableSignal,
+        OpenShareGroupVote, OrganizationSupervisorPermissions, ReservableProfile, Revert,
+        ShareBank, SubGroupSupervisorPermissions, VoteOnProposal, WeightedShareGroup,
     },
     uuid::{UUID2, UUID3},
     voteyesno::{
@@ -70,14 +70,14 @@ pub trait Trait: frame_system::Trait {
         + GroupMembership<Self::AccountId>
         + IDIsAvailable<OrgId>
         + GenerateUniqueID<OrgId>
-        + SudoKeyManagement<Self::AccountId>
-        + SupervisorKeyManagement<Self::AccountId>
+        + ChainSudoPermissions<Self::AccountId>
+        + OrganizationSupervisorPermissions<u32, Self::AccountId>
         + ChangeGroupMembership<Self::AccountId>;
 
     /// An instance of `SharesMembership` for flat membership groups
     type FlatShareData: GetGroupSize<GroupId = UUID2>
         + GroupMembership<Self::AccountId, GroupId = UUID2>
-        + SubSupervisorKeyManagement<Self::AccountId>
+        + SubGroupSupervisorPermissions<u32, u32, Self::AccountId>
         + ChangeGroupMembership<Self::AccountId>
         + GetFlatShareGroup<Self::AccountId>;
 
@@ -176,10 +176,11 @@ decl_module! {
         ) -> DispatchResult {
             let vote_creator = ensure_signed(origin)?;
             // default authentication is organization supervisor or sudo key
-            let authentication: bool = <<T as Trait>::OrgData as SupervisorKeyManagement<
+            let authentication: bool = <<T as Trait>::OrgData as OrganizationSupervisorPermissions<
+                u32,
                 <T as frame_system::Trait>::AccountId,
             >>::is_organization_supervisor(organization, &vote_creator) ||
-            <<T as Trait>::OrgData as SudoKeyManagement<
+            <<T as Trait>::OrgData as ChainSudoPermissions<
                 <T as frame_system::Trait>::AccountId,
             >>::is_sudo_key(&vote_creator);
             ensure!(authentication, Error::<T>::NotAuthorizedToCreateVoteForOrganization);
@@ -201,10 +202,11 @@ decl_module! {
         ) -> DispatchResult {
             let vote_creator = ensure_signed(origin)?;
             // default authentication is organization supervisor or sudo key
-            let authentication: bool = <<T as Trait>::OrgData as SupervisorKeyManagement<
+            let authentication: bool = <<T as Trait>::OrgData as OrganizationSupervisorPermissions<
+                u32,
                 <T as frame_system::Trait>::AccountId,
             >>::is_organization_supervisor(organization, &vote_creator) ||
-            <<T as Trait>::OrgData as SudoKeyManagement<
+            <<T as Trait>::OrgData as ChainSudoPermissions<
                 <T as frame_system::Trait>::AccountId,
             >>::is_sudo_key(&vote_creator);
             ensure!(authentication, Error::<T>::NotAuthorizedToCreateVoteForOrganization);
@@ -226,10 +228,11 @@ decl_module! {
         ) -> DispatchResult {
             let vote_creator = ensure_signed(origin)?;
             // default authentication is organization supervisor or sudo key
-            let authentication: bool = <<T as Trait>::OrgData as SupervisorKeyManagement<
+            let authentication: bool = <<T as Trait>::OrgData as OrganizationSupervisorPermissions<
+                u32,
                 <T as frame_system::Trait>::AccountId,
             >>::is_organization_supervisor(organization, &vote_creator) ||
-            <<T as Trait>::OrgData as SudoKeyManagement<
+            <<T as Trait>::OrgData as ChainSudoPermissions<
                 <T as frame_system::Trait>::AccountId,
             >>::is_sudo_key(&vote_creator);
             ensure!(authentication, Error::<T>::NotAuthorizedToCreateVoteForOrganization);
@@ -251,10 +254,11 @@ decl_module! {
         ) -> DispatchResult {
             let vote_creator = ensure_signed(origin)?;
             // default authentication is organization supervisor or sudo key
-            let authentication: bool = <<T as Trait>::OrgData as SupervisorKeyManagement<
+            let authentication: bool = <<T as Trait>::OrgData as OrganizationSupervisorPermissions<
+                u32,
                 <T as frame_system::Trait>::AccountId,
             >>::is_organization_supervisor(organization, &vote_creator) ||
-            <<T as Trait>::OrgData as SudoKeyManagement<
+            <<T as Trait>::OrgData as ChainSudoPermissions<
                 <T as frame_system::Trait>::AccountId,
             >>::is_sudo_key(&vote_creator);
             ensure!(authentication, Error::<T>::NotAuthorizedToCreateVoteForOrganization);
@@ -279,10 +283,11 @@ decl_module! {
         ) -> DispatchResult {
             let submitter = ensure_signed(origin)?;
             // default authentication is organization supervisor or sudo key
-            let authentication: bool = <<T as Trait>::OrgData as SupervisorKeyManagement<
+            let authentication: bool = <<T as Trait>::OrgData as OrganizationSupervisorPermissions<
+                u32,
                 <T as frame_system::Trait>::AccountId,
             >>::is_organization_supervisor(organization, &submitter) ||
-            <<T as Trait>::OrgData as SudoKeyManagement<
+            <<T as Trait>::OrgData as ChainSudoPermissions<
                 <T as frame_system::Trait>::AccountId,
             >>::is_sudo_key(&submitter) ||
             submitter == voter;

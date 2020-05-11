@@ -22,10 +22,10 @@ use sp_std::prelude::*;
 use util::{
     petition::{PetitionOutcome, PetitionSignature, PetitionState, PetitionView, VetoContext},
     traits::{
-        Apply, Approved, ChangeGroupMembership, EmpowerWithVeto, GenerateUniqueID,
-        GetFlatShareGroup, GetFullVetoContext, GetGroupSize, GetPetitionStatus, GroupMembership,
-        IDIsAvailable, OpenPetition, Rejected, RequestChanges, SignPetition,
-        SubSupervisorKeyManagement, SudoKeyManagement, SupervisorKeyManagement, UpdatePetition,
+        Apply, Approved, ChainSudoPermissions, ChangeGroupMembership, EmpowerWithVeto,
+        GenerateUniqueID, GetFlatShareGroup, GetFullVetoContext, GetGroupSize, GetPetitionStatus,
+        GroupMembership, IDIsAvailable, OpenPetition, OrganizationSupervisorPermissions, Rejected,
+        RequestChanges, SignPetition, SubGroupSupervisorPermissions, UpdatePetition,
         UpdatePetitionTerms, Vetoed,
     },
     uuid::{UUID2, UUID3},
@@ -48,13 +48,13 @@ pub trait Trait: frame_system::Trait {
 
     /// Just used for permissions in this module
     type OrgData: GroupMembership<Self::AccountId>
-        + SudoKeyManagement<Self::AccountId>
-        + SupervisorKeyManagement<Self::AccountId>;
+        + ChainSudoPermissions<Self::AccountId>
+        + OrganizationSupervisorPermissions<u32, Self::AccountId>;
 
     /// An instance of `SharesMembership`
     type ShareData: GetGroupSize<GroupId = UUID2>
         + GroupMembership<Self::AccountId, GroupId = UUID2>
-        + SubSupervisorKeyManagement<Self::AccountId>
+        + SubGroupSupervisorPermissions<u32, u32, Self::AccountId>
         + ChangeGroupMembership<Self::AccountId>
         + GetFlatShareGroup<Self::AccountId>;
 }
@@ -269,19 +269,24 @@ decl_module! {
 impl<T: Trait> Module<T> {
     // $$$ AUTH CHECKS $$$
     fn check_if_sudo_account(who: &T::AccountId) -> bool {
-        <<T as Trait>::OrgData as SudoKeyManagement<<T as frame_system::Trait>::AccountId>>::is_sudo_key(who)
+        <<T as Trait>::OrgData as ChainSudoPermissions<<T as frame_system::Trait>::AccountId>>::is_sudo_key(who)
     }
     fn check_if_organization_supervisor_account(organization: OrgId, who: &T::AccountId) -> bool {
-        <<T as Trait>::OrgData as SupervisorKeyManagement<<T as frame_system::Trait>::AccountId>>::is_organization_supervisor(organization, who)
+        <<T as Trait>::OrgData as OrganizationSupervisorPermissions<
+            u32,
+            <T as frame_system::Trait>::AccountId,
+        >>::is_organization_supervisor(organization, who)
     }
     fn check_if_organization_share_supervisor_account(
         organization: OrgId,
         share_id: ShareId,
         who: &T::AccountId,
     ) -> bool {
-        <<T as Trait>::ShareData as SubSupervisorKeyManagement<
+        <<T as Trait>::ShareData as SubGroupSupervisorPermissions<
+            u32,
+            u32,
             <T as frame_system::Trait>::AccountId,
-        >>::is_sub_organization_supervisor(organization, share_id, who)
+        >>::is_sub_group_supervisor(organization, share_id, who)
     }
     // fn check_if_account_is_member_in_organization(
     //     organization: OrgId,
