@@ -10,11 +10,12 @@ use util::{
     organization::{Organization, OrganizationSource, ShareID},
     share::SimpleShareGenesis,
     traits::{
-        AccessGenesis, ChainSudoPermissions, ChangeGroupMembership, GenerateUniqueID,
-        GetFlatShareGroup, GetGroupSize, GroupMembership, IDIsAvailable, LockableProfile,
-        OrgChecks, OrganizationDNS, OrganizationSupervisorPermissions, RegisterShareGroup,
-        ReservableProfile, ShareBank, ShareGroupChecks, SubGroupSupervisorPermissions,
-        SupervisorPermissions, WeightedShareBankWrapper, WeightedShareGroup,
+        AccessGenesis, ChainSudoPermissions, ChangeGroupMembership, FlatShareWrapper,
+        GenerateUniqueID, GetFlatShareGroup, GetGroupSize, GetInnerOuterShareGroups,
+        GroupMembership, IDIsAvailable, LockableProfile, OrgChecks, OrganizationDNS,
+        OrganizationSupervisorPermissions, RegisterShareGroup, ReservableProfile, ShareBank,
+        ShareGroupChecks, SubGroupSupervisorPermissions, SupervisorPermissions, WeightedShareGroup,
+        WeightedShareIssuanceWrapper, WeightedShareWrapper,
     },
     uuid::UUID2,
 };
@@ -167,14 +168,14 @@ decl_storage! {
         /// Organization Inner Shares
         /// - purpose: organizational governance, task supervision
         OrganizationInnerShares get(fn organization_inner_shares): double_map
-            hasher(opaque_blake2_256) u32,
-            hasher(opaque_blake2_256) ShareID => bool;
+            hasher(blake2_128_concat) u32,
+            hasher(blake2_128_concat) ShareID => bool;
 
         /// Organization Outer Shares
         /// - purpose: funded teams ownership enforcement, external contractors
         OrganizationOuterShares get(fn organization_outer_shares): double_map
-            hasher(opaque_blake2_256) u32,
-            hasher(opaque_blake2_256) ShareID => bool;
+            hasher(blake2_128_concat) u32,
+            hasher(blake2_128_concat) ShareID => bool;
     }
     add_extra_genesis {
         // supervisor set to sudo according to rules of only module call in build(..)
@@ -260,44 +261,6 @@ decl_module! {
             Ok(())
         }
         // setting all permissions
-    }
-}
-
-impl<T: Trait> Module<T> {
-    // helpers for shares-membership (FlatShareData)
-    fn generate_unique_flat_share_id(organization: u32) -> ShareID {
-        // TODO: delete FlatShareID Nonce in this module
-        let generated_joint_id =
-            <<T as Trait>::FlatShareData as GenerateUniqueID<UUID2>>::generate_unique_id(
-                UUID2::new(organization, 1u32),
-            );
-        ShareID::Flat(generated_joint_id.two())
-    }
-    fn add_members_to_flat_share_group(
-        organization: u32,
-        share_id: ShareID,
-        members: Vec<T::AccountId>,
-    ) -> DispatchResult {
-        match share_id {
-            ShareID::Flat(sid) => {
-                let prefix = UUID2::new(organization, sid);
-                <<T as Trait>::FlatShareData as ChangeGroupMembership<
-                    <T as frame_system::Trait>::AccountId,
-                >>::batch_add_group_members(prefix, members);
-                Ok(())
-            }
-            _ => Err(Error::<T>::ShareIdTypeNotShareMembershipVariantSoCantAddMembers.into()),
-        }
-    }
-    fn get_flat_share_group(
-        organization: u32,
-        share_id: u32,
-    ) -> Result<Vec<T::AccountId>, DispatchError> {
-        let ret = <<T as Trait>::FlatShareData as GetFlatShareGroup<
-            <T as frame_system::Trait>::AccountId,
-        >>::get_organization_share_group(organization, share_id)
-        .ok_or(Error::<T>::FlatShareGroupNotFound)?;
-        Ok(ret)
     }
 }
 
@@ -455,10 +418,42 @@ impl<T: Trait> SupervisorPermissions<u32, T::AccountId> for Module<T> {
     }
 }
 
-impl<T: Trait> WeightedShareBankWrapper<u32, u32, T::AccountId> for Module<T> {
+impl<T: Trait> FlatShareWrapper<u32, u32, T::AccountId> for Module<T> {
+    fn get_flat_share_group(
+        organization: u32,
+        share_id: u32,
+    ) -> Result<Vec<T::AccountId>, DispatchError> {
+        let ret = <<T as Trait>::FlatShareData as GetFlatShareGroup<
+            <T as frame_system::Trait>::AccountId,
+        >>::get_organization_share_group(organization, share_id)
+        .ok_or(Error::<T>::FlatShareGroupNotFound)?;
+        Ok(ret)
+    }
+    fn generate_unique_flat_share_id(organization: u32) -> u32 {
+        let new_nonce = <FlatShareIDNonce>::get(organization) + 1;
+        let new_joint_id = UUID2::new(organization, new_nonce);
+        <FlatShareIDNonce>::insert(organization, new_nonce);
+        let generated_joint_id =
+            <<T as Trait>::FlatShareData as GenerateUniqueID<UUID2>>::generate_unique_id(
+                new_joint_id,
+            );
+        generated_joint_id.two()
+    }
+    fn add_members_to_flat_share_group(
+        organization: u32,
+        share_id: u32,
+        members: Vec<T::AccountId>,
+    ) {
+        let prefix = UUID2::new(organization, share_id);
+        <<T as Trait>::FlatShareData as ChangeGroupMembership<
+            <T as frame_system::Trait>::AccountId,
+        >>::batch_add_group_members(prefix, members);
+    }
+}
+
+impl<T: Trait> WeightedShareWrapper<u32, u32, T::AccountId> for Module<T> {
     type Shares = SharesOf<T>; // exists only to pass inheritance to modules that inherit org
     type Genesis = SimpleShareGenesis<T::AccountId, Self::Shares>;
-    type Portion = Permill; // enum for Shares or Percent for the last method
     fn get_weighted_shares_for_member(
         organization: u32,
         share_id: u32,
@@ -498,6 +493,9 @@ impl<T: Trait> WeightedShareBankWrapper<u32, u32, T::AccountId> for Module<T> {
             );
         generated_joint_id.two()
     }
+}
+
+impl<T: Trait> WeightedShareIssuanceWrapper<u32, u32, T::AccountId, Permill> for Module<T> {
     fn issue_weighted_shares_from_accounts(
         organization: u32,
         members: Vec<(T::AccountId, Self::Shares)>,
@@ -514,8 +512,8 @@ impl<T: Trait> WeightedShareBankWrapper<u32, u32, T::AccountId> for Module<T> {
         account: T::AccountId,
         // TODO: make portion an enum that expresses amount or permill
         // execute logic in here to decide that amount
-        amount_to_burn: Option<Self::Portion>,
-    ) -> DispatchResult {
+        amount_to_burn: Option<Permill>,
+    ) -> Result<Self::Shares, DispatchError> {
         let total_shares = Self::get_weighted_shares_for_member(organization, share_id, &account)?;
         let shares_to_burn = if let Some(pct_2_burn) = amount_to_burn {
             pct_2_burn * total_shares
@@ -526,9 +524,10 @@ impl<T: Trait> WeightedShareBankWrapper<u32, u32, T::AccountId> for Module<T> {
             organization,
             share_id,
             account,
-            shares_to_burn,
+            shares_to_burn.clone(),
             false,
-        )
+        )?;
+        Ok(shares_to_burn)
     }
 }
 
@@ -537,8 +536,9 @@ impl<T: Trait> RegisterShareGroup<u32, u32, T::AccountId, SharesOf<T>> for Modul
         organization: u32,
         group: Vec<T::AccountId>,
     ) -> Result<Self::MultiShareIdentifier, DispatchError> {
-        let new_share_id = Self::generate_unique_flat_share_id(organization);
-        Self::add_members_to_flat_share_group(organization, new_share_id, group)?;
+        let raw_share_id = Self::generate_unique_flat_share_id(organization);
+        Self::add_members_to_flat_share_group(organization, raw_share_id, group);
+        let new_share_id = ShareID::Flat(raw_share_id);
         OrganizationInnerShares::insert(organization, new_share_id, true);
         Ok(new_share_id)
     }
@@ -555,8 +555,9 @@ impl<T: Trait> RegisterShareGroup<u32, u32, T::AccountId, SharesOf<T>> for Modul
         organization: u32,
         group: Vec<T::AccountId>,
     ) -> Result<Self::MultiShareIdentifier, DispatchError> {
-        let new_share_id = Self::generate_unique_flat_share_id(organization);
-        Self::add_members_to_flat_share_group(organization, new_share_id, group)?;
+        let raw_share_id = Self::generate_unique_flat_share_id(organization);
+        Self::add_members_to_flat_share_group(organization, raw_share_id, group);
+        let new_share_id = ShareID::Flat(raw_share_id);
         OrganizationOuterShares::insert(organization, new_share_id, true);
         Ok(new_share_id)
     }
@@ -568,6 +569,35 @@ impl<T: Trait> RegisterShareGroup<u32, u32, T::AccountId, SharesOf<T>> for Modul
         let new_share_id = ShareID::WeightedAtomic(raw_share_id);
         OrganizationOuterShares::insert(organization, new_share_id, true);
         Ok(new_share_id)
+    }
+}
+
+impl<T: Trait> GetInnerOuterShareGroups<u32, T::AccountId> for Module<T> {
+    fn get_inner_share_group_identifiers(
+        organization: u32,
+    ) -> Option<Vec<Self::MultiShareIdentifier>> {
+        let inner_shares = <OrganizationInnerShares>::iter()
+            .filter(|(org, _, exists)| (org == &organization) && *exists)
+            .map(|(_, share_id, _)| share_id)
+            .collect::<Vec<_>>();
+        if inner_shares.is_empty() {
+            None
+        } else {
+            Some(inner_shares)
+        }
+    }
+    fn get_outer_share_group_identifiers(
+        organization: u32,
+    ) -> Option<Vec<Self::MultiShareIdentifier>> {
+        let outer_shares = <OrganizationOuterShares>::iter()
+            .filter(|(org, _, exists)| (org == &organization) && *exists)
+            .map(|(_, share_id, _)| share_id)
+            .collect::<Vec<_>>();
+        if outer_shares.is_empty() {
+            None
+        } else {
+            Some(outer_shares)
+        }
     }
 }
 
@@ -589,8 +619,8 @@ impl<T: Trait> OrganizationDNS<u32, T::AccountId, IpfsReference> for Module<T> {
                     organization,
                     new_share_id,
                     unweighted_members,
-                )?;
-                new_share_id
+                );
+                ShareID::Flat(new_share_id)
             }
             OrganizationSource::AccountsWeighted(weighted_members) => {
                 let raw_share_id =
@@ -613,8 +643,8 @@ impl<T: Trait> OrganizationDNS<u32, T::AccountId, IpfsReference> for Module<T> {
                             organization,
                             new_share_id,
                             new_members,
-                        )?;
-                        new_share_id
+                        );
+                        ShareID::Flat(new_share_id)
                     }
                     ShareID::WeightedAtomic(sid) => {
                         let new_weighted_membership =

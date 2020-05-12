@@ -554,7 +554,7 @@ pub trait OrgChecks<OrgId, AccountId> {
 
 // helpers, they are just abstractions over inherited functions
 pub trait ShareGroupChecks<OrgId, AccountId> {
-    type MultiShareIdentifier; // organization::ShareID
+    type MultiShareIdentifier: From<crate::organization::ShareID>; // organization::ShareID
     fn check_share_group_existence(org: OrgId, share_group: Self::MultiShareIdentifier) -> bool;
     fn check_membership_in_share_group(
         org: OrgId,
@@ -574,7 +574,11 @@ pub trait SupervisorPermissions<OrgId, AccountId>: ShareGroupChecks<OrgId, Accou
     // infallible, not protected in any way
     fn put_sudo_account(who: AccountId);
     fn put_organization_supervisor(organization: OrgId, who: AccountId);
-    fn put_share_group_supervisor(organization: OrgId, share_id: Self::MultiShareIdentifier, who: AccountId);
+    fn put_share_group_supervisor(
+        organization: OrgId,
+        share_id: Self::MultiShareIdentifier,
+        who: AccountId,
+    );
     // CAS by default to enforce existing permissions and isolate logic
     fn set_sudo_account(setter: &AccountId, new: AccountId) -> DispatchResult;
     fn set_organization_supervisor(
@@ -590,11 +594,23 @@ pub trait SupervisorPermissions<OrgId, AccountId>: ShareGroupChecks<OrgId, Accou
     ) -> DispatchResult;
 }
 
-// TODO: make `ShareGroupChecks` inherit this and whatever utilities are required for `FlatShareId`
-pub trait WeightedShareBankWrapper<OrgId, WeightedShareId, AccountId> {
-    type Shares; // exists only to pass inheritance to modules that inherit org
+// TODO: make `ShareGroupChecks` inherit this && WeightedShareWrapper
+pub trait FlatShareWrapper<OrgId, FlatShareId, AccountId> {
+    fn get_flat_share_group(
+        organization: OrgId,
+        share_id: FlatShareId,
+    ) -> Result<Vec<AccountId>, DispatchError>;
+    fn generate_unique_flat_share_id(organization: OrgId) -> FlatShareId;
+    fn add_members_to_flat_share_group(
+        organization: OrgId,
+        share_id: FlatShareId,
+        members: Vec<AccountId>,
+    );
+}
+
+pub trait WeightedShareWrapper<OrgId, WeightedShareId, AccountId> {
+    type Shares: Parameter + Member + AtLeast32Bit + Codec; // exists only to pass inheritance to modules that inherit org
     type Genesis;
-    type Portion; // enum for Shares or Percent for the last method
     fn get_weighted_shares_for_member(
         organization: OrgId,
         share_id: WeightedShareId,
@@ -609,6 +625,11 @@ pub trait WeightedShareBankWrapper<OrgId, WeightedShareId, AccountId> {
         share_id: WeightedShareId,
     ) -> Result<Self::Shares, DispatchError>;
     fn generate_unique_weighted_share_id(organization: OrgId) -> WeightedShareId;
+}
+
+pub trait WeightedShareIssuanceWrapper<OrgId, WeightedShareId, AccountId, FineArithmetic>:
+    WeightedShareWrapper<OrgId, WeightedShareId, AccountId>
+{
     fn issue_weighted_shares_from_accounts(
         organization: OrgId,
         members: Vec<(AccountId, Self::Shares)>,
@@ -618,13 +639,13 @@ pub trait WeightedShareBankWrapper<OrgId, WeightedShareId, AccountId> {
         organization: OrgId,
         share_id: WeightedShareId,
         account: AccountId,
-        amount_to_burn: Option<Self::Portion>,
-    ) -> DispatchResult;
+        amount_to_burn: Option<FineArithmetic>, // at some point, replace with portion
+    ) -> Result<Self::Shares, DispatchError>;
 }
 
 // TODO: FlatShareGroup utilities
 pub trait RegisterShareGroup<OrgId, WeightedShareId, AccountId, Shares>:
-    ShareGroupChecks<OrgId, AccountId> + WeightedShareBankWrapper<OrgId, WeightedShareId, AccountId>
+    ShareGroupChecks<OrgId, AccountId> + WeightedShareWrapper<OrgId, WeightedShareId, AccountId>
 {
     fn register_inner_flat_share_group(
         organization: u32,
@@ -642,6 +663,15 @@ pub trait RegisterShareGroup<OrgId, WeightedShareId, AccountId, Shares>:
         organization: u32,
         group: Vec<(AccountId, Shares)>,
     ) -> Result<Self::MultiShareIdentifier, DispatchError>;
+}
+
+pub trait GetInnerOuterShareGroups<OrgId, AccountId>: ShareGroupChecks<OrgId, AccountId> {
+    fn get_inner_share_group_identifiers(
+        organization: OrgId,
+    ) -> Option<Vec<Self::MultiShareIdentifier>>;
+    fn get_outer_share_group_identifiers(
+        organization: OrgId,
+    ) -> Option<Vec<Self::MultiShareIdentifier>>;
 }
 
 pub trait OrganizationDNS<OrgId, AccountId, Hash>: OrgChecks<OrgId, AccountId> {

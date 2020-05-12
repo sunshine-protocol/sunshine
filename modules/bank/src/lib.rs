@@ -16,20 +16,14 @@ use util::{
         PaymentConfirmation, WithdrawalPermissions,
     },
     court::Evidence,
-    organization::{FormedOrganization, Organization, OrganizationSource, ShareID},
-    share::SimpleShareGenesis,
+    organization::{FormedOrganization, ShareID},
     traits::{
-        AccessGenesis, ApplyVote, ChangeBankBalances, ChangeGroupMembership, CheckVoteStatus,
-        DepositWithdrawalOps, EmpowerWithVeto, GenerateUniqueID, GetDepositsByAccountForBank,
-        GetFlatShareGroup, GetGroupSize, GetPetitionStatus, GetVoteOutcome, GroupMembership,
-        IDIsAvailable, LockableProfile, MintableSignal, OffChainBank, OnChainBank,
-        OnChainWithdrawalFilters, OpenPetition, OpenShareGroupVote, OrganizationDNS,
-        RegisterOffChainBankAccount, RegisterOnChainBankAccount, RegisterShareGroup,
-        RequestChanges, ReservableProfile, ShareBank, SignPetition,
-        SupervisorPermissions, SupportedOrganizationShapes, UpdatePetition,
-        VoteOnProposal, WeightedShareGroup, WeightedShareBankWrapper, OrgChecks, ShareGroupChecks,
+        ChangeBankBalances, DepositWithdrawalOps, GenerateUniqueID, GetDepositsByAccountForBank,
+        GetInnerOuterShareGroups, IDIsAvailable, OffChainBank, OnChainBank,
+        OnChainWithdrawalFilters, OrgChecks, OrganizationDNS, RegisterOffChainBankAccount,
+        RegisterOnChainBankAccount, RegisterShareGroup, ShareGroupChecks, SupervisorPermissions,
+        SupportedOrganizationShapes, WeightedShareIssuanceWrapper, WeightedShareWrapper,
     },
-    uuid::{UUID2, UUID3},
 };
 
 use frame_support::{
@@ -49,7 +43,9 @@ pub type IpfsReference = Vec<u8>;
 /// The organization identfier
 pub type OrgId = u32;
 /// The weighted shares
-pub type SharesOf<T> = <<T as Trait>::WeightedShareData as WeightedShareGroup<
+pub type SharesOf<T> = <<T as Trait>::Organization as WeightedShareWrapper<
+    u32,
+    u32,
     <T as frame_system::Trait>::AccountId,
 >>::Shares;
 /// The balances type for this module
@@ -64,8 +60,10 @@ pub trait Trait: system::Trait {
 
     type Organization: OrgChecks<u32, Self::AccountId>
         + ShareGroupChecks<u32, Self::AccountId>
+        + GetInnerOuterShareGroups<u32, Self::AccountId>
         + SupervisorPermissions<u32, Self::AccountId>
-        + WeightedShareBankWrapper<u32, u32, Self::AccountId>
+        + WeightedShareWrapper<u32, u32, Self::AccountId>
+        + WeightedShareIssuanceWrapper<u32, u32, Self::AccountId, Permill>
         + RegisterShareGroup<u32, u32, Self::AccountId, SharesOf<Self>>
         + OrganizationDNS<u32, Self::AccountId, IpfsReference>;
 }
@@ -181,76 +179,18 @@ decl_module! {
         fn deposit_event() = default;
 
         #[weight = 0]
-        fn register_organization_from_accounts(
-            origin,
-            value_constitution: IpfsReference,
-            accounts: Vec<T::AccountId>,
-            supervisor: Option<T::AccountId>,
-        ) -> DispatchResult {
-            let caller = ensure_signed(origin)?;
-            let authentication: bool = Self::check_if_sudo_account(&caller)
-                || Self::check_if_account_is_a_member_of_formed_organization(1u32.into(), &caller);
-            ensure!(authentication, Error::<T>::MustBeAMemberOf0thOrgToRegisterNewOrg);
-
-            let new_organization_state = Self::register_organization(OrganizationSource::<_, SharesOf<T>>::Accounts(accounts), value_constitution, supervisor)?;
-            Self::deposit_event(RawEvent::NewOrganizationRegistered(caller, new_organization_state.0, new_organization_state.1.admin_id(), new_organization_state.1.constitution()));
-            Ok(())
-        }
-        #[weight = 0]
-        fn register_inner_flat_share_group_for_organization(
-            origin,
-            organization: OrgId,
-            group: Vec<T::AccountId>,
-        ) -> DispatchResult {
-            let caller = ensure_signed(origin)?;
-            let authentication: bool = Self::check_if_sudo_account(&caller)
-                || Self::check_if_organization_supervisor_account(organization, &caller);
-            ensure!(authentication, Error::<T>::MustHaveCertainAuthorityToRegisterInnerShares);
-
-            let new_share_id = Self::register_inner_flat_share_group(organization, group)?;
-            Self::deposit_event(RawEvent::FlatInnerShareGroupAddedToOrg(caller, organization, new_share_id));
-            Ok(())
-        }
-        #[weight = 0]
-        fn register_inner_weighted_share_group_for_organization(
-            origin,
-            organization: OrgId,
-            group: Vec<(T::AccountId, SharesOf<T>)>,
-        ) -> DispatchResult {
-            let caller = ensure_signed(origin)?;
-            let authentication: bool = Self::check_if_sudo_account(&caller)
-                || Self::check_if_organization_supervisor_account(organization, &caller);
-            ensure!(authentication, Error::<T>::MustHaveCertainAuthorityToRegisterInnerShares);
-
-            let new_share_id = Self::register_inner_weighted_share_group(organization, group)?;
-            Self::deposit_event(RawEvent::WeightedInnerShareGroupAddedToOrg(caller, organization, new_share_id));
-            Ok(())
-        }
-        #[weight = 0]
-        fn register_outer_weighted_share_group_for_organization(
-            origin,
-            organization: OrgId,
-            group: Vec<(T::AccountId, SharesOf<T>)>,
-        ) -> DispatchResult {
-            let caller = ensure_signed(origin)?;
-            let authentication: bool = Self::check_if_sudo_account(&caller)
-                || Self::check_if_organization_supervisor_account(organization, &caller);
-            ensure!(authentication, Error::<T>::MustHaveCertainAuthorityToRegisterOuterShares);
-
-            let new_share_id = Self::register_outer_weighted_share_group(organization, group)?;
-            Self::deposit_event(RawEvent::WeightedOuterShareGroupAddedToOrg(caller, organization, new_share_id));
-            Ok(())
-        }
-        #[weight = 0]
         fn register_offchain_bank_account_for_organization(
             origin,
             organization: OrgId,
         ) -> DispatchResult {
             let caller = ensure_signed(origin)?;
-            let authentication: bool = Self::check_if_sudo_account(&caller)
-                || Self::check_if_organization_supervisor_account(organization, &caller);
+            let authentication: bool = Self::is_sudo_account(&caller)
+                || Self::is_organization_supervisor(organization, &caller);
             ensure!(authentication, Error::<T>::MustHaveCertainAuthorityToRegisterOffChainBankAccountForOrg);
-            let organization_exists = Self::organization_exists(organization);
+            let organization_exists = <<T as Trait>::Organization as OrgChecks<
+                    u32,
+                    T::AccountId
+                >>::check_org_existence(organization);
             ensure!(organization_exists, Error::<T>::CannotRegisterOffChainBankForOrgThatDNE);
 
             let formed_org: FormedOrganization = organization.into();
@@ -299,7 +239,7 @@ decl_module! {
             // get the organization permissions from the off_chain_treasury_id
             let formed_org = OffChainTreasuryIDs::get(treasury_id).ok_or(Error::<T>::CannotUseOffChainBankThatDNE)?;
             // only requirement is that the claimER is in the organization
-            let authentication: bool = Self::check_if_account_is_a_member_of_formed_organization(formed_org, &sender);
+            let authentication: bool = Self::account_is_member_of_formed_organization(formed_org, &sender);
             ensure!(authentication, Error::<T>::MustBeAMemberToUseOffChainBankAccountToClaimPaymentSent);
 
             let payment_claimed_sent = Payment::new(0u32, sender.clone(), recipient.clone(), amount);
@@ -330,8 +270,8 @@ decl_module! {
             sudo_acc: T::AccountId, // sole controller for the bank account
         ) -> DispatchResult {
             let seeder = ensure_signed(origin)?;
-            let authentication: bool = Self::check_if_sudo_account(&seeder)
-                || Self::check_if_organization_supervisor_account(1u32, &seeder);
+            let authentication: bool = Self::is_sudo_account(&seeder)
+                || Self::is_organization_supervisor(1u32, &seeder);
             ensure!(authentication, Error::<T>::MustHaveCertainAuthorityToRegisterOnChainBankAccount);
 
             let new_bank_id = Self::register_on_chain_bank_account(seeder, seed, None, WithdrawalPermissions::Sudo(sudo_acc.clone()))?;
@@ -346,8 +286,8 @@ decl_module! {
             share_id: u32,
         ) -> DispatchResult {
             let seeder = ensure_signed(origin)?;
-            let authentication: bool = Self::check_if_sudo_account(&seeder)
-                || Self::check_if_organization_supervisor_account(1u32, &seeder);
+            let authentication: bool = Self::is_sudo_account(&seeder)
+                || Self::is_organization_supervisor(1u32, &seeder);
             ensure!(authentication, Error::<T>::MustHaveCertainAuthorityToRegisterOnChainBankAccount);
 
             let wrapped_share_id = ShareID::WeightedAtomic(share_id);
@@ -405,6 +345,39 @@ decl_module! {
             let amount_withdrawn = Self::claim_portion_of_on_chain_deposit(bank_id, deposit, to_claimer.clone(), None)?;
             Self::deposit_event(RawEvent::WeightedShareGroupMemberClaimedPortionOfDepositToWithdraw(bank_id, to_claimer, amount_withdrawn));
             Ok(())
+        }
+    }
+}
+
+impl<T: Trait> Module<T> {
+    fn account_id(id: OnChainTreasuryID) -> T::AccountId {
+        id.into_account()
+    }
+    fn is_sudo_account(who: &T::AccountId) -> bool {
+        <<T as Trait>::Organization as SupervisorPermissions<u32, T::AccountId>>::is_sudo_account(
+            who,
+        )
+    }
+    fn is_organization_supervisor(organization: u32, who: &T::AccountId) -> bool {
+        <<T as Trait>::Organization as SupervisorPermissions<u32, T::AccountId>>::is_organization_supervisor(organization, who)
+    }
+    // fn is_share_supervisor(organization: u32, share_id: ShareID, who: &T::AccountId) -> bool {
+    //     <<T as Trait>::Organization as SupervisorPermissions<u32, T::AccountId>>::is_share_supervisor(organization, share_id.into(), who)
+    // }
+    fn account_is_member_of_formed_organization(
+        org: FormedOrganization,
+        who: &T::AccountId,
+    ) -> bool {
+        match org {
+            FormedOrganization::FlatOrg(org_id) => {
+                <<T as Trait>::Organization as OrgChecks<u32, T::AccountId>>::check_membership_in_org(org_id, who)
+            },
+            FormedOrganization::FlatShares(org_id, share_id) => {
+                <<T as Trait>::Organization as ShareGroupChecks<u32, T::AccountId>>::check_membership_in_share_group(org_id, ShareID::Flat(share_id).into(), who)
+            },
+            FormedOrganization::WeightedShares(org_id, share_id) => {
+                <<T as Trait>::Organization as ShareGroupChecks<u32, T::AccountId>>::check_membership_in_share_group(org_id, ShareID::WeightedAtomic(share_id).into(), who)
+            },
         }
     }
 }
@@ -731,11 +704,21 @@ impl<T: Trait> OnChainWithdrawalFilters<T::AccountId, IpfsReference, BalanceOf<T
             .extract_weighted_share_group_id()
             .ok_or(Error::<T>::MustBeWeightedShareGroupToCalculatePortionOfOnChainDeposit)?;
         // + 1 constant time map lookup
-        let total_shares_issued_for_group =
-            Self::get_outstanding_weighted_shares(org_share_id.0, org_share_id.1)?;
+        let total_shares_issued_for_group = <<T as Trait>::Organization as WeightedShareWrapper<
+            u32,
+            u32,
+            T::AccountId,
+        >>::get_outstanding_weighted_shares(
+            org_share_id.0, org_share_id.1
+        )?;
         // + 1 constant time map lookup
-        let shares_owned_by_member =
-            Self::get_weighted_shares_for_member(org_share_id.0, org_share_id.1, &to_claimer)?;
+        let shares_owned_by_member = <<T as Trait>::Organization as WeightedShareWrapper<
+            u32,
+            u32,
+            T::AccountId,
+        >>::get_weighted_shares_for_member(
+            org_share_id.0, org_share_id.1, &to_claimer
+        )?;
         let ownership_portion = Permill::from_rational_approximation(
             shares_owned_by_member,
             total_shares_issued_for_group,
@@ -758,11 +741,21 @@ impl<T: Trait> OnChainWithdrawalFilters<T::AccountId, IpfsReference, BalanceOf<T
             .extract_weighted_share_group_id()
             .ok_or(Error::<T>::MustBeWeightedShareGroupToCalculatePortionLiquidShareCapital)?;
         // + 1 constant time map lookup
-        let total_shares_issued_for_group =
-            Self::get_outstanding_weighted_shares(org_share_id.0, org_share_id.1)?;
+        let total_shares_issued_for_group = <<T as Trait>::Organization as WeightedShareWrapper<
+            u32,
+            u32,
+            T::AccountId,
+        >>::get_outstanding_weighted_shares(
+            org_share_id.0, org_share_id.1
+        )?;
         // + 1 constant time map lookup
-        let shares_owned_by_member =
-            Self::get_weighted_shares_for_member(org_share_id.0, org_share_id.1, &to_claimer)?;
+        let shares_owned_by_member = <<T as Trait>::Organization as WeightedShareWrapper<
+            u32,
+            u32,
+            T::AccountId,
+        >>::get_weighted_shares_for_member(
+            org_share_id.0, org_share_id.1, &to_claimer
+        )?;
         let ownership_portion = Permill::from_rational_approximation(
             shares_owned_by_member,
             total_shares_issued_for_group,
@@ -847,8 +840,13 @@ impl<T: Trait> OnChainWithdrawalFilters<T::AccountId, IpfsReference, BalanceOf<T
             amount_withdrawn,
             ExistenceRequirement::KeepAlive,
         )?;
-        // burn shares
-        Self::burn_weighted_shares_for_member(
+        // burn proportional amount of shares
+        <<T as Trait>::Organization as WeightedShareIssuanceWrapper<
+            u32,
+            u32,
+            T::AccountId,
+            Permill,
+        >>::burn_weighted_shares_for_member(
             org_share_id_shares.0,
             org_share_id_shares.1,
             to_claimer,
