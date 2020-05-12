@@ -101,13 +101,6 @@ impl org::Trait for Test {
     type FlatShareData = FlatShareData;
     type WeightedShareData = WeightedShareData;
 }
-// impl vote_yesno::Trait for Test {
-//     type Event = TestEvent;
-//     type Signal = Signal;
-//     type OrgData = membership::Module<Test>;
-//     type FlatShareData = shares_membership::Module<Test>;
-//     type WeightedShareData = shares_atomic::Module<Test>;
-// }
 impl Trait for Test {
     type Event = TestEvent;
     type Currency = Balances;

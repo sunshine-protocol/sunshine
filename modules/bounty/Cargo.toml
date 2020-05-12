@@ -10,7 +10,6 @@ description = "on chain RFP system"
 keywords = ["sunshine", "substrate", "blockchain"]
 
 [dependencies]
-# local deps
 serde = { version = "1.0.104", optional = true }
 codec = { package = "parity-scale-codec", version = "1.2.0", default-features = false, features = ["derive"] }
 sp-std = { version = "2.0.0-alpha.7", default-features = false }
@@ -24,6 +23,13 @@ clear_on_drop = { version = "0.2.3", features = ["no_cc"] }	# https://github.com
 [dev-dependencies]
 sp-io = { version = "2.0.0-alpha.7", default-features = false }
 sp-core = { version = "2.0.0-alpha.7", default-features = false }
+membership = { package = "sunshine-membership", path = "../membership", default-features = false }
+shares-membership = { package = "sunshine-shares-membership", path = "../shares-membership", default-features = false }
+shares-atomic = { package = "sunshine-shares-atomic", path = "../shares-atomic", default-features = false }
+org = { package = "sunshine-org", path = "../org", default-features=false}
+bank = { package = "sunshine-bank", path = "../bank", default-features=false}
+vote-petition = { package = "sunshine-vote-petition", path = "../vote-petition", default-features=false}
+vote-yesno = { package = "sunshine-vote-yesno", path = "../vote-yesno", default-features=false}
 
 [features]
 default = ["std"]
@@ -35,4 +41,8 @@ std = [
 	"frame-support/std",
 	"frame-system/std",
 	"pallet-balances/std",
+	"membership/std",
+	"shares-membership/std",
+	"shares-atomic/std",
+	"org/std",
 ]
