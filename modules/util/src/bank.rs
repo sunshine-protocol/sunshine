@@ -1,7 +1,7 @@
 use crate::{
-    organization::ShareID,
+    organization::{FormedOrganization, ShareID},
     share::SimpleShareGenesis,
-    traits::{AccessGenesis, DepositWithdrawalOps},
+    traits::{AccessGenesis, DepositWithdrawalOps, GetBalance, VerifyOwnership},
 };
 use codec::{Codec, Decode, Encode};
 use frame_support::Parameter;
@@ -30,6 +30,7 @@ impl TypeId for OnChainTreasuryID {
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
+// TODO: add more information about the context INNER vs OUTER and how to organize these things
 pub struct DepositInfo<AccountId, Hash, Currency, FineArithmetic> {
     // for uniqueness
     salt: u32,
@@ -81,136 +82,60 @@ impl<AccountId: Clone, Hash: Clone, Currency: Clone, FineArithmetic: PerThing>
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
+pub struct BankVault<AccountId, Currency> {
+    // free capital, available for spends
+    free: Currency,
+    // set aside for future spends, already allocated but can be liquidated after free == 0?
+    reserved: Currency,
+    withdraw_permissions: Option<WithdrawalPermissions<AccountId>>,
+}
+
+impl<AccountId: Clone + PartialEq, Currency: Zero + AtLeast32Bit + Clone>
+    BankVault<AccountId, Currency>
+{
+    pub fn free_funds(&self) -> Currency {
+        self.free.clone()
+    }
+    pub fn reserved_funds(&self) -> Currency {
+        self.reserved.clone()
+    }
+}
+
+#[derive(PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
 /// This is the state for an OnChainBankId, associated with each bank registered in the runtime
-/// INVARIANT: savings + reserved_for_grant_payouts = T::Currency::total_balance(Self::account_id(OnChainBankId))
+/// RULE: inner.free + inner.reserved + outer.free + outer.reserved == total balance in account
 pub struct BankState<AccountId, Currency> {
-    /// Reserved only for liquidation upon burning shares OR vote-based spending by the collective
-    savings: Currency,
-    /// Reserved only for withdrawal by grant team, some portion might be moved to savings if the group prefers this structure
-    reserved_for_spends: Currency,
-    /// Permissions for making withdrawals
-    permissions: WithdrawalPermissions<AccountId>,
+    /// Registered organization identifier
+    registered_org: u32,
+    /// Vault available for inner shares
+    inner: BankVault<AccountId, Currency>,
+    /// Vault available for outer shares
+    outer: BankVault<AccountId, Currency>,
 }
 
 impl<AccountId: Clone + PartialEq, Currency: Zero + AtLeast32Bit + Clone>
     BankState<AccountId, Currency>
 {
-    pub fn savings(&self) -> Currency {
-        self.savings.clone()
+    pub fn registered_org(&self) -> u32 {
+        self.registered_org
     }
-    pub fn reserved_for_spends(&self) -> Currency {
-        self.reserved_for_spends.clone()
+    pub fn inner_free_funds(&self) -> Currency {
+        self.inner.free_funds()
     }
-    pub fn permissions(&self) -> WithdrawalPermissions<AccountId> {
-        self.permissions.clone()
+    pub fn inner_reserved_funds(&self) -> Currency {
+        self.inner.reserved_funds()
     }
-    // getter helper to verify permissions for target groups
-    pub fn verify_sudo(&self, account: &AccountId) -> bool {
-        match &self.permissions {
-            WithdrawalPermissions::Sudo(acc) => acc == account,
-            _ => false,
-        }
+    pub fn outer_free_funds(&self) -> Currency {
+        self.outer.free_funds()
     }
-    pub fn extract_weighted_share_group_id(&self) -> Option<(u32, u32)> {
-        match &self.permissions {
-            WithdrawalPermissions::RegisteredShareGroup(org_id, wrapped_share_id) => {
-                match wrapped_share_id {
-                    ShareID::WeightedAtomic(share_id) => Some((*org_id, *share_id)),
-                    _ => None,
-                }
-            }
-            _ => None,
-        }
-    }
-    pub fn init(
-        beginning_balance: Currency,
-        pct_reserved_for_spends: Option<Permill>,
-        permissions: WithdrawalPermissions<AccountId>,
-    ) -> BankState<AccountId, Currency> {
-        let reserved_for_spends = if let Some(pct) = pct_reserved_for_spends {
-            pct * beginning_balance.clone()
-        } else {
-            Currency::zero()
-        };
-        let savings = beginning_balance - reserved_for_spends;
-        BankState {
-            savings,
-            reserved_for_spends: Currency::zero(),
-            permissions,
-        }
+    pub fn outer_reserved_funds(&self) -> Currency {
+        self.outer.reserved_funds()
     }
 }
-
-impl<AccountId: Clone + PartialEq, Currency: Zero + AtLeast32Bit + Clone>
-    DepositWithdrawalOps<Currency, Permill> for BankState<AccountId, Currency>
-{
-    fn apply_deposit(
-        &self,
-        amount: Currency,
-        reserved_for_savings: Option<Permill>,
-    ) -> BankState<AccountId, Currency> {
-        let increase_in_savings = if let Some(pctage_to_save) = reserved_for_savings {
-            pctage_to_save * amount.clone()
-        } else {
-            Currency::zero()
-        };
-        let increase_in_reserved_for_grant_payouts = amount - increase_in_savings.clone();
-        let savings = self.savings() + increase_in_savings;
-        let reserved_for_spends =
-            self.reserved_for_spends() + increase_in_reserved_for_grant_payouts;
-        let permissions = self.permissions();
-        BankState {
-            savings,
-            reserved_for_spends,
-            permissions,
-        }
-    }
-    fn spend_from_total(&self, amount: Currency) -> Option<Self> {
-        let total_accessible_capital_for_sudo =
-            self.savings.clone() + self.reserved_for_spends.clone();
-        if amount <= total_accessible_capital_for_sudo {
-            let new_balance = if let Some(new_savings) = self.savings.clone().checked_sub(&amount) {
-                (new_savings, self.reserved_for_spends.clone())
-            } else {
-                let amount_to_withdraw_from_reserved = amount - self.savings.clone();
-                let new_reserved_for_spends =
-                    self.reserved_for_spends.clone() - amount_to_withdraw_from_reserved;
-                (Currency::zero(), new_reserved_for_spends)
-            };
-            Some(BankState {
-                savings: new_balance.0,
-                reserved_for_spends: new_balance.1,
-                permissions: self.permissions.clone(),
-            })
-        } else {
-            None
-        }
-    }
-    fn spend_from_reserved_spends(&self, amount: Currency) -> Option<Self> {
-        if amount <= self.reserved_for_spends.clone() {
-            let new_reserved_for_spends = self.reserved_for_spends.clone() - amount;
-            Some(BankState {
-                savings: self.savings.clone(),
-                reserved_for_spends: new_reserved_for_spends,
-                permissions: self.permissions.clone(),
-            })
-        } else {
-            None
-        }
-    }
-    fn spend_from_savings(&self, amount: Currency) -> Option<Self> {
-        if amount <= self.savings.clone() {
-            let new_savings = self.savings.clone() - amount;
-            Some(BankState {
-                savings: new_savings,
-                reserved_for_spends: self.reserved_for_spends.clone(),
-                permissions: self.permissions.clone(),
-            })
-        } else {
-            None
-        }
-    }
-}
+// TODO:
+// ReWrite DepositWithdrawalOps to require attaching something that indicates more specific permissions
+// delete GetBalance or replace
+// delete VerifyOwnership or replace
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
 pub enum WithdrawalPermissions<AccountId> {

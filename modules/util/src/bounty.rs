@@ -1,17 +1,14 @@
 use crate::{bank::OnChainTreasuryID, organization::TermsOfAgreement, uuid::UUID2};
 use codec::{Decode, Encode};
 use frame_support::Parameter;
-use sp_runtime::{PerThing, RuntimeDebug};
+use sp_runtime::RuntimeDebug;
 use sp_std::prelude::*;
-
-#[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug)]
-pub struct Requirements;
-// TODO: impl some traits on this and use them to check the team's application
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 /// The information most often read after a specific bounty is GOT
-pub struct BountyInformation<Hash, Currency, FineArithmetic> {
+pub struct BountyInformation<Hash, Currency, AccountId> {
     // Storage cid
+    // - title, description, team requirements (all subjective metadata uses one reference)
     description: Hash,
     // On chain bank account associated with this bounty
     bank_account: OnChainTreasuryID,
@@ -20,33 +17,29 @@ pub struct BountyInformation<Hash, Currency, FineArithmetic> {
     // Amount claimed to have on hand to fund projects related to the bounty
     // - used to derive the collateral ratio for this bounty, which must be above the module lower bound
     claimed_funding_available: Currency,
-    // How the acceptance committee evaluates applications
-    team_requirements: Option<Requirements>,
     // Committee metadata for approving an application
-    acceptance_committee: VoteConfig<FineArithmetic>,
+    acceptance_committee: ReviewBoard<AccountId>,
     // Committee metadata for approving milestones
     // -- if None, same as acceptance_committee by default
-    supervision_committee: Option<VoteConfig<FineArithmetic>>,
+    supervision_committee: Option<ReviewBoard<AccountId>>,
 }
 
-impl<Hash: Parameter, Currency: Parameter, FineArithmetic: PerThing>
-    BountyInformation<Hash, Currency, FineArithmetic>
+impl<Hash: Parameter, Currency: Parameter, AccountId: Parameter>
+    BountyInformation<Hash, Currency, AccountId>
 {
     pub fn new(
         description: Hash,
         bank_account: OnChainTreasuryID,
         funding_reserved: Currency,
         claimed_funding_available: Currency,
-        team_requirements: Option<Requirements>,
-        acceptance_committee: VoteConfig<FineArithmetic>,
-        supervision_committee: Option<VoteConfig<FineArithmetic>>,
-    ) -> BountyInformation<Hash, Currency, FineArithmetic> {
+        acceptance_committee: ReviewBoard<AccountId>,
+        supervision_committee: Option<ReviewBoard<AccountId>>,
+    ) -> BountyInformation<Hash, Currency, AccountId> {
         BountyInformation {
             description,
             bank_account,
             funding_reserved,
             claimed_funding_available,
-            team_requirements,
             acceptance_committee,
             supervision_committee,
         }
@@ -54,16 +47,16 @@ impl<Hash: Parameter, Currency: Parameter, FineArithmetic: PerThing>
 }
 
 #[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug)]
-/// Metadata to be used to dispatch votes among share groups and/or request specific approval
-pub enum VoteConfig<FineArithmetic> {
-    /// (OrgId, ShareId) for all reviewers, (OrgId, ShareId) for SuperVoters (w/ veto power)
-    PetitionReview(UUID2, UUID2),
-    /// (OrgId, ShareId, Support Percentage Threshold, Turnout Percentage Threshold)
-    YesNoPercentageThresholdVote(UUID2, FineArithmetic, FineArithmetic),
-    /// (OrgId, ShareId, Support Count Threshold, Turnout Percentage Threshold)
-    YesNoCountThresholdVote(UUID2, u32, u32),
-    /// (OrgId, ShareId, Support 1P1V Count Threshold, Turnout 1P1V Count Threshold)
-    YesNo1P1VCountThresholdVote(UUID2, u32, u32),
+/// Metadata that represents pre-dispatch, grant milestone reviews
+/// - TODO: build a variant in which one person is sudo but the role is revocable and can be reassigned
+pub enum ReviewBoard<AccountId> {
+    /// Single person must approve each milestone
+    Sudo(AccountId),
+    /// Uses petition but only requires a single approver from the group
+    /// - anyone can veto as well
+    SimpleReview(UUID2),
+    /// The first UUID2 requires u32 support, the second UUID2 can veto and/or approve
+    PetitionReview(UUID2, u32, UUID2),
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]

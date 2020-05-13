@@ -715,7 +715,7 @@ pub trait OffChainBank: RegisterOffChainBankAccount {
 }
 
 pub trait RegisterOnChainBankAccount<AccountId, Currency, FineArithmetic> {
-    type TreasuryId;
+    type TreasuryId: Clone;
     type WithdrawRules;
     fn register_on_chain_bank_account(
         from: AccountId,
@@ -723,6 +723,16 @@ pub trait RegisterOnChainBankAccount<AccountId, Currency, FineArithmetic> {
         pct_reserved_for_spends: Option<FineArithmetic>,
         permissions: Self::WithdrawRules,
     ) -> Result<Self::TreasuryId, DispatchError>;
+}
+
+pub trait VerifyOwnership<OrgShape>: Sized {
+    fn verify_ownership(&self, org: OrgShape) -> bool;
+}
+
+pub trait GetBalance<Currency>: Sized {
+    fn get_savings(&self) -> Currency;
+    fn get_reserved_for_spends(&self) -> Currency;
+    fn get_total_balance(&self) -> Currency;
 }
 
 pub trait DepositWithdrawalOps<Currency, FineArithmetic>: Sized {
@@ -734,8 +744,10 @@ pub trait DepositWithdrawalOps<Currency, FineArithmetic>: Sized {
     fn spend_from_savings(&self, amt: Currency) -> Option<Self>;
 }
 
-pub trait ChangeBankBalances<Currency, FineArithmetic> {
-    type Bank: DepositWithdrawalOps<Currency, FineArithmetic>;
+pub trait ChangeBankBalances<Currency, FineArithmetic>: SupportedOrganizationShapes {
+    type Bank: DepositWithdrawalOps<Currency, FineArithmetic>
+        + VerifyOwnership<Self::FormedOrgId>
+        + GetBalance<Currency>;
     fn make_deposit_to_update_bank_balance(
         bank: Self::Bank,
         amount: Currency,
@@ -747,6 +759,14 @@ pub trait ChangeBankBalances<Currency, FineArithmetic> {
         savings: bool,             // true if these funds are available to callee
         reserved_for_spends: bool, // true if these funds are available to callee
     ) -> Result<Self::Bank, DispatchError>;
+}
+
+pub trait CheckBankBalances<AccountId, Currency, FineArithmetic>:
+    RegisterOnChainBankAccount<AccountId, Currency, FineArithmetic>
+    + ChangeBankBalances<Currency, FineArithmetic>
+{
+    fn get_bank(bank_id: Self::TreasuryId) -> Option<Self::Bank>;
+    fn get_bank_total_balance(bank_id: Self::TreasuryId) -> Option<Currency>;
 }
 
 pub trait OnChainBank<AccountId, Hash, Currency, FineArithmetic>:
@@ -813,4 +833,32 @@ pub trait OnChainWithdrawalFilters<AccountId, Hash, Currency, FineArithmetic>:
         to_claimer: AccountId,
         amount: Option<Currency>, // if None, as much as possible
     ) -> Result<Currency, DispatchError>;
+}
+
+// ~~~~~~~~ Bounty Module ~~~~~~~~
+
+pub trait CreateBounty<IpfsReference, Currency>: SupportedOrganizationShapes {
+    type BankId: Clone;
+    type ReviewCommittee;
+    // helper to screen, prepare and form bounty information object
+    fn screen_bounty_submission(
+        caller: Self::FormedOrgId,
+        description: IpfsReference,
+        bank_account: Self::BankId,
+        amount_reserved_for_bounty: Currency, // collateral requirement
+        amount_claimed_available: Currency,   // claimed available amount, not necessarily liquid
+        acceptance_committee: Self::ReviewCommittee,
+        supervision_committee: Option<Self::ReviewCommittee>,
+    ) -> DispatchResult;
+    // call should be an authenticated member of the FormedOrgId
+    // - could be the inner shares of an organization for example
+    fn create_bounty(
+        caller: Self::FormedOrgId,
+        description: IpfsReference,
+        bank_account: Self::BankId,
+        amount_reserved_for_bounty: Currency, // collateral requirement
+        amount_claimed_available: Currency,   // claimed available amount, not necessarily liquid
+        acceptance_committee: Self::ReviewCommittee,
+        supervision_committee: Option<Self::ReviewCommittee>,
+    ) -> Result<(Self::FormedOrgId, u32), DispatchError>;
 }
