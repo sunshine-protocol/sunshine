@@ -1,13 +1,13 @@
 use crate::{
-    organization::{FormedOrganization, ShareID},
+    organization::ShareID,
     share::SimpleShareGenesis,
-    traits::{AccessGenesis, DepositWithdrawalOps, GetBalance, VerifyOwnership},
+    traits::{AccessGenesis, DepositSpendOps, GetBalance},
 };
 use codec::{Codec, Decode, Encode};
 use frame_support::Parameter;
 use sp_core::TypeId;
 use sp_runtime::traits::{AtLeast32Bit, Member, Zero};
-use sp_runtime::{PerThing, Permill};
+use sp_runtime::Permill;
 use sp_std::{marker::PhantomData, prelude::*};
 
 /// An off-chain treasury id
@@ -30,129 +30,198 @@ impl TypeId for OnChainTreasuryID {
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
-// TODO: add more information about the context INNER vs OUTER and how to organize these things
-pub struct DepositInfo<AccountId, Hash, Currency, FineArithmetic> {
-    // for uniqueness
-    salt: u32,
-    depositer: AccountId,
-    // TODO: change this to an enum, it might wrap an IpfsReference (which is what this hash was for anyway)
-    reason: Hash,
-    amount: Currency,
-    // default None is no capital reserved for savings
-    // TODO: add configurable API for bank's enforcing savings on deposits with certain reasons
-    savings_pct: Option<FineArithmetic>,
-}
-impl<AccountId: Clone, Hash: Clone, Currency: Clone, FineArithmetic: PerThing>
-    DepositInfo<AccountId, Hash, Currency, FineArithmetic>
-{
-    pub fn new(
-        salt: u32,
-        depositer: AccountId,
-        reason: Hash,
-        amount: Currency,
-        savings_pct: Option<FineArithmetic>,
-    ) -> DepositInfo<AccountId, Hash, Currency, FineArithmetic> {
-        DepositInfo {
-            salt,
-            depositer,
-            reason,
-            amount,
-            savings_pct,
-        }
-    }
-    pub fn depositer(&self) -> AccountId {
-        self.depositer.clone()
-    }
-    pub fn amount(&self) -> Currency {
-        self.amount.clone()
-    }
-    pub fn savings_pct(&self) -> Option<FineArithmetic> {
-        self.savings_pct
-    }
-    // TODO: make this take &mut instead? is changing it better than all these inner clones?
-    pub fn iterate_salt(&self) -> Self {
-        DepositInfo {
-            salt: self.salt + 1u32,
-            depositer: self.depositer.clone(),
-            reason: self.reason.clone(),
-            amount: self.amount.clone(),
-            savings_pct: self.savings_pct,
-        }
-    }
+/// the simplest `GovernanceConfig`
+pub enum WithdrawalPermissions<AccountId> {
+    // a single account can reserve free capital for spending
+    Sudo(AccountId),
+    // two accounts can reserve free capital for spending
+    // TODO: add this up to 5 accounts?
+    AnyOfTwoAccounts(AccountId, AccountId),
+    // any account in org
+    AnyAccountInOrg(u32),
+    // all accounts in this organization can reserve free capital for spending
+    AnyMemberOfOrgShareGroup(u32, ShareID),
 }
 
-#[derive(PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
-pub struct BankVault<AccountId, Currency> {
-    // free capital, available for spends
-    free: Currency,
-    // set aside for future spends, already allocated but can be liquidated after free == 0?
-    reserved: Currency,
-    withdraw_permissions: Option<WithdrawalPermissions<AccountId>>,
-}
-
-impl<AccountId: Clone + PartialEq, Currency: Zero + AtLeast32Bit + Clone>
-    BankVault<AccountId, Currency>
-{
-    pub fn free_funds(&self) -> Currency {
-        self.free.clone()
-    }
-    pub fn reserved_funds(&self) -> Currency {
-        self.reserved.clone()
+impl<AccountId> Default for WithdrawalPermissions<AccountId> {
+    fn default() -> WithdrawalPermissions<AccountId> {
+        WithdrawalPermissions::AnyAccountInOrg(0u32)
     }
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
 /// This is the state for an OnChainBankId, associated with each bank registered in the runtime
-/// RULE: inner.free + inner.reserved + outer.free + outer.reserved == total balance in account
-pub struct BankState<AccountId, Currency> {
+pub struct BankState<GovernanceConfig, Currency> {
     /// Registered organization identifier
     registered_org: u32,
-    /// Vault available for inner shares
-    inner: BankVault<AccountId, Currency>,
-    /// Vault available for outer shares
-    outer: BankVault<AccountId, Currency>,
+    // free capital, available for spends
+    free: Currency,
+    // set aside for future spends, already allocated but can only be _liquidated_ after free == 0?
+    reserved: Currency,
+    // owner of vault, likely WithdrawalPermissions<AccountId>
+    owner_s: GovernanceConfig,
 }
 
-impl<AccountId: Clone + PartialEq, Currency: Zero + AtLeast32Bit + Clone>
-    BankState<AccountId, Currency>
+impl<GovernanceConfig: Clone + PartialEq, Currency: Zero + AtLeast32Bit + Clone>
+    BankState<GovernanceConfig, Currency>
 {
+    pub fn new_from_deposit(
+        registered_org: u32,
+        amount: Currency,
+        owner_s: GovernanceConfig,
+    ) -> Self {
+        BankState {
+            registered_org,
+            free: amount,
+            reserved: Currency::zero(),
+            owner_s,
+        }
+    }
     pub fn registered_org(&self) -> u32 {
         self.registered_org
     }
-    pub fn inner_free_funds(&self) -> Currency {
-        self.inner.free_funds()
+    pub fn free(&self) -> Currency {
+        self.free.clone()
     }
-    pub fn inner_reserved_funds(&self) -> Currency {
-        self.inner.reserved_funds()
+    pub fn reserved(&self) -> Currency {
+        self.reserved.clone()
     }
-    pub fn outer_free_funds(&self) -> Currency {
-        self.outer.free_funds()
+    pub fn owner_s(&self) -> GovernanceConfig {
+        self.owner_s.clone()
     }
-    pub fn outer_reserved_funds(&self) -> Currency {
-        self.outer.reserved_funds()
+    pub fn is_owner_s(&self, cmp_owner: GovernanceConfig) -> bool {
+        cmp_owner == self.owner_s
     }
 }
-// TODO:
-// ReWrite DepositWithdrawalOps to require attaching something that indicates more specific permissions
-// delete GetBalance or replace
-// delete VerifyOwnership or replace
+
+impl<
+        GovernanceConfig: Clone + PartialEq,
+        Currency: Zero + AtLeast32Bit + Clone + sp_std::ops::Add,
+    > GetBalance<Currency> for BankState<GovernanceConfig, Currency>
+{
+    fn total_free_funds(&self) -> Currency {
+        self.free()
+    }
+    fn total_reserved_funds(&self) -> Currency {
+        self.reserved()
+    }
+    fn total_funds(&self) -> Currency {
+        self.free() + self.reserved()
+    }
+}
+
+impl<GovernanceConfig: Clone + PartialEq, Currency: Zero + AtLeast32Bit + Clone>
+    DepositSpendOps<Currency> for BankState<GovernanceConfig, Currency>
+{
+    // infallible
+    fn deposit_into_free(&self, amount: Currency) -> Self {
+        let new_free = self.free() + amount;
+        BankState {
+            registered_org: self.registered_org(),
+            free: new_free,
+            reserved: self.reserved(),
+            owner_s: self.owner_s(),
+        }
+    }
+    fn deposit_into_reserved(&self, amount: Currency) -> Self {
+        let new_reserved = self.reserved() + amount;
+        BankState {
+            registered_org: self.registered_org(),
+            free: self.free(),
+            reserved: new_reserved,
+            owner_s: self.owner_s(),
+        }
+    }
+    // fallible, not enough capital in relative account
+    fn spend_from_free(&self, amount: Currency) -> Option<Self> {
+        if self.free() >= amount {
+            let new_free = self.free() - amount;
+            Some(BankState {
+                registered_org: self.registered_org(),
+                free: new_free,
+                reserved: self.reserved(),
+                owner_s: self.owner_s(),
+            })
+        } else {
+            // not enough capital in account, spend failed
+            None
+        }
+    }
+    fn spend_from_reserved(&self, amount: Currency) -> Option<Self> {
+        if self.reserved() >= amount {
+            let new_reserved = self.reserved() - amount;
+            Some(BankState {
+                registered_org: self.registered_org(),
+                free: self.free(),
+                reserved: new_reserved,
+                owner_s: self.owner_s(),
+            })
+        } else {
+            // not enough capital in account, spend failed
+            None
+        }
+    }
+}
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
-pub enum WithdrawalPermissions<AccountId> {
-    // a single account controls withdrawal permissions, can approve on-chain requests
-    Sudo(AccountId),
-    // flat group, implied equal withdrawal permissions \forall members
-    RegisteredOrganizationFlatMembership(u32),
-    // The members in a registered share group can withdraw as per their proportion of ownership
-    // HAPPY PATH!
-    RegisteredShareGroup(u32, ShareID),
+pub struct DepositInfo<AccountId, Hash, Currency> {
+    // Depositer's identity
+    depositer: AccountId,
+    // Reason for the deposit, an ipfs reference
+    // TODO: think about what the specific fields are to understand uniqueness properties
+    reason: Hash,
+    // Total amount of deposit into bank account (before fees, if any)
+    amount: Currency,
+} // TODO: attach an enum Tax<AccountId, Currency, FineArithmetic> { Flat(account, currency), PercentofAmount(account, permill, currency), }
+
+impl<AccountId: Clone, Hash: Clone, Currency: Clone> DepositInfo<AccountId, Hash, Currency> {
+    pub fn new(
+        depositer: AccountId,
+        reason: Hash,
+        amount: Currency,
+    ) -> DepositInfo<AccountId, Hash, Currency> {
+        DepositInfo {
+            depositer,
+            reason,
+            amount,
+        }
+    }
+    pub fn depositer(&self) -> AccountId {
+        self.depositer.clone()
+    }
+    pub fn reason(&self) -> Hash {
+        self.reason.clone()
+    }
+    pub fn amount(&self) -> Currency {
+        self.amount.clone()
+    }
 }
 
-impl<AccountId> Default for WithdrawalPermissions<AccountId> {
-    fn default() -> WithdrawalPermissions<AccountId> {
-        // this will be the address for ecosystem governance of taxes
-        WithdrawalPermissions::RegisteredOrganizationFlatMembership(0u32)
-    }
+#[derive(PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
+/// This provides record of reservation of capital for specific purpose,
+/// it makes `free` capital illiquid and effectively transfers control over this capital
+/// - in v1, acceptance_committee only requires membership to authorize internal transfers which actually transfer withdrawal control
+pub struct ReservationInfo<Hash, Currency, GovernanceConfig> {
+    // the reason for the reservation, an ipfs reference
+    reason: Hash,
+    // the amount reserved
+    amount: Currency,
+    // the committee for transferring liquidity rights to this capital and possibly enabling liquidity
+    acceptance_committee: GovernanceConfig,
+}
+
+#[derive(PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
+/// Transfers withdrawal control to the new_controller
+/// - them referencing this item in storage is the authentication necessary for withdrawals from the Bank
+pub struct InternalTransferInfo<Hash, Currency, GovernanceConfig> {
+    // the referenced Reservation from which this originated
+    reference_id: u32,
+    // the reason for this transfer
+    reason: Hash,
+    // the amount transferred
+    amount: Currency,
+    // governance type, should be possible to liquidate to the accounts that comprise this `GovernanceConfig` (dispatch proportional payment)
+    new_controller: GovernanceConfig,
 }
 
 // 000experiment with type states000

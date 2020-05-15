@@ -690,7 +690,7 @@ pub trait OrganizationDNS<OrgId, AccountId, Hash>: OrgChecks<OrgId, AccountId> {
     ) -> Result<(OrgId, Self::OrganizationState), DispatchError>; // returns OrgId in this module's context
 }
 
-// ~~~~~~~~ Bank Module ~~~~~~~~
+// ~~~~~~~~ BankOffChain Module ~~~~~~~~
 
 pub trait SupportedOrganizationShapes {
     type FormedOrgId; // see crate::organization::FormedOrganization
@@ -714,83 +714,126 @@ pub trait OffChainBank: RegisterOffChainBankAccount {
     fn check_payment_confirmation(id: Self::TreasuryId, payment: Self::Payment) -> bool;
 }
 
-pub trait RegisterOnChainBankAccount<AccountId, Currency, FineArithmetic> {
+// ~~~~~~~~ BankOnChain Module ~~~~~~~~
+
+pub trait OnChainBank {
+    type OrgId;
     type TreasuryId: Clone;
-    type WithdrawRules;
+}
+
+pub trait RegisterBankAccount<AccountId, Currency>: OnChainBank {
+    type GovernanceConfig;
+    // requires a deposit of some size above the minimum and returns the OnChainTreasuryID
     fn register_on_chain_bank_account(
+        registered_org: Self::OrgId,
         from: AccountId,
         amount: Currency,
-        pct_reserved_for_spends: Option<FineArithmetic>,
-        permissions: Self::WithdrawRules,
+        owner_s: Self::GovernanceConfig,
     ) -> Result<Self::TreasuryId, DispatchError>;
 }
 
-pub trait VerifyOwnership<OrgShape>: Sized {
-    fn verify_ownership(&self, org: OrgShape) -> bool;
-}
-
 pub trait GetBalance<Currency>: Sized {
-    fn get_savings(&self) -> Currency;
-    fn get_reserved_for_spends(&self) -> Currency;
-    fn get_total_balance(&self) -> Currency;
+    fn total_free_funds(&self) -> Currency;
+    fn total_reserved_funds(&self) -> Currency;
+    fn total_funds(&self) -> Currency;
 }
 
-pub trait DepositWithdrawalOps<Currency, FineArithmetic>: Sized {
+pub trait DepositSpendOps<Currency>: Sized {
     // infallible
-    fn apply_deposit(&self, amount: Currency, pct_savings: Option<FineArithmetic>) -> Self;
-    // fallible, not enough capital
-    fn spend_from_total(&self, amount: Currency) -> Option<Self>;
-    fn spend_from_reserved_spends(&self, amt: Currency) -> Option<Self>;
-    fn spend_from_savings(&self, amt: Currency) -> Option<Self>;
+    fn deposit_into_free(&self, amount: Currency) -> Self;
+    fn deposit_into_reserved(&self, amount: Currency) -> Self;
+    // fallible, not enough capital in relative account
+    fn spend_from_free(&self, amount: Currency) -> Option<Self>;
+    fn spend_from_reserved(&self, amount: Currency) -> Option<Self>;
 }
 
-pub trait ChangeBankBalances<Currency, FineArithmetic>: SupportedOrganizationShapes {
-    type Bank: DepositWithdrawalOps<Currency, FineArithmetic>
-        + VerifyOwnership<Self::FormedOrgId>
-        + GetBalance<Currency>;
-    fn make_deposit_to_update_bank_balance(
+// notably, !\exists deposit_into_reservation || spend_from_free because those aren't supported _here_
+pub trait BankDepositsAndSpends<Currency> {
+    type Bank: DepositSpendOps<Currency> + GetBalance<Currency>;
+    fn make_infallible_deposit_into_free(bank: Self::Bank, amount: Currency) -> Self::Bank;
+    // returns option if the `DepositSpendOps` does, propagate that NotEnoughFundsError
+    fn fallible_spend_from_reserved(
         bank: Self::Bank,
         amount: Currency,
-        pct_savings: Option<FineArithmetic>,
-    ) -> Self::Bank;
-    fn request_withdrawal_to_update_bank_balance(
-        bank: Self::Bank,
-        amount: Currency,
-        savings: bool,             // true if these funds are available to callee
-        reserved_for_spends: bool, // true if these funds are available to callee
     ) -> Result<Self::Bank, DispatchError>;
 }
 
-pub trait CheckBankBalances<AccountId, Currency, FineArithmetic>:
-    RegisterOnChainBankAccount<AccountId, Currency, FineArithmetic>
-    + ChangeBankBalances<Currency, FineArithmetic>
-{
-    fn get_bank(bank_id: Self::TreasuryId) -> Option<Self::Bank>;
-    fn get_bank_total_balance(bank_id: Self::TreasuryId) -> Option<Currency>;
+// useful for testing, the invariant is that the storage item returned from the first method should have self.free + self.reserved == the balance returned from the second method (for the same bank_id)
+pub trait CheckBankBalances<Currency>: OnChainBank + BankDepositsAndSpends<Currency> {
+    // prefer this method in most cases because
+    fn get_bank_store(bank_id: Self::TreasuryId) -> Option<Self::Bank>;
+    // -> invariant for module is that this returns the same as if you calculate total balance from the above storage item
+    fn calculate_total_bank_balance_from_balances(bank_id: Self::TreasuryId) -> Option<Currency>;
 }
 
-pub trait OnChainBank<AccountId, Hash, Currency, FineArithmetic>:
-    RegisterOnChainBankAccount<AccountId, Currency, FineArithmetic>
+pub trait DepositIntoBank<AccountId, Hash, Currency>:
+    RegisterBankAccount<AccountId, Currency> + BankDepositsAndSpends<Currency>
 {
-    fn deposit_currency_into_on_chain_bank_account(
+    // get the bank corresponding to bank_id call infallible deposit
+    // - only fails if `from` doesn't have enough Currency
+    fn deposit_into_bank(
         from: AccountId,
         to_bank_id: Self::TreasuryId,
-        amount: Currency,
-        savings_tax: Option<FineArithmetic>,
         reason: Hash,
+        amount: Currency,
     ) -> DispatchResult;
+}
+
+// TBH, I'm uncomfortable with this being its own separate trait, it's too powerful
+pub trait WithdrawFromBank<AccountId, Currency>: OnChainBank {
     // NEVER TO BE CALLED DIRECTLY, must be wrapped in some other API
     fn withdraw_from_on_chain_bank_account(
         from_bank_id: Self::TreasuryId,
         to: AccountId,
         amount: Currency,
-        savings: bool,             // true if these funds are available to callee
-        reserved_for_spends: bool, // true if these funds are available to callee
     ) -> DispatchResult;
 }
 
-pub trait GetDepositsByAccountForBank<AccountId, Hash, Currency, FineArithmetic>:
-    OnChainBank<AccountId, Hash, Currency, FineArithmetic>
+pub trait BankReservations<AccountId, Currency>: RegisterBankAccount<AccountId, Currency> {
+    fn reserve_for_spend(
+        caller: AccountId, // must be in owner_s: GovernanceConfig for BankState, that's the auth
+        bank_id: Self::TreasuryId,
+        // acceptance committee for approving set aside spends below the amount
+        supervision_committee: Option<Self::GovernanceConfig>, // default WithdrawalRules
+        amount: Currency,
+    ) -> DispatchResult;
+    // Allocate some funds (previously set aside for spending reasons) to be withdrawable by new group
+    // - this is an internal transfer to a team and it makes this capital withdrawable by them
+    fn transfer_spending_power(
+        caller: AccountId, // must be in reference's supervision_committee
+        bank_id: Self::TreasuryId,
+        // reference to specific reservation
+        reservation_id: u32,
+        // move control of funds to new outer group which can reserve or withdraw directly
+        new_controller: Self::GovernanceConfig,
+        amount: Currency,
+    ) -> DispatchResult;
+}
+
+pub trait BankSpends<AccountId, Currency>:
+    OnChainBank + BankReservations<AccountId, Currency>
+{
+    // spends up to allowed amount by default
+    // - envisioned use case: liquidation
+    // should not be used often!
+    fn spend_from_free(
+        caller: AccountId,
+        from_bank_id: Self::TreasuryId,
+        to: AccountId,
+        amount_requested: Option<Currency>,
+    ) -> Result<Currency, DispatchError>;
+    // spends up to allowed amount by default
+    fn spend_from_reserved(
+        caller: AccountId,
+        from_bank_id: Self::TreasuryId,
+        transfer_id: u32, // refers to InternalTransfer, which transfers control over a subset of the overall funds
+        to: AccountId,
+        amount_requested: Option<Currency>,
+    ) -> Result<Currency, DispatchError>;
+}
+
+pub trait DepositInformation<AccountId, Currency>:
+    RegisterBankAccount<AccountId, Currency>
 {
     type DepositInfo;
     fn get_deposits_by_account(
@@ -802,38 +845,34 @@ pub trait GetDepositsByAccountForBank<AccountId, Hash, Currency, FineArithmetic>
         depositer: AccountId,
     ) -> Currency;
 }
-// all operations are done with calculations done at the time the request is processed
-// - this leads to some problems because requests automatically execute at values that change
-pub trait OnChainWithdrawalFilters<AccountId, Hash, Currency, FineArithmetic>:
-    GetDepositsByAccountForBank<AccountId, Hash, Currency, FineArithmetic>
+
+// pub trait CalculateDueAmountForAccount<AccountId, Currency> {
+//     fn authorized_request(&self, who: AccountId) -> Option<Currency>;
+// }
+
+pub trait TransferInformation<AccountId, Currency>:
+    RegisterBankAccount<AccountId, Currency>
 {
-    // no guarantees on the value this returns, on chain conditions change fast
-    fn calculate_liquid_portion_of_on_chain_deposit(
-        from_bank_id: Self::TreasuryId,
-        deposit: Self::DepositInfo,
-        to_claimer: AccountId,
-    ) -> Result<Currency, DispatchError>;
-    // no guarantees on the value this returns, on chain conditions change fast
-    fn calculate_liquid_share_capital_from_savings(
-        from_bank_id: Self::TreasuryId,
-        to_claimer: AccountId,
-    ) -> Result<(u32, u32, Currency), DispatchError>;
-    // request for a portion of an on-chain deposit, the impl defines what determines the fair portion
-    fn claim_portion_of_on_chain_deposit(
-        from_bank_id: Self::TreasuryId,
-        deposit: Self::DepositInfo,
-        to_claimer: AccountId,
-        amount: Option<Currency>,
-    ) -> Result<Currency, DispatchError>;
-    // irreversible decision to sell ownership in exchange for a portion of the collateral
-    // - automatically calculated according to the proportion of ownership at the time the request is processed
-    // -- NOTE: this does not shield against dilution if there is a run on the collateral because it does not yield a limit order for the share sale
-    fn withdraw_capital_by_burning_shares(
-        from_bank_id: Self::TreasuryId,
-        to_claimer: AccountId,
-        amount: Option<Currency>, // if None, as much as possible
-    ) -> Result<Currency, DispatchError>;
+    type TransferInfo;
+    fn get_transfers_by_account_that_invoked(
+        bank_id: Self::TreasuryId,
+        invoker: AccountId,
+    ) -> Option<Vec<Self::TransferInfo>>;
+    fn total_capital_transferred_by_account(
+        bank_id: Self::TreasuryId,
+        invoker: AccountId,
+    ) -> Currency;
 }
+
+// TODO: create trait for
+// - liquidating an onchanin bank
+// pub trait BankLiquidityRules<AccountId, Currency>: DepositInformation<AccountId, Currency> {
+//     fn withdraw_capital_by_burning_shares(
+//         from_bank_id: Self::TreasuryId,
+//         to_claimer: AccountId,
+//         amount: Option<Currency>, // if None, as much as possible
+//     ) -> Result<Currency, DispatchError>;
+// }
 
 // ~~~~~~~~ Bounty Module ~~~~~~~~
 
