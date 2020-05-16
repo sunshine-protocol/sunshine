@@ -732,6 +732,20 @@ pub trait RegisterBankAccount<AccountId, Currency>: OnChainBank {
     ) -> Result<Self::TreasuryId, DispatchError>;
 }
 
+pub trait OwnershipProportionCalculations<AccountId, Currency, FineArithmetic>:
+    RegisterBankAccount<AccountId, Currency>
+{
+    fn calculate_proportion_ownership_for_account(
+        account: AccountId,
+        group: Self::GovernanceConfig,
+    ) -> Option<FineArithmetic>;
+    fn calculate_proportional_amount_for_account(
+        amount: Currency,
+        account: AccountId,
+        group: Self::GovernanceConfig,
+    ) -> Option<Currency>;
+}
+
 pub trait GetBalance<Currency>: Sized {
     fn total_free_funds(&self) -> Currency;
     fn total_reserved_funds(&self) -> Currency;
@@ -756,6 +770,10 @@ pub trait BankDepositsAndSpends<Currency> {
         bank: Self::Bank,
         amount: Currency,
     ) -> Result<Self::Bank, DispatchError>;
+    fn fallible_spend_from_free(
+        bank: Self::Bank,
+        amount: Currency,
+    ) -> Result<Self::Bank, DispatchError>;
 }
 
 // useful for testing, the invariant is that the storage item returned from the first method should have self.free + self.reserved == the balance returned from the second method (for the same bank_id)
@@ -774,34 +792,29 @@ pub trait DepositIntoBank<AccountId, Hash, Currency>:
     fn deposit_into_bank(
         from: AccountId,
         to_bank_id: Self::TreasuryId,
+        amount: Currency,
         reason: Hash,
-        amount: Currency,
     ) -> DispatchResult;
 }
 
-// TBH, I'm uncomfortable with this being its own separate trait, it's too powerful
-pub trait WithdrawFromBank<AccountId, Currency>: OnChainBank {
-    // NEVER TO BE CALLED DIRECTLY, must be wrapped in some other API
-    fn withdraw_from_on_chain_bank_account(
-        from_bank_id: Self::TreasuryId,
-        to: AccountId,
-        amount: Currency,
-    ) -> DispatchResult;
-}
-
-pub trait BankReservations<AccountId, Currency>: RegisterBankAccount<AccountId, Currency> {
+// One good question here might be, why are we passing the caller into this method and doing authentication in this method instead of doing it in the runtime method and just limiting where this is called to places where authenticaton occurs before it. The answer is that we're using objects in runtime storage to authenticate the call so we need to pass the caller into the method -- if we don't do this, we'll require two storage calls instead of one because we'll authenticate outside of this method by getting the storage item in the runtime method to check auth but then we'll also get the storage item in this method (because we don't pass it in and I struggle to see a clean design in which we pass it in but don't encourage/enable unsafe puts)
+pub trait BankReservations<AccountId, Currency, Hash>:
+    RegisterBankAccount<AccountId, Currency>
+{
     fn reserve_for_spend(
         caller: AccountId, // must be in owner_s: GovernanceConfig for BankState, that's the auth
         bank_id: Self::TreasuryId,
-        // acceptance committee for approving set aside spends below the amount
-        supervision_committee: Option<Self::GovernanceConfig>, // default WithdrawalRules
+        reason: Hash,
         amount: Currency,
+        // acceptance committee for approving set aside spends below the amount
+        controller: Self::GovernanceConfig,
     ) -> DispatchResult;
     // Allocate some funds (previously set aside for spending reasons) to be withdrawable by new group
     // - this is an internal transfer to a team and it makes this capital withdrawable by them
     fn transfer_spending_power(
         caller: AccountId, // must be in reference's supervision_committee
         bank_id: Self::TreasuryId,
+        reason: Hash,
         // reference to specific reservation
         reservation_id: u32,
         // move control of funds to new outer group which can reserve or withdraw directly
@@ -811,24 +824,28 @@ pub trait BankReservations<AccountId, Currency>: RegisterBankAccount<AccountId, 
 }
 
 pub trait BankSpends<AccountId, Currency>:
-    OnChainBank + BankReservations<AccountId, Currency>
+    OnChainBank + RegisterBankAccount<AccountId, Currency>
 {
-    // spends up to allowed amount by default
-    // - envisioned use case: liquidation
-    // should not be used often!
     fn spend_from_free(
-        caller: AccountId,
+        caller: Self::GovernanceConfig,
         from_bank_id: Self::TreasuryId,
         to: AccountId,
-        amount_requested: Option<Currency>,
+        amount: Currency,
     ) -> Result<Currency, DispatchError>;
-    // spends up to allowed amount by default
     fn spend_from_reserved(
-        caller: AccountId,
+        caller: Self::GovernanceConfig,
         from_bank_id: Self::TreasuryId,
-        transfer_id: u32, // refers to InternalTransfer, which transfers control over a subset of the overall funds
+        // reservation_id
+        id: u32,
         to: AccountId,
-        amount_requested: Option<Currency>,
+        amount: Currency,
+    ) -> Result<Currency, DispatchError>;
+    fn spend_from_transfers(
+        from_bank_id: Self::TreasuryId,
+        // transfer_id
+        id: u32,
+        to: AccountId,
+        amount: Currency,
     ) -> Result<Currency, DispatchError>;
 }
 
@@ -845,10 +862,6 @@ pub trait DepositInformation<AccountId, Currency>:
         depositer: AccountId,
     ) -> Currency;
 }
-
-// pub trait CalculateDueAmountForAccount<AccountId, Currency> {
-//     fn authorized_request(&self, who: AccountId) -> Option<Currency>;
-// }
 
 pub trait TransferInformation<AccountId, Currency>:
     RegisterBankAccount<AccountId, Currency>

@@ -30,6 +30,40 @@ impl TypeId for OnChainTreasuryID {
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
+/// All the other counter identifiers in this module that track state associated with bank account governance
+pub enum BankAssociatedIdentifiers {
+    Deposit(u32),
+    Reservation(u32),
+    InternalTransfer(u32),
+}
+
+impl Into<u32> for BankAssociatedIdentifiers {
+    fn into(self) -> u32 {
+        match self {
+            BankAssociatedIdentifiers::Deposit(id) => id,
+            BankAssociatedIdentifiers::Reservation(id) => id,
+            BankAssociatedIdentifiers::InternalTransfer(id) => id,
+        }
+    }
+}
+
+impl BankAssociatedIdentifiers {
+    pub fn iterate(&self) -> Self {
+        match self {
+            BankAssociatedIdentifiers::Deposit(val) => {
+                BankAssociatedIdentifiers::Deposit(val + 1u32)
+            }
+            BankAssociatedIdentifiers::Reservation(val) => {
+                BankAssociatedIdentifiers::Reservation(val + 1u32)
+            }
+            BankAssociatedIdentifiers::InternalTransfer(val) => {
+                BankAssociatedIdentifiers::InternalTransfer(val + 1u32)
+            }
+        }
+    }
+}
+
+#[derive(PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
 /// the simplest `GovernanceConfig`
 pub enum WithdrawalPermissions<AccountId> {
     // a single account can reserve free capital for spending
@@ -168,7 +202,6 @@ pub struct DepositInfo<AccountId, Hash, Currency> {
     // Depositer's identity
     depositer: AccountId,
     // Reason for the deposit, an ipfs reference
-    // TODO: think about what the specific fields are to understand uniqueness properties
     reason: Hash,
     // Total amount of deposit into bank account (before fees, if any)
     amount: Currency,
@@ -207,7 +240,29 @@ pub struct ReservationInfo<Hash, Currency, GovernanceConfig> {
     // the amount reserved
     amount: Currency,
     // the committee for transferring liquidity rights to this capital and possibly enabling liquidity
-    acceptance_committee: GovernanceConfig,
+    controller: GovernanceConfig,
+}
+
+impl<Hash, Currency: Clone, GovernanceConfig: Clone>
+    ReservationInfo<Hash, Currency, GovernanceConfig>
+{
+    pub fn new(
+        reason: Hash,
+        amount: Currency,
+        controller: GovernanceConfig,
+    ) -> ReservationInfo<Hash, Currency, GovernanceConfig> {
+        ReservationInfo {
+            reason,
+            amount,
+            controller,
+        }
+    }
+    pub fn amount(&self) -> Currency {
+        self.amount.clone()
+    }
+    pub fn controller(&self) -> GovernanceConfig {
+        self.controller.clone()
+    }
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
@@ -221,7 +276,18 @@ pub struct InternalTransferInfo<Hash, Currency, GovernanceConfig> {
     // the amount transferred
     amount: Currency,
     // governance type, should be possible to liquidate to the accounts that comprise this `GovernanceConfig` (dispatch proportional payment)
-    new_controller: GovernanceConfig,
+    controller: GovernanceConfig,
+}
+
+impl<Hash, Currency: Clone, GovernanceConfig: Clone>
+    InternalTransferInfo<Hash, Currency, GovernanceConfig>
+{
+    pub fn amount(&self) -> Currency {
+        self.amount.clone()
+    }
+    pub fn controller(&self) -> GovernanceConfig {
+        self.controller.clone()
+    }
 }
 
 // 000experiment with type states000
