@@ -303,19 +303,27 @@ fn weighted_inner_share_registration_for_organization() {
         );
         // check that some members are in each group as expected
         assert_eq!(
-            WeightedShareData::get_share_profile(1u32, 1u32, &9u64).unwrap(),
+            WeightedShareData::get_share_profile(1u32, 1u32, &9u64)
+                .unwrap()
+                .total(),
             20u64
         );
         assert_eq!(
-            WeightedShareData::get_share_profile(1u32, 2u32, &101u64).unwrap(),
+            WeightedShareData::get_share_profile(1u32, 2u32, &101u64)
+                .unwrap()
+                .total(),
             40u64
         );
         assert_eq!(
-            WeightedShareData::get_share_profile(1u32, 3u32, &73u64).unwrap(),
+            WeightedShareData::get_share_profile(1u32, 3u32, &73u64)
+                .unwrap()
+                .total(),
             20u64
         );
         assert_eq!(
-            WeightedShareData::get_share_profile(1u32, 4u32, &6u64).unwrap(),
+            WeightedShareData::get_share_profile(1u32, 4u32, &6u64)
+                .unwrap()
+                .total(),
             100u64
         );
     });

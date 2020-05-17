@@ -1,4 +1,4 @@
-use crate::traits::{AccessGenesis, VerifyShape};
+use crate::traits::{AccessGenesis, AccessProfile, VerifyShape};
 use codec::{Decode, Encode};
 use frame_support::Parameter;
 use sp_runtime::{traits::Zero, RuntimeDebug};
@@ -85,6 +85,12 @@ impl<
 
     pub fn is_unlocked(&self) -> bool {
         !self.locked
+    }
+}
+
+impl<Shares: Copy + Parameter> AccessProfile<Shares> for AtomicShareProfile<Shares> {
+    fn total(&self) -> Shares {
+        self.total
     }
 }
 

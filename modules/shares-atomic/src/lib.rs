@@ -566,6 +566,7 @@ impl<T: Trait> LockableProfile<T::AccountId> for Module<T> {
 
 impl<T: Trait> WeightedShareGroup<T::AccountId> for Module<T> {
     type Shares = T::Shares;
+    type Profile = AtomicShareProfile<T::Shares>;
     type Genesis = SimpleShareGenesis<T::AccountId, T::Shares>;
     fn outstanding_shares(organization: OrgId, share_id: ShareId) -> Option<T::Shares> {
         <TotalIssuance<T>>::get(organization, share_id)
@@ -574,14 +575,9 @@ impl<T: Trait> WeightedShareGroup<T::AccountId> for Module<T> {
         organization: OrgId,
         share_id: ShareId,
         who: &T::AccountId,
-    ) -> Result<T::Shares, DispatchError> {
+    ) -> Option<Self::Profile> {
         let prefix_key = UUID2::new(organization, share_id);
-        let wrapped_profile = Profile::<T>::get(prefix_key, who);
-        if let Some(profile) = wrapped_profile {
-            Ok(profile.total())
-        } else {
-            Err(Error::<T>::ProfileNotInstantiated.into())
-        }
+        Profile::<T>::get(prefix_key, who)
     }
     fn shareholder_membership(organization: OrgId, share_id: ShareId) -> Option<Self::Genesis> {
         let prefix = UUID2::new(organization, share_id);

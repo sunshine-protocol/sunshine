@@ -10,12 +10,12 @@ use util::{
     organization::{Organization, OrganizationSource, ShareID},
     share::SimpleShareGenesis,
     traits::{
-        AccessGenesis, ChainSudoPermissions, ChangeGroupMembership, FlatShareWrapper,
-        GenerateUniqueID, GetFlatShareGroup, GetGroupSize, GetInnerOuterShareGroups,
-        GroupMembership, IDIsAvailable, LockableProfile, OrgChecks, OrganizationDNS,
-        OrganizationSupervisorPermissions, RegisterShareGroup, ReservableProfile, ShareBank,
-        ShareGroupChecks, SubGroupSupervisorPermissions, SupervisorPermissions, WeightedShareGroup,
-        WeightedShareIssuanceWrapper, WeightedShareWrapper,
+        AccessGenesis, AccessProfile, ChainSudoPermissions, ChangeGroupMembership,
+        FlatShareWrapper, GenerateUniqueID, GetFlatShareGroup, GetGroupSize,
+        GetInnerOuterShareGroups, GroupMembership, IDIsAvailable, LockableProfile, OrgChecks,
+        OrganizationDNS, OrganizationSupervisorPermissions, RegisterShareGroup, ReservableProfile,
+        ShareBank, ShareGroupChecks, SubGroupSupervisorPermissions, SupervisorPermissions,
+        WeightedShareGroup, WeightedShareIssuanceWrapper, WeightedShareWrapper,
     },
     uuid::UUID2,
 };
@@ -143,6 +143,7 @@ decl_error! {
         MustHaveCertainAuthorityToRegisterOuterShares,
         FlatShareGroupNotFound,
         WeightedShareGroupNotFound,
+        NoProfileFoundForAccountToBurn,
     }
 }
 
@@ -275,6 +276,9 @@ impl<T: Trait> OrgChecks<u32, T::AccountId> for Module<T> {
             org, account
         )
     }
+    fn get_org_size(org: u32) -> u32 {
+        <<T as Trait>::OrgData as GetGroupSize>::get_size_of_group(org)
+    }
 }
 
 impl<T: Trait> ShareGroupChecks<u32, T::AccountId> for Module<T> {
@@ -308,6 +312,18 @@ impl<T: Trait> ShareGroupChecks<u32, T::AccountId> for Module<T> {
                 <<T as Trait>::WeightedShareData as GroupMembership<
                     <T as frame_system::Trait>::AccountId,
                 >>::is_member_of_group(group_id, account)
+            }
+        }
+    }
+    fn get_share_group_size(org: u32, share_group: Self::MultiShareIdentifier) -> u32 {
+        match share_group {
+            ShareID::Flat(share_id) => {
+                let group_id = UUID2::new(org, share_id);
+                <<T as Trait>::FlatShareData as GetGroupSize>::get_size_of_group(group_id)
+            }
+            ShareID::WeightedAtomic(share_id) => {
+                let group_id = UUID2::new(org, share_id);
+                <<T as Trait>::WeightedShareData as GetGroupSize>::get_size_of_group(group_id)
             }
         }
     }
@@ -453,12 +469,15 @@ impl<T: Trait> FlatShareWrapper<u32, u32, T::AccountId> for Module<T> {
 
 impl<T: Trait> WeightedShareWrapper<u32, u32, T::AccountId> for Module<T> {
     type Shares = SharesOf<T>; // exists only to pass inheritance to modules that inherit org
+    type Profile = <<T as Trait>::WeightedShareData as WeightedShareGroup<
+        <T as frame_system::Trait>::AccountId,
+    >>::Profile;
     type Genesis = SimpleShareGenesis<T::AccountId, Self::Shares>;
-    fn get_weighted_shares_for_member(
+    fn get_member_share_profile(
         organization: u32,
         share_id: u32,
         member: &T::AccountId,
-    ) -> Result<Self::Shares, DispatchError> {
+    ) -> Option<Self::Profile> {
         <<T as Trait>::WeightedShareData as WeightedShareGroup<
             <T as frame_system::Trait>::AccountId,
         >>::get_share_profile(organization, share_id, member)
@@ -473,15 +492,10 @@ impl<T: Trait> WeightedShareWrapper<u32, u32, T::AccountId> for Module<T> {
         .ok_or(Error::<T>::WeightedShareGroupNotFound)?;
         Ok(ret.into())
     }
-    fn get_outstanding_weighted_shares(
-        organization: u32,
-        share_id: u32,
-    ) -> Result<Self::Shares, DispatchError> {
-        let ret = <<T as Trait>::WeightedShareData as WeightedShareGroup<
+    fn get_outstanding_weighted_shares(organization: u32, share_id: u32) -> Option<Self::Shares> {
+        <<T as Trait>::WeightedShareData as WeightedShareGroup<
             <T as frame_system::Trait>::AccountId,
         >>::outstanding_shares(organization, share_id)
-        .ok_or(Error::<T>::WeightedShareGroupNotFound)?;
-        Ok(ret)
     }
     fn generate_unique_weighted_share_id(organization: u32) -> u32 {
         let new_nonce = WeightedShareIDNonce::get(organization) + 1;
@@ -514,7 +528,9 @@ impl<T: Trait> WeightedShareIssuanceWrapper<u32, u32, T::AccountId, Permill> for
         // execute logic in here to decide that amount
         amount_to_burn: Option<Permill>,
     ) -> Result<Self::Shares, DispatchError> {
-        let total_shares = Self::get_weighted_shares_for_member(organization, share_id, &account)?;
+        let total_shares = Self::get_member_share_profile(organization, share_id, &account)
+            .ok_or(Error::<T>::NoProfileFoundForAccountToBurn)?
+            .total();
         let shares_to_burn = if let Some(pct_2_burn) = amount_to_burn {
             pct_2_burn * total_shares
         } else {

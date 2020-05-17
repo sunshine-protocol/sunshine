@@ -106,15 +106,15 @@ pub trait ChangeGroupMembership<AccountId>: GroupMembership<AccountId> {
 pub trait GetFlatShareGroup<AccountId> {
     fn get_organization_share_group(organization: u32, share_id: u32) -> Option<Vec<AccountId>>;
 }
-pub trait GetTotalShareIssuance<Shares> {
-    fn get_total_share_issuance(organization: u32, share_id: u32) -> Result<Shares, DispatchError>;
-}
-pub trait GetWeightedShareGroupShape<AccountId, Shares>: GetTotalShareIssuance<Shares> {
-    fn get_weighted_share_group_shape(
-        organization: u32,
-        share_id: u32,
-    ) -> Result<Vec<(AccountId, Shares)>, DispatchError>;
-}
+// --
+// GetTotalShareIssuance is in WeightedShareGroup::outstanding_shares
+// --
+// pub trait GetWeightedShareGroupShape<AccountId, Shares>: GetTotalShareIssuance<Shares> {
+//     fn get_weighted_share_group_shape(
+//         organization: u32,
+//         share_id: u32,
+//     ) -> Result<Vec<(AccountId, Shares)>, DispatchError>;
+// }
 
 // ---------- Petition Logic ----------
 
@@ -230,9 +230,13 @@ pub trait AccessGenesis<AccountId, Shares> {
     fn total(&self) -> Shares;
     fn account_ownership(&self) -> Vec<(AccountId, Shares)>;
 }
+pub trait AccessProfile<Shares> {
+    fn total(&self) -> Shares;
+}
 
 pub trait WeightedShareGroup<AccountId> {
     type Shares: Parameter + Member + AtLeast32Bit + Codec;
+    type Profile: AccessProfile<Self::Shares>;
     type Genesis: From<Vec<(AccountId, Self::Shares)>>
         + Into<SimpleShareGenesis<AccountId, Self::Shares>>
         + VerifyShape
@@ -244,7 +248,7 @@ pub trait WeightedShareGroup<AccountId> {
         organization: u32,
         share_id: u32,
         who: &AccountId,
-    ) -> Result<Self::Shares, DispatchError>;
+    ) -> Option<Self::Profile>;
     /// Returns the entire membership group associated with a share identifier, fallible bc checks existence
     fn shareholder_membership(organization: u32, id: u32) -> Option<Self::Genesis>;
 }
@@ -550,6 +554,7 @@ pub trait PollActiveProposal: ScheduleVoteSequence {
 pub trait OrgChecks<OrgId, AccountId> {
     fn check_org_existence(org: OrgId) -> bool;
     fn check_membership_in_org(org: OrgId, account: &AccountId) -> bool;
+    fn get_org_size(org: OrgId) -> u32;
 }
 
 // helpers, they are just abstractions over inherited functions
@@ -561,6 +566,7 @@ pub trait ShareGroupChecks<OrgId, AccountId> {
         share_group: Self::MultiShareIdentifier,
         account: &AccountId,
     ) -> bool;
+    fn get_share_group_size(org: OrgId, share_group: Self::MultiShareIdentifier) -> u32;
 }
 
 pub trait SupervisorPermissions<OrgId, AccountId>: ShareGroupChecks<OrgId, AccountId> {
@@ -610,12 +616,13 @@ pub trait FlatShareWrapper<OrgId, FlatShareId, AccountId> {
 
 pub trait WeightedShareWrapper<OrgId, WeightedShareId, AccountId> {
     type Shares: Parameter + Member + AtLeast32Bit + Codec; // exists only to pass inheritance to modules that inherit org
+    type Profile: AccessProfile<Self::Shares>;
     type Genesis;
-    fn get_weighted_shares_for_member(
+    fn get_member_share_profile(
         organization: OrgId,
         share_id: WeightedShareId,
         member: &AccountId,
-    ) -> Result<Self::Shares, DispatchError>;
+    ) -> Option<Self::Profile>;
     fn get_weighted_share_group(
         organization: OrgId,
         share_id: WeightedShareId,
@@ -623,7 +630,7 @@ pub trait WeightedShareWrapper<OrgId, WeightedShareId, AccountId> {
     fn get_outstanding_weighted_shares(
         organization: OrgId,
         share_id: WeightedShareId,
-    ) -> Result<Self::Shares, DispatchError>;
+    ) -> Option<Self::Shares>;
     fn generate_unique_weighted_share_id(organization: OrgId) -> WeightedShareId;
 }
 
@@ -863,22 +870,38 @@ pub trait DepositInformation<AccountId, Currency>:
     ) -> Currency;
 }
 
+// TODO: impl after everything else (combine with DepositInformation into a single trait for this module for getting info on all of these objects)
+pub trait ReservationInformation<AccountId, Currency>:
+    RegisterBankAccount<AccountId, Currency>
+{
+    type ReservationInfo;
+    fn get_transfers_by_governance_config(
+        bank_id: Self::TreasuryId,
+        invoker: Self::GovernanceConfig,
+    ) -> Option<Vec<Self::ReservationInfo>>;
+    fn total_capital_transferred_by_account(
+        bank_id: Self::TreasuryId,
+        invoker: Self::GovernanceConfig,
+    ) -> Currency;
+}
 pub trait TransferInformation<AccountId, Currency>:
     RegisterBankAccount<AccountId, Currency>
 {
     type TransferInfo;
-    fn get_transfers_by_account_that_invoked(
+    fn get_transfers_by_governance_config(
         bank_id: Self::TreasuryId,
-        invoker: AccountId,
+        invoker: Self::GovernanceConfig,
     ) -> Option<Vec<Self::TransferInfo>>;
     fn total_capital_transferred_by_account(
         bank_id: Self::TreasuryId,
-        invoker: AccountId,
+        invoker: Self::GovernanceConfig,
     ) -> Currency;
 }
 
 // TODO: create trait for
 // - liquidating an onchanin bank
+// - basically needs to define an order for withdrawal to completely liquidate the bank account => I think this a good rule for every DAO to _uphold_
+
 // pub trait BankLiquidityRules<AccountId, Currency>: DepositInformation<AccountId, Currency> {
 //     fn withdraw_capital_by_burning_shares(
 //         from_bank_id: Self::TreasuryId,

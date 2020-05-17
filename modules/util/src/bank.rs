@@ -31,34 +31,61 @@ impl TypeId for OnChainTreasuryID {
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
 /// All the other counter identifiers in this module that track state associated with bank account governance
-pub enum BankAssociatedIdentifiers {
+pub enum BankMapID {
     Deposit(u32),
     Reservation(u32),
     InternalTransfer(u32),
 }
 
-impl Into<u32> for BankAssociatedIdentifiers {
-    fn into(self) -> u32 {
-        match self {
-            BankAssociatedIdentifiers::Deposit(id) => id,
-            BankAssociatedIdentifiers::Reservation(id) => id,
-            BankAssociatedIdentifiers::InternalTransfer(id) => id,
+#[derive(PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
+pub struct BankTrackerIdentifier {
+    treasury_id: OnChainTreasuryID,
+    tracker_id: BankTrackerID,
+}
+
+impl BankTrackerIdentifier {
+    pub fn new(treasury_id: OnChainTreasuryID, tracker_id: BankTrackerID) -> BankTrackerIdentifier {
+        BankTrackerIdentifier {
+            treasury_id,
+            tracker_id,
         }
     }
 }
 
-impl BankAssociatedIdentifiers {
+impl From<(OnChainTreasuryID, BankTrackerID)> for BankTrackerIdentifier {
+    fn from(other: (OnChainTreasuryID, BankTrackerID)) -> BankTrackerIdentifier {
+        BankTrackerIdentifier::new(other.0, other.1)
+    }
+}
+
+#[derive(PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
+/// Identifiers for tracking actions by specific individuals to _eventually_ enforce limits on this behavior
+pub enum BankTrackerID {
+    // acceptable only if the withdrawer burns their ownership
+    SpentFromFree,
+    SpendReserved,
+    // wraps reservation_id
+    InternalTransferMade(u32),
+    // wraps transfer_id, only acceptable withdrawal from reserved, must follow configured decision process
+    SpentFromReserved(u32),
+}
+
+impl Into<u32> for BankMapID {
+    fn into(self) -> u32 {
+        match self {
+            BankMapID::Deposit(id) => id,
+            BankMapID::Reservation(id) => id,
+            BankMapID::InternalTransfer(id) => id,
+        }
+    }
+}
+
+impl BankMapID {
     pub fn iterate(&self) -> Self {
         match self {
-            BankAssociatedIdentifiers::Deposit(val) => {
-                BankAssociatedIdentifiers::Deposit(val + 1u32)
-            }
-            BankAssociatedIdentifiers::Reservation(val) => {
-                BankAssociatedIdentifiers::Reservation(val + 1u32)
-            }
-            BankAssociatedIdentifiers::InternalTransfer(val) => {
-                BankAssociatedIdentifiers::InternalTransfer(val + 1u32)
-            }
+            BankMapID::Deposit(val) => BankMapID::Deposit(val + 1u32),
+            BankMapID::Reservation(val) => BankMapID::Reservation(val + 1u32),
+            BankMapID::InternalTransfer(val) => BankMapID::InternalTransfer(val + 1u32),
         }
     }
 }
