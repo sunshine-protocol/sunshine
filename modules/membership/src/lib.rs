@@ -224,7 +224,7 @@ impl<T: Trait> ChainSudoPermissions<T::AccountId> for Module<T> {
     fn set_sudo_key(old_key: &T::AccountId, new_key: T::AccountId) -> DispatchResult {
         if let Some(okey) = <SudoKey<T>>::get() {
             if old_key == &okey {
-                <SudoKey<T>>::put(new_key.clone());
+                <SudoKey<T>>::put(new_key);
                 return Ok(());
             }
             return Err(Error::<T>::UnAuthorizedSwapSudoRequest.into());
@@ -253,7 +253,7 @@ impl<T: Trait> OrganizationSupervisorPermissions<u32, T::AccountId> for Module<T
         let authentication: bool = Self::is_organization_supervisor(org, &old_supervisor)
             || Self::is_sudo_key(&old_supervisor);
         if authentication {
-            <OrganizationSupervisor<T>>::insert(org, new_supervisor.clone());
+            <OrganizationSupervisor<T>>::insert(org, new_supervisor);
             return Ok(());
         }
         Err(Error::<T>::UnAuthorizedRequestToSwapSupervisor.into())

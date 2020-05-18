@@ -753,6 +753,11 @@ pub trait OwnershipProportionCalculations<AccountId, Currency, FineArithmetic>:
     ) -> Option<Currency>;
 }
 
+pub trait FreeToReserved<Currency>: Sized {
+    // fallible, requires enough in `free`
+    fn move_from_free_to_reserved(&self, amount: Currency) -> Option<Self>;
+}
+
 pub trait GetBalance<Currency>: Sized {
     fn total_free_funds(&self) -> Currency;
     fn total_reserved_funds(&self) -> Currency;
@@ -770,7 +775,7 @@ pub trait DepositSpendOps<Currency>: Sized {
 
 // notably, !\exists deposit_into_reservation || spend_from_free because those aren't supported _here_
 pub trait BankDepositsAndSpends<Currency> {
-    type Bank: DepositSpendOps<Currency> + GetBalance<Currency>;
+    type Bank: DepositSpendOps<Currency> + GetBalance<Currency> + FreeToReserved<Currency>;
     fn make_infallible_deposit_into_free(bank: Self::Bank, amount: Currency) -> Self::Bank;
     // returns option if the `DepositSpendOps` does, propagate that NotEnoughFundsError
     fn fallible_spend_from_reserved(
@@ -816,10 +821,18 @@ pub trait BankReservations<AccountId, Currency, Hash>:
         // acceptance committee for approving set aside spends below the amount
         controller: Self::GovernanceConfig,
     ) -> DispatchResult;
+    // this should unreserve and make free
+    fn unreserve_to_make_free(
+        caller: AccountId,
+        bank_id: Self::TreasuryId,
+        reservation_id: u32,
+    ) -> Result<Currency, DispatchError>;
     // Allocate some funds (previously set aside for spending reasons) to be withdrawable by new group
     // - this is an internal transfer to a team and it makes this capital withdrawable by them
+    // NOTE: expected to be called by a vote's result, not called by an individual
+    // (but an individual should still set this and take credit for it?)
     fn transfer_spending_power(
-        caller: AccountId, // must be in reference's supervision_committee
+        caller: AccountId,
         bank_id: Self::TreasuryId,
         reason: Hash,
         // reference to specific reservation
@@ -836,14 +849,6 @@ pub trait BankSpends<AccountId, Currency>:
     fn spend_from_free(
         caller: Self::GovernanceConfig,
         from_bank_id: Self::TreasuryId,
-        to: AccountId,
-        amount: Currency,
-    ) -> Result<Currency, DispatchError>;
-    fn spend_from_reserved(
-        caller: Self::GovernanceConfig,
-        from_bank_id: Self::TreasuryId,
-        // reservation_id
-        id: u32,
         to: AccountId,
         amount: Currency,
     ) -> Result<Currency, DispatchError>;

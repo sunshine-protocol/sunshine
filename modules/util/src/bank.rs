@@ -1,7 +1,7 @@
 use crate::{
     organization::ShareID,
     share::SimpleShareGenesis,
-    traits::{AccessGenesis, DepositSpendOps, GetBalance},
+    traits::{AccessGenesis, DepositSpendOps, FreeToReserved, GetBalance},
 };
 use codec::{Codec, Decode, Encode};
 use frame_support::Parameter;
@@ -63,8 +63,11 @@ impl From<(OnChainTreasuryID, BankTrackerID)> for BankTrackerIdentifier {
 pub enum BankTrackerID {
     // acceptable only if the withdrawer burns their ownership
     SpentFromFree,
-    SpendReserved,
-    // wraps reservation_id
+    // allowed from any member of the bank's controller
+    ReservedSpend,
+    // wraps reservation_id, allowed from any member of bank's controller
+    UnReservedSpend(u32),
+    // wraps reservation_id, allowed from any member of the controller in the reference
     InternalTransferMade(u32),
     // wraps transfer_id, only acceptable withdrawal from reserved, must follow configured decision process
     SpentFromReserved(u32),
@@ -152,6 +155,29 @@ impl<GovernanceConfig: Clone + PartialEq, Currency: Zero + AtLeast32Bit + Clone>
     }
     pub fn is_owner_s(&self, cmp_owner: GovernanceConfig) -> bool {
         cmp_owner == self.owner_s
+    }
+}
+
+impl<
+        GovernanceConfig: Clone + PartialEq,
+        Currency: Zero + AtLeast32Bit + Clone + sp_std::ops::Add + sp_std::ops::Sub,
+    > FreeToReserved<Currency> for BankState<GovernanceConfig, Currency>
+{
+    fn move_from_free_to_reserved(&self, amount: Currency) -> Option<Self> {
+        if self.free() >= amount {
+            // safe because of above conditional
+            let new_free = self.free() - amount.clone();
+            let new_reserved = self.reserved() + amount;
+            Some(BankState {
+                registered_org: self.registered_org(),
+                free: new_free,
+                reserved: new_reserved,
+                owner_s: self.owner_s(),
+            })
+        } else {
+            // failed, not enough in free to make reservation of amount
+            None
+        }
     }
 }
 
@@ -309,6 +335,19 @@ pub struct InternalTransferInfo<Hash, Currency, GovernanceConfig> {
 impl<Hash, Currency: Clone, GovernanceConfig: Clone>
     InternalTransferInfo<Hash, Currency, GovernanceConfig>
 {
+    pub fn new(
+        reference_id: u32,
+        reason: Hash,
+        amount: Currency,
+        controller: GovernanceConfig,
+    ) -> InternalTransferInfo<Hash, Currency, GovernanceConfig> {
+        InternalTransferInfo {
+            reference_id,
+            reason,
+            amount,
+            controller,
+        }
+    }
     pub fn amount(&self) -> Currency {
         self.amount.clone()
     }

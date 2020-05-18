@@ -426,7 +426,7 @@ impl<T: Trait> SubGroupSupervisorPermissions<u32, u32, T::AccountId> for Module<
             || Self::check_if_organization_supervisor_account(org, &old_supervisor)
             || Self::is_sub_group_supervisor(org, sub_group, &old_supervisor);
         if authentication {
-            <ShareGroupSupervisor<T>>::insert(org, sub_group, new_supervisor.clone());
+            <ShareGroupSupervisor<T>>::insert(org, sub_group, new_supervisor);
             return Ok(());
         }
         Err(Error::<T>::UnAuthorizedRequestToSwapSupervisor.into())

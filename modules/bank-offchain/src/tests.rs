@@ -7,9 +7,6 @@ use util::{organization::Organization, traits::GroupMembership};
 
 // type aliases
 pub type AccountId = u64;
-type OrgId = u32;
-type FlatShareId = u32;
-type WeightedShareId = u32;
 pub type Shares = u64;
 pub type BlockNumber = u64;
 
@@ -96,9 +93,6 @@ impl shares_atomic::Trait for Test {
 }
 impl org::Trait for Test {
     type Event = TestEvent;
-    type OrgId = OrgId;
-    type FlatShareId = FlatShareId;
-    type WeightedShareId = WeightedShareId;
     type OrgData = OrgMembership;
     type FlatShareData = FlatShareData;
     type WeightedShareData = WeightedShareData;

@@ -20,17 +20,12 @@ use util::{
     uuid::UUID2,
 };
 
-use codec::Codec;
 use frame_support::{
     decl_error, decl_event, decl_module, decl_storage, ensure, storage::IterableStorageDoubleMap,
-    Parameter,
 };
 use frame_system::{self as system, ensure_signed};
-use sp_runtime::{
-    traits::{CheckedSub, MaybeSerializeDeserialize, Member, Zero},
-    DispatchError, DispatchResult, Permill,
-};
-use sp_std::{fmt::Debug, prelude::*};
+use sp_runtime::{DispatchError, DispatchResult, Permill};
+use sp_std::prelude::*;
 
 /// Common ipfs type alias for our modules
 pub type IpfsReference = Vec<u8>;
@@ -41,44 +36,6 @@ pub type SharesOf<T> = <<T as Trait>::WeightedShareData as WeightedShareGroup<
 
 pub trait Trait: system::Trait {
     type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
-
-    // notably not AtLeast32Bit...
-    type OrgId: Parameter
-        + Member
-        + Codec
-        + Default
-        + Copy
-        + MaybeSerializeDeserialize
-        + Debug
-        + PartialOrd
-        + CheckedSub
-        + Zero
-        + From<u32>
-        + Into<u32>; // TODO: replace with + From<OrgId<Self>> s.t. OrgId<T>: <OrgData as _::OrgId> once that is added back
-    type FlatShareId: Parameter
-        + Member
-        + Codec
-        + Default
-        + Copy
-        + MaybeSerializeDeserialize
-        + Debug
-        + PartialOrd
-        + CheckedSub
-        + Zero
-        + From<u32>
-        + Into<u32>; // + From<FlatShareId<Self>> s.t. FlatShareId<T>: <FlatShareData as _::ShareId> once that is added back
-    type WeightedShareId: Parameter
-        + Member
-        + Codec
-        + Default
-        + Copy
-        + MaybeSerializeDeserialize
-        + Debug
-        + PartialOrd
-        + CheckedSub
-        + Zero
-        + From<u32>
-        + Into<u32>; // + From<WeightedShareId<Self>> s.t. WeightedShareId<T>: <WeightedShareData as _::ShareId> once that is added back
 
     /// Used for permissions and shared for organizational membership in both
     /// shares modules
@@ -209,7 +166,7 @@ decl_module! {
         ) -> DispatchResult {
             let caller = ensure_signed(origin)?;
             let authentication: bool = Self::is_sudo_account(&caller)
-                || Self::check_membership_in_org(1u32.into(), &caller);
+                || Self::check_membership_in_org(1u32, &caller);
             ensure!(authentication, Error::<T>::MustBeAMemberOf0thOrgToRegisterNewOrg);
 
             let new_organization_state = Self::register_organization(OrganizationSource::<_, SharesOf<T>>::Accounts(accounts), value_constitution, supervisor)?;

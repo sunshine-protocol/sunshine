@@ -1,16 +1,13 @@
 #![cfg(test)]
 
 use super::*;
-use frame_support::{assert_noop, assert_ok};
+use frame_support::assert_ok;
 use frame_support::{impl_outer_event, impl_outer_origin, parameter_types, weights::Weight};
 use sp_core::H256;
 use sp_runtime::{testing::Header, traits::IdentityLookup, Perbill};
 
 // type aliases
 pub type AccountId = u64;
-type OrgId = u32;
-type FlatShareId = u32;
-type WeightedShareId = u32;
 pub type Shares = u64;
 pub type BlockNumber = u64;
 
@@ -80,9 +77,6 @@ impl shares_atomic::Trait for TestRuntime {
 }
 impl Trait for TestRuntime {
     type Event = TestEvent;
-    type OrgId = OrgId;
-    type FlatShareId = FlatShareId;
-    type WeightedShareId = WeightedShareId;
     type OrgData = OrgMembership;
     type FlatShareData = FlatShareData;
     type WeightedShareData = WeightedShareData;
