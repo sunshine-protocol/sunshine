@@ -703,37 +703,41 @@ impl<T: Trait> BankSpends<T::AccountId, BalanceOf<T>> for Module<T> {
             .ok_or(Error::<T>::BankAccountNotFoundForWithdrawal)?;
         let transfer_certificate = <InternalTransfers<T>>::get(from_bank_id, id)
             .ok_or(Error::<T>::AllSpendsFromReserveMustReferenceInternalTransferNotFound)?;
-        let controller_from_certificate = transfer_certificate.controller();
-        // TODO: replace this with a trait on the `TransferInfo` associated type?
+        // calculate due amount
         let due_amount = Self::calculate_proportional_amount_for_account(
             transfer_certificate.amount(),
             to.clone(),
-            controller_from_certificate,
+            transfer_certificate.controller(),
         )
         .ok_or(Error::<T>::CallerIsntInControllingMembershipForWithdrawal)?;
-        let mut withdrawal_data = ((from_bank_id, id), to.clone(), due_amount);
         ensure!(
             due_amount >= amount,
             Error::<T>::NotEnoughFundsInReservedToAllowSpend
         );
+        let new_transfer_certificate = transfer_certificate
+            .move_funds_out(amount)
+            .ok_or(Error::<T>::NotEnoughFundsInReservedToAllowSpend)?;
         let bank_tracker_id =
             BankTrackerIdentifier::new(from_bank_id, BankTrackerID::SpentFromReserved(id));
         // check if withdrawal has occurred before
-        if let Some(amount_left) =
-            <BankTracker<T>>::get(bank_tracker_id.clone(), withdrawal_data.1.clone())
-        {
-            ensure!(
-                amount_left >= amount,
-                Error::<T>::NotEnoughFundsInReservedToAllowSpend
-            );
-        }
-        withdrawal_data.2 = due_amount - amount;
-        // update the amount stored in the bank
+        let new_due_amount =
+            if let Some(amount_left) = <BankTracker<T>>::get(bank_tracker_id.clone(), to.clone()) {
+                ensure!(
+                    amount_left >= amount,
+                    Error::<T>::NotEnoughFundsInReservedToAllowSpend
+                );
+                amount_left - amount
+            } else {
+                due_amount - amount
+            };
+        // update the bank store
         let bank_after_withdrawal = Self::fallible_spend_from_reserved(bank_account, amount)?;
         // make the transfer
         let from = Self::account_id(from_bank_id);
         T::Currency::transfer(&from, &to, amount, ExistenceRequirement::KeepAlive)?;
-        <BankTracker<T>>::insert(bank_tracker_id, withdrawal_data.1, withdrawal_data.2);
+        // insert updated transfer certificate after amount is spent
+        <InternalTransfers<T>>::insert(from_bank_id, id, new_transfer_certificate);
+        <BankTracker<T>>::insert(bank_tracker_id, to, new_due_amount);
         <BankStores<T>>::insert(from_bank_id, bank_after_withdrawal);
         Ok(amount)
     }
