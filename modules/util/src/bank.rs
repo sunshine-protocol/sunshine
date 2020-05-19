@@ -1,7 +1,7 @@
 use crate::{
     organization::ShareID,
     share::SimpleShareGenesis,
-    traits::{AccessGenesis, DepositSpendOps, FreeToReserved, GetBalance},
+    traits::{AccessGenesis, DepositSpendOps, FreeToReserved, GetBalance, MoveFundsOut},
 };
 use codec::{Codec, Decode, Encode};
 use frame_support::Parameter;
@@ -296,7 +296,7 @@ pub struct ReservationInfo<Hash, Currency, GovernanceConfig> {
     controller: GovernanceConfig,
 }
 
-impl<Hash, Currency: Clone, GovernanceConfig: Clone>
+impl<Hash: Clone, Currency: Clone, GovernanceConfig: Clone>
     ReservationInfo<Hash, Currency, GovernanceConfig>
 {
     pub fn new(
@@ -313,8 +313,35 @@ impl<Hash, Currency: Clone, GovernanceConfig: Clone>
     pub fn amount(&self) -> Currency {
         self.amount.clone()
     }
+    pub fn reason(&self) -> Hash {
+        self.reason.clone()
+    }
     pub fn controller(&self) -> GovernanceConfig {
         self.controller.clone()
+    }
+}
+
+impl<
+        Hash: Clone,
+        Currency: Clone + sp_std::ops::Sub<Output = Currency> + PartialOrd,
+        GovernanceConfig: Clone,
+    > MoveFundsOut<Currency> for ReservationInfo<Hash, Currency, GovernanceConfig>
+{
+    fn move_funds_out(
+        &self,
+        amount: Currency,
+    ) -> Option<ReservationInfo<Hash, Currency, GovernanceConfig>> {
+        if self.amount() >= amount {
+            let new_amount = self.amount() - amount;
+            Some(ReservationInfo {
+                reason: self.reason(),
+                amount: new_amount,
+                controller: self.controller(),
+            })
+        } else {
+            // not enough funds
+            None
+        }
     }
 }
 
@@ -332,7 +359,7 @@ pub struct InternalTransferInfo<Hash, Currency, GovernanceConfig> {
     controller: GovernanceConfig,
 }
 
-impl<Hash, Currency: Clone, GovernanceConfig: Clone>
+impl<Hash: Clone, Currency: Clone, GovernanceConfig: Clone>
     InternalTransferInfo<Hash, Currency, GovernanceConfig>
 {
     pub fn new(
@@ -348,11 +375,42 @@ impl<Hash, Currency: Clone, GovernanceConfig: Clone>
             controller,
         }
     }
+    pub fn id(&self) -> u32 {
+        self.reference_id
+    }
+    pub fn reason(&self) -> Hash {
+        self.reason.clone()
+    }
     pub fn amount(&self) -> Currency {
         self.amount.clone()
     }
     pub fn controller(&self) -> GovernanceConfig {
         self.controller.clone()
+    }
+}
+
+impl<
+        Hash: Clone,
+        Currency: Clone + sp_std::ops::Sub<Output = Currency> + PartialOrd,
+        GovernanceConfig: Clone,
+    > MoveFundsOut<Currency> for InternalTransferInfo<Hash, Currency, GovernanceConfig>
+{
+    fn move_funds_out(
+        &self,
+        amount: Currency,
+    ) -> Option<InternalTransferInfo<Hash, Currency, GovernanceConfig>> {
+        if self.amount() >= amount {
+            let new_amount = self.amount() - amount;
+            Some(InternalTransferInfo {
+                reference_id: self.id(),
+                reason: self.reason(),
+                amount: new_amount,
+                controller: self.controller(),
+            })
+        } else {
+            // not enough funds
+            None
+        }
     }
 }
 

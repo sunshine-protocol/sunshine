@@ -21,8 +21,8 @@ use util::{
     traits::{
         AccessProfile, BankDepositsAndSpends, BankReservations, BankSpends, CheckBankBalances,
         DepositInformation, DepositIntoBank, DepositSpendOps, FreeToReserved, GenerateUniqueID,
-        GetInnerOuterShareGroups, IDIsAvailable, OffChainBank, OnChainBank, OrgChecks,
-        OrganizationDNS, OwnershipProportionCalculations, RegisterBankAccount,
+        GetInnerOuterShareGroups, IDIsAvailable, MoveFundsOut, OffChainBank, OnChainBank,
+        OrgChecks, OrganizationDNS, OwnershipProportionCalculations, RegisterBankAccount,
         RegisterOffChainBankAccount, RegisterShareGroup, ShareGroupChecks, SupervisorPermissions,
         SupportedOrganizationShapes, TransferInformation, WeightedShareIssuanceWrapper,
         WeightedShareWrapper,
@@ -95,7 +95,6 @@ decl_event!(
 
 decl_error! {
     pub enum Error for Module<T: Trait> {
-        AccountNotAuthorizedToTransferSpendingPowerForSpendReservation,
         MustHaveCertainAuthorityToRegisterBankAccount,
         MustBeWeightedShareGroupToCalculatePortionOfOnChainDeposit,
         CannotWithdrawIfOnChainBankDNE,
@@ -109,17 +108,16 @@ decl_error! {
         BankAccountNotFoundForWithdrawal,
         BankAccountNotFoundForSpendReservation,
         BankAccountNotFoundForInternalTransfer,
-        BankAccountEitherNotSudoOrCallerIsNotDesignatedSudo,
         SpendReservationNotFound,
         MustBeWeightedShareGroupToCalculatePortionLiquidShareCapital,
         NotEnoughFundsInReservedToAllowSpend,
+        NotEnoughFundsInReservedToUnReserve,
         NotEnoughFundsInFreeToAllowSpend,
         NotEnoughFundsInFreeToAllowReservation,
         NotEnoughFundsInReservedToAllowInternalTransfer,
         NotAuthorizedToMakeWithdrawal,
         CallerIsntInControllingMembershipForWithdrawal,
         AllSpendsFromReserveMustReferenceInternalTransferNotFound,
-        NoBalanceLeftToWithdrawFromThisTransferForThisAccount,
         CallerMustSatisfyBankOwnerPermissionsForSpendReservation,
     }
 }
@@ -589,18 +587,37 @@ impl<T: Trait> BankReservations<T::AccountId, BalanceOf<T>, IpfsReference> for M
         caller: T::AccountId,
         bank_id: Self::TreasuryId,
         reservation_id: u32,
-    ) -> Result<BalanceOf<T>, DispatchError> {
+        amount: BalanceOf<T>,
+    ) -> DispatchResult {
         let bank_account = <BankStores<T>>::get(bank_id)
             .ok_or(Error::<T>::BankAccountNotFoundForSpendReservation)?;
         let spend_reservation = <SpendReservations<T>>::get(bank_id, reservation_id)
             .ok_or(Error::<T>::SpendReservationNotFound)?;
-        // same permissions for reservation, must be in the controller set for the bank to reverse a reservation
-        // - must also look to see how much has been sent to InternalTransferred and I can't get that back
+        // ensure that the amount is less than the spend reservation amount
+        let new_spend_reservation = spend_reservation
+            .move_funds_out(amount)
+            .ok_or(Error::<T>::NotEnoughFundsInReservedToUnReserve)?;
+        // same permissions for reservation; must be in the controller set of the bank to reverse a reservation
         ensure!(
             Self::account_satisfies_withdrawal_permissions(&caller, bank_account.owner_s()),
             Error::<T>::CallerMustSatisfyBankOwnerPermissionsForSpendReservation
         );
-        Err(Error::<T>::SpendReservationNotFound.into())
+        // create bank tracker identifier
+        let bank_tracker_id =
+            BankTrackerIdentifier::new(bank_id, BankTrackerID::UnReservedSpend(reservation_id));
+        let new_bank_tracker_amount = if let Some(existing_balance) =
+            <BankTracker<T>>::get(bank_tracker_id.clone(), &caller)
+        {
+            // here is where you might enforce some limit per account with an ensure check
+            existing_balance + amount
+        } else {
+            amount
+        };
+        // insert update spend reservation object (with the new, lower amount reserved)
+        <SpendReservations<T>>::insert(bank_id, reservation_id, spend_reservation);
+        // insert new bank tracker info
+        <BankTracker<T>>::insert(bank_tracker_id, caller, new_bank_tracker_amount);
+        Ok(())
     }
     // Allocate some funds (previously set aside for spending reasons) to be withdrawable by new group
     // - this is an internal transfer to a team and it makes this capital withdrawable by them
@@ -610,9 +627,9 @@ impl<T: Trait> BankReservations<T::AccountId, BalanceOf<T>, IpfsReference> for M
         reason: IpfsReference,
         // reference to specific reservation
         reservation_id: u32,
+        amount: BalanceOf<T>,
         // move control of funds to new outer group which can reserve or withdraw directly
         new_controller: Self::GovernanceConfig,
-        amount: BalanceOf<T>,
     ) -> DispatchResult {
         // no authentication but the caller is logged in the BankTracker
         let bank_account = <BankStores<T>>::get(bank_id)
@@ -620,10 +637,9 @@ impl<T: Trait> BankReservations<T::AccountId, BalanceOf<T>, IpfsReference> for M
         let spend_reservation = <SpendReservations<T>>::get(bank_id, reservation_id)
             .ok_or(Error::<T>::SpendReservationNotFound)?;
         // ensure that the amount is less than the spend reservation amount
-        ensure!(
-            amount <= spend_reservation.amount(),
-            Error::<T>::NotEnoughFundsInReservedToAllowInternalTransfer
-        );
+        let new_spend_reservation = spend_reservation
+            .move_funds_out(amount)
+            .ok_or(Error::<T>::NotEnoughFundsInReservedToAllowInternalTransfer)?;
         let bank_tracker_id = BankTrackerIdentifier::new(
             bank_id,
             BankTrackerID::InternalTransferMade(reservation_id),
@@ -646,6 +662,8 @@ impl<T: Trait> BankReservations<T::AccountId, BalanceOf<T>, IpfsReference> for M
                 .into();
         // insert transfer_info, thereby unlocking the capital for the `new_controller` group
         <InternalTransfers<T>>::insert(bank_id, new_transfer_id, new_transfer);
+        // insert update reservation info after the transfer was made
+        <SpendReservations<T>>::insert(bank_id, reservation_id, new_spend_reservation);
         // insert new bank tracker info
         <BankTracker<T>>::insert(bank_tracker_id, caller, new_bank_tracker_amount);
         Ok(())
@@ -674,8 +692,6 @@ impl<T: Trait> BankSpends<T::AccountId, BalanceOf<T>> for Module<T> {
         <BankStores<T>>::insert(from_bank_id, bank_after_withdrawal);
         Ok(amount)
     }
-    // TODO: delete this and make something to unreserve and/or liquidate the reserved `=>` we need a way of checking if this happened easily, maybe another field on the struct that us a bool
-    // liquidation in which spends can only occur from (1) free or (2) governance (transfers)
     // spends up to allowed amount by default
     fn spend_from_transfers(
         from_bank_id: Self::TreasuryId,
@@ -702,7 +718,7 @@ impl<T: Trait> BankSpends<T::AccountId, BalanceOf<T>> for Module<T> {
         );
         let bank_tracker_id =
             BankTrackerIdentifier::new(from_bank_id, BankTrackerID::SpentFromReserved(id));
-        // check if withdrawal has occured before
+        // check if withdrawal has occurred before
         if let Some(amount_left) =
             <BankTracker<T>>::get(bank_tracker_id.clone(), withdrawal_data.1.clone())
         {

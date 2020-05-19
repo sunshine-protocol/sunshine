@@ -809,7 +809,17 @@ pub trait DepositIntoBank<AccountId, Hash, Currency>:
     ) -> DispatchResult;
 }
 
-// One good question here might be, why are we passing the caller into this method and doing authentication in this method instead of doing it in the runtime method and just limiting where this is called to places where authenticaton occurs before it. The answer is that we're using objects in runtime storage to authenticate the call so we need to pass the caller into the method -- if we don't do this, we'll require two storage calls instead of one because we'll authenticate outside of this method by getting the storage item in the runtime method to check auth but then we'll also get the storage item in this method (because we don't pass it in and I struggle to see a clean design in which we pass it in but don't encourage/enable unsafe puts)
+// One good question here might be, why are we passing the caller into this
+// method and doing authentication in this method instead of doing it in the
+// runtime method and just limiting where this is called to places where
+// authenticaton occurs before it. The answer is that we're using objects in
+// runtime storage to authenticate the call so we need to pass the caller
+// into the method -- if we don't do this, we'll require two storage calls
+// instead of one because we'll authenticate outside of this method by getting
+// the storage item in the runtime method to check auth but then we'll also
+// get the storage item in this method (because we don't pass it in and I
+// struggle to see a clean design in which we pass it in but don't
+// encourage/enable unsafe puts)
 pub trait BankReservations<AccountId, Currency, Hash>:
     RegisterBankAccount<AccountId, Currency>
 {
@@ -826,7 +836,8 @@ pub trait BankReservations<AccountId, Currency, Hash>:
         caller: AccountId,
         bank_id: Self::TreasuryId,
         reservation_id: u32,
-    ) -> Result<Currency, DispatchError>;
+        amount: Currency,
+    ) -> DispatchResult;
     // Allocate some funds (previously set aside for spending reasons) to be withdrawable by new group
     // - this is an internal transfer to a team and it makes this capital withdrawable by them
     // NOTE: expected to be called by a vote's result, not called by an individual
@@ -837,9 +848,9 @@ pub trait BankReservations<AccountId, Currency, Hash>:
         reason: Hash,
         // reference to specific reservation
         reservation_id: u32,
+        amount: Currency,
         // move control of funds to new outer group which can reserve or withdraw directly
         new_controller: Self::GovernanceConfig,
-        amount: Currency,
     ) -> DispatchResult;
 }
 
@@ -875,11 +886,15 @@ pub trait DepositInformation<AccountId, Currency>:
     ) -> Currency;
 }
 
+pub trait MoveFundsOut<Currency>: Sized {
+    fn move_funds_out(&self, amount: Currency) -> Option<Self>;
+}
+
 // TODO: impl after everything else (combine with DepositInformation into a single trait for this module for getting info on all of these objects)
 pub trait ReservationInformation<AccountId, Currency>:
     RegisterBankAccount<AccountId, Currency>
 {
-    type ReservationInfo;
+    type ReservationInfo: MoveFundsOut<Currency>;
     fn get_transfers_by_governance_config(
         bank_id: Self::TreasuryId,
         invoker: Self::GovernanceConfig,
@@ -892,7 +907,7 @@ pub trait ReservationInformation<AccountId, Currency>:
 pub trait TransferInformation<AccountId, Currency>:
     RegisterBankAccount<AccountId, Currency>
 {
-    type TransferInfo;
+    type TransferInfo: MoveFundsOut<Currency>;
     fn get_transfers_by_governance_config(
         bank_id: Self::TreasuryId,
         invoker: Self::GovernanceConfig,
