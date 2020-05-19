@@ -872,10 +872,15 @@ pub trait BankSpends<AccountId, Currency>:
     ) -> Result<Currency, DispatchError>;
 }
 
-pub trait DepositInformation<AccountId, Currency>:
-    RegisterBankAccount<AccountId, Currency>
-{
+pub trait MoveFundsOut<Currency>: Sized {
+    fn move_funds_out(&self, amount: Currency) -> Option<Self>;
+}
+
+pub trait BankStorageInfo<AccountId, Currency>: RegisterBankAccount<AccountId, Currency> {
     type DepositInfo;
+    type ReservationInfo: MoveFundsOut<Currency>;
+    type TransferInfo: MoveFundsOut<Currency>;
+    // deposit
     fn get_deposits_by_account(
         bank_id: Self::TreasuryId,
         depositer: AccountId,
@@ -884,51 +889,33 @@ pub trait DepositInformation<AccountId, Currency>:
         bank_id: Self::TreasuryId,
         depositer: AccountId,
     ) -> Currency;
-}
-
-pub trait MoveFundsOut<Currency>: Sized {
-    fn move_funds_out(&self, amount: Currency) -> Option<Self>;
-}
-
-// TODO: impl after everything else (combine with DepositInformation into a single trait for this module for getting info on all of these objects)
-pub trait ReservationInformation<AccountId, Currency>:
-    RegisterBankAccount<AccountId, Currency>
-{
-    type ReservationInfo: MoveFundsOut<Currency>;
-    fn get_transfers_by_governance_config(
+    // reservations
+    fn get_amount_left_in_spend_reservation(
+        bank_id: Self::TreasuryId,
+        reservation_id: u32,
+    ) -> Option<Currency>;
+    fn get_reservations_for_governance_config(
         bank_id: Self::TreasuryId,
         invoker: Self::GovernanceConfig,
     ) -> Option<Vec<Self::ReservationInfo>>;
-    fn total_capital_transferred_by_account(
+    fn total_capital_reserved_for_governance_config(
         bank_id: Self::TreasuryId,
         invoker: Self::GovernanceConfig,
     ) -> Currency;
-}
-pub trait TransferInformation<AccountId, Currency>:
-    RegisterBankAccount<AccountId, Currency>
-{
-    type TransferInfo: MoveFundsOut<Currency>;
-    fn get_transfers_by_governance_config(
+    // transfers
+    fn get_amount_left_in_approved_transfer(
+        bank_id: Self::TreasuryId,
+        transfer_id: u32,
+    ) -> Option<Currency>;
+    fn get_transfers_for_governance_config(
         bank_id: Self::TreasuryId,
         invoker: Self::GovernanceConfig,
     ) -> Option<Vec<Self::TransferInfo>>;
-    fn total_capital_transferred_by_account(
+    fn total_capital_transferred_to_governance_config(
         bank_id: Self::TreasuryId,
         invoker: Self::GovernanceConfig,
     ) -> Currency;
 }
-
-// TODO: create trait for
-// - liquidating an onchanin bank
-// - basically needs to define an order for withdrawal to completely liquidate the bank account => I think this a good rule for every DAO to _uphold_
-
-// pub trait BankLiquidityRules<AccountId, Currency>: DepositInformation<AccountId, Currency> {
-//     fn withdraw_capital_by_burning_shares(
-//         from_bank_id: Self::TreasuryId,
-//         to_claimer: AccountId,
-//         amount: Option<Currency>, // if None, as much as possible
-//     ) -> Result<Currency, DispatchError>;
-// }
 
 // ~~~~~~~~ Bounty Module ~~~~~~~~
 

@@ -19,13 +19,12 @@ use util::{
     court::Evidence,
     organization::{FormedOrganization, ShareID},
     traits::{
-        AccessProfile, BankDepositsAndSpends, BankReservations, BankSpends, CheckBankBalances,
-        DepositInformation, DepositIntoBank, DepositSpendOps, FreeToReserved, GenerateUniqueID,
+        AccessProfile, BankDepositsAndSpends, BankReservations, BankSpends, BankStorageInfo,
+        CheckBankBalances, DepositIntoBank, DepositSpendOps, FreeToReserved, GenerateUniqueID,
         GetInnerOuterShareGroups, IDIsAvailable, MoveFundsOut, OffChainBank, OnChainBank,
         OrgChecks, OrganizationDNS, OwnershipProportionCalculations, RegisterBankAccount,
         RegisterOffChainBankAccount, RegisterShareGroup, ShareGroupChecks, SupervisorPermissions,
-        SupportedOrganizationShapes, TransferInformation, WeightedShareIssuanceWrapper,
-        WeightedShareWrapper,
+        SupportedOrganizationShapes, WeightedShareIssuanceWrapper, WeightedShareWrapper,
     },
 };
 
@@ -743,9 +742,13 @@ impl<T: Trait> BankSpends<T::AccountId, BalanceOf<T>> for Module<T> {
     }
 }
 
-impl<T: Trait> DepositInformation<T::AccountId, BalanceOf<T>> for Module<T> {
+impl<T: Trait> BankStorageInfo<T::AccountId, BalanceOf<T>> for Module<T> {
     type DepositInfo = DepositInfo<T::AccountId, IpfsReference, BalanceOf<T>>;
-
+    type ReservationInfo =
+        ReservationInfo<IpfsReference, BalanceOf<T>, WithdrawalPermissions<T::AccountId>>;
+    type TransferInfo =
+        InternalTransferInfo<IpfsReference, BalanceOf<T>, WithdrawalPermissions<T::AccountId>>;
+    // deposit
     fn get_deposits_by_account(
         bank_id: Self::TreasuryId,
         depositer: T::AccountId,
@@ -768,6 +771,76 @@ impl<T: Trait> DepositInformation<T::AccountId, BalanceOf<T>> for Module<T> {
             .filter(|(id, _, deposit)| id == &bank_id && deposit.depositer() == depositer)
             .fold(BalanceOf::<T>::zero(), |acc, (_, _, deposit)| {
                 acc + deposit.amount()
+            })
+    }
+    // reservation
+    fn get_amount_left_in_spend_reservation(
+        bank_id: Self::TreasuryId,
+        reservation_id: u32,
+    ) -> Option<BalanceOf<T>> {
+        if let Some(spend_reservation) = <SpendReservations<T>>::get(bank_id, reservation_id) {
+            Some(spend_reservation.amount())
+        } else {
+            None
+        }
+    }
+    fn get_reservations_for_governance_config(
+        bank_id: Self::TreasuryId,
+        invoker: Self::GovernanceConfig,
+    ) -> Option<Vec<Self::ReservationInfo>> {
+        let ret = <SpendReservations<T>>::iter()
+            .filter(|(id, _, reservation)| id == &bank_id && reservation.controller() == invoker)
+            .map(|(_, _, reservation)| reservation)
+            .collect::<Vec<Self::ReservationInfo>>();
+        if ret.is_empty() {
+            None
+        } else {
+            Some(ret)
+        }
+    }
+    fn total_capital_reserved_for_governance_config(
+        bank_id: Self::TreasuryId,
+        invoker: Self::GovernanceConfig,
+    ) -> BalanceOf<T> {
+        <SpendReservations<T>>::iter()
+            .filter(|(id, _, reservation)| id == &bank_id && reservation.controller() == invoker)
+            .fold(BalanceOf::<T>::zero(), |acc, (_, _, reservation)| {
+                acc + reservation.amount()
+            })
+    }
+    // transfers
+    fn get_amount_left_in_approved_transfer(
+        bank_id: Self::TreasuryId,
+        transfer_id: u32,
+    ) -> Option<BalanceOf<T>> {
+        if let Some(internal_transfer) = <InternalTransfers<T>>::get(bank_id, transfer_id) {
+            Some(internal_transfer.amount())
+        } else {
+            None
+        }
+    }
+    fn get_transfers_for_governance_config(
+        bank_id: Self::TreasuryId,
+        invoker: Self::GovernanceConfig,
+    ) -> Option<Vec<Self::TransferInfo>> {
+        let ret = <InternalTransfers<T>>::iter()
+            .filter(|(id, _, transfer)| id == &bank_id && transfer.controller() == invoker)
+            .map(|(_, _, transfer)| transfer)
+            .collect::<Vec<Self::TransferInfo>>();
+        if ret.is_empty() {
+            None
+        } else {
+            Some(ret)
+        }
+    }
+    fn total_capital_transferred_to_governance_config(
+        bank_id: Self::TreasuryId,
+        invoker: Self::GovernanceConfig,
+    ) -> BalanceOf<T> {
+        <InternalTransfers<T>>::iter()
+            .filter(|(id, _, transfer)| id == &bank_id && transfer.controller() == invoker)
+            .fold(BalanceOf::<T>::zero(), |acc, (_, _, transfer)| {
+                acc + transfer.amount()
             })
     }
 }
