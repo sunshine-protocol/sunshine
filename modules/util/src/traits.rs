@@ -831,17 +831,29 @@ pub trait BankReservations<AccountId, Currency, Hash>:
         // acceptance committee for approving set aside spends below the amount
         controller: Self::GovernanceConfig,
     ) -> DispatchResult;
-    // this should unreserve and make free
-    fn unreserve_to_make_free(
+    // only reserve.controller() can unreserve funds after commitment (with method further down)
+    fn commit_reserved_spend_for_transfer(
+        caller: AccountId,
+        bank_id: Self::TreasuryId,
+        reservation_id: u32,
+        amount: Currency,
+        expected_future_owner: Self::GovernanceConfig,
+    ) -> DispatchResult;
+    // bank controller can unreserve if not committed
+    fn unreserve_uncommitted_to_make_free(
         caller: AccountId,
         bank_id: Self::TreasuryId,
         reservation_id: u32,
         amount: Currency,
     ) -> DispatchResult;
-    // Allocate some funds (previously set aside for spending reasons) to be withdrawable by new group
-    // - this is an internal transfer to a team and it makes this capital withdrawable by them
-    // NOTE: expected to be called by a vote's result, not called by an individual
-    // (but an individual should still set this and take credit for it?)
+    // reservation.controller() can unreserve committed funds
+    fn unreserve_committed_to_make_free(
+        caller: AccountId,
+        bank_id: Self::TreasuryId,
+        reservation_id: u32,
+        amount: Currency,
+    ) -> DispatchResult;
+    // reservation.controller() transfers control power to new_controller and enables liquidity by this controller
     fn transfer_spending_power(
         caller: AccountId,
         bank_id: Self::TreasuryId,
@@ -872,14 +884,29 @@ pub trait BankSpends<AccountId, Currency>:
     ) -> Result<Currency, DispatchError>;
 }
 
-pub trait MoveFundsOut<Currency>: Sized {
-    fn move_funds_out(&self, amount: Currency) -> Option<Self>;
+// Note to Self: the game theoretic move will be to unreserve all the capital and trade it
+// so that has to be controlled in the context of this request. There are a few options to solve
+// (1)  require a significant enough delay between unreserving and calling this
+// (2) rate limit the number of `reservations` and `unreservations` for each member
+// (3) if liquidating, automatically exercise rate limit unreserve for reserved, uncommitted capital
+// pub trait TradeOwnershipForFreeCapital
+
+// primarily useful for unreserving funds to move them back to free
+pub trait MoveFundsOutUnCommittedOnly<Currency>: Sized {
+    fn move_funds_out_uncommitted_only(&self, amount: Currency) -> Option<Self>;
+}
+
+// useful for (1) moving out of spend_reservation to internal transfer
+//            (2) moving out of transfer during withdrawal
+pub trait MoveFundsOutCommittedOnly<Currency>: Sized {
+    fn move_funds_out_committed_only(&self, amount: Currency) -> Option<Self>;
 }
 
 pub trait BankStorageInfo<AccountId, Currency>: RegisterBankAccount<AccountId, Currency> {
     type DepositInfo;
-    type ReservationInfo: MoveFundsOut<Currency>;
-    type TransferInfo: MoveFundsOut<Currency>;
+    type ReservationInfo: MoveFundsOutUnCommittedOnly<Currency>
+        + MoveFundsOutCommittedOnly<Currency>;
+    type TransferInfo: MoveFundsOutCommittedOnly<Currency>;
     // deposit
     fn get_deposits_by_account(
         bank_id: Self::TreasuryId,

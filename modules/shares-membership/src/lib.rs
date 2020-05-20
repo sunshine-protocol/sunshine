@@ -95,6 +95,7 @@ decl_storage! {
             hasher(opaque_blake2_256) T::AccountId => u32;
 
         /// The map to track organizational membership by share class
+        // (OrgId, ShareId)
         ShareHolders get(fn share_holders): double_map hasher(blake2_128_concat) UUID2, hasher(blake2_128_concat) T::AccountId => bool;
 
         ShareGroupSize get(fn share_group_size): double_map
@@ -271,6 +272,7 @@ impl<T: Trait> GetFlatShareGroup<T::AccountId> for Module<T> {
         // TODO: update once https://github.com/paritytech/substrate/pull/5335 is merged and pulled into local version
         if !Self::id_is_available(prefix) {
             Some(
+                // is this the same performance as a get() with Key=Vec<AccountId>
                 <ShareHolders<T>>::iter()
                     .filter(|(uuidtwo, _, _)| uuidtwo == &prefix)
                     .map(|(_, account, _)| account)

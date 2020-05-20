@@ -1,13 +1,18 @@
 use crate::{
     organization::ShareID,
     share::SimpleShareGenesis,
-    traits::{AccessGenesis, DepositSpendOps, FreeToReserved, GetBalance, MoveFundsOut},
+    traits::{
+        AccessGenesis, DepositSpendOps, FreeToReserved, GetBalance, MoveFundsOutCommittedOnly,
+        MoveFundsOutUnCommittedOnly,
+    },
 };
 use codec::{Codec, Decode, Encode};
 use frame_support::Parameter;
 use sp_core::TypeId;
-use sp_runtime::traits::{AtLeast32Bit, Member, Zero};
-use sp_runtime::Permill;
+use sp_runtime::{
+    traits::{AtLeast32Bit, Member, Zero},
+    Permill,
+};
 use sp_std::{marker::PhantomData, prelude::*};
 
 /// An off-chain treasury id
@@ -292,12 +297,20 @@ pub struct ReservationInfo<Hash, Currency, GovernanceConfig> {
     reason: Hash,
     // the amount reserved
     amount: Currency,
+    // the amount committed, must be less than or equal to reserved
+    committed: Option<Currency>,
     // the committee for transferring liquidity rights to this capital and possibly enabling liquidity
     controller: GovernanceConfig,
 }
 
-impl<Hash: Clone, Currency: Clone, GovernanceConfig: Clone>
-    ReservationInfo<Hash, Currency, GovernanceConfig>
+impl<
+        Hash: Clone,
+        Currency: Clone
+            + sp_std::ops::Add<Output = Currency>
+            + sp_std::ops::Sub<Output = Currency>
+            + PartialOrd,
+        GovernanceConfig: Clone,
+    > ReservationInfo<Hash, Currency, GovernanceConfig>
 {
     pub fn new(
         reason: Hash,
@@ -307,11 +320,42 @@ impl<Hash: Clone, Currency: Clone, GovernanceConfig: Clone>
         ReservationInfo {
             reason,
             amount,
+            committed: None,
             controller,
+        }
+    }
+    pub fn commit(
+        &self,
+        amount: Currency,
+    ) -> Option<ReservationInfo<Hash, Currency, GovernanceConfig>> {
+        if let Some(amount_committed_already) = self.committed() {
+            let new_committed = amount_committed_already + amount;
+            if new_committed <= self.amount() {
+                Some(ReservationInfo {
+                    reason: self.reason(),
+                    amount: self.amount(),
+                    committed: Some(new_committed),
+                    controller: self.controller(),
+                })
+            } else {
+                None
+            }
+        } else if amount <= self.amount() {
+            Some(ReservationInfo {
+                reason: self.reason(),
+                amount: self.amount(),
+                committed: Some(amount),
+                controller: self.controller(),
+            })
+        } else {
+            None
         }
     }
     pub fn amount(&self) -> Currency {
         self.amount.clone()
+    }
+    pub fn committed(&self) -> Option<Currency> {
+        self.committed.clone()
     }
     pub fn reason(&self) -> Hash {
         self.reason.clone()
@@ -323,23 +367,64 @@ impl<Hash: Clone, Currency: Clone, GovernanceConfig: Clone>
 
 impl<
         Hash: Clone,
-        Currency: Clone + sp_std::ops::Sub<Output = Currency> + PartialOrd,
+        Currency: Clone
+            + sp_std::ops::Add<Output = Currency>
+            + sp_std::ops::Sub<Output = Currency>
+            + PartialOrd,
         GovernanceConfig: Clone,
-    > MoveFundsOut<Currency> for ReservationInfo<Hash, Currency, GovernanceConfig>
+    > MoveFundsOutUnCommittedOnly<Currency> for ReservationInfo<Hash, Currency, GovernanceConfig>
 {
-    fn move_funds_out(
-        &self,
-        amount: Currency,
-    ) -> Option<ReservationInfo<Hash, Currency, GovernanceConfig>> {
-        if self.amount() >= amount {
-            let new_amount = self.amount() - amount;
+    fn move_funds_out_uncommitted_only(&self, amount: Currency) -> Option<Self> {
+        let uncommitted_amount = if let Some(committed_count) = self.committed() {
+            // ASSUMED INVARIANT, should hold here (if it doesn't ever,
+            // we're mixing error branches here w/ two sources for output None)
+            if self.amount() >= committed_count {
+                self.amount() - committed_count
+            } else {
+                return None;
+            }
+        } else {
+            self.amount()
+        };
+        // difference between this impl and InternalTransferInfo is this is restricted by uncommitted value
+        // -- it returns None if the uncommitted_amount < the_amount_requested
+        if uncommitted_amount >= amount {
+            let new_amount = uncommitted_amount - amount;
             Some(ReservationInfo {
                 reason: self.reason(),
                 amount: new_amount,
+                committed: self.committed(),
                 controller: self.controller(),
             })
         } else {
-            // not enough funds
+            None
+        }
+    }
+}
+
+impl<
+        Hash: Clone,
+        Currency: Clone
+            + sp_std::ops::Add<Output = Currency>
+            + sp_std::ops::Sub<Output = Currency>
+            + PartialOrd,
+        GovernanceConfig: Clone,
+    > MoveFundsOutCommittedOnly<Currency> for ReservationInfo<Hash, Currency, GovernanceConfig>
+{
+    fn move_funds_out_committed_only(&self, amount: Currency) -> Option<Self> {
+        let committed_amount = self.committed()?;
+        // difference between this impl and ReservationInfo is this is restricted by committed value
+        // -- it returns None if the committed_amount < the_amount_requested
+        if committed_amount >= amount {
+            let new_amount = self.amount() - amount.clone();
+            let new_committed = committed_amount - amount;
+            Some(ReservationInfo {
+                reason: self.reason(),
+                amount: new_amount,
+                committed: Some(new_committed),
+                controller: self.controller(),
+            })
+        } else {
             None
         }
     }
@@ -393,9 +478,10 @@ impl<
         Hash: Clone,
         Currency: Clone + sp_std::ops::Sub<Output = Currency> + PartialOrd,
         GovernanceConfig: Clone,
-    > MoveFundsOut<Currency> for InternalTransferInfo<Hash, Currency, GovernanceConfig>
+    > MoveFundsOutCommittedOnly<Currency>
+    for InternalTransferInfo<Hash, Currency, GovernanceConfig>
 {
-    fn move_funds_out(
+    fn move_funds_out_committed_only(
         &self,
         amount: Currency,
     ) -> Option<InternalTransferInfo<Hash, Currency, GovernanceConfig>> {
