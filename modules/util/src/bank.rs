@@ -2,8 +2,8 @@ use crate::{
     organization::ShareID,
     share::SimpleShareGenesis,
     traits::{
-        AccessGenesis, DepositSpendOps, FreeToReserved, GetBalance, MoveFundsOutCommittedOnly,
-        MoveFundsOutUnCommittedOnly,
+        AccessGenesis, CommitSpendReservation, DepositSpendOps, FreeToReserved, GetBalance,
+        MoveFundsOutCommittedOnly, MoveFundsOutUnCommittedOnly,
     },
 };
 use codec::{Codec, Decode, Encode};
@@ -64,14 +64,18 @@ impl From<(OnChainTreasuryID, BankTrackerID)> for BankTrackerIdentifier {
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
-/// Identifiers for tracking actions by specific individuals to _eventually_ enforce limits on this behavior
+/// Identifiers for tracking actions by specific individual AccountId to _eventually_ enforce limits on this behavior
 pub enum BankTrackerID {
     // acceptable only if the withdrawer burns their ownership
     SpentFromFree,
     // allowed from any member of the bank's controller
     ReservedSpend,
-    // wraps reservation_id, allowed from any member of bank's controller
-    UnReservedSpend(u32),
+    // wraos reservation_id, allowed from any member of bank's controller
+    UnReservedSpendFromUnCommitted(u32),
+    // wraps reservation_id, allowed from any member of reservation's controller
+    UnReservedSpendFromCommitted(u32),
+    // wraps reservation_id, allowed from any member of spend reservation's controller
+    CommitSpend(u32),
     // wraps reservation_id, allowed from any member of the controller in the reference
     InternalTransferMade(u32),
     // wraps transfer_id, only acceptable withdrawal from reserved, must follow configured decision process
@@ -324,7 +328,30 @@ impl<
             controller,
         }
     }
-    pub fn commit(
+    pub fn amount(&self) -> Currency {
+        self.amount.clone()
+    }
+    pub fn committed(&self) -> Option<Currency> {
+        self.committed.clone()
+    }
+    pub fn reason(&self) -> Hash {
+        self.reason.clone()
+    }
+    pub fn controller(&self) -> GovernanceConfig {
+        self.controller.clone()
+    }
+}
+
+impl<
+        Hash: Clone,
+        Currency: Clone
+            + sp_std::ops::Add<Output = Currency>
+            + sp_std::ops::Sub<Output = Currency>
+            + PartialOrd,
+        GovernanceConfig: Clone,
+    > CommitSpendReservation<Currency> for ReservationInfo<Hash, Currency, GovernanceConfig>
+{
+    fn commit_spend_reservation(
         &self,
         amount: Currency,
     ) -> Option<ReservationInfo<Hash, Currency, GovernanceConfig>> {
@@ -350,18 +377,6 @@ impl<
         } else {
             None
         }
-    }
-    pub fn amount(&self) -> Currency {
-        self.amount.clone()
-    }
-    pub fn committed(&self) -> Option<Currency> {
-        self.committed.clone()
-    }
-    pub fn reason(&self) -> Hash {
-        self.reason.clone()
-    }
-    pub fn controller(&self) -> GovernanceConfig {
-        self.controller.clone()
     }
 }
 

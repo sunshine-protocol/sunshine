@@ -806,7 +806,7 @@ pub trait DepositIntoBank<AccountId, Hash, Currency>:
         to_bank_id: Self::TreasuryId,
         amount: Currency,
         reason: Hash,
-    ) -> DispatchResult;
+    ) -> Result<u32, DispatchError>; // returns DepositId
 }
 
 // One good question here might be, why are we passing the caller into this
@@ -890,6 +890,10 @@ pub trait BankSpends<AccountId, Currency>:
 // (2) rate limit the number of `reservations` and `unreservations` for each member
 // (3) if liquidating, automatically exercise rate limit unreserve for reserved, uncommitted capital
 // pub trait TradeOwnershipForFreeCapital
+
+pub trait CommitSpendReservation<Currency>: Sized {
+    fn commit_spend_reservation(&self, amount: Currency) -> Option<Self>;
+}
 
 // primarily useful for unreserving funds to move them back to free
 pub trait MoveFundsOutUnCommittedOnly<Currency>: Sized {

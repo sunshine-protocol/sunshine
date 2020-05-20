@@ -13,19 +13,17 @@ mod tests;
 use util::{
     bank::{
         BankMapID, BankState, BankTrackerID, BankTrackerIdentifier, DepositInfo,
-        InternalTransferInfo, OnChainTreasuryID, PaymentConfirmation, ReservationInfo,
-        WithdrawalPermissions,
+        InternalTransferInfo, OnChainTreasuryID, ReservationInfo, WithdrawalPermissions,
     },
-    court::Evidence,
-    organization::{FormedOrganization, ShareID},
+    organization::ShareID,
     traits::{
         AccessProfile, BankDepositsAndSpends, BankReservations, BankSpends, BankStorageInfo,
-        CheckBankBalances, DepositIntoBank, DepositSpendOps, FreeToReserved, GenerateUniqueID,
-        GetInnerOuterShareGroups, IDIsAvailable, MoveFundsOutCommittedOnly,
-        MoveFundsOutUnCommittedOnly, OffChainBank, OnChainBank, OrgChecks, OrganizationDNS,
-        OwnershipProportionCalculations, RegisterBankAccount, RegisterOffChainBankAccount,
-        RegisterShareGroup, ShareGroupChecks, SupervisorPermissions, SupportedOrganizationShapes,
-        WeightedShareIssuanceWrapper, WeightedShareWrapper,
+        CheckBankBalances, CommitSpendReservation, DepositIntoBank, DepositSpendOps,
+        FreeToReserved, GenerateUniqueID, GetInnerOuterShareGroups, IDIsAvailable,
+        MoveFundsOutCommittedOnly, MoveFundsOutUnCommittedOnly, OnChainBank, OrgChecks,
+        OrganizationDNS, OwnershipProportionCalculations, RegisterBankAccount, RegisterShareGroup,
+        ShareGroupChecks, SupervisorPermissions, WeightedShareIssuanceWrapper,
+        WeightedShareWrapper,
     },
 };
 
@@ -121,6 +119,7 @@ decl_error! {
         CallerMustSatisfyBankOwnerPermissionsForSpendReservation,
         NotEnoughFundsCommittedToSatisfyUnreserveAndFreeRequest,
         NotEnoughFundsCommittedToEnableInternalTransfer,
+        NotEnoughFundsUnCommittedToSatisfyUnreserveAndFreeRequest,
     }
 }
 
@@ -145,6 +144,11 @@ decl_storage! {
         SpendReservations get(fn spend_reservations): double_map
             hasher(blake2_128_concat) OnChainTreasuryID,
             hasher(blake2_128_concat) u32 => Option<ReservationInfo<IpfsReference, BalanceOf<T>, WithdrawalPermissions<T::AccountId>>>;
+
+        /// Spend commitments, marks formal shift of power over capital from direct bank.controller() to reservation.controller()
+        SpendCommitments get(fn spend_commitments): double_map
+            hasher(blake2_128_concat) BankTrackerIdentifier, // only the CommitSpend variant allowed, seems unergonomic but it works
+            hasher(blake2_128_concat) WithdrawalPermissions<T::AccountId> => Option<BalanceOf<T>>;
 
         /// Internal transfers of control over capital that allow transfer liquidity rights to the current controller
         InternalTransfers get(fn internal_transfers): double_map
@@ -520,7 +524,7 @@ impl<T: Trait> DepositIntoBank<T::AccountId, IpfsReference, BalanceOf<T>> for Mo
         to_bank_id: Self::TreasuryId,
         amount: BalanceOf<T>,
         reason: IpfsReference,
-    ) -> DispatchResult {
+    ) -> Result<u32, DispatchError> {
         let bank_account =
             <BankStores<T>>::get(to_bank_id).ok_or(Error::<T>::BankAccountNotFoundForDeposit)?;
         // make the transfer
@@ -535,10 +539,10 @@ impl<T: Trait> DepositIntoBank<T::AccountId, IpfsReference, BalanceOf<T>> for Mo
         let unique_deposit = Self::generate_unique_id((to_bank_id, BankMapID::Deposit(1u32)));
         let deposit_id: u32 = unique_deposit.1.into();
 
-        // TODO2: when will we delete this, how long is this going to stay in storage?
+        // TODO: when will we delete this, how long is this going to stay in storage?
         <Deposits<T>>::insert(to_bank_id, deposit_id, new_deposit);
-        // TODO: return DepositId?
-        Ok(())
+        // return DepositId?
+        Ok(deposit_id)
     }
 }
 
@@ -584,7 +588,7 @@ impl<T: Trait> BankReservations<T::AccountId, BalanceOf<T>, IpfsReference> for M
         Ok(())
     }
     // only reserve.controller() can unreserve funds after commitment (with method further down)
-    // - this puts the funds out of reach
+    // - this method puts the funds out of reach of bank.controller() (at least immediate reach)
     fn commit_reserved_spend_for_transfer(
         caller: T::AccountId,
         bank_id: Self::TreasuryId,
@@ -592,9 +596,45 @@ impl<T: Trait> BankReservations<T::AccountId, BalanceOf<T>, IpfsReference> for M
         amount: BalanceOf<T>,
         expected_future_owner: Self::GovernanceConfig,
     ) -> DispatchResult {
-        // insert expected_future_owner with (bank_id, reservation_id) as the prefix for the map
-        //
-        // change the spend_reservation by adding to the committed amount
+        let _ = <BankStores<T>>::get(bank_id)
+            .ok_or(Error::<T>::BankAccountNotFoundForSpendReservation)?;
+        let spend_reservation = <SpendReservations<T>>::get(bank_id, reservation_id)
+            .ok_or(Error::<T>::SpendReservationNotFound)?;
+        // permissions are that the caller is in the permissions of the spend_reservation
+        ensure!(
+            Self::account_satisfies_withdrawal_permissions(&caller, spend_reservation.controller()),
+            Error::<T>::CallerMustSatisfyBankOwnerPermissionsForSpendReservation
+        );
+        // ensure enough of the amount is uncommitted
+        let reservation_after_commit = spend_reservation
+            .commit_spend_reservation(amount)
+            .ok_or(Error::<T>::SpendReservationNotFound)?; // TODO better error message here
+        let bank_tracker_id =
+            BankTrackerIdentifier::new(bank_id, BankTrackerID::CommitSpend(reservation_id));
+        // tracks all spend commitments made by specific AccountIds
+        let new_committed_sum_by_caller = if let Some(previous_spend_commitments) =
+            <BankTracker<T>>::get(bank_tracker_id.clone(), &caller)
+        {
+            previous_spend_commitments + amount
+        } else {
+            amount
+        };
+        // tracks all spend commitments made to specific WithdrawalPermissions
+        let new_commitment = if let Some(existing_commitment_amt) =
+            <SpendCommitments<T>>::get(bank_tracker_id.clone(), expected_future_owner.clone())
+        {
+            existing_commitment_amt + amount
+        } else {
+            amount
+        };
+        // respective insertions (3)
+        <SpendCommitments<T>>::insert(
+            bank_tracker_id.clone(),
+            expected_future_owner,
+            new_commitment,
+        );
+        <BankTracker<T>>::insert(bank_tracker_id, caller, new_committed_sum_by_caller);
+        <SpendReservations<T>>::insert(bank_id, reservation_id, reservation_after_commit);
         Ok(())
     }
     // bank controller can unreserve if not committed
@@ -604,9 +644,44 @@ impl<T: Trait> BankReservations<T::AccountId, BalanceOf<T>, IpfsReference> for M
         reservation_id: u32,
         amount: BalanceOf<T>,
     ) -> DispatchResult {
-        // check that amount is less than reservation.amount() - reservation.committed.unwrap()
-        // if not, return Err(Error::<T>::NotEnoughFundsFreeInReservedToUnReserve)
-        // move_funds_out_of_reserved(amount, false)
+        let bank_account = <BankStores<T>>::get(bank_id)
+            .ok_or(Error::<T>::BankAccountNotFoundForSpendReservation)?;
+        let spend_reservation = <SpendReservations<T>>::get(bank_id, reservation_id)
+            .ok_or(Error::<T>::SpendReservationNotFound)?;
+        // this request must be approved by unreserving from the spend_reservation's
+        // uncommitted funds
+        let new_spend_reservation = spend_reservation
+            .move_funds_out_uncommitted_only(amount)
+            .ok_or(Error::<T>::NotEnoughFundsUnCommittedToSatisfyUnreserveAndFreeRequest)?;
+        // anyone in bank.controller() can make the _unreservation_ request
+        ensure!(
+            Self::account_satisfies_withdrawal_permissions(&caller, bank_account.owner_s()),
+            Error::<T>::CallerMustSatisfyBankOwnerPermissionsForSpendReservation
+        );
+        // the change in the bank account is equivalent to spending reserved and increasing free by the same amount
+        let new_bank_account = bank_account
+            .spend_from_reserved(amount)
+            .ok_or(Error::<T>::NotEnoughFundsUnCommittedToSatisfyUnreserveAndFreeRequest)?
+            .deposit_into_free(amount);
+        // create bank tracker identifier
+        let bank_tracker_id = BankTrackerIdentifier::new(
+            bank_id,
+            BankTrackerID::UnReservedSpendFromUnCommitted(reservation_id),
+        );
+        let new_bank_tracker_amount = if let Some(existing_balance) =
+            <BankTracker<T>>::get(bank_tracker_id.clone(), &caller)
+        {
+            // here is where you might enforce some limit per account with an ensure check
+            existing_balance + amount
+        } else {
+            amount
+        };
+        // insert new bank account
+        <BankStores<T>>::insert(bank_id, new_bank_account);
+        // insert update spend reservation object (with the new, lower amount reserved)
+        <SpendReservations<T>>::insert(bank_id, reservation_id, new_spend_reservation);
+        // insert new bank tracker info
+        <BankTracker<T>>::insert(bank_tracker_id, caller, new_bank_tracker_amount);
         Ok(())
     }
     // reservation.controller() can unreserve committed funds
@@ -635,8 +710,10 @@ impl<T: Trait> BankReservations<T::AccountId, BalanceOf<T>, IpfsReference> for M
             .ok_or(Error::<T>::NotEnoughFundsCommittedToSatisfyUnreserveAndFreeRequest)?
             .deposit_into_free(amount);
         // create bank tracker identifier
-        let bank_tracker_id =
-            BankTrackerIdentifier::new(bank_id, BankTrackerID::UnReservedSpend(reservation_id));
+        let bank_tracker_id = BankTrackerIdentifier::new(
+            bank_id,
+            BankTrackerID::UnReservedSpendFromCommitted(reservation_id),
+        );
         let new_bank_tracker_amount = if let Some(existing_balance) =
             <BankTracker<T>>::get(bank_tracker_id.clone(), &caller)
         {
@@ -888,185 +965,3 @@ impl<T: Trait> BankStorageInfo<T::AccountId, BalanceOf<T>> for Module<T> {
             })
     }
 }
-
-// impl<T: Trait> OnChainWithdrawalFilters<T::AccountId, IpfsReference, BalanceOf<T>, Permill>
-//     for Module<T>
-// {
-//     fn calculate_liquid_portion_of_on_chain_deposit(
-//         from_bank_id: Self::TreasuryId,
-//         deposit: Self::DepositInfo,
-//         to_claimer: T::AccountId,
-//     ) -> Result<BalanceOf<T>, DispatchError> {
-//         // this is implied to be the withdrawable portion
-//         // TODO: add the choice to withdraw capital or accept greater share ownership?
-//         // - idk, I dont want to add too much confusion already, pick a default like it's set the same
-//         // for everyone and they are mandated to withdraw and its reserved for them to withdraw...
-//         let amount = if let Some(savings_pct) = deposit.savings_pct() {
-//             let reserved_for_savings = savings_pct * deposit.amount();
-//             deposit.amount() - reserved_for_savings
-//         } else {
-//             deposit.amount()
-//         };
-//         let deposit_dne = Self::id_is_available((from_bank_id, deposit));
-//         ensure!(
-//             !deposit_dne,
-//             Error::<T>::DepositCannotBeFoundToCalculateCorrectPortion
-//         );
-//         // get the bank's controller information
-//         let controller = <BankStores<T>>::get(from_bank_id)
-//             .ok_or(Error::<T>::CannotCalculateDepositPortionFromBankThatDNE)?;
-//         let org_share_id = controller
-//             .extract_weighted_share_group_id()
-//             .ok_or(Error::<T>::MustBeWeightedShareGroupToCalculatePortionOfOnChainDeposit)?;
-//         // + 1 constant time map lookup
-//         let total_shares_issued_for_group = <<T as Trait>::Organization as WeightedShareWrapper<
-//             u32,
-//             u32,
-//             T::AccountId,
-//         >>::get_outstanding_weighted_shares(
-//             org_share_id.0, org_share_id.1
-//         )?;
-//         // + 1 constant time map lookup
-//         let shares_owned_by_member = <<T as Trait>::Organization as WeightedShareWrapper<
-//             u32,
-//             u32,
-//             T::AccountId,
-//         >>::get_weighted_shares_for_member(
-//             org_share_id.0, org_share_id.1, &to_claimer
-//         )?;
-//         let ownership_portion = Permill::from_rational_approximation(
-//             shares_owned_by_member,
-//             total_shares_issued_for_group,
-//         );
-//         // calculate the amount to withdraw;
-//         let amount_to_withdraw = ownership_portion * amount;
-//         Ok(amount_to_withdraw)
-//     }
-//     // no guarantees on the value this returns, on chain conditions change fast
-//     fn calculate_liquid_share_capital_from_savings(
-//         from_bank_id: Self::TreasuryId,
-//         to_claimer: T::AccountId,
-//     ) -> Result<(u32, u32, BalanceOf<T>), DispatchError> {
-//         let bank_account = <BankStores<T>>::get(from_bank_id)
-//             .ok_or(Error::<T>::CannotCalculateLiquidShareCapitalFromBankThatDNE)?;
-//         // Burning Shares Only Yields Access To The Portion of SAVINGS -- it does not expose capital reserved for spends
-//         // i.e. reserved for others as part of a grant milestone payment
-//         let balance_withdrawable_by_burning_shares = bank_account.savings();
-//         let org_share_id = bank_account
-//             .extract_weighted_share_group_id()
-//             .ok_or(Error::<T>::MustBeWeightedShareGroupToCalculatePortionLiquidShareCapital)?;
-//         // + 1 constant time map lookup
-//         let total_shares_issued_for_group = <<T as Trait>::Organization as WeightedShareWrapper<
-//             u32,
-//             u32,
-//             T::AccountId,
-//         >>::get_outstanding_weighted_shares(
-//             org_share_id.0, org_share_id.1
-//         )?;
-//         // + 1 constant time map lookup
-//         let shares_owned_by_member = <<T as Trait>::Organization as WeightedShareWrapper<
-//             u32,
-//             u32,
-//             T::AccountId,
-//         >>::get_weighted_shares_for_member(
-//             org_share_id.0, org_share_id.1, &to_claimer
-//         )?;
-//         let ownership_portion = Permill::from_rational_approximation(
-//             shares_owned_by_member,
-//             total_shares_issued_for_group,
-//         );
-//         // note that this is only a proportion of savings, not deposits...
-//         let amount_can_withdraw = ownership_portion * balance_withdrawable_by_burning_shares;
-//         Ok((org_share_id.0, org_share_id.1, amount_can_withdraw))
-//     }
-//     // request for a portion of an on-chain deposit, the impl defines what determines the fair portion
-//     fn claim_portion_of_on_chain_deposit(
-//         from_bank_id: Self::TreasuryId,
-//         deposit: Self::DepositInfo,
-//         to_claimer: T::AccountId,
-//         amount: Option<BalanceOf<T>>,
-//     ) -> Result<BalanceOf<T>, DispatchError> {
-//         let bank_account_dne = Self::id_is_available(from_bank_id);
-//         ensure!(
-//             bank_account_dne,
-//             Error::<T>::CannotClaimDepositFromBankThatDNE
-//         );
-//         // check that they can claim some portion
-//         let can_claim: BalanceOf<T> = Self::calculate_liquid_portion_of_on_chain_deposit(
-//             from_bank_id,
-//             deposit,
-//             to_claimer.clone(),
-//         )?;
-//         // set the amount for withdrawal, make sure it is less than above
-//         let amount_for_withdrawal = if let Some(amt) = amount {
-//             ensure!(
-//                 amt <= can_claim,
-//                 Error::<T>::CanOnlyClaimUpToOwnershipPortionByDefault
-//             );
-//             amt
-//         } else {
-//             can_claim
-//         };
-//         // make withdrawal
-//         let from = Self::account_id(from_bank_id);
-//         T::Currency::transfer(
-//             &from,
-//             &to_claimer,
-//             amount_for_withdrawal,
-//             ExistenceRequirement::KeepAlive,
-//         )?;
-//         Ok(amount_for_withdrawal)
-//     }
-//     // irreversible decision to sell ownership in exchange for a portion of the collateral
-//     // - automatically calculated according to the proportion of ownership at the time the request is processed
-//     // -- NOTE: this does not shield against dilution if there is a run on the collateral because it does not yield a limit order for the share sale
-//     fn withdraw_capital_by_burning_shares(
-//         from_bank_id: Self::TreasuryId,
-//         to_claimer: T::AccountId,
-//         amount: Option<BalanceOf<T>>, // if None, burns all shares for to_claimer to liquidate as much as possible
-//     ) -> Result<BalanceOf<T>, DispatchError> {
-//         let bank_account_dne = Self::id_is_available(from_bank_id);
-//         ensure!(
-//             bank_account_dne,
-//             Error::<T>::CannotClaimDepositFromBankThatDNE
-//         );
-//         let org_share_id_shares =
-//             Self::calculate_liquid_share_capital_from_savings(from_bank_id, to_claimer.clone())?;
-//         let can_withdraw = org_share_id_shares.2;
-//         // if None, it burns all shares by default see last outside method call at bottom of method body
-//         let mut proportion_of_own_shares_to_burn: Option<Permill> = None;
-//         let amount_withdrawn = if let Some(amt) = amount {
-//             ensure!(
-//                 amt <= can_withdraw,
-//                 Error::<T>::CannotBurnEnoughSharesToLiquidateCapitalForWithdrawalRequest
-//             );
-//             let proportion_of_capital_requested =
-//                 Permill::from_rational_approximation(amt, can_withdraw);
-//             proportion_of_own_shares_to_burn = Some(proportion_of_capital_requested);
-//             amt
-//         } else {
-//             can_withdraw
-//         };
-//         // make withdrawal
-//         let from = Self::account_id(from_bank_id);
-//         T::Currency::transfer(
-//             &from,
-//             &to_claimer,
-//             amount_withdrawn,
-//             ExistenceRequirement::KeepAlive,
-//         )?;
-//         // burn proportional amount of shares
-//         <<T as Trait>::Organization as WeightedShareIssuanceWrapper<
-//             u32,
-//             u32,
-//             T::AccountId,
-//             Permill,
-//         >>::burn_weighted_shares_for_member(
-//             org_share_id_shares.0,
-//             org_share_id_shares.1,
-//             to_claimer,
-//             proportion_of_own_shares_to_burn,
-//         )?;
-//         Ok(amount_withdrawn)
-//     }
-// }
