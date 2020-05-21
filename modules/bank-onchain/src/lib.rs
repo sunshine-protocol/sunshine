@@ -22,7 +22,7 @@ use util::{
         FreeToReserved, GenerateUniqueID, GetInnerOuterShareGroups, IDIsAvailable,
         MoveFundsOutCommittedOnly, MoveFundsOutUnCommittedOnly, OnChainBank, OrgChecks,
         OrganizationDNS, OwnershipProportionCalculations, RegisterBankAccount, RegisterShareGroup,
-        ShareGroupChecks, SupervisorPermissions, WeightedShareIssuanceWrapper,
+        ShareGroupChecks, SupervisorPermissions, TermSheetExit, WeightedShareIssuanceWrapper,
         WeightedShareWrapper,
     },
 };
@@ -93,33 +93,26 @@ decl_event!(
 
 decl_error! {
     pub enum Error for Module<T: Trait> {
+        BankAccountNotFoundForTermSheetExit,
         MustHaveCertainAuthorityToRegisterBankAccount,
         MustBeWeightedShareGroupToCalculatePortionOfOnChainDeposit,
-        CannotWithdrawIfOnChainBankDNE,
-        CannotClaimDepositFromBankThatDNE,
-        CannotCalculateDepositPortionFromBankThatDNE,
-        CannotCalculateLiquidShareCapitalFromBankThatDNE,
-        CannotBurnEnoughSharesToLiquidateCapitalForWithdrawalRequest,
-        DepositCannotBeFoundToCalculateCorrectPortion,
-        CanOnlyClaimUpToOwnershipPortionByDefault,
+        MustHaveOwnershipToRageQuit,
         BankAccountNotFoundForDeposit,
         BankAccountNotFoundForWithdrawal,
         BankAccountNotFoundForSpendReservation,
         BankAccountNotFoundForInternalTransfer,
         SpendReservationNotFound,
-        MustBeWeightedShareGroupToCalculatePortionLiquidShareCapital,
         NotEnoughFundsInReservedToAllowSpend,
-        NotEnoughFundsInReservedToUnReserve,
         NotEnoughFundsInFreeToAllowSpend,
         NotEnoughFundsInFreeToAllowReservation,
-        NotEnoughFundsInReservedToAllowInternalTransfer,
-        NotAuthorizedToMakeWithdrawal,
         CallerIsntInControllingMembershipForWithdrawal,
         AllSpendsFromReserveMustReferenceInternalTransferNotFound,
         CallerMustSatisfyBankOwnerPermissionsForSpendReservation,
         NotEnoughFundsCommittedToSatisfyUnreserveAndFreeRequest,
         NotEnoughFundsCommittedToEnableInternalTransfer,
         NotEnoughFundsUnCommittedToSatisfyUnreserveAndFreeRequest,
+        InternalTransferRequestExceedsReferencedSpendCommitment,
+        SpendCommitmentNotFoundForInternalTransfer,
     }
 }
 
@@ -168,6 +161,7 @@ decl_module! {
         type Error = Error<T>;
         fn deposit_event() = default;
 
+        // TODO: what does this imply about withdrawal permissions?
         #[weight = 0]
         fn register_on_chain_bank_account_with_sudo_permissions_for_organization(
             origin,
@@ -233,20 +227,14 @@ decl_module! {
             Self::deposit_event(RawEvent::CapitalDepositedIntoOnChainBankAccount(depositer, bank_id, amount, reason));
             Ok(())
         }
-        #[weight = 0]
-        fn sudo_withdrawal_from_on_chain_bank_account(
-            origin,
-            bank_id: OnChainTreasuryID,
-            to: T::AccountId,
-            amount: BalanceOf<T>,
-        ) -> DispatchResult {
-            let sudo_withdrawer = ensure_signed(origin)?;
-
-            // succeeds if user is the authorized sudo withdrawer for this bank account
-            Self::spend_from_free(WithdrawalPermissions::Sudo(sudo_withdrawer), bank_id, to.clone(), amount)?;
-            Self::deposit_event(RawEvent::SudoWithdrawalFromOnChainBankAccount(bank_id, to, amount));
-            Ok(())
-        }
+        // TODO:
+        // - reserve spend
+        // - unreserve spend
+        // - term sheet exit method (spend from free)
+        // - commit spend
+        // - transfer liquidity to new controller
+        // - withdraw by referencing transfer
+        //
         // #[weight = 0]
         // fn burn_all_shares_to_leave_weighted_membership_bank(
         //     origin,
@@ -283,9 +271,9 @@ impl<T: Trait> Module<T> {
     fn is_organization_supervisor(organization: u32, who: &T::AccountId) -> bool {
         <<T as Trait>::Organization as SupervisorPermissions<u32, T::AccountId>>::is_organization_supervisor(organization, who)
     }
-    fn is_share_supervisor(organization: u32, share_id: ShareID, who: &T::AccountId) -> bool {
-        <<T as Trait>::Organization as SupervisorPermissions<u32, T::AccountId>>::is_share_supervisor(organization, share_id.into(), who)
-    }
+    // fn is_share_supervisor(organization: u32, share_id: ShareID, who: &T::AccountId) -> bool {
+    //     <<T as Trait>::Organization as SupervisorPermissions<u32, T::AccountId>>::is_share_supervisor(organization, share_id.into(), who)
+    // }
     /// This method simply checks membership in group,
     /// note: `WithdrawalPermissions` lacks context for magnitude requirement
     fn account_satisfies_withdrawal_permissions(
@@ -391,7 +379,7 @@ impl<T: Trait> OwnershipProportionCalculations<T::AccountId, BalanceOf<T>, Permi
     ) -> Option<Permill> {
         match group {
             WithdrawalPermissions::Sudo(acc) => {
-                if &acc == &account {
+                if acc == account {
                     Some(Permill::one())
                 } else {
                     None
@@ -399,7 +387,7 @@ impl<T: Trait> OwnershipProportionCalculations<T::AccountId, BalanceOf<T>, Permi
             }
             WithdrawalPermissions::AnyOfTwoAccounts(acc1, acc2) => {
                 // assumes that we never use this with acc1 == acc2; use sudo in that situation
-                if &acc1 == &account || &acc2 == &account {
+                if acc1 == account || acc2 == account {
                     Some(Permill::from_percent(50))
                 } else {
                     None
@@ -572,7 +560,7 @@ impl<T: Trait> BankReservations<T::AccountId, BalanceOf<T>, IpfsReference> for M
             amount
         };
         // create Reservation Info object with 100 percent of it uncommitted
-        let new_spend_reservation = ReservationInfo::new(reason, amount.clone(), controller);
+        let new_spend_reservation = ReservationInfo::new(reason, amount, controller);
 
         // change bank_account such free is less and reserved is more
         let new_bank = bank_account
@@ -747,6 +735,17 @@ impl<T: Trait> BankReservations<T::AccountId, BalanceOf<T>, IpfsReference> for M
             .ok_or(Error::<T>::BankAccountNotFoundForInternalTransfer)?;
         let spend_reservation = <SpendReservations<T>>::get(bank_id, reservation_id)
             .ok_or(Error::<T>::SpendReservationNotFound)?;
+        let commitment_tracker =
+            BankTrackerIdentifier::new(bank_id, BankTrackerID::CommitSpend(reservation_id));
+        let spend_commitment =
+            <SpendCommitments<T>>::get(commitment_tracker.clone(), new_controller.clone())
+                .ok_or(Error::<T>::SpendCommitmentNotFoundForInternalTransfer)?;
+        // ensure the spend_commitment exceeds the amount
+        ensure!(
+            spend_commitment >= amount,
+            Error::<T>::InternalTransferRequestExceedsReferencedSpendCommitment
+        );
+        let new_spend_commitment = spend_commitment - amount;
         // ensure that the amount is less than the spend reservation amount
         let new_spend_reservation = spend_reservation
             .move_funds_out_committed_only(amount)
@@ -765,7 +764,7 @@ impl<T: Trait> BankReservations<T::AccountId, BalanceOf<T>, IpfsReference> for M
         };
         // form a transfer_info
         let new_transfer =
-            InternalTransferInfo::new(reservation_id, reason, amount, new_controller);
+            InternalTransferInfo::new(reservation_id, reason, amount, new_controller.clone());
         // generate the unique transfer_id
         let new_transfer_id: u32 =
             Self::generate_unique_id((bank_id, BankMapID::InternalTransfer(1u32)))
@@ -775,6 +774,8 @@ impl<T: Trait> BankReservations<T::AccountId, BalanceOf<T>, IpfsReference> for M
         <InternalTransfers<T>>::insert(bank_id, new_transfer_id, new_transfer);
         // insert update reservation info after the transfer was made
         <SpendReservations<T>>::insert(bank_id, reservation_id, new_spend_reservation);
+        // update spend commitment data
+        <SpendCommitments<T>>::insert(commitment_tracker, new_controller, new_spend_commitment);
         // insert new bank tracker info
         <BankTracker<T>>::insert(bank_tracker_id, caller, new_bank_tracker_amount);
         Ok(())
@@ -790,25 +791,19 @@ impl<T: Trait> BankSpends<T::AccountId, BalanceOf<T>> for Module<T> {
     /// based on their ownership/permissions
     /// ==> this will be called to liquidate free capital by burning bank controller ownership
     fn spend_from_free(
-        caller: Self::GovernanceConfig,
         from_bank_id: Self::TreasuryId,
         to: T::AccountId,
         amount: BalanceOf<T>,
-    ) -> Result<BalanceOf<T>, DispatchError> {
+    ) -> DispatchResult {
         let bank_account = <BankStores<T>>::get(from_bank_id)
             .ok_or(Error::<T>::BankAccountNotFoundForWithdrawal)?;
-        // authenticate caller
-        ensure!(
-            bank_account.is_owner_s(caller),
-            Error::<T>::NotAuthorizedToMakeWithdrawal
-        );
         // update the amount stored in the bank
         let bank_after_withdrawal = Self::fallible_spend_from_free(bank_account, amount)?;
         // make the transfer
         let from = Self::account_id(from_bank_id);
         T::Currency::transfer(&from, &to, amount, ExistenceRequirement::KeepAlive)?;
         <BankStores<T>>::insert(from_bank_id, bank_after_withdrawal);
-        Ok(amount)
+        Ok(())
     }
     /// Authenticates the spend within this method based on the identity of `to`
     /// in relation to the `transfer_certificate`. This is how most (almost all)
@@ -963,5 +958,40 @@ impl<T: Trait> BankStorageInfo<T::AccountId, BalanceOf<T>> for Module<T> {
             .fold(BalanceOf::<T>::zero(), |acc, (_, _, transfer)| {
                 acc + transfer.amount()
             })
+    }
+}
+
+impl<T: Trait> TermSheetExit<T::AccountId, BalanceOf<T>> for Module<T> {
+    // caller should only be rage_quitter!
+    fn burn_shares_to_exit_bank_ownership(
+        rage_quitter: T::AccountId,
+        bank_id: Self::TreasuryId,
+    ) -> Result<BalanceOf<T>, DispatchError> {
+        let bank_account =
+            <BankStores<T>>::get(bank_id).ok_or(Error::<T>::BankAccountNotFoundForTermSheetExit)?;
+        let org_share_id = bank_account
+            .owner_s()
+            .extract_org_weighted_share_id()
+            .ok_or(Error::<T>::MustBeWeightedShareGroupToCalculatePortionOfOnChainDeposit)?;
+        let withdrawal_amount = Self::calculate_proportional_amount_for_account(
+            bank_account.free(),
+            rage_quitter.clone(),
+            bank_account.owner_s(),
+        )
+        .ok_or(Error::<T>::MustHaveOwnershipToRageQuit)?;
+        // here is where we might apply some discount based on a vesting period/schedule
+
+        // TODO: this call duplicates the Get for BankStore and we only should use one GET
+        Self::spend_from_free(bank_id, rage_quitter.clone(), withdrawal_amount.clone())?;
+        // burn the shares
+        let _ = <<T as Trait>::Organization as WeightedShareIssuanceWrapper<
+            u32,
+            u32,
+            T::AccountId,
+            Permill,
+        >>::burn_weighted_shares_for_member(
+            org_share_id.0, org_share_id.1, rage_quitter, None
+        )?;
+        Ok(withdrawal_amount)
     }
 }

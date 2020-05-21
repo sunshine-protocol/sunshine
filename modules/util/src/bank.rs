@@ -122,6 +122,20 @@ impl<AccountId> Default for WithdrawalPermissions<AccountId> {
     }
 }
 
+impl<AccountId> WithdrawalPermissions<AccountId> {
+    pub fn extract_org_weighted_share_id(&self) -> Option<(u32, u32)> {
+        match self {
+            WithdrawalPermissions::AnyMemberOfOrgShareGroup(org_id, wrapped_share_id) => {
+                match wrapped_share_id {
+                    ShareID::WeightedAtomic(share_id) => Some((*org_id, *share_id)),
+                    _ => None,
+                }
+            }
+            _ => None,
+        }
+    }
+}
+
 #[derive(PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
 /// This is the state for an OnChainBankId, associated with each bank registered in the runtime
 pub struct BankState<GovernanceConfig, Currency> {

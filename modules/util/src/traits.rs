@@ -870,11 +870,10 @@ pub trait BankSpends<AccountId, Currency>:
     OnChainBank + RegisterBankAccount<AccountId, Currency>
 {
     fn spend_from_free(
-        caller: Self::GovernanceConfig,
         from_bank_id: Self::TreasuryId,
         to: AccountId,
         amount: Currency,
-    ) -> Result<Currency, DispatchError>;
+    ) -> DispatchResult;
     fn spend_from_transfers(
         from_bank_id: Self::TreasuryId,
         // transfer_id
@@ -884,12 +883,52 @@ pub trait BankSpends<AccountId, Currency>:
     ) -> Result<Currency, DispatchError>;
 }
 
+// soon-to-be new module: Term Sheet
+
 // Note to Self: the game theoretic move will be to unreserve all the capital and trade it
 // so that has to be controlled in the context of this request. There are a few options to solve
 // (1)  require a significant enough delay between unreserving and calling this
 // (2) rate limit the number of `reservations` and `unreservations` for each member
 // (3) if liquidating, automatically exercise rate limit unreserve for reserved, uncommitted capital
 // pub trait TradeOwnershipForFreeCapital
+
+// ~ in bank now for demo purposes, this is mvp rage_quit
+pub trait TermSheetExit<AccountId, Currency>: OnChainBank {
+    fn burn_shares_to_exit_bank_ownership(
+        rage_quitter: AccountId,
+        bank_id: Self::TreasuryId,
+    ) -> Result<Currency, DispatchError>;
+}
+
+pub trait TermSheetIssuance<AccountId, Hash, Shares, Currency>: OnChainBank {
+    type VoteConfig; // enum to express supported vote options
+
+    // apply to DAO
+    fn apply_for_bank_ownership(
+        bank_id: Self::TreasuryId,
+        applicant: AccountId,
+        stake_promised: Currency,
+        shares_requested: Shares,
+        application: Hash,
+    ) -> Result<u32, DispatchError>; // returns Ok(ApplicationId)
+
+    // sponsor application to trigger vote (only requires one member)
+    fn sponsor_application_to_trigger_vote(
+        caller: AccountId,
+        bank_id: Self::TreasuryId,
+        application_id: u32,
+        stake_promised: Currency,
+        shares_requested: Shares,
+        application: Hash,
+    ) -> Result<u32, DispatchError>; // returns Ok(VoteId)
+
+    // polling method to check the vote module and make changes in this module if necessary for issuance
+    // -> requires an application's relevant vote to be approved
+    fn poll_vote_result_to_enforce_outcome(
+        bank_id: Self::TreasuryId,
+        vote_id: u32,
+    ) -> DispatchResult;
+}
 
 pub trait CommitSpendReservation<Currency>: Sized {
     fn commit_spend_reservation(&self, amount: Currency) -> Option<Self>;
