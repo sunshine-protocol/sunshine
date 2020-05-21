@@ -12,10 +12,10 @@ use util::{
     court::Evidence,
     organization::{FormedOrganization, ShareID},
     traits::{
-        GenerateUniqueID, GetInnerOuterShareGroups, IDIsAvailable, OffChainBank, OrgChecks,
-        OrganizationDNS, RegisterOffChainBankAccount, RegisterShareGroup, ShareGroupChecks,
-        SupervisorPermissions, SupportedOrganizationShapes, WeightedShareIssuanceWrapper,
-        WeightedShareWrapper,
+        GenerateUniqueID, GenerateUniqueKeyID, GetInnerOuterShareGroups, IDIsAvailable,
+        OffChainBank, OrgChecks, OrganizationDNS, RegisterOffChainBankAccount, RegisterShareGroup,
+        ShareGroupChecks, SupervisorPermissions, SupportedOrganizationShapes,
+        WeightedShareIssuanceWrapper, WeightedShareWrapper,
     },
 };
 
@@ -241,36 +241,32 @@ impl<T: Trait> IDIsAvailable<(OffChainTreasuryID, Payment<T::AccountId, BalanceO
     }
 }
 
-impl<T: Trait> GenerateUniqueID<(OffChainTreasuryID, Payment<T::AccountId, BalanceOf<T>>)>
+impl<T: Trait> GenerateUniqueKeyID<(OffChainTreasuryID, Payment<T::AccountId, BalanceOf<T>>)>
     for Module<T>
 {
-    fn generate_unique_id(
-        proposed_id: (OffChainTreasuryID, Payment<T::AccountId, BalanceOf<T>>),
+    fn generate_unique_key_id(
+        proposed: (OffChainTreasuryID, Payment<T::AccountId, BalanceOf<T>>),
     ) -> (OffChainTreasuryID, Payment<T::AccountId, BalanceOf<T>>) {
-        if !Self::id_is_available(proposed_id.clone()) {
-            let mut new_deposit_id = proposed_id.1.iterate_salt();
-            while !Self::id_is_available((proposed_id.0, new_deposit_id.clone())) {
+        if !Self::id_is_available(proposed.clone()) {
+            let mut new_deposit_id = proposed.1.iterate_salt();
+            while !Self::id_is_available((proposed.0, new_deposit_id.clone())) {
                 new_deposit_id = new_deposit_id.iterate_salt();
             }
-            (proposed_id.0, new_deposit_id)
+            (proposed.0, new_deposit_id)
         } else {
-            proposed_id
+            proposed
         }
     }
 }
 
 impl<T: Trait> GenerateUniqueID<OffChainTreasuryID> for Module<T> {
-    fn generate_unique_id(proposed_id: OffChainTreasuryID) -> OffChainTreasuryID {
-        if !Self::id_is_available(proposed_id) || proposed_id == 0u32 {
-            let mut current_nonce = OffChainTreasuryIDNonce::get() + 1;
-            while !Self::id_is_available(current_nonce) {
-                current_nonce += 1;
-            }
-            OffChainTreasuryIDNonce::put(current_nonce);
-            current_nonce
-        } else {
-            proposed_id
+    fn generate_unique_id() -> OffChainTreasuryID {
+        let mut current_nonce = OffChainTreasuryIDNonce::get() + 1;
+        while !Self::id_is_available(current_nonce) {
+            current_nonce += 1;
         }
+        OffChainTreasuryIDNonce::put(current_nonce);
+        current_nonce
     }
 }
 
@@ -283,7 +279,7 @@ impl<T: Trait> RegisterOffChainBankAccount for Module<T> {
     fn register_off_chain_bank_account(
         org: Self::FormedOrgId,
     ) -> Result<Self::TreasuryId, DispatchError> {
-        let generated_id = Self::generate_unique_id(0u32);
+        let generated_id = Self::generate_unique_id();
         OffChainTreasuryIDs::insert(generated_id, org);
         Ok(generated_id)
     }
@@ -293,7 +289,7 @@ impl<T: Trait> OffChainBank for Module<T> {
     type Payment = Payment<T::AccountId, BalanceOf<T>>;
 
     fn sender_claims_payment_sent(id: Self::TreasuryId, payment: Self::Payment) -> Self::Payment {
-        let generated_id = Self::generate_unique_id((id, payment));
+        let generated_id = Self::generate_unique_key_id((id, payment));
         // sender confirms
         let new_confirmation = PaymentConfirmation::from_sender_claims();
         <OffChainTransfers<T>>::insert(id, generated_id.1.clone(), new_confirmation);

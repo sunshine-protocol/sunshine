@@ -26,6 +26,10 @@ pub trait SeededGenerateUniqueID<Id, Seed> {
     fn generate_unique_id(seed: Seed) -> Id;
 }
 
+pub trait GenerateUniqueKeyID<KeyId> {
+    fn generate_unique_key_id(proposed: KeyId) -> KeyId;
+}
+
 // ====== Permissions ACL ======
 
 pub trait ChainSudoPermissions<AccountId> {

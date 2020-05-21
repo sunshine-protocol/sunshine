@@ -19,11 +19,11 @@ use util::{
     traits::{
         AccessProfile, BankDepositsAndSpends, BankReservations, BankSpends, BankStorageInfo,
         CheckBankBalances, CommitSpendReservation, DepositIntoBank, DepositSpendOps,
-        FreeToReserved, GenerateUniqueID, GetInnerOuterShareGroups, IDIsAvailable,
-        MoveFundsOutCommittedOnly, MoveFundsOutUnCommittedOnly, OnChainBank, OrgChecks,
-        OrganizationDNS, OwnershipProportionCalculations, RegisterBankAccount, RegisterShareGroup,
-        ShareGroupChecks, SupervisorPermissions, TermSheetExit, WeightedShareIssuanceWrapper,
-        WeightedShareWrapper,
+        FreeToReserved, GenerateUniqueID, GenerateUniqueKeyID, GetInnerOuterShareGroups,
+        IDIsAvailable, MoveFundsOutCommittedOnly, MoveFundsOutUnCommittedOnly, OnChainBank,
+        OrgChecks, OrganizationDNS, OwnershipProportionCalculations, RegisterBankAccount,
+        RegisterShareGroup, ShareGroupChecks, SupervisorPermissions, TermSheetExit,
+        WeightedShareIssuanceWrapper, WeightedShareWrapper,
     },
 };
 
@@ -161,8 +161,8 @@ decl_module! {
         type Error = Error<T>;
         fn deposit_event() = default;
 
-        /// Infallible deposit runtime method invokes a helper trait 
-        /// method exposed outside this runtime method to make this 
+        /// Infallible deposit runtime method invokes a helper trait
+        /// method exposed outside this runtime method to make this
         /// method accessible from inherited modules.
         #[weight = 0]
         fn deposit_from_signer_into_on_chain_bank_account(
@@ -320,33 +320,30 @@ impl<T: Trait> IDIsAvailable<(OnChainTreasuryID, BankMapID)> for Module<T> {
     }
 }
 
-impl<T: Trait> GenerateUniqueID<(OnChainTreasuryID, BankMapID)> for Module<T> {
-    fn generate_unique_id(
-        proposed_id: (OnChainTreasuryID, BankMapID),
+impl<T: Trait> GenerateUniqueKeyID<(OnChainTreasuryID, BankMapID)> for Module<T> {
+    fn generate_unique_key_id(
+        proposed: (OnChainTreasuryID, BankMapID),
     ) -> (OnChainTreasuryID, BankMapID) {
-        if !Self::id_is_available(proposed_id.clone()) {
-            let mut new_id = proposed_id.1.iterate();
-            while !Self::id_is_available((proposed_id.0, new_id.clone())) {
+        if !Self::id_is_available(proposed.clone()) {
+            let mut new_id = proposed.1.iterate();
+            while !Self::id_is_available((proposed.0, new_id.clone())) {
                 new_id = new_id.iterate();
             }
-            (proposed_id.0, new_id)
+            (proposed.0, new_id)
         } else {
-            proposed_id
+            proposed
         }
     }
 }
 
 impl<T: Trait> GenerateUniqueID<OnChainTreasuryID> for Module<T> {
-    fn generate_unique_id(proposed_id: OnChainTreasuryID) -> OnChainTreasuryID {
-        if !Self::id_is_available(proposed_id) {
-            let mut treasury_nonce_id = BankIDNonce::get().iterate();
-            while !Self::id_is_available(treasury_nonce_id) {
-                treasury_nonce_id = treasury_nonce_id.iterate();
-            }
-            treasury_nonce_id
-        } else {
-            proposed_id
+    fn generate_unique_id() -> OnChainTreasuryID {
+        let mut treasury_nonce_id = BankIDNonce::get().iterate();
+        while !Self::id_is_available(treasury_nonce_id) {
+            treasury_nonce_id = treasury_nonce_id.iterate();
         }
+        BankIDNonce::put(treasury_nonce_id);
+        treasury_nonce_id
     }
 }
 
@@ -363,8 +360,7 @@ impl<T: Trait> RegisterBankAccount<T::AccountId, BalanceOf<T>> for Module<T> {
         amount: BalanceOf<T>, // TODO: ADD MINIMUM AMOUNT TO OPEN BANK
         owner_s: Self::GovernanceConfig,
     ) -> Result<Self::TreasuryId, DispatchError> {
-        let proposed_id = OnChainTreasuryID::default();
-        let generated_id = Self::generate_unique_id(proposed_id);
+        let generated_id = Self::generate_unique_id();
         // default all of it is put into savings but this optional param allows us to set some aside for spends
         let new_bank = BankState::new_from_deposit(registered_org, amount, owner_s);
         let to = Self::account_id(generated_id);
@@ -528,7 +524,7 @@ impl<T: Trait> DepositIntoBank<T::AccountId, IpfsReference, BalanceOf<T>> for Mo
         // form the deposit, no savings_pct allocated
         let new_deposit = DepositInfo::new(from, reason, amount);
         // generate unique deposit
-        let unique_deposit = Self::generate_unique_id((to_bank_id, BankMapID::Deposit(1u32)));
+        let unique_deposit = Self::generate_unique_key_id((to_bank_id, BankMapID::Deposit(1u32)));
         let deposit_id: u32 = unique_deposit.1.into();
 
         // TODO: when will we delete this, how long is this going to stay in storage?
@@ -570,9 +566,10 @@ impl<T: Trait> BankReservations<T::AccountId, BalanceOf<T>, IpfsReference> for M
         let new_bank = bank_account
             .move_from_free_to_reserved(amount)
             .ok_or(Error::<T>::NotEnoughFundsInFreeToAllowReservation)?;
-        let reservation_id: u32 = Self::generate_unique_id((bank_id, BankMapID::Reservation(1u32)))
-            .1
-            .into();
+        let reservation_id: u32 =
+            Self::generate_unique_key_id((bank_id, BankMapID::Reservation(1u32)))
+                .1
+                .into();
         // insert new bank account
         <BankStores<T>>::insert(bank_id, new_bank);
         <BankTracker<T>>::insert(bank_tracker_id, caller, new_reserved_sum_by_caller);
@@ -771,7 +768,7 @@ impl<T: Trait> BankReservations<T::AccountId, BalanceOf<T>, IpfsReference> for M
             InternalTransferInfo::new(reservation_id, reason, amount, new_controller.clone());
         // generate the unique transfer_id
         let new_transfer_id: u32 =
-            Self::generate_unique_id((bank_id, BankMapID::InternalTransfer(1u32)))
+            Self::generate_unique_key_id((bank_id, BankMapID::InternalTransfer(1u32)))
                 .1
                 .into();
         // insert transfer_info, thereby unlocking the capital for the `new_controller` group
