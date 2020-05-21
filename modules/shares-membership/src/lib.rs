@@ -14,7 +14,7 @@ use util::{
     traits::{
         ChainSudoPermissions, ChangeGroupMembership, GenerateUniqueID, GetFlatShareGroup,
         GetGroupSize, GroupMembership, IDIsAvailable, OrganizationSupervisorPermissions,
-        SubGroupSupervisorPermissions,
+        SeededGenerateUniqueID, SubGroupSupervisorPermissions,
     },
     uuid::UUID2,
 };
@@ -284,20 +284,15 @@ impl<T: Trait> GetFlatShareGroup<T::AccountId> for Module<T> {
     }
 }
 
-impl<T: Trait> GenerateUniqueID<UUID2> for Module<T> {
-    fn generate_unique_id(proposed_id: UUID2) -> UUID2 {
-        if !Self::id_is_available(proposed_id) {
-            let static_org = proposed_id.one();
-            let mut id_counter = <ShareIdCounter>::get(static_org) + 1u32;
-            while ClaimedShareIdentity::get(static_org, id_counter) {
-                // TODO: add overflow check here
-                id_counter += 1u32;
-            }
-            <ShareIdCounter>::insert(static_org, id_counter);
-            UUID2::new(static_org, id_counter)
-        } else {
-            proposed_id
+impl<T: Trait> SeededGenerateUniqueID<ShareId, OrgId> for Module<T> {
+    fn generate_unique_id(seed: OrgId) -> ShareId {
+        let mut id_counter = <ShareIdCounter>::get(seed) + 1u32;
+        while ClaimedShareIdentity::get(seed, id_counter) {
+            // TODO: add overflow check here
+            id_counter += 1u32;
         }
+        <ShareIdCounter>::insert(seed, id_counter);
+        id_counter
     }
 }
 

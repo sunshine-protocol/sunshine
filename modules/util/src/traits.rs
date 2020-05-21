@@ -18,11 +18,11 @@ pub trait IDIsAvailable<Id> {
     fn id_is_available(id: Id) -> bool;
 }
 
-pub trait GenerateUniqueID<Id>: IDIsAvailable<Id> {
+pub trait GenerateUniqueID<Id> {
     fn generate_unique_id() -> Id;
 }
 
-pub trait SeededGenerateUniqueID<Id, Seed>: IDIsAvailable<Id> {
+pub trait SeededGenerateUniqueID<Id, Seed> {
     fn generate_unique_id(seed: Seed) -> Id;
 }
 

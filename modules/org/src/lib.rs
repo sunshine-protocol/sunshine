@@ -14,8 +14,9 @@ use util::{
         FlatShareWrapper, GenerateUniqueID, GetFlatShareGroup, GetGroupSize,
         GetInnerOuterShareGroups, GroupMembership, IDIsAvailable, LockableProfile, OrgChecks,
         OrganizationDNS, OrganizationSupervisorPermissions, RegisterShareGroup, ReservableProfile,
-        ShareBank, ShareGroupChecks, SubGroupSupervisorPermissions, SupervisorPermissions,
-        WeightedShareGroup, WeightedShareIssuanceWrapper, WeightedShareWrapper,
+        SeededGenerateUniqueID, ShareBank, ShareGroupChecks, SubGroupSupervisorPermissions,
+        SupervisorPermissions, WeightedShareGroup, WeightedShareIssuanceWrapper,
+        WeightedShareWrapper,
     },
     uuid::UUID2,
 };
@@ -51,7 +52,7 @@ pub trait Trait: system::Trait {
     type FlatShareData: GetGroupSize<GroupId = UUID2>
         + GroupMembership<Self::AccountId, GroupId = UUID2>
         + IDIsAvailable<UUID2>
-        + GenerateUniqueID<UUID2>
+        + SeededGenerateUniqueID<u32, u32>
         + SubGroupSupervisorPermissions<u32, u32, Self::AccountId>
         + ChangeGroupMembership<Self::AccountId>
         + GetFlatShareGroup<Self::AccountId>;
@@ -62,7 +63,7 @@ pub trait Trait: system::Trait {
     type WeightedShareData: GetGroupSize<GroupId = UUID2>
         + GroupMembership<Self::AccountId>
         + IDIsAvailable<UUID2>
-        + GenerateUniqueID<UUID2>
+        + SeededGenerateUniqueID<u32, u32>
         + WeightedShareGroup<Self::AccountId>
         + ShareBank<Self::AccountId>
         + ReservableProfile<Self::AccountId>
@@ -108,16 +109,6 @@ decl_storage! {
     trait Store for Module<T: Trait> as Org {
         /// The number of organizations in this module (eventually add nuance like `Active` tiers)
         OrganizationCounter get(fn organization_counter): u32;
-
-        OrganizationIdentityNonce get(fn organization_identity_nonce): u32;
-
-        // OrgId => FlateShareIDNonce
-        FlatShareIDNonce get(fn flat_share_id_nonce): map
-            hasher(opaque_blake2_256) u32 => u32;
-
-        // OrgId => WeightedShareIDNonce
-        WeightedShareIDNonce get(fn weighted_share_id_nonce): map
-            hasher(opaque_blake2_256) u32 => u32;
 
         /// Organizations that were registered in this module
         OrganizationStates get(fn organization_states): map
@@ -403,14 +394,9 @@ impl<T: Trait> FlatShareWrapper<u32, u32, T::AccountId> for Module<T> {
         Ok(ret)
     }
     fn generate_unique_flat_share_id(organization: u32) -> u32 {
-        let new_nonce = <FlatShareIDNonce>::get(organization) + 1;
-        let new_joint_id = UUID2::new(organization, new_nonce);
-        <FlatShareIDNonce>::insert(organization, new_nonce);
-        let generated_joint_id =
-            <<T as Trait>::FlatShareData as GenerateUniqueID<UUID2>>::generate_unique_id(
-                new_joint_id,
-            );
-        generated_joint_id.two()
+        <<T as Trait>::FlatShareData as SeededGenerateUniqueID<u32, u32>>::generate_unique_id(
+            organization,
+        )
     }
     fn add_members_to_flat_share_group(
         organization: u32,
@@ -455,14 +441,9 @@ impl<T: Trait> WeightedShareWrapper<u32, u32, T::AccountId> for Module<T> {
         >>::outstanding_shares(organization, share_id)
     }
     fn generate_unique_weighted_share_id(organization: u32) -> u32 {
-        let new_nonce = WeightedShareIDNonce::get(organization) + 1;
-        let new_joint_id = UUID2::new(organization, new_nonce);
-        WeightedShareIDNonce::insert(organization, new_nonce);
-        let generated_joint_id =
-            <<T as Trait>::WeightedShareData as GenerateUniqueID<UUID2>>::generate_unique_id(
-                new_joint_id,
-            );
-        generated_joint_id.two()
+        <<T as Trait>::WeightedShareData as SeededGenerateUniqueID<u32, u32>>::generate_unique_id(
+            organization,
+        )
     }
 }
 
@@ -642,7 +623,7 @@ impl<T: Trait> OrganizationDNS<u32, T::AccountId, IpfsReference> for Module<T> {
         value_constitution: IpfsReference,
         supervisor: Option<T::AccountId>,
     ) -> Result<(u32, Self::OrganizationState), DispatchError> {
-        let new_org_id = <<T as Trait>::OrgData as GenerateUniqueID<u32>>::generate_unique_id(0u32);
+        let new_org_id = <<T as Trait>::OrgData as GenerateUniqueID<u32>>::generate_unique_id();
         // use helper method to register everything and return main storage item for tracking associated state/permissions for org
         let new_organization_state =
             Self::organization_from_src(source, new_org_id, value_constitution)?;
