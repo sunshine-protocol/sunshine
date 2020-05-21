@@ -18,10 +18,12 @@ pub trait IDIsAvailable<Id> {
     fn id_is_available(id: Id) -> bool;
 }
 
-/// For the module to implement for its id type (typically a common double_map prefix key)
 pub trait GenerateUniqueID<Id>: IDIsAvailable<Id> {
-    // this should be infallible, it returns the generated unique id which may or may not be equal to the original value
-    fn generate_unique_id(proposed_id: Id) -> Id;
+    fn generate_unique_id() -> Id;
+}
+
+pub trait SeededGenerateUniqueID<Id, Seed>: IDIsAvailable<Id> {
+    fn generate_unique_id(seed: Seed) -> Id;
 }
 
 // ====== Permissions ACL ======

@@ -161,6 +161,23 @@ decl_module! {
         type Error = Error<T>;
         fn deposit_event() = default;
 
+        /// Infallible deposit runtime method invokes a helper trait 
+        /// method exposed outside this runtime method to make this 
+        /// method accessible from inherited modules.
+        #[weight = 0]
+        fn deposit_from_signer_into_on_chain_bank_account(
+            origin,
+            bank_id: OnChainTreasuryID,
+            amount: BalanceOf<T>,
+            savings_tax: Option<Permill>,
+            reason: IpfsReference,
+        ) -> DispatchResult {
+            let depositer = ensure_signed(origin)?;
+
+            Self::deposit_into_bank(depositer.clone(), bank_id, amount, reason.clone())?;
+            Self::deposit_event(RawEvent::CapitalDepositedIntoOnChainBankAccount(depositer, bank_id, amount, reason));
+            Ok(())
+        }
         // TODO: what does this imply about withdrawal permissions?
         #[weight = 0]
         fn register_on_chain_bank_account_with_sudo_permissions_for_organization(
@@ -179,6 +196,7 @@ decl_module! {
             Self::deposit_event(RawEvent::NewOnChainTreasuryRegisteredWithSudoPermissions(new_bank_id, sudo_acc));
             Ok(())
         }
+        // TODO: no current withdrawal path for bank.controller() from bank.free()
         #[weight = 0]
         fn register_on_chain_bank_account_with_flat_share_group_permissions(
             origin,
@@ -211,20 +229,6 @@ decl_module! {
             let wrapped_share_id = ShareID::WeightedAtomic(share_id);
             let new_bank_id = Self::register_on_chain_bank_account(organization, seeder, seed, WithdrawalPermissions::AnyMemberOfOrgShareGroup(organization, wrapped_share_id))?;
             Self::deposit_event(RawEvent::NewOnChainTreasuryRegisteredWithWeightedShareGroupPermissions(new_bank_id, organization, wrapped_share_id));
-            Ok(())
-        }
-        #[weight = 0]
-        fn deposit_from_signer_into_on_chain_bank_account(
-            origin,
-            bank_id: OnChainTreasuryID,
-            amount: BalanceOf<T>,
-            savings_tax: Option<Permill>,
-            reason: IpfsReference,
-        ) -> DispatchResult {
-            let depositer = ensure_signed(origin)?;
-
-            Self::deposit_into_bank(depositer.clone(), bank_id, amount, reason.clone())?;
-            Self::deposit_event(RawEvent::CapitalDepositedIntoOnChainBankAccount(depositer, bank_id, amount, reason));
             Ok(())
         }
         // TODO:

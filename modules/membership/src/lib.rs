@@ -195,18 +195,14 @@ impl<T: Trait> IDIsAvailable<OrgId> for Module<T> {
 }
 
 impl<T: Trait> GenerateUniqueID<OrgId> for Module<T> {
-    fn generate_unique_id(proposed_id: OrgId) -> OrgId {
-        if !Self::id_is_available(proposed_id) {
-            let mut id_counter = OrgIdNonce::get() + 1u32;
-            while ClaimedOrganizationIdentity::get(id_counter) {
-                // TODO: add overflow check here
-                id_counter += 1u32;
-            }
-            OrgIdNonce::put(id_counter);
-            id_counter
-        } else {
-            proposed_id
+    fn generate_unique_id() -> OrgId {
+        let mut id_counter = OrgIdNonce::get() + 1u32;
+        while ClaimedOrganizationIdentity::get(id_counter) {
+            // TODO: add overflow check here
+            id_counter += 1u32;
         }
+        OrgIdNonce::put(id_counter);
+        id_counter
     }
 }
 
