@@ -81,13 +81,17 @@ decl_event!(
         <T as frame_system::Trait>::AccountId,
         Balance = BalanceOf<T>,
     {
-        NewOnChainTreasuryRegisteredWithSudoPermissions(OnChainTreasuryID, AccountId),
-        NewOnChainTreasuryRegisteredWithFlatShareGroupPermissions(OnChainTreasuryID, OrgId, ShareID),
-        NewOnChainTreasuryRegisteredWithWeightedShareGroupPermissions(OnChainTreasuryID, OrgId, ShareID),
+        // u32 is the hosting organization identifier
+        RegisteredNewOnChainBank(AccountId, OnChainTreasuryID, Balance, u32, WithdrawalPermissions<AccountId>),
         CapitalDepositedIntoOnChainBankAccount(AccountId, OnChainTreasuryID, Balance, IpfsReference),
-        SudoWithdrawalFromOnChainBankAccount(OnChainTreasuryID, AccountId, Balance),
-        WeightedShareGroupMemberClaimedPortionOfDepositToWithdraw(OnChainTreasuryID, AccountId, Balance),
-        WeightedShareGroupMemberBurnedSharesToClaimProportionalWithdrawal(OnChainTreasuryID, AccountId, Balance),
+        // u32 is reservation_id
+        SpendReservedForBankAccount(AccountId, OnChainTreasuryID, u32, IpfsReference, Balance, WithdrawalPermissions<AccountId>),
+        CommitSpendBeforeInternalTransfer(AccountId, OnChainTreasuryID, u32, Balance, WithdrawalPermissions<AccountId>),
+        UnReserveUncommittedReservationToMakeFree(AccountId, OnChainTreasuryID, u32, Balance),
+        UnReserveCommittedReservationToMakeFree(AccountId, OnChainTreasuryID, u32, Balance),
+        InternalTransferExecutedAndSpendingPowerDoledOutToController(AccountId, OnChainTreasuryID, IpfsReference, u32, Balance, WithdrawalPermissions<AccountId>),
+        SpendRequestForInternalTransferApprovedAndExecuted(OnChainTreasuryID, AccountId, Balance, u32),
+        AccountLeftMembershipAndWithdrewProportionOfFreeCapitalInBank(OnChainTreasuryID, AccountId, Balance),
     }
 );
 
@@ -113,6 +117,7 @@ decl_error! {
         NotEnoughFundsUnCommittedToSatisfyUnreserveAndFreeRequest,
         InternalTransferRequestExceedsReferencedSpendCommitment,
         SpendCommitmentNotFoundForInternalTransfer,
+        GovernanceConfigDoesNotSatisfyOrgRequirementsForBankRegistration,
     }
 }
 
@@ -165,11 +170,11 @@ decl_module! {
         /// method exposed outside this runtime method to make this
         /// method accessible from inherited modules.
         #[weight = 0]
-        fn deposit_from_signer_into_on_chain_bank_account(
+        fn deposit_from_signer_for_bank_account(
             origin,
             bank_id: OnChainTreasuryID,
             amount: BalanceOf<T>,
-            savings_tax: Option<Permill>,
+            //savings_tax: Option<Permill>, // to be added ;)
             reason: IpfsReference,
         ) -> DispatchResult {
             let depositer = ensure_signed(origin)?;
@@ -178,88 +183,118 @@ decl_module! {
             Self::deposit_event(RawEvent::CapitalDepositedIntoOnChainBankAccount(depositer, bank_id, amount, reason));
             Ok(())
         }
-        // TODO: what does this imply about withdrawal permissions?
         #[weight = 0]
-        fn register_on_chain_bank_account_with_sudo_permissions_for_organization(
+        fn register_and_seed_for_bank_account(
             origin,
-            registered_org: u32,
             seed: BalanceOf<T>,
-            sudo_acc: T::AccountId, // sole controller for the bank account
+            hosting_org: OrgId, // pre-requisite is registered organization
+            bank_controller: WithdrawalPermissions<T::AccountId>,
         ) -> DispatchResult {
             let seeder = ensure_signed(origin)?;
             let authentication: bool = Self::is_sudo_account(&seeder)
-                || Self::is_organization_supervisor(1u32, &seeder);
-            ensure!(authentication, Error::<T>::MustHaveCertainAuthorityToRegisterBankAccount);
-            // TODO: should add check that `registered_org` is a registered organization in the `Organization` module
-
-            let new_bank_id = Self::register_on_chain_bank_account(registered_org, seeder, seed, WithdrawalPermissions::Sudo(sudo_acc.clone()))?;
-            Self::deposit_event(RawEvent::NewOnChainTreasuryRegisteredWithSudoPermissions(new_bank_id, sudo_acc));
-            Ok(())
-        }
-        // TODO: no current withdrawal path for bank.controller() from bank.free()
-        #[weight = 0]
-        fn register_on_chain_bank_account_with_flat_share_group_permissions(
-            origin,
-            seed: BalanceOf<T>,
-            organization: OrgId,
-            share_id: u32,
-        ) -> DispatchResult {
-            let seeder = ensure_signed(origin)?;
-            let authentication: bool = Self::is_sudo_account(&seeder)
-                || Self::is_organization_supervisor(1u32, &seeder);
+                || Self::is_organization_supervisor(hosting_org, &seeder);
             ensure!(authentication, Error::<T>::MustHaveCertainAuthorityToRegisterBankAccount);
 
-            let wrapped_share_id = ShareID::Flat(share_id);
-            let new_bank_id = Self::register_on_chain_bank_account(organization, seeder, seed, WithdrawalPermissions::AnyMemberOfOrgShareGroup(organization, wrapped_share_id))?;
-            Self::deposit_event(RawEvent::NewOnChainTreasuryRegisteredWithFlatShareGroupPermissions(new_bank_id, organization, wrapped_share_id));
+            let new_bank_id = Self::register_on_chain_bank_account(hosting_org, seeder.clone(), seed, bank_controller.clone())?;
+            Self::deposit_event(RawEvent::RegisteredNewOnChainBank(seeder, new_bank_id, seed, hosting_org, bank_controller));
             Ok(())
         }
         #[weight = 0]
-        fn register_on_chain_bank_account_with_weighted_share_group_permissions(
+        fn reserve_spend_for_bank_account(
             origin,
-            seed: BalanceOf<T>,
-            organization: OrgId,
-            share_id: u32,
+            bank_id: OnChainTreasuryID,
+            reason: IpfsReference,
+            amount: BalanceOf<T>,
+            controller: WithdrawalPermissions<T::AccountId>,
         ) -> DispatchResult {
-            let seeder = ensure_signed(origin)?;
-            let authentication: bool = Self::is_sudo_account(&seeder)
-                || Self::is_organization_supervisor(1u32, &seeder);
-            ensure!(authentication, Error::<T>::MustHaveCertainAuthorityToRegisterBankAccount);
-
-            let wrapped_share_id = ShareID::WeightedAtomic(share_id);
-            let new_bank_id = Self::register_on_chain_bank_account(organization, seeder, seed, WithdrawalPermissions::AnyMemberOfOrgShareGroup(organization, wrapped_share_id))?;
-            Self::deposit_event(RawEvent::NewOnChainTreasuryRegisteredWithWeightedShareGroupPermissions(new_bank_id, organization, wrapped_share_id));
+            let reserver = ensure_signed(origin)?;
+            // auth happens in this method because the context for authentication requires the bank_account object in storage
+            let new_reservation_id = Self::reserve_for_spend(reserver.clone(), bank_id, reason.clone(), amount, controller.clone())?;
+            Self::deposit_event(RawEvent::SpendReservedForBankAccount(reserver, bank_id, new_reservation_id, reason, amount, controller));
             Ok(())
         }
-        // TODO:
-        // - reserve spend
-        // - unreserve spend
-        // - term sheet exit method (spend from free)
-        // - commit spend
-        // - transfer liquidity to new controller
-        // - withdraw by referencing transfer
-        //
-        // #[weight = 0]
-        // fn burn_all_shares_to_leave_weighted_membership_bank(
-        //     origin,
-        //     bank_id: OnChainTreasuryID,
-        // ) -> DispatchResult {
-        //     let leaving_member = ensure_signed(origin)?;
-        //     let amount_withdrawn_by_burning_shares = Self::withdraw_capital_by_burning_shares(bank_id, leaving_member.clone(), None)?;
-        //     Self::deposit_event(RawEvent::WeightedShareGroupMemberBurnedSharesToClaimProportionalWithdrawal(bank_id, leaving_member, amount_withdrawn_by_burning_shares));
-        //     Ok(())
-        // }
-        // #[weight = 0]
-        // fn withdraw_due_portion_of_deposit_from_weighted_membership_bank(
-        //     origin,
-        //     bank_id: OnChainTreasuryID,
-        //     deposit: DepositInfo<T::AccountId, IpfsReference, BalanceOf<T>>,
-        // ) -> DispatchResult {
-        //     let to_claimer = ensure_signed(origin)?;
-        //     let amount_withdrawn = Self::claim_portion_of_on_chain_deposit(bank_id, deposit, to_claimer.clone(), None)?;
-        //     Self::deposit_event(RawEvent::WeightedShareGroupMemberClaimedPortionOfDepositToWithdraw(bank_id, to_claimer, amount_withdrawn));
-        //     Ok(())
-        // }
+        #[weight = 0]
+        fn commit_reserved_spend_for_transfer_inside_bank_account(
+            origin,
+            bank_id: OnChainTreasuryID,
+            reservation_id: u32,
+            amount: BalanceOf<T>,
+            future_controller: WithdrawalPermissions<T::AccountId>,
+        ) -> DispatchResult {
+            let committer = ensure_signed(origin)?;
+            // auth happens in this method because the context for authentication requires the bank_account object in storage
+            Self::commit_reserved_spend_for_transfer(committer.clone(), bank_id, reservation_id, amount, future_controller.clone())?;
+            Self::deposit_event(RawEvent::CommitSpendBeforeInternalTransfer(committer, bank_id, reservation_id, amount, future_controller));
+            Ok(())
+        }
+        #[weight = 0]
+        fn unreserve_uncommitted_reservation_to_make_free(
+            origin,
+            bank_id: OnChainTreasuryID,
+            reservation_id: u32,
+            amount: BalanceOf<T>,
+        ) -> DispatchResult {
+            let qualified_bank_controller = ensure_signed(origin)?;
+            // auth happens in this method because the context for authentication requires the bank_account object in storage
+            Self::unreserve_uncommitted_to_make_free(qualified_bank_controller.clone(), bank_id, reservation_id, amount)?;
+            Self::deposit_event(RawEvent::UnReserveUncommittedReservationToMakeFree(qualified_bank_controller, bank_id, reservation_id, amount));
+            Ok(())
+        }
+        #[weight = 0]
+        fn unreserve_committed_reservation_to_make_free(
+            origin,
+            bank_id: OnChainTreasuryID,
+            reservation_id: u32,
+            amount: BalanceOf<T>,
+        ) -> DispatchResult {
+            let qualified_spend_reservation_controller = ensure_signed(origin)?;
+            // auth happens in this method because the context for authentication requires the bank_account object in storage
+            Self::unreserve_committed_to_make_free(qualified_spend_reservation_controller.clone(), bank_id, reservation_id, amount)?;
+            Self::deposit_event(RawEvent::UnReserveCommittedReservationToMakeFree(qualified_spend_reservation_controller, bank_id, reservation_id, amount));
+            Ok(())
+        }
+        #[weight = 0]
+        fn transfer_spending_for_spend_commitment(
+            origin,
+            bank_id: OnChainTreasuryID,
+            reason: IpfsReference,
+            reservation_id: u32,
+            amount: BalanceOf<T>,
+            committed_controller: WithdrawalPermissions<T::AccountId>,
+        ) -> DispatchResult {
+            let qualified_spend_reservation_controller = ensure_signed(origin)?;
+            // auth happens in this method because the context for authentication requires the bank_account object in storage
+            Self::transfer_spending_power(qualified_spend_reservation_controller.clone(), bank_id, reason.clone(), reservation_id, amount, committed_controller.clone())?;
+            Self::deposit_event(RawEvent::InternalTransferExecutedAndSpendingPowerDoledOutToController(qualified_spend_reservation_controller, bank_id, reason, reservation_id, amount, committed_controller));
+            Ok(())
+        }
+        #[weight = 0]
+        fn withdraw_by_referencing_internal_transfer(
+            origin,
+            bank_id: OnChainTreasuryID,
+            transfer_id: u32,
+            amount: BalanceOf<T>,
+        ) -> DispatchResult {
+            let requester = ensure_signed(origin)?;
+            let amount_received = Self::spend_from_transfers(
+                bank_id,
+                transfer_id,
+                requester.clone(),
+                amount,
+            )?;
+            Self::deposit_event(RawEvent::SpendRequestForInternalTransferApprovedAndExecuted(bank_id, requester, amount_received, transfer_id));
+            Ok(())
+        }
+        #[weight = 0]
+        fn burn_all_shares_to_leave_weighted_membership_bank_and_withdraw_related_free_capital(
+            origin,
+            bank_id: OnChainTreasuryID,
+        ) -> DispatchResult {
+            let leaving_member = ensure_signed(origin)?;
+            let amount_withdrawn_by_burning_shares = Self::burn_shares_to_exit_bank_ownership(leaving_member.clone(), bank_id)?;
+            Self::deposit_event(RawEvent::AccountLeftMembershipAndWithdrewProportionOfFreeCapitalInBank(bank_id, leaving_member, amount_withdrawn_by_burning_shares));
+            Ok(())
+        }
     }
 }
 
@@ -280,6 +315,30 @@ impl<T: Trait> Module<T> {
     // }
     /// This method simply checks membership in group,
     /// note: `WithdrawalPermissions` lacks context for magnitude requirement
+    fn governance_config_satisfies_org_controller_registration_requirements(
+        org: u32,
+        governance_config: WithdrawalPermissions<T::AccountId>,
+    ) -> bool {
+        // check the existence of the governance_config in the context of the org
+        match governance_config {
+            WithdrawalPermissions::Sudo(_) => {
+                // // COULD UNCOMMENT: requires any sudo-based bank account to be controlled only by the sudo chain account or the organization supervisor
+                // <<T as Trait>::Organization as SupervisorPermissions<u32, T::AccountId>>::is_sudo_account(&acc)
+                // || <<T as Trait>::Organization as SupervisorPermissions<u32, T::AccountId>>::is_organization_supervisor(org, &acc)
+                true // no restrictions for now
+            },
+            WithdrawalPermissions::AnyOfTwoAccounts(_, _) => true, // no restrictions for now
+            WithdrawalPermissions::AnyAccountInOrg(org_id) => {
+                org_id == org && // can only create banks with controllers for this org
+                <<T as Trait>::Organization as OrgChecks<u32, T::AccountId>>::check_org_existence(org)
+            },
+            // HAPPY PATH, pls use this for bank controllers for structured liquidity from account.free() as well
+            WithdrawalPermissions::AnyMemberOfOrgShareGroup(org_id, wrapped_share_id) => {
+                <<T as Trait>::Organization as ShareGroupChecks<u32, T::AccountId>>::check_share_group_existence(org_id, wrapped_share_id.into())
+            },
+        }
+        // a more granular check might require inner share membership for example in the org
+    }
     fn account_satisfies_withdrawal_permissions(
         who: &T::AccountId,
         governance_config: WithdrawalPermissions<T::AccountId>,
@@ -360,9 +419,19 @@ impl<T: Trait> RegisterBankAccount<T::AccountId, BalanceOf<T>> for Module<T> {
         amount: BalanceOf<T>, // TODO: ADD MINIMUM AMOUNT TO OPEN BANK
         owner_s: Self::GovernanceConfig,
     ) -> Result<Self::TreasuryId, DispatchError> {
-        let generated_id = Self::generate_unique_id();
+        // check that the owner_s is in the `registered_org` because those are our tacit requirements
+        // => cannot create bank and assign an outside organization or outside share group its controller permissions
+        ensure!(
+            Self::governance_config_satisfies_org_controller_registration_requirements(
+                registered_org,
+                owner_s.clone()
+            ),
+            Error::<T>::GovernanceConfigDoesNotSatisfyOrgRequirementsForBankRegistration
+        );
         // default all of it is put into savings but this optional param allows us to set some aside for spends
         let new_bank = BankState::new_from_deposit(registered_org, amount, owner_s);
+        // TODO: this changes storage even if the transfer fails, is it a bug?
+        let generated_id = Self::generate_unique_id();
         let to = Self::account_id(generated_id);
         T::Currency::transfer(&from, &to, amount, ExistenceRequirement::KeepAlive)?;
         <BankStores<T>>::insert(generated_id, new_bank);
@@ -542,7 +611,7 @@ impl<T: Trait> BankReservations<T::AccountId, BalanceOf<T>, IpfsReference> for M
         amount: BalanceOf<T>,
         // acceptance committee for approving set aside spends below the amount
         controller: Self::GovernanceConfig, // default WithdrawalRules
-    ) -> DispatchResult {
+    ) -> Result<u32, DispatchError> {
         let bank_account = <BankStores<T>>::get(bank_id)
             .ok_or(Error::<T>::BankAccountNotFoundForSpendReservation)?;
         // check that the account is authenticated to do this in the context of this bank
@@ -574,7 +643,7 @@ impl<T: Trait> BankReservations<T::AccountId, BalanceOf<T>, IpfsReference> for M
         <BankStores<T>>::insert(bank_id, new_bank);
         <BankTracker<T>>::insert(bank_tracker_id, caller, new_reserved_sum_by_caller);
         <SpendReservations<T>>::insert(bank_id, reservation_id, new_spend_reservation);
-        Ok(())
+        Ok(reservation_id)
     }
     // only reserve.controller() can unreserve funds after commitment (with method further down)
     // - this method puts the funds out of reach of bank.controller() (at least immediate reach)
@@ -983,7 +1052,7 @@ impl<T: Trait> TermSheetExit<T::AccountId, BalanceOf<T>> for Module<T> {
         // here is where we might apply some discount based on a vesting period/schedule
 
         // TODO: this call duplicates the Get for BankStore and we only should use one GET
-        Self::spend_from_free(bank_id, rage_quitter.clone(), withdrawal_amount.clone())?;
+        Self::spend_from_free(bank_id, rage_quitter.clone(), withdrawal_amount)?;
         // burn the shares
         let _ = <<T as Trait>::Organization as WeightedShareIssuanceWrapper<
             u32,

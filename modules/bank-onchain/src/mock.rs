@@ -95,10 +95,15 @@ impl org::Trait for Test {
     type FlatShareData = FlatShareData;
     type WeightedShareData = WeightedShareData;
 }
+parameter_types! {
+    // minimum deposit to register an on-chain bank
+    pub const MinimumInitialDeposit: u64 = 1;
+}
 impl Trait for Test {
     type Event = TestEvent;
     type Currency = Balances;
     type Organization = OrganizationWrapper;
+    type MinimumInitialDeposit = MinimumInitialDeposit;
 }
 pub type System = frame_system::Module<Test>;
 pub type Balances = pallet_balances::Module<Test>;

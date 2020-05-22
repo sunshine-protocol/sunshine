@@ -743,7 +743,7 @@ pub trait RegisterBankAccount<AccountId, Currency>: OnChainBank {
         amount: Currency,
         owner_s: Self::GovernanceConfig,
     ) -> Result<Self::TreasuryId, DispatchError>;
-}
+} // people should be eventually able to solicit loans from others to SEED a bank account but they cede some or all of the control...
 
 pub trait OwnershipProportionCalculations<AccountId, Currency, FineArithmetic>:
     RegisterBankAccount<AccountId, Currency>
@@ -836,7 +836,7 @@ pub trait BankReservations<AccountId, Currency, Hash>:
         amount: Currency,
         // acceptance committee for approving set aside spends below the amount
         controller: Self::GovernanceConfig,
-    ) -> DispatchResult;
+    ) -> Result<u32, DispatchError>;
     // only reserve.controller() can unreserve funds after commitment (with method further down)
     fn commit_reserved_spend_for_transfer(
         caller: AccountId,
@@ -904,7 +904,7 @@ pub trait TermSheetExit<AccountId, Currency>: OnChainBank {
         rage_quitter: AccountId,
         bank_id: Self::TreasuryId,
     ) -> Result<Currency, DispatchError>;
-}
+} // TODO: method to trade some ownership for some free capital instead of making ownership atomic, but it should be atomic for the simplest version
 
 pub trait TermSheetIssuance<AccountId, Hash, Shares, Currency>: OnChainBank {
     type VoteConfig; // enum to express supported vote options

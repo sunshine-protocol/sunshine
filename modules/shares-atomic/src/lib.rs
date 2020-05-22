@@ -176,13 +176,13 @@ decl_storage! {
             }
             if let Some(mem) = &config.shareholder_membership {
                 mem.iter().for_each(|(org_id, share_id, account, shares)| {
-                    let share_supervisor = ShareGroupSupervisor::<T>::get(org_id, share_id).expect("share supervisor must exist in order to add members at genesis");
-                    <Module<T>>::issue_shares(
-                        T::Origin::from(Some(share_supervisor).into()),
+                    let _ = ShareGroupSupervisor::<T>::get(org_id, share_id).expect("share supervisor must exist in order to add members at genesis");
+                    <Module<T>>::issue(
                         *org_id,
                         *share_id,
                         account.clone(),
                         *shares,
+                        false
                     ).expect("genesis member could not be added to the organization");
                 });
             }
