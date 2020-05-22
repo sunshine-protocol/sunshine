@@ -12,7 +12,7 @@ mod tests;
 
 use util::{
     bank::{
-        BankMapID, BankState, BankTrackerID, BankTrackerIdentifier, DepositInfo,
+        BankMapID, BankState, BankTrackerID, BankTrackerIdentifier, CommitmentInfo, DepositInfo,
         InternalTransferInfo, OnChainTreasuryID, ReservationInfo, WithdrawalPermissions,
     },
     organization::ShareID,
@@ -86,7 +86,7 @@ decl_event!(
         CapitalDepositedIntoOnChainBankAccount(AccountId, OnChainTreasuryID, Balance, IpfsReference),
         // u32 is reservation_id
         SpendReservedForBankAccount(AccountId, OnChainTreasuryID, u32, IpfsReference, Balance, WithdrawalPermissions<AccountId>),
-        CommitSpendBeforeInternalTransfer(AccountId, OnChainTreasuryID, u32, Balance, WithdrawalPermissions<AccountId>),
+        CommitSpendBeforeInternalTransfer(AccountId, OnChainTreasuryID, u32, IpfsReference, Balance, WithdrawalPermissions<AccountId>),
         UnReserveUncommittedReservationToMakeFree(AccountId, OnChainTreasuryID, u32, Balance),
         UnReserveCommittedReservationToMakeFree(AccountId, OnChainTreasuryID, u32, Balance),
         InternalTransferExecutedAndSpendingPowerDoledOutToController(AccountId, OnChainTreasuryID, IpfsReference, u32, Balance, WithdrawalPermissions<AccountId>),
@@ -146,7 +146,7 @@ decl_storage! {
         /// Spend commitments, marks formal shift of power over capital from direct bank.controller() to reservation.controller()
         SpendCommitments get(fn spend_commitments): double_map
             hasher(blake2_128_concat) BankTrackerIdentifier, // only the CommitSpend variant allowed, seems unergonomic but it works
-            hasher(blake2_128_concat) WithdrawalPermissions<T::AccountId> => Option<BalanceOf<T>>;
+            hasher(blake2_128_concat) WithdrawalPermissions<T::AccountId> => Option<CommitmentInfo<IpfsReference, BalanceOf<T>>>;
 
         /// Internal transfers of control over capital that allow transfer liquidity rights to the current controller
         InternalTransfers get(fn internal_transfers): double_map
@@ -218,13 +218,14 @@ decl_module! {
             origin,
             bank_id: OnChainTreasuryID,
             reservation_id: u32,
+            reason: IpfsReference,
             amount: BalanceOf<T>,
             future_controller: WithdrawalPermissions<T::AccountId>,
         ) -> DispatchResult {
             let committer = ensure_signed(origin)?;
             // auth happens in this method because the context for authentication requires the bank_account object in storage
-            Self::commit_reserved_spend_for_transfer(committer.clone(), bank_id, reservation_id, amount, future_controller.clone())?;
-            Self::deposit_event(RawEvent::CommitSpendBeforeInternalTransfer(committer, bank_id, reservation_id, amount, future_controller));
+            Self::commit_reserved_spend_for_transfer(committer.clone(), bank_id, reservation_id, reason.clone(), amount, future_controller.clone())?;
+            Self::deposit_event(RawEvent::CommitSpendBeforeInternalTransfer(committer, bank_id, reservation_id, reason, amount, future_controller));
             Ok(())
         }
         #[weight = 0]
@@ -651,6 +652,7 @@ impl<T: Trait> BankReservations<T::AccountId, BalanceOf<T>, IpfsReference> for M
         caller: T::AccountId,
         bank_id: Self::TreasuryId,
         reservation_id: u32,
+        reason: IpfsReference,
         amount: BalanceOf<T>,
         expected_future_owner: Self::GovernanceConfig,
     ) -> DispatchResult {
@@ -678,13 +680,14 @@ impl<T: Trait> BankReservations<T::AccountId, BalanceOf<T>, IpfsReference> for M
             amount
         };
         // tracks all spend commitments made to specific WithdrawalPermissions
-        let new_commitment = if let Some(existing_commitment_amt) =
+        let commit_amt = if let Some(existing_commitment_amt) =
             <SpendCommitments<T>>::get(bank_tracker_id.clone(), expected_future_owner.clone())
         {
-            existing_commitment_amt + amount
+            existing_commitment_amt.amount() + amount
         } else {
             amount
         };
+        let new_commitment = CommitmentInfo::new(reason, commit_amt);
         // respective insertions (3)
         <SpendCommitments<T>>::insert(
             bank_tracker_id.clone(),
@@ -812,10 +815,12 @@ impl<T: Trait> BankReservations<T::AccountId, BalanceOf<T>, IpfsReference> for M
                 .ok_or(Error::<T>::SpendCommitmentNotFoundForInternalTransfer)?;
         // ensure the spend_commitment exceeds the amount
         ensure!(
-            spend_commitment >= amount,
+            spend_commitment.amount() >= amount,
             Error::<T>::InternalTransferRequestExceedsReferencedSpendCommitment
-        );
-        let new_spend_commitment = spend_commitment - amount;
+        ); // equivalent to CheckedSub
+        let new_spend_commitment_amt = spend_commitment.amount() - amount;
+        let new_spend_commitment =
+            CommitmentInfo::new(spend_commitment.reason(), new_spend_commitment_amt);
         // ensure that the amount is less than the spend reservation amount
         let new_spend_reservation = spend_reservation
             .move_funds_out_committed_only(amount)

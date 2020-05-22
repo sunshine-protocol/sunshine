@@ -842,6 +842,7 @@ pub trait BankReservations<AccountId, Currency, Hash>:
         caller: AccountId,
         bank_id: Self::TreasuryId,
         reservation_id: u32,
+        reason: Hash,
         amount: Currency,
         expected_future_owner: Self::GovernanceConfig,
     ) -> DispatchResult;

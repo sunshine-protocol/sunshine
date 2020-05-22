@@ -274,6 +274,24 @@ impl<GovernanceConfig: Clone + PartialEq, Currency: Zero + AtLeast32Bit + Clone>
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
+pub struct CommitmentInfo<Hash, Currency> {
+    reason: Hash,
+    amount: Currency,
+}
+
+impl<Hash: Clone, Currency: Clone> CommitmentInfo<Hash, Currency> {
+    pub fn new(reason: Hash, amount: Currency) -> CommitmentInfo<Hash, Currency> {
+        CommitmentInfo { reason, amount }
+    }
+    pub fn amount(&self) -> Currency {
+        self.amount.clone()
+    }
+    pub fn reason(&self) -> Hash {
+        self.reason.clone()
+    }
+}
+
+#[derive(PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
 pub struct DepositInfo<AccountId, Hash, Currency> {
     // Depositer's identity
     depositer: AccountId,
