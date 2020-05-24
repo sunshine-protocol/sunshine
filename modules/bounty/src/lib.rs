@@ -14,21 +14,23 @@ use sp_runtime::{DispatchError, DispatchResult, Permill};
 use sp_std::prelude::*;
 
 use util::{
-    bank::{OffChainTreasuryID, OnChainTreasuryID},
+    bank::{BankMapID, OnChainTreasuryID},
     bounty::{
         BountyInformation, BountyPaymentTracker, GrantApplication, Milestone, MilestoneReview,
         MilestoneSchedule, ReviewBoard,
     },
-    organization::{FormedOrganization, TermsOfAgreement},
+    organization::TermsOfAgreement,
     traits::{
-        AccessGenesis, ApplyVote, ChangeBankBalances, ChangeGroupMembership, CheckBankBalances,
-        CheckVoteStatus, CreateBounty, DepositWithdrawalOps, EmpowerWithVeto, GenerateUniqueID,
-        GetDepositsByAccountForBank, GetInnerOuterShareGroups, GetPetitionStatus, GetVoteOutcome,
-        IDIsAvailable, MintableSignal, OffChainBank, OnChainBank, OnChainWithdrawalFilters,
-        OpenPetition, OpenShareGroupVote, OrgChecks, OrganizationDNS, RegisterOffChainBankAccount,
-        RegisterOnChainBankAccount, RegisterShareGroup, RequestChanges, ShareGroupChecks,
-        SignPetition, SupervisorPermissions, SupportedOrganizationShapes, UpdatePetition,
-        VerifyOwnership, VoteOnProposal, WeightedShareIssuanceWrapper, WeightedShareWrapper,
+        AccessGenesis, ApplyVote, BankDepositsAndSpends, BankReservations, BankSpends,
+        BankStorageInfo, ChangeGroupMembership, CheckBankBalances, CheckVoteStatus, CreateBounty,
+        DepositIntoBank, EmpowerWithVeto, FoundationParts, GenerateUniqueID, GenerateUniqueKeyID,
+        GetInnerOuterShareGroups, GetPetitionStatus, GetVoteOutcome, IDIsAvailable, MintableSignal,
+        OnChainBank, OpenPetition, OpenShareGroupVote, OrgChecks, OrganizationDNS,
+        OwnershipProportionCalculations, RegisterBankAccount, RegisterFoundation,
+        RegisterOffChainBankAccount, RegisterShareGroup, RequestChanges, SeededGenerateUniqueID,
+        ShareGroupChecks, SignPetition, SupervisorPermissions, SupportedOrganizationShapes,
+        TermSheetExit, UpdatePetition, VoteOnProposal, WeightedShareIssuanceWrapper,
+        WeightedShareWrapper,
     },
     uuid::UUID3,
 };
@@ -69,18 +71,19 @@ pub trait Trait: frame_system::Trait {
     // TODO: start with spending functionality with balances for milestones
     // - then extend to offchain bank interaction (try to mirror logic/calls)
     type Bank: IDIsAvailable<OnChainTreasuryID>
+        + IDIsAvailable<(OnChainTreasuryID, BankMapID)>
+        + GenerateUniqueKeyID<(OnChainTreasuryID, BankMapID)>
         + GenerateUniqueID<OnChainTreasuryID>
-        + IDIsAvailable<OffChainTreasuryID>
-        + GenerateUniqueID<OffChainTreasuryID>
-        + RegisterOffChainBankAccount
-        + RegisterOnChainBankAccount<Self::AccountId, BalanceOf<Self>, Permill>
-        + ChangeBankBalances<BalanceOf<Self>, Permill>
-        + CheckBankBalances<Self::AccountId, BalanceOf<Self>, Permill>
-        + OffChainBank
-        + SupportedOrganizationShapes
-        + OnChainBank<Self::AccountId, IpfsReference, BalanceOf<Self>, Permill>
-        + GetDepositsByAccountForBank<Self::AccountId, IpfsReference, BalanceOf<Self>, Permill>
-        + OnChainWithdrawalFilters<Self::AccountId, IpfsReference, BalanceOf<Self>, Permill>;
+        + OnChainBank
+        + RegisterBankAccount<Self::AccountId, BalanceOf<Self>>
+        + OwnershipProportionCalculations<Self::AccountId, BalanceOf<Self>, Permill>
+        + BankDepositsAndSpends<BalanceOf<Self>>
+        + CheckBankBalances<BalanceOf<Self>>
+        + DepositIntoBank<Self::AccountId, IpfsReference, BalanceOf<Self>>
+        + BankReservations<Self::AccountId, BalanceOf<Self>, IpfsReference>
+        + BankSpends<Self::AccountId, BalanceOf<Self>>
+        + BankStorageInfo<Self::AccountId, BalanceOf<Self>>
+        + TermSheetExit<Self::AccountId, BalanceOf<Self>>;
 
     // TODO: use this when adding TRIGGER => VOTE => OUTCOME framework for util::bank::Spends
     type VotePetition: IDIsAvailable<UUID3>
@@ -117,44 +120,44 @@ decl_event!(
         <T as frame_system::Trait>::AccountId,
         Currency = BalanceOf<T>,
     {
-        PlaceHolder(AccountId), // delete this
-        BountyPosted(AccountId, OrgId, BountyId, Currency),
-        GrantApplicationSubmitted(AccountId, OrgId, BountyId, Currency),
+        FoundationPostedBounty(AccountId, OrgId, BountyId, OnChainTreasuryID, IpfsReference, Currency, Currency),
     }
 );
 
 decl_error! {
     pub enum Error for Module<T: Trait> {
-        PlaceHolderError,
         NoBankExistsAtInputTreasuryIdForCreatingBounty,
         WithdrawalPermissionsOfBankMustAlignWithCallerToUseForBounty,
         OrganizationBankDoesNotHaveEnoughBalanceToCreateBounty,
-        BountyAmountBelowGlobalMinimum,
-        BountyCollateralRatioBelowGlobalMinimum,
+        MinimumBountyClaimedAmountMustMeetModuleLowerBound,
+        BountyCollateralRatioMustMeetModuleRequirements,
+        FoundationMustBeRegisteredToCreateBounty,
+        CannotRegisterFoundationFromOrgBankRelationshipThatDNE,
     }
 }
 
 decl_storage! {
     trait Store for Module<T: Trait> as Court {
-        pub PlaceHolderStorageValue get(fn place_holder_storage_value): u32;
-
         FoundationBountyNonce get(fn foundation_bounty_nonce): map
-            hasher(opaque_blake2_256) FormedOrganization => BountyId;
+            hasher(opaque_blake2_256) OrgId => BountyId;
 
-        // TODO: ensure that the FormedOrganization is the controller for the bank account during registration of bounty
+        // unordered set for tracking foundations as relationships b/t OrgId and OnChainTreasuryID
+        RegisteredFoundations get(fn registered_foundations): double_map
+            hasher(blake2_128_concat) OrgId,
+            hasher(blake2_128_concat) OnChainTreasuryID => bool;
+
+        // TODO: helper method for getting all the bounties for an organization
         FoundationSponsoredBounties get(fn foundation_sponsored_bounties): double_map
-            hasher(opaque_blake2_256) FormedOrganization,
+            hasher(opaque_blake2_256) OrgId,
             hasher(opaque_blake2_256) BountyId => Option<BountyInformation<IpfsReference, BalanceOf<T>, T::AccountId>>;
 
-        // TODO: push notifications should ping all supervisors when this submission occurs
-        // - optionally: request their acknowledgement before starting the supervision vote according to the ReviewBoard (could be part of the ReviewBoard)
-        MilestoneSubmissions get(fn milestone_submissions): double_map
-            hasher(opaque_blake2_256) (FormedOrganization, BountyId),
-            hasher(opaque_blake2_256) Milestone<IpfsReference, BalanceOf<T>> => Option<MilestoneReview>;
-
         BountyApplications get(fn bounty_applications): double_map
-            hasher(opaque_blake2_256) (FormedOrganization, BountyId),
+            hasher(opaque_blake2_256) (OrgId, BountyId),
             hasher(opaque_blake2_256) GrantApplication<T::AccountId, BalanceOf<T>, IpfsReference> => bool;
+
+        MilestoneSubmissions get(fn milestone_submissions): double_map
+            hasher(opaque_blake2_256) (OrgId, BountyId),
+            hasher(opaque_blake2_256) Milestone<IpfsReference, BalanceOf<T>> => Option<MilestoneReview>;
     }
 }
 
@@ -164,18 +167,9 @@ decl_module! {
         fn deposit_event() = default;
 
         #[weight = 0]
-        fn fake_method(origin) -> DispatchResult {
-            let signer = ensure_signed(origin)?;
-            if PlaceHolderStorageValue::get() == 69u32 {
-                return Err(Error::<T>::PlaceHolderError.into());
-            }
-            Self::deposit_event(RawEvent::PlaceHolder(signer));
-            Ok(())
-        }
-
-        #[weight = 0]
-        fn create_bounty(
+        fn create_bounty_on_behalf_of_foundation(
             origin,
+            registered_organization: OrgId,
             description: IpfsReference,
             bank_account: OnChainTreasuryID,
             amount_reserved_for_bounty: BalanceOf<T>, // collateral requirement
@@ -183,128 +177,174 @@ decl_module! {
             acceptance_committee: ReviewBoard<T::AccountId>,
             supervision_committee: Option<ReviewBoard<T::AccountId>>,
         ) -> DispatchResult {
-            // permissions, might be the first organization for example but it is permissioned
-            let _ = ensure_signed(origin)?;
+            let bounty_creator = ensure_signed(origin)?;
+            // TODO: need to verify bank_account ownership by registered_organization somehow
+            // -> may just need to add this check to the spend reservation implicitly
+            let bounty_identifier = Self::create_bounty(
+                registered_organization,
+                bounty_creator.clone(),
+                bank_account,
+                description.clone(),
+                amount_reserved_for_bounty,
+                amount_claimed_available,
+                acceptance_committee,
+                supervision_committee,
+            )?;
+            Self::deposit_event(RawEvent::FoundationPostedBounty(
+                bounty_creator,
+                registered_organization,
+                bounty_identifier,
+                bank_account,
+                description,
+                amount_reserved_for_bounty,
+                amount_claimed_available,
+            ));
             Ok(())
         }
     }
 }
 
-impl<T: Trait> IDIsAvailable<(FormedOrganization, BountyId)> for Module<T> {
-    fn id_is_available(id: (FormedOrganization, BountyId)) -> bool {
+impl<T: Trait> Module<T> {
+    fn collateral_satisfies_module_limits(collateral: BalanceOf<T>, claimed: BalanceOf<T>) -> bool {
+        let ratio = Permill::from_rational_approximation(collateral, claimed);
+        ratio >= T::MinimumBountyCollateralRatio::get()
+    }
+}
+
+impl<T: Trait> IDIsAvailable<(OrgId, BountyId)> for Module<T> {
+    fn id_is_available(id: (OrgId, BountyId)) -> bool {
         <FoundationSponsoredBounties<T>>::get(id.0, id.1).is_none()
     }
 }
 
-impl<T: Trait> GenerateUniqueID<(FormedOrganization, BountyId)> for Module<T> {
-    fn generate_unique_id(
-        proposed_id: (FormedOrganization, BountyId),
-    ) -> (FormedOrganization, BountyId) {
-        if !Self::id_is_available(proposed_id) {
-            let mut id_counter = FoundationBountyNonce::get(proposed_id.0) + 1;
-            while !Self::id_is_available((proposed_id.0, id_counter)) {
-                id_counter += 1;
-            }
-            FoundationBountyNonce::insert(proposed_id.0, id_counter);
-            (proposed_id.0, id_counter)
-        } else {
-            proposed_id
+impl<T: Trait> SeededGenerateUniqueID<BountyId, OrgId> for Module<T> {
+    fn generate_unique_id(seed: OrgId) -> BountyId {
+        let mut id_counter = FoundationBountyNonce::get(seed) + 1;
+        while !Self::id_is_available((seed, id_counter)) {
+            id_counter += 1;
         }
+        FoundationBountyNonce::insert(seed, id_counter);
+        id_counter
     }
 }
 
-impl<T: Trait> SupportedOrganizationShapes for Module<T> {
-    type FormedOrgId = <<T as Trait>::Bank as SupportedOrganizationShapes>::FormedOrgId;
+impl<T: Trait> FoundationParts for Module<T> {
+    type OrgId = OrgId;
+    type BountyId = BountyId;
+    type BankId = OnChainTreasuryID;
 }
 
-impl<T: Trait> CreateBounty<IpfsReference, BalanceOf<T>> for Module<T> {
-    type BankId = <<T as Trait>::Bank as RegisterOnChainBankAccount<
-        <T as frame_system::Trait>::AccountId,
-        BalanceOf<T>,
-        Permill,
-    >>::TreasuryId;
-    type ReviewCommittee = ReviewBoard<T::AccountId>;
-    fn screen_bounty_submission(
-        caller: Self::FormedOrgId,
-        description: IpfsReference,
-        bank_account: Self::BankId,
-        amount_reserved_for_bounty: BalanceOf<T>, // collateral requirement
-        amount_claimed_available: BalanceOf<T>, // claimed available amount, not necessarily liquid
-        acceptance_committee: Self::ReviewCommittee,
-        supervision_committee: Option<Self::ReviewCommittee>,
+impl<T: Trait> RegisterFoundation<BalanceOf<T>, T::AccountId> for Module<T> {
+    // helper method to quickly bootstrap an organization form a donation
+    // -> it should register an on-chain bank account and return the on-chain bank account identifier
+    // TODO
+    fn register_foundation_from_donation_deposit(
+        from: T::AccountId,
+        for_org: Self::OrgId,
+        amount: BalanceOf<T>,
+    ) -> Result<Self::BankId, DispatchError> {
+        todo!()
+    }
+    fn register_foundation_from_existing_bank(
+        org: Self::OrgId,
+        bank: Self::BankId,
     ) -> DispatchResult {
+        ensure!(
+            <<T as Trait>::Bank as RegisterBankAccount<T::AccountId, BalanceOf<T>>>::check_bank_owner(bank.into(), org.into()),
+            Error::<T>::CannotRegisterFoundationFromOrgBankRelationshipThatDNE
+        );
+        RegisteredFoundations::insert(org, bank, true);
         Ok(())
     }
-    // This method is still permissioned by the caller in terms of the actual caller's AccountId's relationship
-    // to the caller: Self::FormedOrgId
-    fn create_bounty(
-        caller: Self::FormedOrgId,
-        description: IpfsReference,
+}
+
+impl<T: Trait> CreateBounty<BalanceOf<T>, T::AccountId, IpfsReference> for Module<T> {
+    type BountyInfo = BountyInformation<IpfsReference, BalanceOf<T>, T::AccountId>;
+    // smpl vote config for this module in particular
+    type ReviewCommittee = ReviewBoard<T::AccountId>;
+    // helper to screen, prepare and form bounty information object
+    fn screen_bounty_creation(
+        foundation: u32, // registered OrgId
+        caller: T::AccountId,
         bank_account: Self::BankId,
+        description: IpfsReference,
         amount_reserved_for_bounty: BalanceOf<T>, // collateral requirement
         amount_claimed_available: BalanceOf<T>, // claimed available amount, not necessarily liquid
         acceptance_committee: Self::ReviewCommittee,
         supervision_committee: Option<Self::ReviewCommittee>,
-    ) -> Result<(Self::FormedOrgId, u32), DispatchError> {
-        // get bank state with bank id
-        let bank_state = <<T as Trait>::Bank as CheckBankBalances<
-            <T as frame_system::Trait>::AccountId,
-            BalanceOf<T>,
-            Permill,
-        >>::get_bank(bank_account.clone())
-        .ok_or(Error::<T>::NoBankExistsAtInputTreasuryIdForCreatingBounty)?;
-        // verify that WithdrawalPermissions conform to shape of the `caller: FormedOrgId`
+    ) -> Result<Self::BountyInfo, DispatchError> {
+        // this constraints specifies required registration of the relationship between OrgId and OnChainBankId
         ensure!(
-            bank_state.verify_ownership(caller),
-            Error::<T>::WithdrawalPermissionsOfBankMustAlignWithCallerToUseForBounty
+            RegisteredFoundations::get(foundation, bank_account),
+            Error::<T>::FoundationMustBeRegisteredToCreateBounty
         );
-        // get the bank balance with bank id
-        // TODO: I want an event emitted with this information somewhere
-        let bank_balance = <<T as Trait>::Bank as CheckBankBalances<
-            <T as frame_system::Trait>::AccountId,
-            BalanceOf<T>,
-            Permill,
-        >>::get_bank_total_balance(bank_account)
-        .ok_or(Error::<T>::OrganizationBankDoesNotHaveEnoughBalanceToCreateBounty)?;
-        // ensure that the bank has more than the amount that needs to be reserved for the bounty
+        // enfore module constraints for all posted bounties
         ensure!(
-            bank_balance >= amount_reserved_for_bounty,
-            Error::<T>::OrganizationBankDoesNotHaveEnoughBalanceToCreateBounty
+            amount_claimed_available.clone() >= T::BountyLowerBound::get(),
+            Error::<T>::MinimumBountyClaimedAmountMustMeetModuleLowerBound
         );
-        // TODO: set aside that amount for a reserved spend aka reserve this
-        // amount for only withdrawal requests pertaining to this bounty?
-        // - could just shift it from SAVINGS to RESERVED_FOR_SPENDS if its available
-        // - but we also need to share context so that the money can flow when the acceptance
-        // committee approves a grant && the supervising committee approves a milestone submission
+        ensure!(
+            Self::collateral_satisfies_module_limits(
+                amount_reserved_for_bounty.clone(),
+                amount_claimed_available.clone(),
+            ),
+            Error::<T>::BountyCollateralRatioMustMeetModuleRequirements
+        );
 
-        // check that the bounty amount is above the global
-        ensure!(
-            amount_claimed_available >= T::BountyLowerBound::get(),
-            Error::<T>::BountyAmountBelowGlobalMinimum
-        );
-        let collateral_ratio = Permill::from_rational_approximation(
+        // reserve `amount_reserved_for_bounty` here by calling into `bank-onchain`
+        let spend_reservation_id = <<T as Trait>::Bank as BankReservations<
+            T::AccountId,
+            BalanceOf<T>,
+            IpfsReference,
+        >>::reserve_for_spend(
+            caller,
+            bank_account.into(),
+            description.clone(),
+            amount_reserved_for_bounty,
+            acceptance_committee.clone().into(),
+        )?;
+        // form the bounty_info
+        let new_bounty_info = BountyInformation::new(
+            description,
+            bank_account,
+            spend_reservation_id,
             amount_reserved_for_bounty,
             amount_claimed_available,
+            acceptance_committee,
+            supervision_committee,
         );
-        // check that the collateralization ratio is above the global (create helper)
+        Ok(new_bounty_info)
+    }
+    fn create_bounty(
+        foundation: u32, // registered OrgId
+        caller: T::AccountId,
+        bank_account: Self::BankId,
+        description: IpfsReference,
+        amount_reserved_for_bounty: BalanceOf<T>, // collateral requirement
+        amount_claimed_available: BalanceOf<T>, // claimed available amount, not necessarily liquid
+        acceptance_committee: Self::ReviewCommittee,
+        supervision_committee: Option<Self::ReviewCommittee>,
+    ) -> Result<u32, DispatchError> {
+        // quick lint, check that the organization is already registered in the org module
         ensure!(
-            collateral_ratio >= T::MinimumBountyCollateralRatio::get(),
-            Error::<T>::BountyCollateralRatioBelowGlobalMinimum
+            <<T as Trait>::Organization as OrgChecks<u32, <T as frame_system::Trait>::AccountId>>::check_org_existence(foundation),
+            Error::<T>::NoBankExistsAtInputTreasuryIdForCreatingBounty
         );
-
-        // check existence of the acceptance committee
-        // - must be an inner share group of the organization?
-
-        // check existence of the supervision committee
-        // - must be an inner share group of the organization?
-
-        // generate unique identifier for bounty
-
-        // form bounty
-
-        // insert bounty into storage
-
-        // return unique storage identifier
-        Err(Error::<T>::PlaceHolderError.into())
+        // creates object and propagates any error related to invalid creation inputs
+        let new_bounty_info = Self::screen_bounty_creation(
+            foundation,
+            caller,
+            bank_account,
+            description,
+            amount_reserved_for_bounty,
+            amount_claimed_available,
+            acceptance_committee,
+            supervision_committee,
+        )?;
+        // generate unique BountyId for OrgId
+        let new_bounty_id = Self::generate_unique_id(foundation);
+        // insert bounty_info object into storage
+        <FoundationSponsoredBounties<T>>::insert(foundation, new_bounty_id, new_bounty_info);
+        Ok(new_bounty_id)
     }
 }

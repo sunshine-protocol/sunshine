@@ -728,14 +728,14 @@ pub trait OffChainBank: RegisterOffChainBankAccount {
 }
 
 // ~~~~~~~~ BankOnChain Module ~~~~~~~~
-
+use crate::bank::OnChainTreasuryID;
 pub trait OnChainBank {
-    type OrgId;
-    type TreasuryId: Clone;
+    type OrgId: From<u32>;
+    type TreasuryId: Clone + From<OnChainTreasuryID>;
 }
-
+use crate::bounty::ReviewBoard;
 pub trait RegisterBankAccount<AccountId, Currency>: OnChainBank {
-    type GovernanceConfig;
+    type GovernanceConfig: From<ReviewBoard<AccountId>>;
     // requires a deposit of some size above the minimum and returns the OnChainTreasuryID
     fn register_on_chain_bank_account(
         registered_org: Self::OrgId,
@@ -743,6 +743,10 @@ pub trait RegisterBankAccount<AccountId, Currency>: OnChainBank {
         amount: Currency,
         owner_s: Self::GovernanceConfig,
     ) -> Result<Self::TreasuryId, DispatchError>;
+    fn check_bank_owner(
+        bank_id: Self::TreasuryId,
+        org: Self::OrgId,
+    ) -> bool;
 } // people should be eventually able to solicit loans from others to SEED a bank account but they cede some or all of the control...
 
 pub trait OwnershipProportionCalculations<AccountId, Currency, FineArithmetic>:
@@ -996,28 +1000,45 @@ pub trait BankStorageInfo<AccountId, Currency>: RegisterBankAccount<AccountId, C
 
 // ~~~~~~~~ Bounty Module ~~~~~~~~
 
-pub trait CreateBounty<IpfsReference, Currency>: SupportedOrganizationShapes {
-    type BankId: Clone;
+pub trait FoundationParts {
+    type OrgId;
+    type BountyId;
+    type BankId;
+}
+
+// TODO: this could be removed if we didn't cache the ownership of on-chain
+// banks in bounty and instead checked ownership in the `screen_bounty_creation` `reserve_spend` call
+// to bank but I don't think it's the worst thing to have for V1
+pub trait RegisterFoundation<Currency, AccountId>: FoundationParts {
+    // should still be some minimum enforced in bank
+    fn register_foundation_from_donation_deposit(from: AccountId, for_org: Self::OrgId, amount: Currency) -> Result<Self::BankId, DispatchError>;
+    fn register_foundation_from_existing_bank(org: Self::OrgId, bank: Self::BankId) -> DispatchResult;
+}
+
+pub trait CreateBounty<Currency, AccountId, IpfsReference>: RegisterFoundation<Currency, AccountId> {
+    type BountyInfo;
     type ReviewCommittee;
     // helper to screen, prepare and form bounty information object
-    fn screen_bounty_submission(
-        caller: Self::FormedOrgId,
-        description: IpfsReference,
+    fn screen_bounty_creation(
+        foundation: Self::OrgId, // registered OrgId
+        caller: AccountId,
         bank_account: Self::BankId,
+        description: IpfsReference,
         amount_reserved_for_bounty: Currency, // collateral requirement
         amount_claimed_available: Currency,   // claimed available amount, not necessarily liquid
         acceptance_committee: Self::ReviewCommittee,
         supervision_committee: Option<Self::ReviewCommittee>,
-    ) -> DispatchResult;
-    // call should be an authenticated member of the FormedOrgId
-    // - could be the inner shares of an organization for example
+    ) -> Result<Self::BountyInfo, DispatchError>;
+    // call should be an authenticated member of the OrgId
+    // - requirement might be the inner shares of an organization for example
     fn create_bounty(
-        caller: Self::FormedOrgId,
-        description: IpfsReference,
+        foundation: Self::OrgId, // registered OrgId
+        caller: AccountId,
         bank_account: Self::BankId,
+        description: IpfsReference,
         amount_reserved_for_bounty: Currency, // collateral requirement
         amount_claimed_available: Currency,   // claimed available amount, not necessarily liquid
         acceptance_committee: Self::ReviewCommittee,
         supervision_committee: Option<Self::ReviewCommittee>,
-    ) -> Result<(Self::FormedOrgId, u32), DispatchError>;
+    ) -> Result<Self::BountyId, DispatchError>;
 }

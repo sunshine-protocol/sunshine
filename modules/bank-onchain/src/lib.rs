@@ -114,7 +114,8 @@ decl_error! {
         CallerMustSatisfyBankOwnerPermissionsForSpendReservation,
         NotEnoughFundsCommittedToSatisfyUnreserveAndFreeRequest,
         NotEnoughFundsCommittedToEnableInternalTransfer,
-        NotEnoughFundsUnCommittedToSatisfyUnreserveAndFreeRequest,
+        NotEnoughFundsInSpendReservationUnCommittedToSatisfyUnreserveUnCommittedRequest,
+        NotEnoughFundsInBankReservedToSatisfyUnReserveUnComittedRequest,
         InternalTransferRequestExceedsReferencedSpendCommitment,
         SpendCommitmentNotFoundForInternalTransfer,
         GovernanceConfigDoesNotSatisfyOrgRequirementsForBankRegistration,
@@ -438,6 +439,13 @@ impl<T: Trait> RegisterBankAccount<T::AccountId, BalanceOf<T>> for Module<T> {
         <BankStores<T>>::insert(generated_id, new_bank);
         Ok(generated_id)
     }
+    fn check_bank_owner(bank_id: Self::TreasuryId, org: Self::OrgId) -> bool {
+        if let Some(account) = <BankStores<T>>::get(bank_id) {
+            account.registered_org() == org
+        } else {
+            false
+        }
+    }
 }
 
 impl<T: Trait> OwnershipProportionCalculations<T::AccountId, BalanceOf<T>, Permill> for Module<T> {
@@ -713,7 +721,7 @@ impl<T: Trait> BankReservations<T::AccountId, BalanceOf<T>, IpfsReference> for M
         // uncommitted funds
         let new_spend_reservation = spend_reservation
             .move_funds_out_uncommitted_only(amount)
-            .ok_or(Error::<T>::NotEnoughFundsUnCommittedToSatisfyUnreserveAndFreeRequest)?;
+            .ok_or(Error::<T>::NotEnoughFundsInSpendReservationUnCommittedToSatisfyUnreserveUnCommittedRequest)?;
         // anyone in bank.controller() can make the _unreservation_ request
         ensure!(
             Self::account_satisfies_withdrawal_permissions(&caller, bank_account.owner_s()),
@@ -722,7 +730,7 @@ impl<T: Trait> BankReservations<T::AccountId, BalanceOf<T>, IpfsReference> for M
         // the change in the bank account is equivalent to spending reserved and increasing free by the same amount
         let new_bank_account = bank_account
             .spend_from_reserved(amount)
-            .ok_or(Error::<T>::NotEnoughFundsUnCommittedToSatisfyUnreserveAndFreeRequest)?
+            .ok_or(Error::<T>::NotEnoughFundsInBankReservedToSatisfyUnReserveUnComittedRequest)?
             .deposit_into_free(amount);
         // create bank tracker identifier
         let bank_tracker_id = BankTrackerIdentifier::new(

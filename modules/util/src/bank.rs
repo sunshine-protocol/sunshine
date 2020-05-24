@@ -135,6 +135,26 @@ impl<AccountId> WithdrawalPermissions<AccountId> {
         }
     }
 }
+use crate::bounty::ReviewBoard;
+impl<AccountId> From<ReviewBoard<AccountId>> for WithdrawalPermissions<AccountId> {
+    fn from(other: ReviewBoard<AccountId>) -> WithdrawalPermissions<AccountId> {
+        match other {
+            ReviewBoard::Sudo(acc) => WithdrawalPermissions::Sudo(acc),
+            ReviewBoard::SimpleFlatReview(org_id, flat_share_id) => {
+                WithdrawalPermissions::AnyMemberOfOrgShareGroup(
+                    org_id,
+                    ShareID::Flat(flat_share_id),
+                )
+            }
+            ReviewBoard::WeightedThresholdReview(org_id, weighted_share_id, _) => {
+                WithdrawalPermissions::AnyMemberOfOrgShareGroup(
+                    org_id,
+                    ShareID::WeightedAtomic(weighted_share_id),
+                )
+            }
+        }
+    }
+}
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
 /// This is the state for an OnChainBankId, associated with each bank registered in the runtime

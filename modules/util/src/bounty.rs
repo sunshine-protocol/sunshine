@@ -12,6 +12,8 @@ pub struct BountyInformation<Hash, Currency, AccountId> {
     description: Hash,
     // On chain bank account associated with this bounty
     bank_account: OnChainTreasuryID,
+    // Spend reservation identifier
+    spend_reservation_id: u32,
     // Collateral amount in the bank account (TODO: refresh method for syncing balance)
     funding_reserved: Currency,
     // Amount claimed to have on hand to fund projects related to the bounty
@@ -30,6 +32,7 @@ impl<Hash: Parameter, Currency: Parameter, AccountId: Parameter>
     pub fn new(
         description: Hash,
         bank_account: OnChainTreasuryID,
+        spend_reservation_id: u32,
         funding_reserved: Currency,
         claimed_funding_available: Currency,
         acceptance_committee: ReviewBoard<AccountId>,
@@ -38,6 +41,7 @@ impl<Hash: Parameter, Currency: Parameter, AccountId: Parameter>
         BountyInformation {
             description,
             bank_account,
+            spend_reservation_id,
             funding_reserved,
             claimed_funding_available,
             acceptance_committee,
@@ -54,10 +58,10 @@ pub enum ReviewBoard<AccountId> {
     Sudo(AccountId),
     /// Uses petition but only requires a single approver from the group
     /// - anyone can veto as well
-    SimpleReview(UUID2),
-    /// The first UUID2 requires u32 support, the second UUID2 can veto and/or approve
-    PetitionReview(UUID2, u32, UUID2),
-}
+    SimpleFlatReview(u32, u32),
+    /// Weighted threshold
+    WeightedThresholdReview(u32, u32, u32),
+} //PetitionReview(u32, u32, u32, u32, u32)
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 /// (BountyId, MilestoneId), Milestone => bool
