@@ -1,8 +1,20 @@
-use crate::{bank::OnChainTreasuryID, organization::TermsOfAgreement, uuid::UUID2};
+use crate::{bank::OnChainTreasuryID, organization::TermsOfAgreement};
 use codec::{Decode, Encode};
 use frame_support::Parameter;
 use sp_runtime::RuntimeDebug;
 use sp_std::prelude::*;
+
+#[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug)]
+pub enum BountyMapID {
+    ApplicationId,
+    MilestoneId,
+}
+
+impl Default for BountyMapID {
+    fn default() -> BountyMapID {
+        BountyMapID::ApplicationId
+    }
+}
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 /// The information most often read after a specific bounty is GOT
@@ -10,6 +22,8 @@ pub struct BountyInformation<Hash, Currency, AccountId> {
     // Storage cid
     // - title, description, team requirements (all subjective metadata uses one reference)
     description: Hash,
+    // registered organization associated with bounty
+    foundation_id: u32,
     // On chain bank account associated with this bounty
     bank_account: OnChainTreasuryID,
     // Spend reservation identifier
@@ -31,6 +45,7 @@ impl<Hash: Parameter, Currency: Parameter, AccountId: Parameter>
 {
     pub fn new(
         description: Hash,
+        foundation_id: u32,
         bank_account: OnChainTreasuryID,
         spend_reservation_id: u32,
         funding_reserved: Currency,
@@ -40,6 +55,7 @@ impl<Hash: Parameter, Currency: Parameter, AccountId: Parameter>
     ) -> BountyInformation<Hash, Currency, AccountId> {
         BountyInformation {
             description,
+            foundation_id,
             bank_account,
             spend_reservation_id,
             funding_reserved,
@@ -47,6 +63,9 @@ impl<Hash: Parameter, Currency: Parameter, AccountId: Parameter>
             acceptance_committee,
             supervision_committee,
         }
+    }
+    pub fn claimed_funding_available(&self) -> Currency {
+        self.claimed_funding_available.clone()
     }
 }
 
@@ -64,31 +83,27 @@ pub enum ReviewBoard<AccountId> {
 } //PetitionReview(u32, u32, u32, u32, u32)
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-/// (BountyId, MilestoneId), Milestone => bool
-/// - consider Option<Vec<Task<Hash>>> as value
-pub struct Milestone<Hash, Currency> {
-    team_id: UUID2, // org_id, share_id
-    // these are a reference to subjective information
-    requirements: Hash,
-    reward: Currency,
-    submission: Option<Hash>,
+pub struct MilestoneSubmission<Hash, Currency, Status> {
+    // the team application for which this submission pertains
+    application_id: u32,
+    submission: Hash,
+    amount: Currency,
+    // the review status, none upon immediate submission
+    review: Option<Status>,
 }
 
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-/// The schedule for grant milestones
-/// (OrgId, BountyId) => MilestoneSchedule
-/// TODO: should be easy to pop a milestone from this vec and pop it onto completed in `BountyPaymentTracker`
-pub struct MilestoneSchedule<Currency> {
-    /// The sum of the rewards for all milestones in the other field
-    total_reward: Currency,
-    /// All the milestone identifiers for this MilestoneSchedule
-    /// - not instantiated and added until they are approved
-    milestones: Option<Vec<u32>>,
-}
-
-impl<Currency: Clone> MilestoneSchedule<Currency> {
-    pub fn reward(&self) -> Currency {
-        self.total_reward.clone()
+impl<Hash, Currency, Status> MilestoneSubmission<Hash, Currency, Status> {
+    pub fn new(
+        application_id: u32,
+        submission: Hash,
+        amount: Currency,
+    ) -> MilestoneSubmission<Hash, Currency, Status> {
+        MilestoneSubmission {
+            application_id,
+            submission,
+            amount,
+            review: None,
+        }
     }
 }
 
@@ -108,26 +123,26 @@ pub enum ApplicationState {
 pub struct GrantApplication<AccountId, Currency, Hash> {
     /// The ipfs reference to the application information
     description: Hash,
-    /// The milestone proposed by the applying team, hashes need to be authenticated with data off-chain
-    milestone_schedule: MilestoneSchedule<Currency>,
+    /// total amount
+    total_amount: Currency,
     /// The terms of agreement that must agreed to by all members before the bounty execution starts
     terms_of_agreement: TermsOfAgreement<AccountId>,
 }
 
-impl<AccountId: Clone, Currency: Clone, Hash> GrantApplication<AccountId, Currency, Hash> {
+impl<AccountId: Clone, Currency: Clone, Hash: Clone> GrantApplication<AccountId, Currency, Hash> {
     pub fn new(
         description: Hash,
-        milestone_schedule: MilestoneSchedule<Currency>,
+        total_amount: Currency,
         terms_of_agreement: TermsOfAgreement<AccountId>,
     ) -> GrantApplication<AccountId, Currency, Hash> {
         GrantApplication {
             description,
-            milestone_schedule,
+            total_amount,
             terms_of_agreement,
         }
     }
-    pub fn milestones(&self) -> MilestoneSchedule<Currency> {
-        self.milestone_schedule.clone()
+    pub fn total_amount(&self) -> Currency {
+        self.total_amount.clone()
     }
     pub fn terms(&self) -> TermsOfAgreement<AccountId> {
         self.terms_of_agreement.clone()
@@ -137,24 +152,10 @@ impl<AccountId: Clone, Currency: Clone, Hash> GrantApplication<AccountId, Curren
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 /// This struct is designed to track the payment for an ongoing bounty
 pub struct BountyPaymentTracker<Currency> {
-    /// Added once milestone is completed and removed once the recipient indicates they've
-    /// received the payment
+    received: Currency,
     due: Currency,
-    /// Completed milestones
-    completed: Vec<u32>,
-    /// Milestones left
-    schedule: MilestoneSchedule<Currency>,
 }
 
 // upon posting a grant, the organization should assign reviewers for applications and state a formal review process for every bounty posted
 
 // upon accepting a grant, the organization giving it should assign supervisors `=>` easy to make reviewers the supervisors
-
-#[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug)]
-/// This vote metadata describes the review of the milestone
-/// - first the shareholder acknowledge the submission with submission hash
-/// - then a vote is dispatched as per the review process
-pub struct MilestoneReview {
-    // vote config for supervising committee, specified in `BountyInformation`
-// - think about the process for changing supervisors
-}

@@ -285,7 +285,7 @@ impl<T: Trait> GetFlatShareGroup<T::AccountId> for Module<T> {
 }
 
 impl<T: Trait> SeededGenerateUniqueID<ShareId, OrgId> for Module<T> {
-    fn generate_unique_id(seed: OrgId) -> ShareId {
+    fn seeded_generate_unique_id(seed: OrgId) -> ShareId {
         let mut id_counter = <ShareIdCounter>::get(seed) + 1u32;
         while ClaimedShareIdentity::get(seed, id_counter) {
             // TODO: add overflow check here

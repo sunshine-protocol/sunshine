@@ -390,7 +390,7 @@ impl<T: Trait> IDIsAvailable<UUID2> for Module<T> {
 }
 
 impl<T: Trait> SeededGenerateUniqueID<OrgId, ShareId> for Module<T> {
-    fn generate_unique_id(seed: OrgId) -> ShareId {
+    fn seeded_generate_unique_id(seed: OrgId) -> ShareId {
         let mut id_counter = ShareIdCounter::get(seed) + 1;
         while ClaimedShareIdentity::get(seed, id_counter) {
             // TODO: add overflow check here

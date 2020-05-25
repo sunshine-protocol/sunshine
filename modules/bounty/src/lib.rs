@@ -16,21 +16,20 @@ use sp_std::prelude::*;
 use util::{
     bank::{BankMapID, OnChainTreasuryID},
     bounty::{
-        BountyInformation, BountyPaymentTracker, GrantApplication, Milestone, MilestoneReview,
-        MilestoneSchedule, ReviewBoard,
+        BountyInformation, BountyMapID, BountyPaymentTracker, GrantApplication,
+        MilestoneSubmission, ReviewBoard,
     },
     organization::TermsOfAgreement,
     traits::{
-        AccessGenesis, ApplyVote, BankDepositsAndSpends, BankReservations, BankSpends,
-        BankStorageInfo, ChangeGroupMembership, CheckBankBalances, CheckVoteStatus, CreateBounty,
-        DepositIntoBank, EmpowerWithVeto, FoundationParts, GenerateUniqueID, GenerateUniqueKeyID,
-        GetInnerOuterShareGroups, GetPetitionStatus, GetVoteOutcome, IDIsAvailable, MintableSignal,
-        OnChainBank, OpenPetition, OpenShareGroupVote, OrgChecks, OrganizationDNS,
+        ApplyVote, BankDepositsAndSpends, BankReservations, BankSpends, BankStorageInfo,
+        CheckBankBalances, CheckVoteStatus, CreateBounty, DepositIntoBank, EmpowerWithVeto,
+        FoundationParts, GenerateUniqueID, GenerateUniqueKeyID, GetInnerOuterShareGroups,
+        GetPetitionStatus, GetVoteOutcome, IDIsAvailable, MintableSignal, OnChainBank,
+        OpenPetition, OpenShareGroupVote, OrgChecks, OrganizationDNS,
         OwnershipProportionCalculations, RegisterBankAccount, RegisterFoundation,
-        RegisterOffChainBankAccount, RegisterShareGroup, RequestChanges, SeededGenerateUniqueID,
-        ShareGroupChecks, SignPetition, SupervisorPermissions, SupportedOrganizationShapes,
-        TermSheetExit, UpdatePetition, VoteOnProposal, WeightedShareIssuanceWrapper,
-        WeightedShareWrapper,
+        RegisterShareGroup, RequestChanges, SeededGenerateUniqueID, ShareGroupChecks, SignPetition,
+        SubmitGrantApplication, SupervisorPermissions, TermSheetExit, UpdatePetition,
+        VoteOnProposal, WeightedShareIssuanceWrapper, WeightedShareWrapper,
     },
     uuid::UUID3,
 };
@@ -133,13 +132,18 @@ decl_error! {
         BountyCollateralRatioMustMeetModuleRequirements,
         FoundationMustBeRegisteredToCreateBounty,
         CannotRegisterFoundationFromOrgBankRelationshipThatDNE,
+        GrantApplicationFailsIfBountyDNE,
+        GrantRequestExceedsAvailableBountyFunds,
     }
 }
 
 decl_storage! {
     trait Store for Module<T: Trait> as Court {
-        FoundationBountyNonce get(fn foundation_bounty_nonce): map
-            hasher(opaque_blake2_256) OrgId => BountyId;
+        BountyNonce get(fn bounty_nonce): BountyId;
+
+        BountyAssociatedNonces get(fn bounty_associated_nonces): double_map
+            hasher(opaque_blake2_256) BountyId,
+            hasher(opaque_blake2_256) BountyMapID => u32;
 
         // unordered set for tracking foundations as relationships b/t OrgId and OnChainTreasuryID
         RegisteredFoundations get(fn registered_foundations): double_map
@@ -147,17 +151,18 @@ decl_storage! {
             hasher(blake2_128_concat) OnChainTreasuryID => bool;
 
         // TODO: helper method for getting all the bounties for an organization
-        FoundationSponsoredBounties get(fn foundation_sponsored_bounties): double_map
-            hasher(opaque_blake2_256) OrgId,
+        FoundationSponsoredBounties get(fn foundation_sponsored_bounties): map
             hasher(opaque_blake2_256) BountyId => Option<BountyInformation<IpfsReference, BalanceOf<T>, T::AccountId>>;
 
+        // second key is an ApplicationId
         BountyApplications get(fn bounty_applications): double_map
-            hasher(opaque_blake2_256) (OrgId, BountyId),
-            hasher(opaque_blake2_256) GrantApplication<T::AccountId, BalanceOf<T>, IpfsReference> => bool;
+            hasher(opaque_blake2_256) BountyId,
+            hasher(opaque_blake2_256) u32 => Option<GrantApplication<T::AccountId, BalanceOf<T>, IpfsReference>>;
 
+        // second key is a MilestoneId
         MilestoneSubmissions get(fn milestone_submissions): double_map
-            hasher(opaque_blake2_256) (OrgId, BountyId),
-            hasher(opaque_blake2_256) Milestone<IpfsReference, BalanceOf<T>> => Option<MilestoneReview>;
+            hasher(opaque_blake2_256) BountyId,
+            hasher(opaque_blake2_256) u32 => Option<MilestoneSubmission<IpfsReference, BalanceOf<T>, T::AccountId>>;
     }
 }
 
@@ -165,6 +170,19 @@ decl_module! {
     pub struct Module<T: Trait> for enum Call where origin: T::Origin {
         type Error = Error<T>;
         fn deposit_event() = default;
+
+        #[weight = 0]
+        fn register_foundation_from_existing_on_chain_bank(
+            origin,
+            registered_organization: OrgId,
+            bank_account: OnChainTreasuryID,
+        ) -> DispatchResult {
+            let _ = ensure_signed(origin)?;
+            // any authorization would need to be HERE
+            Self::register_foundation_from_existing_bank(registered_organization, bank_account)?;
+            // TODO: deposit relevant event
+            Ok(())
+        }
 
         #[weight = 0]
         fn create_bounty_on_behalf_of_foundation(
@@ -211,19 +229,50 @@ impl<T: Trait> Module<T> {
     }
 }
 
-impl<T: Trait> IDIsAvailable<(OrgId, BountyId)> for Module<T> {
-    fn id_is_available(id: (OrgId, BountyId)) -> bool {
-        <FoundationSponsoredBounties<T>>::get(id.0, id.1).is_none()
+impl<T: Trait> IDIsAvailable<BountyId> for Module<T> {
+    fn id_is_available(id: BountyId) -> bool {
+        <FoundationSponsoredBounties<T>>::get(id).is_none()
     }
 }
 
-impl<T: Trait> SeededGenerateUniqueID<BountyId, OrgId> for Module<T> {
-    fn generate_unique_id(seed: OrgId) -> BountyId {
-        let mut id_counter = FoundationBountyNonce::get(seed) + 1;
-        while !Self::id_is_available((seed, id_counter)) {
+impl<T: Trait> IDIsAvailable<(BountyId, BountyMapID, u32)> for Module<T> {
+    fn id_is_available(id: (BountyId, BountyMapID, u32)) -> bool {
+        match id.1 {
+            BountyMapID::ApplicationId => <BountyApplications<T>>::get(id.0, id.2).is_none(),
+            BountyMapID::MilestoneId => <MilestoneSubmissions<T>>::get(id.0, id.2).is_none(),
+        }
+    }
+}
+
+impl<T: Trait> SeededGenerateUniqueID<u32, (BountyId, BountyMapID)> for Module<T> {
+    fn seeded_generate_unique_id(seed: (BountyId, BountyMapID)) -> u32 {
+        let mut new_id = <BountyAssociatedNonces>::get(seed.0, seed.1) + 1u32;
+        match seed.1 {
+            BountyMapID::ApplicationId => {
+                while !Self::id_is_available((seed.0, seed.1, new_id)) {
+                    new_id += 1u32;
+                }
+                <BountyAssociatedNonces>::insert(seed.0, seed.1, new_id);
+                new_id
+            }
+            BountyMapID::MilestoneId => {
+                while !Self::id_is_available((seed.0, seed.1, new_id)) {
+                    new_id += 1u32;
+                }
+                <BountyAssociatedNonces>::insert(seed.0, seed.1, new_id);
+                new_id
+            }
+        }
+    }
+}
+
+impl<T: Trait> GenerateUniqueID<BountyId> for Module<T> {
+    fn generate_unique_id() -> BountyId {
+        let mut id_counter = BountyNonce::get() + 1;
+        while !Self::id_is_available(id_counter) {
             id_counter += 1;
         }
-        FoundationBountyNonce::insert(seed, id_counter);
+        BountyNonce::put(id_counter);
         id_counter
     }
 }
@@ -273,12 +322,12 @@ impl<T: Trait> CreateBounty<BalanceOf<T>, T::AccountId, IpfsReference> for Modul
         acceptance_committee: Self::ReviewCommittee,
         supervision_committee: Option<Self::ReviewCommittee>,
     ) -> Result<Self::BountyInfo, DispatchError> {
-        // this constraints specifies required registration of the relationship between OrgId and OnChainBankId
+        // required registration of relationship between OrgId and OnChainBankId
         ensure!(
             RegisteredFoundations::get(foundation, bank_account),
             Error::<T>::FoundationMustBeRegisteredToCreateBounty
         );
-        // enfore module constraints for all posted bounties
+        // enforce module constraints for all posted bounties
         ensure!(
             amount_claimed_available.clone() >= T::BountyLowerBound::get(),
             Error::<T>::MinimumBountyClaimedAmountMustMeetModuleLowerBound
@@ -306,6 +355,7 @@ impl<T: Trait> CreateBounty<BalanceOf<T>, T::AccountId, IpfsReference> for Modul
         // form the bounty_info
         let new_bounty_info = BountyInformation::new(
             description,
+            foundation,
             bank_account,
             spend_reservation_id,
             amount_reserved_for_bounty,
@@ -342,9 +392,45 @@ impl<T: Trait> CreateBounty<BalanceOf<T>, T::AccountId, IpfsReference> for Modul
             supervision_committee,
         )?;
         // generate unique BountyId for OrgId
-        let new_bounty_id = Self::generate_unique_id(foundation);
+        let new_bounty_id = Self::generate_unique_id();
         // insert bounty_info object into storage
-        <FoundationSponsoredBounties<T>>::insert(foundation, new_bounty_id, new_bounty_info);
+        <FoundationSponsoredBounties<T>>::insert(new_bounty_id, new_bounty_info);
         Ok(new_bounty_id)
+    }
+}
+
+impl<T: Trait> SubmitGrantApplication<BalanceOf<T>, T::AccountId, IpfsReference> for Module<T> {
+    type GrantApp = GrantApplication<T::AccountId, BalanceOf<T>, IpfsReference>;
+    type TermsOfAgreement = TermsOfAgreement<T::AccountId>;
+    fn form_grant_application(
+        bounty_id: u32,
+        description: IpfsReference,
+        total_amount: BalanceOf<T>,
+        terms_of_agreement: Self::TermsOfAgreement,
+    ) -> Result<Self::GrantApp, DispatchError> {
+        // get the bounty information
+        let bounty_info = <FoundationSponsoredBounties<T>>::get(bounty_id)
+            .ok_or(Error::<T>::GrantApplicationFailsIfBountyDNE)?;
+        // ensure that the total_amount is below the claimed_available_amount for the referenced bounty
+        ensure!(
+            bounty_info.claimed_funding_available() >= total_amount, // note this isn't known to be up to date
+            Error::<T>::GrantRequestExceedsAvailableBountyFunds
+        );
+        // form the grant app object and return it
+        let grant_app = GrantApplication::new(description, total_amount, terms_of_agreement);
+        Ok(grant_app)
+    }
+    fn submit_grant_application(
+        bounty_id: u32,
+        description: IpfsReference,
+        total_amount: BalanceOf<T>,
+        terms_of_agreement: Self::TermsOfAgreement,
+    ) -> Result<u32, DispatchError> {
+        let formed_grant_app =
+            Self::form_grant_application(bounty_id, description, total_amount, terms_of_agreement)?;
+        let new_application_id =
+            Self::seeded_generate_unique_id((bounty_id, BountyMapID::ApplicationId));
+        <BountyApplications<T>>::insert(bounty_id, new_application_id, formed_grant_app);
+        Ok(new_application_id)
     }
 }

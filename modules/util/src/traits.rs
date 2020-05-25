@@ -23,7 +23,7 @@ pub trait GenerateUniqueID<Id> {
 }
 
 pub trait SeededGenerateUniqueID<Id, Seed> {
-    fn generate_unique_id(seed: Seed) -> Id;
+    fn seeded_generate_unique_id(seed: Seed) -> Id;
 }
 
 pub trait GenerateUniqueKeyID<KeyId> {
@@ -743,10 +743,7 @@ pub trait RegisterBankAccount<AccountId, Currency>: OnChainBank {
         amount: Currency,
         owner_s: Self::GovernanceConfig,
     ) -> Result<Self::TreasuryId, DispatchError>;
-    fn check_bank_owner(
-        bank_id: Self::TreasuryId,
-        org: Self::OrgId,
-    ) -> bool;
+    fn check_bank_owner(bank_id: Self::TreasuryId, org: Self::OrgId) -> bool;
 } // people should be eventually able to solicit loans from others to SEED a bank account but they cede some or all of the control...
 
 pub trait OwnershipProportionCalculations<AccountId, Currency, FineArithmetic>:
@@ -1011,11 +1008,18 @@ pub trait FoundationParts {
 // to bank but I don't think it's the worst thing to have for V1
 pub trait RegisterFoundation<Currency, AccountId>: FoundationParts {
     // should still be some minimum enforced in bank
-    fn register_foundation_from_donation_deposit(from: AccountId, for_org: Self::OrgId, amount: Currency) -> Result<Self::BankId, DispatchError>;
-    fn register_foundation_from_existing_bank(org: Self::OrgId, bank: Self::BankId) -> DispatchResult;
+    fn register_foundation_from_donation_deposit(
+        from: AccountId,
+        for_org: Self::OrgId,
+        amount: Currency,
+    ) -> Result<Self::BankId, DispatchError>;
+    fn register_foundation_from_existing_bank(
+        org: Self::OrgId,
+        bank: Self::BankId,
+    ) -> DispatchResult;
 }
 
-pub trait CreateBounty<Currency, AccountId, IpfsReference>: RegisterFoundation<Currency, AccountId> {
+pub trait CreateBounty<Currency, AccountId, Hash>: RegisterFoundation<Currency, AccountId> {
     type BountyInfo;
     type ReviewCommittee;
     // helper to screen, prepare and form bounty information object
@@ -1023,7 +1027,7 @@ pub trait CreateBounty<Currency, AccountId, IpfsReference>: RegisterFoundation<C
         foundation: Self::OrgId, // registered OrgId
         caller: AccountId,
         bank_account: Self::BankId,
-        description: IpfsReference,
+        description: Hash,
         amount_reserved_for_bounty: Currency, // collateral requirement
         amount_claimed_available: Currency,   // claimed available amount, not necessarily liquid
         acceptance_committee: Self::ReviewCommittee,
@@ -1035,10 +1039,44 @@ pub trait CreateBounty<Currency, AccountId, IpfsReference>: RegisterFoundation<C
         foundation: Self::OrgId, // registered OrgId
         caller: AccountId,
         bank_account: Self::BankId,
-        description: IpfsReference,
+        description: Hash,
         amount_reserved_for_bounty: Currency, // collateral requirement
         amount_claimed_available: Currency,   // claimed available amount, not necessarily liquid
         acceptance_committee: Self::ReviewCommittee,
         supervision_committee: Option<Self::ReviewCommittee>,
     ) -> Result<Self::BountyId, DispatchError>;
+}
+
+pub trait SubmitGrantApplication<Currency, AccountId, Hash>:
+    CreateBounty<Currency, AccountId, Hash>
+{
+    type GrantApp;
+    type TermsOfAgreement;
+    fn form_grant_application(
+        bounty_id: u32,
+        description: Hash,
+        total_amount: Currency,
+        terms_of_agreement: Self::TermsOfAgreement,
+    ) -> Result<Self::GrantApp, DispatchError>;
+    fn submit_grant_application(
+        bounty_id: u32,
+        description: Hash,
+        total_amount: Currency,
+        terms_of_agreement: Self::TermsOfAgreement,
+    ) -> Result<u32, DispatchError>; // returns application identifier
+}
+
+pub trait ApproveGrantApplication<Currency, AccountId, Hash>:
+    CreateBounty<Currency, AccountId, Hash>
+{
+    // associated type like SupportedVoteTypes?
+    fn trigger_application_review(
+        trigger: AccountId, // must be authorized to trigger in context of objects
+        bounty_id: u32,
+        application_id: u32,
+        // returns VoteId, might be associated type like SupportedVoteTypes
+    ) -> Result<u32, DispatchError>;
+    // called after vote returns approved
+    // - might also register the applicant as an outer share group
+    fn approve_application_and_commit_spend(bounty_id: u32, application_id: u32) -> DispatchResult;
 }

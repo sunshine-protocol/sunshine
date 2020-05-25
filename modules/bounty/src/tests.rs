@@ -8,9 +8,6 @@ use sp_runtime::{testing::Header, traits::IdentityLookup, Perbill};
 
 // type aliases
 pub type AccountId = u64;
-type OrgId = u32;
-type FlatShareId = u32;
-type WeightedShareId = u32;
 pub type Shares = u64;
 pub type Signal = u64;
 pub type BlockNumber = u64;
