@@ -735,7 +735,7 @@ pub trait OnChainBank {
 }
 use crate::bounty::ReviewBoard;
 pub trait RegisterBankAccount<AccountId, Currency>: OnChainBank {
-    type GovernanceConfig: From<ReviewBoard<AccountId>>;
+    type GovernanceConfig: From<ReviewBoard>;
     // requires a deposit of some size above the minimum and returns the OnChainTreasuryID
     fn register_on_chain_bank_account(
         registered_org: Self::OrgId,
@@ -1070,13 +1070,15 @@ pub trait ApproveGrantApplication<Currency, AccountId, Hash>:
     CreateBounty<Currency, AccountId, Hash>
 {
     // associated type like SupportedVoteTypes?
+    type SupportedVoteMechanisms;
+    type AppState;
     fn trigger_application_review(
         trigger: AccountId, // must be authorized to trigger in context of objects
         bounty_id: u32,
         application_id: u32,
-        // returns VoteId, might be associated type like SupportedVoteTypes
-    ) -> Result<u32, DispatchError>;
-    // called after vote returns approved
-    // - might also register the applicant as an outer share group
-    fn approve_application_and_commit_spend(bounty_id: u32, application_id: u32) -> DispatchResult;
+    ) -> Result<Self::AppState, DispatchError>;
+    fn poll_application(
+        bounty_id: u32,
+        application_id: u32,
+    ) -> Result<Self::AppState, DispatchError>;
 }

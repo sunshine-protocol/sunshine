@@ -18,7 +18,7 @@ impl Default for BountyMapID {
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 /// The information most often read after a specific bounty is GOT
-pub struct BountyInformation<Hash, Currency, AccountId> {
+pub struct BountyInformation<Hash, Currency> {
     // Storage cid
     // - title, description, team requirements (all subjective metadata uses one reference)
     description: Hash,
@@ -34,15 +34,13 @@ pub struct BountyInformation<Hash, Currency, AccountId> {
     // - used to derive the collateral ratio for this bounty, which must be above the module lower bound
     claimed_funding_available: Currency,
     // Committee metadata for approving an application
-    acceptance_committee: ReviewBoard<AccountId>,
+    acceptance_committee: ReviewBoard,
     // Committee metadata for approving milestones
     // -- if None, same as acceptance_committee by default
-    supervision_committee: Option<ReviewBoard<AccountId>>,
+    supervision_committee: Option<ReviewBoard>,
 }
 
-impl<Hash: Parameter, Currency: Parameter, AccountId: Parameter>
-    BountyInformation<Hash, Currency, AccountId>
-{
+impl<Hash: Parameter, Currency: Parameter> BountyInformation<Hash, Currency> {
     pub fn new(
         description: Hash,
         foundation_id: u32,
@@ -50,9 +48,9 @@ impl<Hash: Parameter, Currency: Parameter, AccountId: Parameter>
         spend_reservation_id: u32,
         funding_reserved: Currency,
         claimed_funding_available: Currency,
-        acceptance_committee: ReviewBoard<AccountId>,
-        supervision_committee: Option<ReviewBoard<AccountId>>,
-    ) -> BountyInformation<Hash, Currency, AccountId> {
+        acceptance_committee: ReviewBoard,
+        supervision_committee: Option<ReviewBoard>,
+    ) -> BountyInformation<Hash, Currency> {
         BountyInformation {
             description,
             foundation_id,
@@ -67,14 +65,15 @@ impl<Hash: Parameter, Currency: Parameter, AccountId: Parameter>
     pub fn claimed_funding_available(&self) -> Currency {
         self.claimed_funding_available.clone()
     }
+    pub fn acceptance_committee(&self) -> ReviewBoard {
+        self.acceptance_committee.clone()
+    }
 }
 
 #[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug)]
 /// Metadata that represents pre-dispatch, grant milestone reviews
 /// - TODO: build a variant in which one person is sudo but the role is revocable and can be reassigned
-pub enum ReviewBoard<AccountId> {
-    /// Single person must approve each milestone
-    Sudo(AccountId),
+pub enum ReviewBoard {
     /// Uses petition but only requires a single approver from the group
     /// - anyone can veto as well
     SimpleFlatReview(u32, u32),
@@ -107,19 +106,20 @@ impl<Hash, Currency, Status> MilestoneSubmission<Hash, Currency, Status> {
     }
 }
 
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+#[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug)]
 pub enum ApplicationState {
     SubmittedAwaitingResponse,
+    // wraps a VoteId for the acceptance committee
+    UnderReviewByAcceptanceCommittee(u32),
     // however many individuals are left that need to consent
     ApprovedByFoundationAwaitingTeamConsent,
-    // current milestone
+    // current milestone identifier
     ApprovedAndLive(u32),
     // closed for some reason
     Closed,
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-/// BountyId, GrantApplication => Option<ApplicationState>
 pub struct GrantApplication<AccountId, Currency, Hash> {
     /// The ipfs reference to the application information
     description: Hash,
@@ -127,6 +127,8 @@ pub struct GrantApplication<AccountId, Currency, Hash> {
     total_amount: Currency,
     /// The terms of agreement that must agreed to by all members before the bounty execution starts
     terms_of_agreement: TermsOfAgreement<AccountId>,
+    /// state of the application
+    state: ApplicationState,
 }
 
 impl<AccountId: Clone, Currency: Clone, Hash: Clone> GrantApplication<AccountId, Currency, Hash> {
@@ -139,7 +141,11 @@ impl<AccountId: Clone, Currency: Clone, Hash: Clone> GrantApplication<AccountId,
             description,
             total_amount,
             terms_of_agreement,
+            state: ApplicationState::SubmittedAwaitingResponse,
         }
+    }
+    pub fn state(&self) -> ApplicationState {
+        self.state
     }
     pub fn total_amount(&self) -> Currency {
         self.total_amount.clone()

@@ -16,16 +16,16 @@ use sp_std::prelude::*;
 use util::{
     bank::{BankMapID, OnChainTreasuryID},
     bounty::{
-        BountyInformation, BountyMapID, BountyPaymentTracker, GrantApplication,
+        ApplicationState, BountyInformation, BountyMapID, BountyPaymentTracker, GrantApplication,
         MilestoneSubmission, ReviewBoard,
     },
-    organization::TermsOfAgreement,
+    organization::{ShareID, TermsOfAgreement},
     traits::{
-        ApplyVote, BankDepositsAndSpends, BankReservations, BankSpends, BankStorageInfo,
-        CheckBankBalances, CheckVoteStatus, CreateBounty, DepositIntoBank, EmpowerWithVeto,
-        FoundationParts, GenerateUniqueID, GenerateUniqueKeyID, GetInnerOuterShareGroups,
-        GetPetitionStatus, GetVoteOutcome, IDIsAvailable, MintableSignal, OnChainBank,
-        OpenPetition, OpenShareGroupVote, OrgChecks, OrganizationDNS,
+        ApplyVote, ApproveGrantApplication, BankDepositsAndSpends, BankReservations, BankSpends,
+        BankStorageInfo, CheckBankBalances, CheckVoteStatus, CreateBounty, DepositIntoBank,
+        EmpowerWithVeto, FoundationParts, GenerateUniqueID, GenerateUniqueKeyID,
+        GetInnerOuterShareGroups, GetPetitionStatus, GetVoteOutcome, IDIsAvailable, MintableSignal,
+        OnChainBank, OpenPetition, OpenShareGroupVote, OrgChecks, OrganizationDNS,
         OwnershipProportionCalculations, RegisterBankAccount, RegisterFoundation,
         RegisterShareGroup, RequestChanges, SeededGenerateUniqueID, ShareGroupChecks, SignPetition,
         SubmitGrantApplication, SupervisorPermissions, TermSheetExit, UpdatePetition,
@@ -134,6 +134,10 @@ decl_error! {
         CannotRegisterFoundationFromOrgBankRelationshipThatDNE,
         GrantApplicationFailsIfBountyDNE,
         GrantRequestExceedsAvailableBountyFunds,
+        CannotReviewApplicationIfBountyDNE,
+        CannotReviewApplicationIfApplicationDNE,
+        ApplicationMustBeSubmittedAwaitingResponseToTriggerReview,
+        AccountNotAuthorizedToTriggerApplicationReview,
     }
 }
 
@@ -152,7 +156,7 @@ decl_storage! {
 
         // TODO: helper method for getting all the bounties for an organization
         FoundationSponsoredBounties get(fn foundation_sponsored_bounties): map
-            hasher(opaque_blake2_256) BountyId => Option<BountyInformation<IpfsReference, BalanceOf<T>, T::AccountId>>;
+            hasher(opaque_blake2_256) BountyId => Option<BountyInformation<IpfsReference, BalanceOf<T>>>;
 
         // second key is an ApplicationId
         BountyApplications get(fn bounty_applications): double_map
@@ -192,8 +196,8 @@ decl_module! {
             bank_account: OnChainTreasuryID,
             amount_reserved_for_bounty: BalanceOf<T>, // collateral requirement
             amount_claimed_available: BalanceOf<T>,  // claimed available amount, not necessarily liquid
-            acceptance_committee: ReviewBoard<T::AccountId>,
-            supervision_committee: Option<ReviewBoard<T::AccountId>>,
+            acceptance_committee: ReviewBoard,
+            supervision_committee: Option<ReviewBoard>,
         ) -> DispatchResult {
             let bounty_creator = ensure_signed(origin)?;
             // TODO: need to verify bank_account ownership by registered_organization somehow
@@ -226,6 +230,26 @@ impl<T: Trait> Module<T> {
     fn collateral_satisfies_module_limits(collateral: BalanceOf<T>, claimed: BalanceOf<T>) -> bool {
         let ratio = Permill::from_rational_approximation(collateral, claimed);
         ratio >= T::MinimumBountyCollateralRatio::get()
+    }
+    // In the future, consider this as a method in a trait for inputting
+    // application and returning dispatched VoteId based on context
+    // (which is what the method that calls this is doing...)
+    fn account_can_trigger_application_review(
+        account: &T::AccountId,
+        acceptance_committee: ReviewBoard,
+    ) -> bool {
+        match acceptance_committee {
+            ReviewBoard::SimpleFlatReview(org_id, share_id) => {
+                <<T as Trait>::Organization as ShareGroupChecks<
+                    u32, T::AccountId
+                >>::check_membership_in_share_group(org_id, ShareID::Flat(share_id).into(), account)
+            },
+            ReviewBoard::WeightedThresholdReview(org_id, share_id, _) => {
+                <<T as Trait>::Organization as ShareGroupChecks<
+                    u32, T::AccountId
+                >>::check_membership_in_share_group(org_id, ShareID::WeightedAtomic(share_id).into(), account)
+            },
+        }
     }
 }
 
@@ -308,9 +332,9 @@ impl<T: Trait> RegisterFoundation<BalanceOf<T>, T::AccountId> for Module<T> {
 }
 
 impl<T: Trait> CreateBounty<BalanceOf<T>, T::AccountId, IpfsReference> for Module<T> {
-    type BountyInfo = BountyInformation<IpfsReference, BalanceOf<T>, T::AccountId>;
+    type BountyInfo = BountyInformation<IpfsReference, BalanceOf<T>>;
     // smpl vote config for this module in particular
-    type ReviewCommittee = ReviewBoard<T::AccountId>;
+    type ReviewCommittee = ReviewBoard;
     // helper to screen, prepare and form bounty information object
     fn screen_bounty_creation(
         foundation: u32, // registered OrgId
@@ -432,5 +456,57 @@ impl<T: Trait> SubmitGrantApplication<BalanceOf<T>, T::AccountId, IpfsReference>
             Self::seeded_generate_unique_id((bounty_id, BountyMapID::ApplicationId));
         <BountyApplications<T>>::insert(bounty_id, new_application_id, formed_grant_app);
         Ok(new_application_id)
+    }
+}
+
+impl<T: Trait> ApproveGrantApplication<BalanceOf<T>, T::AccountId, IpfsReference> for Module<T> {
+    type SupportedVoteMechanisms = u32;
+    type AppState = ApplicationState;
+    fn trigger_application_review(
+        trigger: T::AccountId, // must be authorized to trigger in context of objects
+        bounty_id: u32,
+        application_id: u32,
+    ) -> Result<Self::AppState, DispatchError> {
+        // get the bounty information
+        let bounty_info = <FoundationSponsoredBounties<T>>::get(bounty_id)
+            .ok_or(Error::<T>::CannotReviewApplicationIfBountyDNE)?;
+        // get the application that is under review
+        let application_to_review = <BountyApplications<T>>::get(bounty_id, application_id)
+            .ok_or(Error::<T>::CannotReviewApplicationIfApplicationDNE)?;
+        // change the bounty application state to UnderReview
+        ensure!(
+            application_to_review.state() == ApplicationState::SubmittedAwaitingResponse,
+            Error::<T>::ApplicationMustBeSubmittedAwaitingResponseToTriggerReview
+        );
+        // check if the trigger is authorized to trigger a vote on this application
+        // --- for now, this will consist of a membership check for the bounty_info.acceptance_committee
+        ensure!(
+            Self::account_can_trigger_application_review(
+                &trigger,
+                bounty_info.acceptance_committee()
+            ),
+            Error::<T>::AccountNotAuthorizedToTriggerApplicationReview
+        );
+        // vote should dispatch based on the acceptance_committee variant here
+
+        // TODO: look into the syntax fo dispatching a vote here
+
+        // change the application status on the Applications
+
+        // insert the new status into the Applications map
+        Ok(application_to_review.state())
+    }
+    fn poll_application(
+        bounty_id: u32,
+        application_id: u32,
+    ) -> Result<Self::AppState, DispatchError> {
+        // get the bounty information
+        let bounty_info = <FoundationSponsoredBounties<T>>::get(bounty_id)
+            .ok_or(Error::<T>::CannotReviewApplicationIfBountyDNE)?;
+        // get the application information
+        let application_to_review = <BountyApplications<T>>::get(bounty_id, application_id)
+            .ok_or(Error::<T>::CannotReviewApplicationIfApplicationDNE)?;
+        // TODO: if state is under review, check status and push it along if it has passed
+        Ok(application_to_review.state())
     }
 }

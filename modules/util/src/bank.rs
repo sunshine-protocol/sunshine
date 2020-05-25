@@ -105,8 +105,6 @@ impl BankMapID {
 #[derive(PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
 /// the simplest `GovernanceConfig`
 pub enum WithdrawalPermissions<AccountId> {
-    // a single account can reserve free capital for spending
-    Sudo(AccountId),
     // two accounts can reserve free capital for spending
     // TODO: add this up to 5 accounts?
     AnyOfTwoAccounts(AccountId, AccountId),
@@ -136,10 +134,9 @@ impl<AccountId> WithdrawalPermissions<AccountId> {
     }
 }
 use crate::bounty::ReviewBoard;
-impl<AccountId> From<ReviewBoard<AccountId>> for WithdrawalPermissions<AccountId> {
-    fn from(other: ReviewBoard<AccountId>) -> WithdrawalPermissions<AccountId> {
+impl<AccountId> From<ReviewBoard> for WithdrawalPermissions<AccountId> {
+    fn from(other: ReviewBoard) -> WithdrawalPermissions<AccountId> {
         match other {
-            ReviewBoard::Sudo(acc) => WithdrawalPermissions::Sudo(acc),
             ReviewBoard::SimpleFlatReview(org_id, flat_share_id) => {
                 WithdrawalPermissions::AnyMemberOfOrgShareGroup(
                     org_id,
