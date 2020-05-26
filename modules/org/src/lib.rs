@@ -394,7 +394,7 @@ impl<T: Trait> FlatShareWrapper<u32, u32, T::AccountId> for Module<T> {
         Ok(ret)
     }
     fn generate_unique_flat_share_id(organization: u32) -> u32 {
-        <<T as Trait>::FlatShareData as SeededGenerateUniqueID<u32, u32>>::generate_unique_id(
+        <<T as Trait>::FlatShareData as SeededGenerateUniqueID<u32, u32>>::seeded_generate_unique_id(
             organization,
         )
     }
@@ -441,7 +441,7 @@ impl<T: Trait> WeightedShareWrapper<u32, u32, T::AccountId> for Module<T> {
         >>::outstanding_shares(organization, share_id)
     }
     fn generate_unique_weighted_share_id(organization: u32) -> u32 {
-        <<T as Trait>::WeightedShareData as SeededGenerateUniqueID<u32, u32>>::generate_unique_id(
+        <<T as Trait>::WeightedShareData as SeededGenerateUniqueID<u32, u32>>::seeded_generate_unique_id(
             organization,
         )
     }

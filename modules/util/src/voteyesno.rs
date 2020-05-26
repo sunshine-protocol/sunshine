@@ -1,5 +1,6 @@
 use crate::traits::{
-    Apply, Approved, ConsistentThresholdStructure, DeriveThresholdRequirement, Revert, VoteVector,
+    Apply, Approved, ConsistentThresholdStructure, DeriveThresholdRequirement, Revert,
+    UpdateOutcome, VoteVector,
 };
 use codec::{Decode, Encode};
 use frame_support::Parameter;
@@ -240,6 +241,7 @@ impl<
             threshold,
             initialized,
             expires,
+            outcome: VoteOutcome::Voting,
             ..Default::default()
         }
     }
@@ -385,6 +387,36 @@ impl<
             VoterYesNoView::InFavor => self.remove_in_favor_vote(vote.magnitude()),
             VoterYesNoView::Against => self.remove_against_vote(vote.magnitude()),
             VoterYesNoView::Abstain => self.remove_abstention(vote.magnitude()),
+        }
+    }
+}
+
+impl<
+        Signal: Parameter
+            + Copy
+            + From<u32>
+            + Default
+            + PartialOrd
+            + sp_std::ops::Add<Output = Signal>
+            + sp_std::ops::Sub<Output = Signal>,
+        FineArithmetic: PerThing + Default + sp_std::ops::Mul<Signal, Output = Signal>,
+        BlockNumber: Parameter + Copy + Default,
+    > UpdateOutcome for VoteState<Signal, FineArithmetic, BlockNumber>
+{
+    fn update_outcome(&self) -> Option<VoteState<Signal, FineArithmetic, BlockNumber>> {
+        let current_outcome = self.outcome();
+        match current_outcome {
+            VoteOutcome::Voting => {
+                if self.approved() {
+                    Some(VoteState {
+                        outcome: VoteOutcome::Approved,
+                        ..self.clone()
+                    })
+                } else {
+                    None
+                }
+            }
+            _ => None,
         }
     }
 }

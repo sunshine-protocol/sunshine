@@ -130,49 +130,31 @@ fn create_petition_happy_path() {
         let one = Origin::signed(1);
         let ten = Origin::signed(10);
         let new_topic = random(10);
-        assert_eq!(VotePetition::petition_id_counter(), 0);
+        assert_eq!(VotePetition::petition_id_nonce(), 0);
         // auth only allows sudo or organization supervisor
         assert_err!(
-            VotePetition::create_petition(
-                ten,
-                1,
-                1,
-                None,
-                new_topic.clone(),
-                4,
-                None,
-                None,
-                Some(None)
-            ),
+            VotePetition::create_petition(ten, 1, 1, new_topic.clone(), 4, None, None,),
             Error::<Test>::NotAuthorizedToCreatePetition
         );
-        assert_eq!(VotePetition::petition_id_counter(1, 1), 0);
+        assert_eq!(VotePetition::petition_id_nonce(), 0);
         assert_ok!(VotePetition::create_petition(
             one,
             1,
             1,
-            None,
             new_topic.clone(),
             4,
             None,
             None,
-            Some(None)
         ));
-        assert_eq!(VotePetition::petition_id_counter(1, 1), 1);
+        assert_eq!(VotePetition::petition_id_nonce(), 1);
         // let petition_started =
         //     TestEvent::vote_petition(RawEvent::NewPetitionStarted(1, 1, 1, 1, true));
         // assert!(System::events().iter().any(|a| a.event == petition_started));
-        let prefix = UUID3::new(1, 1, 1);
-        for i in 1u64..13u64 {
-            // check that everyone in the share group received veto power by default
-            assert!(VotePetition::veto_power(prefix, &i).is_some());
-        }
 
-        let new_petition_state = PetitionState::new(new_topic, 4, None, 12, None).unwrap();
-        let prefix = UUID2::new(1, 1);
+        let new_petition_state = PetitionState::new(new_topic, (1, 1), 4, None, 12, None).unwrap();
         assert_eq!(
             new_petition_state,
-            VotePetition::petition_states(prefix, 1).unwrap()
+            VotePetition::petition_states(1).unwrap()
         );
     });
 }

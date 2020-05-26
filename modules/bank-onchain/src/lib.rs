@@ -323,12 +323,6 @@ impl<T: Trait> Module<T> {
     ) -> bool {
         // check the existence of the governance_config in the context of the org
         match governance_config {
-            WithdrawalPermissions::Sudo(_) => {
-                // // COULD UNCOMMENT: requires any sudo-based bank account to be controlled only by the sudo chain account or the organization supervisor
-                // <<T as Trait>::Organization as SupervisorPermissions<u32, T::AccountId>>::is_sudo_account(&acc)
-                // || <<T as Trait>::Organization as SupervisorPermissions<u32, T::AccountId>>::is_organization_supervisor(org, &acc)
-                true // no restrictions for now
-            },
             WithdrawalPermissions::AnyOfTwoAccounts(_, _) => true, // no restrictions for now
             WithdrawalPermissions::AnyAccountInOrg(org_id) => {
                 org_id == org && // can only create banks with controllers for this org
@@ -346,7 +340,6 @@ impl<T: Trait> Module<T> {
         governance_config: WithdrawalPermissions<T::AccountId>,
     ) -> bool {
         match governance_config {
-            WithdrawalPermissions::Sudo(acc) => &acc == who,
             WithdrawalPermissions::AnyOfTwoAccounts(acc1, acc2) => ((&acc1 == who) || (&acc2 == who)),
             WithdrawalPermissions::AnyAccountInOrg(org_id) => {
                 <<T as Trait>::Organization as OrgChecks<u32, T::AccountId>>::check_membership_in_org(org_id, who)
@@ -456,13 +449,6 @@ impl<T: Trait> OwnershipProportionCalculations<T::AccountId, BalanceOf<T>, Permi
         group: Self::GovernanceConfig,
     ) -> Option<Permill> {
         match group {
-            WithdrawalPermissions::Sudo(acc) => {
-                if acc == account {
-                    Some(Permill::one())
-                } else {
-                    None
-                }
-            }
             WithdrawalPermissions::AnyOfTwoAccounts(acc1, acc2) => {
                 // assumes that we never use this with acc1 == acc2; use sudo in that situation
                 if acc1 == account || acc2 == account {

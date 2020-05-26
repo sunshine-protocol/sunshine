@@ -82,5 +82,4 @@ impl_outer_event! {
         vote_yesno<T>,
     }
 }
-
 pub type VoteYesNo = Module<Test>;

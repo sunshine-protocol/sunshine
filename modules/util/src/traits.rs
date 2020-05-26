@@ -352,6 +352,11 @@ pub trait Revert<Vote>: Sized {
     fn revert(&self, vote: Vote) -> Self;
 }
 
+pub trait UpdateOutcome: Sized {
+    // only returns if outcome changes
+    fn update_outcome(&self) -> Option<Self>;
+}
+
 pub trait VoteVector<Signal, Direction> {
     fn magnitude(&self) -> Signal;
     fn direction(&self) -> Direction;
@@ -361,8 +366,8 @@ pub trait VoteVector<Signal, Direction> {
 pub trait ApplyVote: GetVoteOutcome + ThresholdVote {
     type Direction;
     type Vote: VoteVector<Self::Signal, Self::Direction>;
-    type State: Approved + Apply<Self::Vote> + Revert<Self::Vote>;
-
+    type State: Approved + Apply<Self::Vote> + Revert<Self::Vote> + UpdateOutcome;
+    // apply vote to vote state
     fn apply_vote(
         state: Self::State,
         new_vote: Self::Vote,

@@ -25,8 +25,8 @@ use util::{
         CheckVoteStatus, GenerateUniqueID, GetFlatShareGroup, GetGroupSize, GetMagnitude,
         GetVoteOutcome, GroupMembership, IDIsAvailable, LockableProfile, MintableSignal,
         OpenShareGroupVote, OrganizationSupervisorPermissions, ReservableProfile, Revert,
-        ShareBank, SubGroupSupervisorPermissions, ThresholdVote, VoteOnProposal, VoteVector,
-        WeightedShareGroup,
+        ShareBank, SubGroupSupervisorPermissions, ThresholdVote, UpdateOutcome, VoteOnProposal,
+        VoteVector, WeightedShareGroup,
     },
     uuid::UUID2,
     voteyesno::{
@@ -420,18 +420,22 @@ impl<T: Trait> ApplyVote for Module<T> {
         // -> the whole point is to prevent re-voting
         let mut surplus_signal: Option<(bool, Self::Signal)> = None;
         let new_state = if let Some(unwrapped_old_vote) = old_vote {
-            if unwrapped_old_vote.magnitude() >= unwrapped_old_vote.magnitude() {
-                let difference = unwrapped_old_vote.magnitude() - unwrapped_old_vote.magnitude();
+            if unwrapped_old_vote.magnitude() >= new_vote.magnitude() {
+                let difference = unwrapped_old_vote.magnitude() - new_vote.magnitude();
                 surplus_signal = Some((true, difference));
             } else {
-                let difference = unwrapped_old_vote.magnitude() - unwrapped_old_vote.magnitude();
+                let difference = new_vote.magnitude() - unwrapped_old_vote.magnitude();
                 surplus_signal = Some((false, difference));
             }
-            state.revert(unwrapped_old_vote)
+            state.revert(unwrapped_old_vote).apply(new_vote)
         } else {
-            state
+            state.apply(new_vote)
         };
-        Ok((new_state.apply(new_vote), surplus_signal))
+        if let Some(new_outcome_state) = new_state.update_outcome() {
+            Ok((new_outcome_state, surplus_signal))
+        } else {
+            Ok((new_state, surplus_signal))
+        }
     }
 }
 
