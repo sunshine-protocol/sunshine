@@ -1,4 +1,5 @@
 #![allow(clippy::type_complexity)]
+#![allow(clippy::too_many_arguments)]
 #![cfg_attr(not(feature = "std"), no_std)]
 //! `util` contains all behavior and relationships for all sunshine modules:
 //! - [`shares-atomic`](../shares_atomic/index.html)

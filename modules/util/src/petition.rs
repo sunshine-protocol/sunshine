@@ -66,6 +66,15 @@ pub enum PetitionOutcome {
     Rejected,
 }
 
+impl Approved for PetitionOutcome {
+    fn approved(&self) -> bool {
+        match self {
+            PetitionOutcome::Approved => true,
+            _ => false,
+        }
+    }
+}
+
 impl Default for PetitionOutcome {
     fn default() -> PetitionOutcome {
         PetitionOutcome::VotingWithNoOutcomeYet
@@ -252,7 +261,7 @@ impl<Hash: Clone, BlockNumber: Clone> PetitionState<Hash, BlockNumber> {
     }
     pub fn revoke_veto(&self) -> Self {
         let new_veto_count = self.veto_count - 1u32;
-        let frozen = if new_veto_count == 0 { false } else { true };
+        let frozen = new_veto_count != 0;
         PetitionState {
             topic: self.topic(),
             frozen,

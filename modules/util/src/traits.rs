@@ -263,8 +263,8 @@ pub trait LockableProfile<AccountId> {
 
 /// Retrieves the outcome of a vote associated with the vote identifier `vote_id`
 pub trait GetVoteOutcome {
-    type VoteId: Into<u32>; // Into<u32> is necessary to make it work
-    type Outcome;
+    type VoteId: Into<u32> + From<u32>; // Into<u32> is necessary to make it work
+    type Outcome: Approved;
 
     fn get_vote_outcome(vote_id: Self::VoteId) -> Result<Self::Outcome, DispatchError>;
 }
@@ -934,6 +934,7 @@ pub trait FoundationParts {
     type OrgId;
     type BountyId;
     type BankId;
+    type MultiVoteId;
 }
 
 // TODO: this could be removed if we didn't cache the ownership of on-chain
@@ -980,11 +981,23 @@ pub trait CreateBounty<Currency, AccountId, Hash>: RegisterFoundation<Currency, 
     ) -> Result<Self::BountyId, DispatchError>;
 }
 
-pub trait SubmitGrantApplication<Currency, AccountId, Hash>:
-    CreateBounty<Currency, AccountId, Hash>
-{
-    type GrantApp;
+pub trait RequestConsentOnTermsOfAgreement<AccountId>: FoundationParts {
     type TermsOfAgreement;
+    fn request_consent_on_terms_of_agreement(
+        bounty_id: Self::BountyId,
+        terms: Self::TermsOfAgreement,
+    ) -> Option<Self::MultiVoteId>;
+}
+
+pub trait StartReview<VoteID> {
+    fn start_review(&self, vote_id: VoteID) -> Self;
+    fn get_review_id(&self) -> Option<VoteID>;
+}
+
+pub trait SubmitGrantApplication<Currency, AccountId, Hash>:
+    CreateBounty<Currency, AccountId, Hash> + RequestConsentOnTermsOfAgreement<AccountId>
+{
+    type GrantApp: StartReview<Self::MultiVoteId>;
     fn form_grant_application(
         bounty_id: u32,
         description: Hash,
@@ -1000,10 +1013,8 @@ pub trait SubmitGrantApplication<Currency, AccountId, Hash>:
 }
 
 pub trait ApproveGrantApplication<Currency, AccountId, Hash>:
-    CreateBounty<Currency, AccountId, Hash>
+    CreateBounty<Currency, AccountId, Hash> + RequestConsentOnTermsOfAgreement<AccountId>
 {
-    // associated type like SupportedVoteTypes?
-    type SupportedVoteMechanisms;
     type AppState;
     fn trigger_application_review(
         trigger: AccountId, // must be authorized to trigger in context of objects

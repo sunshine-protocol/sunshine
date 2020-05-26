@@ -1,4 +1,4 @@
-use crate::{bank::OnChainTreasuryID, organization::TermsOfAgreement};
+use crate::{bank::OnChainTreasuryID, organization::TermsOfAgreement, traits::StartReview};
 use codec::{Decode, Encode};
 use frame_support::Parameter;
 use sp_runtime::RuntimeDebug;
@@ -66,7 +66,7 @@ impl<Hash: Parameter, Currency: Parameter> BountyInformation<Hash, Currency> {
         self.claimed_funding_available.clone()
     }
     pub fn acceptance_committee(&self) -> ReviewBoard {
-        self.acceptance_committee.clone()
+        self.acceptance_committee
     }
 }
 
@@ -119,7 +119,7 @@ pub enum ApplicationState {
     // wraps a VoteId for the acceptance committee
     UnderReviewByAcceptanceCommittee(VoteID),
     // however many individuals are left that need to consent
-    ApprovedByFoundationAwaitingTeamConsent,
+    ApprovedByFoundationAwaitingTeamConsent(VoteID),
     // current milestone identifier
     ApprovedAndLive(u32),
     // closed for some reason
@@ -157,8 +157,27 @@ impl<AccountId: Clone, Currency: Clone, Hash: Clone> GrantApplication<AccountId,
     pub fn total_amount(&self) -> Currency {
         self.total_amount.clone()
     }
-    pub fn terms(&self) -> TermsOfAgreement<AccountId> {
+    pub fn terms_of_agreement(&self) -> TermsOfAgreement<AccountId> {
         self.terms_of_agreement.clone()
+    }
+}
+
+impl<AccountId: Clone, Currency: Clone, Hash: Clone> StartReview<VoteID>
+    for GrantApplication<AccountId, Currency, Hash>
+{
+    fn start_review(&self, vote_id: VoteID) -> Self {
+        GrantApplication {
+            description: self.description.clone(),
+            total_amount: self.total_amount.clone(),
+            terms_of_agreement: self.terms_of_agreement.clone(),
+            state: ApplicationState::UnderReviewByAcceptanceCommittee(vote_id),
+        }
+    }
+    fn get_review_id(&self) -> Option<VoteID> {
+        match self.state() {
+            ApplicationState::UnderReviewByAcceptanceCommittee(vote_id) => Some(vote_id),
+            _ => None,
+        }
     }
 }
 
