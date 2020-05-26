@@ -38,7 +38,8 @@ std = [
     'membership/std',
     'shares-membership/std',
     'shares-atomic/std',
-    'bank/std',
+    'sunshine-org/std',
+    'bank-onchain/std',
 ]
 
 [build-dependencies]
@@ -46,34 +47,38 @@ substrate-wasm-builder-runner = "1.0.5"
 
 [dependencies]
 codec = { version = "1.2.0", default-features = false, features = ["derive"], package = "parity-scale-codec" }
-frame-executive = { version = "2.0.0-alpha.7", default-features = false }
-frame-support = { version = "2.0.0-alpha.7", default-features = false }
-frame-system = { version = "2.0.0-alpha.7", default-features = false }
-pallet-aura = { version = "2.0.0-alpha.7", default-features = false }
-pallet-balances = { version = "2.0.0-alpha.7", default-features = false }
-pallet-grandpa = { version = "2.0.0-alpha.7", default-features = false }
-pallet-indices = { version = "2.0.0-alpha.7", default-features = false }
-pallet-randomness-collective-flip = { version = "2.0.0-alpha.7", default-features = false }
-pallet-sudo = { version = "2.0.0-alpha.7", default-features = false }
-pallet-timestamp = { version = "2.0.0-alpha.7", default-features = false }
-pallet-transaction-payment = { version = "2.0.0-alpha.7", default-features = false }
-sp-api = { version = "2.0.0-alpha.7", default-features = false }
-sp-block-builder = { version = "2.0.0-alpha.7", default-features = false }
+frame-executive = { version = "2.0.0-rc2", default-features = false }
+frame-support = { version = "2.0.0-rc2", default-features = false }
+frame-system = { version = "2.0.0-rc2", default-features = false }
+pallet-aura = { version = "2.0.0-rc2", default-features = false }
+pallet-balances = { version = "2.0.0-rc2", default-features = false }
+pallet-grandpa = { version = "2.0.0-rc2", default-features = false }
+pallet-indices = { version = "2.0.0-rc2", default-features = false }
+pallet-randomness-collective-flip = { version = "2.0.0-rc2", default-features = false }
+pallet-sudo = { version = "2.0.0-rc2", default-features = false }
+pallet-timestamp = { version = "2.0.0-rc2", default-features = false }
+pallet-transaction-payment = { version = "2.0.0-rc2", default-features = false }
+sp-api = { version = "2.0.0-rc2", default-features = false }
+sp-block-builder = { version = "2.0.0-rc2", default-features = false }
 sp-consensus-aura = { version = "0.8.0-alpha.6", default-features = false }
-sp-core = { version = "2.0.0-alpha.7", default-features = false }
-sp-inherents = { version = "2.0.0-alpha.7", default-features = false }
-sp-io = { version = "2.0.0-alpha.7", default-features = false }
-sp-offchain = { version = "2.0.0-alpha.7", default-features = false }
-sp-runtime = { version = "2.0.0-alpha.7", default-features = false }
-sp-session = { version = "2.0.0-alpha.7", default-features = false }
-sp-std = { version = "2.0.0-alpha.7", default-features = false }
-sp-transaction-pool = { version = "2.0.0-alpha.7", default-features = false }
-sp-version = { version = "2.0.0-alpha.7", default-features = false }
+sp-core = { version = "2.0.0-rc2", default-features = false }
+sp-inherents = { version = "2.0.0-rc2", default-features = false }
+sp-io = { version = "2.0.0-rc2", default-features = false }
+sp-offchain = { version = "2.0.0-rc2", default-features = false }
+sp-runtime = { version = "2.0.0-rc2", default-features = false }
+sp-session = { version = "2.0.0-rc2", default-features = false }
+sp-std = { version = "2.0.0-rc2", default-features = false }
+sp-transaction-pool = { version = "2.0.0-rc2", default-features = false }
+sp-version = { version = "2.0.0-rc2", default-features = false }
 serde = { version = "1.0.106", features = ["derive"], optional = true }
-util = { package = "sunshine-util", version = "0.0.2", default-features = false }
-membership = { package = "sunshine-membership", version = "0.0.1", default-features = false }
-shares-membership = { package = "sunshine-shares-membership", version = "0.0.1", default-features = false }
-shares-atomic = { package = "sunshine-shares-atomic", version = "0.0.1", default-features = false }
-vote-yesno = { package = "sunshine-vote-yesno", version = "0.0.1", default-features = false}
-vote-petition = { package = "sunshine-vote-petition", version = "0.0.1", default-features=false}
-bank = { package = "sunshine-bank", version = "0.0.2", default-features=false}
+# local deps
+util = { package = "sunshine-util", path = "../modules/util", default-features = false }
+membership = { package = "sunshine-membership", path = "../modules/membership", default-features = false }
+shares-membership = { package = "sunshine-shares-membership", path = "../modules/shares-membership", default-features = false }
+shares-atomic = { package = "sunshine-shares-atomic", path = "../modules/shares-atomic", default-features = false }
+sunshine-org = {package = "sunshine-org", path = "../modules/org", default-features=false }
+vote-yesno = { package = "sunshine-vote-yesno", path = "../modules/vote-yesno", default-features = false}
+vote-petition = { package = "sunshine-vote-petition", path = "../modules/vote-petition", default-features=false}
+bank-onchain = { package = "sunshine-bank-onchain", version = "0.0.1", path = "../modules/bank-onchain", default-features=false}
+bank-offchain = { package = "sunshine-bank-offchain", path = "../modules/bank-offchain", default-features=false}
+bounty = { package = "sunshine-bounty", path = "../modules/bounty", default-features=false}

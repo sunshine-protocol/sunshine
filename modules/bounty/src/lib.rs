@@ -89,17 +89,16 @@ pub trait Trait: frame_system::Trait {
         + TermSheetExit<Self::AccountId, BalanceOf<Self>>;
 
     // TODO: use this when adding TRIGGER => VOTE => OUTCOME framework for util::bank::Spends
-    type VotePetition: IDIsAvailable<UUID3>
-        + GenerateUniqueID<UUID3>
+    type VotePetition: IDIsAvailable<u32>
+        + GenerateUniqueID<u32>
         + GetVoteOutcome
         + OpenPetition<IpfsReference, Self::BlockNumber>
         + SignPetition<Self::AccountId, IpfsReference>
-        + RequestChanges<Self::AccountId, IpfsReference>
-        + UpdatePetition<Self::AccountId, IpfsReference>;
+        + UpdatePetition<Self::AccountId, IpfsReference>; // + RequestChanges<Self::AccountId, IpfsReference>
 
     // TODO: use this when adding TRIGGER => VOTE => OUTCOME framework for util::bank::Spends
-    type VoteYesNo: IDIsAvailable<UUID3>
-        + GenerateUniqueID<UUID3>
+    type VoteYesNo: IDIsAvailable<u32>
+        + GenerateUniqueID<u32>
         + MintableSignal<Self::AccountId, Self::BlockNumber, Permill>
         + GetVoteOutcome
         + ThresholdVote

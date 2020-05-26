@@ -13,9 +13,7 @@ use pallet_grandpa::AuthorityList as GrandpaAuthorityList;
 use sp_api::impl_runtime_apis;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::OpaqueMetadata;
-use sp_runtime::traits::{
-    BlakeTwo256, Block as BlockT, ConvertInto, IdentifyAccount, StaticLookup, Verify,
-};
+use sp_runtime::traits::{BlakeTwo256, Block as BlockT, IdentifyAccount, StaticLookup, Verify};
 use sp_runtime::{
     create_runtime_str, generic, impl_opaque_keys, transaction_validity::TransactionValidity,
     ApplyExtrinsicResult, MultiSignature, SaturatedConversion,
@@ -31,7 +29,7 @@ pub use frame_support::{
     traits::Randomness,
     weights::{
         constants::{BlockExecutionWeight, ExtrinsicBaseWeight, RocksDbWeight, WEIGHT_PER_SECOND},
-        Weight,
+        IdentityFee, Weight,
     },
     StorageValue,
 };
@@ -115,7 +113,8 @@ where
             // so the actual block number is `n`.
             .saturating_sub(1);
         let extra: SignedExtra = (
-            frame_system::CheckVersion::<Runtime>::new(),
+            frame_system::CheckSpecVersion::<Runtime>::new(),
+            frame_system::CheckTxVersion::<Runtime>::new(),
             frame_system::CheckGenesis::<Runtime>::new(),
             frame_system::CheckEra::<Runtime>::from(generic::Era::mortal(period, current_block)),
             frame_system::CheckNonce::<Runtime>::from(nonce),
@@ -291,7 +290,7 @@ impl pallet_transaction_payment::Trait for Runtime {
     type Currency = pallet_balances::Module<Runtime>;
     type OnTransactionPayment = ();
     type TransactionByteFee = TransactionByteFee;
-    type WeightToFee = ConvertInto;
+    type WeightToFee = IdentityFee<Balance>;
     type FeeMultiplierUpdate = ();
 }
 impl pallet_sudo::Trait for Runtime {
@@ -334,15 +333,38 @@ impl vote_yesno::Trait for Runtime {
     type FlatShareData = SharesMembership;
     type WeightedShareData = SharesAtomic;
 }
-pub use bank;
-impl bank::Trait for Runtime {
+pub use sunshine_org;
+impl sunshine_org::Trait for Runtime {
     type Event = Event;
-    type Currency = Balances;
     type OrgData = Membership;
     type FlatShareData = SharesMembership;
-    type VotePetition = VotePetition;
     type WeightedShareData = SharesAtomic;
+}
+parameter_types! {
+    pub const MinimumInitialDeposit: u128 = 5;
+}
+pub use bank_onchain;
+impl bank_onchain::Trait for Runtime {
+    type Event = Event;
+    type Currency = Balances;
+    type Organization = SunshineOrg;
+    type MinimumInitialDeposit = MinimumInitialDeposit;
+}
+// => every bounty has at least 10 reserved behind it
+parameter_types! {
+    pub const MinimumBountyCollateralRatio: Permill = Permill::from_percent(50);
+    pub const BountyLowerBound: u128 = 20;
+}
+pub use bounty;
+impl bounty::Trait for Runtime {
+    type Event = Event;
+    type Currency = Balances;
+    type Organization = SunshineOrg;
+    type Bank = BankOnChain;
+    type VotePetition = VotePetition;
     type VoteYesNo = VoteYesNo;
+    type MinimumBountyCollateralRatio = MinimumBountyCollateralRatio;
+    type BountyLowerBound = BountyLowerBound;
 }
 
 construct_runtime!(
@@ -366,7 +388,9 @@ construct_runtime!(
         SharesAtomic: shares_atomic::{Module, Call, Config<T>, Storage, Event<T>},
         VotePetition: vote_petition::{Module, Call, Storage, Event<T>},
         VoteYesNo: vote_yesno::{Module, Call, Storage, Event<T>},
-        Bank: bank::{Module, Call, Config<T>, Storage, Event<T>},
+        SunshineOrg: sunshine_org::{Module, Call, Config<T>, Storage, Event<T>},
+        BankOnChain: bank_onchain::{Module, Call, Config<T>, Storage, Event<T>},
+        Bounty: bounty::{Module, Call, Storage, Event<T>},
     }
 );
 
@@ -382,7 +406,8 @@ pub type SignedBlock = generic::SignedBlock<Block>;
 pub type BlockId = generic::BlockId<Block>;
 /// The SignedExtension to the basic transaction logic.
 pub type SignedExtra = (
-    frame_system::CheckVersion<Runtime>,
+    frame_system::CheckSpecVersion<Runtime>,
+    frame_system::CheckTxVersion<Runtime>,
     frame_system::CheckGenesis<Runtime>,
     frame_system::CheckEra<Runtime>,
     frame_system::CheckNonce<Runtime>,
