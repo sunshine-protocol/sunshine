@@ -251,6 +251,32 @@ impl<T: Trait> Module<T> {
             },
         }
     }
+    fn dispatch_application_review(
+        committee: ReviewBoard,
+        topic: IpfsReference,
+        required_support: u32,
+        required_against: Option<u32>,
+        duration: Option<BlockNumber>,
+    ) -> Result<u32, DispatchError> {
+        let new_vote_id = match committee {
+            ReviewBoard::SimpleFlatReview(org_id, share_id) => {
+                // dispatch single approval vote (any vetos possible) in petition
+                let id: u32 = <<T as Trait>::VotePetition as OpenPetition<IpfsReference, T::BlockNumber>>::open_petition(
+                    org_id,
+                    share_id,
+                    topic,
+                    required_support,
+                    required_against,
+                    duration
+                )?.into();
+                Ok(id)
+            },
+            ReviewBoard::WeightedThresholdReview(org_id, share_id, threshold) => {
+                // dispatch weighted threshold review in vote-yesno
+            },
+        };
+        Ok(new_vote_id)
+    }
 }
 
 impl<T: Trait> IDIsAvailable<BountyId> for Module<T> {
@@ -489,7 +515,7 @@ impl<T: Trait> ApproveGrantApplication<BalanceOf<T>, T::AccountId, IpfsReference
         );
         // vote should dispatch based on the acceptance_committee variant here
 
-        // TODO: look into the syntax fo dispatching a vote here
+        // TODO: look into the syntax fo dispatching a simple vote here
 
         // change the application status on the Applications
 

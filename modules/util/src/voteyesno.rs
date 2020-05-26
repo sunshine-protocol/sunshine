@@ -205,6 +205,8 @@ where
     initialized: BlockNumber,
     /// The time at which this vote state expired, now an Option
     expires: Option<BlockNumber>,
+    /// The vote outcome
+    outcome: VoteOutcome,
 }
 
 impl<
@@ -377,7 +379,7 @@ impl<
 #[derive(PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
 #[non_exhaustive]
 /// The vote's state and outcome
-pub enum Outcome {
+pub enum VoteOutcome {
     /// The VoteId in question has been reserved but is not yet open for voting (context is schedule)
     NotStarted,
     /// The VoteState associated with the VoteId is open to voting by the given `ShareId`
@@ -388,16 +390,16 @@ pub enum Outcome {
     Rejected,
 }
 
-impl Default for Outcome {
+impl Default for VoteOutcome {
     fn default() -> Self {
-        Outcome::NotStarted
+        VoteOutcome::NotStarted
     }
 }
 
-impl Approved for Outcome {
+impl Approved for VoteOutcome {
     fn approved(&self) -> bool {
         match self {
-            Outcome::Approved => true,
+            VoteOutcome::Approved => true,
             _ => false,
         }
     }

@@ -26,6 +26,12 @@ impl UUID2 {
     }
 }
 
+impl Into<(u32, u32)> for UUID2 {
+    fn into(self) -> (u32, u32) {
+        (self.one(), self.two())
+    }
+}
+
 #[derive(PartialEq, Eq, Default, Copy, Clone, Encode, Decode, RuntimeDebug)]
 pub struct UUID3(u32, u32, u32);
 

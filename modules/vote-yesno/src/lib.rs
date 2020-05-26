@@ -130,34 +130,24 @@ decl_error! {
 
 decl_storage! {
     trait Store for Module<T: Trait> as VoteYesNo {
-        /// VoteId storage helper for unique id generation, see issue #62
-        pub VoteIdCounter get(fn vote_id_counter): double_map
-            hasher(opaque_blake2_256) OrgId,
-            hasher(opaque_blake2_256) ShareId  => VoteId;
+        pub VoteIdCounter get(fn vote_id_counter): VoteId;
 
         /// Total signal available for each member for the vote in question
         pub MintedSignal get(fn minted_signal): double_map
-            hasher(opaque_blake2_256) UUID3,
+            hasher(opaque_blake2_256) VoteId,
             hasher(opaque_blake2_256) T::AccountId  => Option<T::Signal>;
 
-        pub TotalSignalIssuance get(fn total_signal_issuance): double_map
-            hasher(opaque_blake2_256) UUID2,
-            hasher(opaque_blake2_256) VoteId => Option<T::Signal>;
-
         /// The state of a vote (separate from outcome so that this can be purged if Outcome is not Voting)
-        pub VoteStates get(fn vote_states): double_map
-            hasher(opaque_blake2_256) UUID2,
+        pub VoteStates get(fn vote_states): map
             hasher(opaque_blake2_256) VoteId => Option<VoteState<T::Signal, Permill, T::BlockNumber>>;
+
+        pub TotalSignalIssuance get(fn total_signal_issuance): map
+            hasher(opaque_blake2_256) VoteId => Option<T::Signal>;
 
         /// Tracks all votes
         pub VoteLogger get(fn vote_logger): double_map
-            hasher(opaque_blake2_256) UUID3,
+            hasher(opaque_blake2_256) VoteId,
             hasher(opaque_blake2_256) T::AccountId  => Option<YesNoVote<T::Signal, IpfsReference>>;
-
-        /// The outcome of a vote
-        pub VoteOutcome get(fn vote_outcome): double_map
-            hasher(opaque_blake2_256) UUID2,
-            hasher(opaque_blake2_256) VoteId => Option<Outcome>;
     }
 }
 
@@ -299,28 +289,20 @@ decl_module! {
     }
 }
 
-impl<T: Trait> IDIsAvailable<UUID3> for Module<T> {
-    fn id_is_available(id: UUID3) -> bool {
-        None == <VoteStates<T>>::get(id.one_two(), id.three())
+impl<T: Trait> IDIsAvailable<VoteId> for Module<T> {
+    fn id_is_available(id: VoteId) -> bool {
+        <VoteStates<T>>::get(id).is_none()
     }
 }
 
-impl<T: Trait> GenerateUniqueID<UUID3> for Module<T> {
-    fn generate_unique_id(proposed_id: UUID3) -> UUID3 {
-        let organization = proposed_id.one();
-        let share_id = proposed_id.two();
-        let one_two = proposed_id.one_two();
-        if !Self::id_is_available(proposed_id) || proposed_id.three() == 0u32 {
-            let mut id_counter = VoteIdCounter::get(organization, share_id);
-            while <VoteStates<T>>::get(one_two, id_counter).is_some() || id_counter == 0 {
-                // TODO: add overflow check here
-                id_counter += 1u32;
-            }
-            VoteIdCounter::insert(organization, share_id, id_counter);
-            UUID3::new(organization, share_id, id_counter)
-        } else {
-            proposed_id
+impl<T: Trait> GenerateUniqueID<VoteId> for Module<T> {
+    fn generate_unique_id() -> VoteId {
+        let mut id_counter = VoteIdCounter::get() + 1u32;
+        while VoteStates::get(id_counter).is_some() {
+            id_counter += 1u32;
         }
+        VoteIdCounter::put(id_counter)
+        id_counter
     }
 }
 
@@ -329,14 +311,10 @@ impl<T: Trait> MintableSignal<T::AccountId, T::BlockNumber, Permill> for Module<
     /// - may be useful for resetting voting rights
     /// - should be heavily guarded and no public facing
     fn mint_custom_signal_for_account(
-        organization: OrgId,
-        share_id: ShareId,
         vote_id: VoteId,
         who: &T::AccountId,
         signal: T::Signal,
     ) {
-        // minting custom signal for this account
-        let prefix_key = UUID3::new(organization, share_id, vote_id);
         <MintedSignal<T>>::insert(prefix_key, who, signal);
     }
 

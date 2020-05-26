@@ -124,105 +124,50 @@ pub trait GetFlatShareGroup<AccountId> {
 
 // ---------- Petition Logic ----------
 
-pub trait GetPetitionStatus {
-    type Status; // says approvals gotten and outcome, including veto context?
+// impl GetVoteOutcome
 
-    fn get_petition_status(
-        organization: u32,
-        share_id: u32,
-        petition_id: u32,
-    ) -> Result<Self::Status, DispatchError>;
-}
-
-pub trait OpenPetition<Hash, BlockNumber>: GetPetitionStatus {
+pub trait OpenPetition<Hash, BlockNumber>: GetVoteOutcome {
     fn open_petition(
         organization: u32,
         share_id: u32,
-        petition_id: u32,
         topic: Hash,
         required_support: u32,
         require_against: Option<u32>,
         ends: Option<BlockNumber>,
-    ) -> DispatchResult;
+    ) -> Result<Self::VoteId, DispatchError>;
 }
 
 pub trait UpdatePetitionTerms<Hash>: Sized {
     fn update_petition_terms(&self, new_terms: Hash) -> Self;
 }
-pub trait Vetoed {
-    fn vetoed(&self) -> bool;
-}
 
-pub trait SignPetition<AccountId, Hash> {
-    type Petition: Approved
-        + Vetoed
-        + Rejected
-        + UpdatePetitionTerms<Hash>
-        + Apply<Self::SignerView>;
+pub trait SignPetition<AccountId, Hash>: GetVoteOutcome {
+    type Petition: Approved + Rejected + UpdatePetitionTerms<Hash> + Apply<Self::SignerView>;
     type SignerView;
-    type Outcome;
+    fn check_petition_outcome(petition: Self::Petition) -> Result<Self::Outcome, DispatchError>;
     fn sign_petition(
-        organization: u32,
-        share_id: u32,
-        petition_id: u32,
+        petition_id: Self::VoteId,
         signer: AccountId,
         view: Self::SignerView,
-        justification: Hash,
     ) -> Result<Self::Outcome, DispatchError>;
 }
 
-pub trait EmpowerWithVeto<AccountId> {
-    fn get_those_empowered_with_veto(
-        organization: u32,
-        share_id: u32,
-        petition_id: u32,
-    ) -> Option<Vec<AccountId>>;
-    fn get_those_who_invoked_veto(
-        organization: u32,
-        share_id: u32,
-        petition_id: u32,
-    ) -> Option<Vec<AccountId>>;
-    fn empower_with_veto(
-        organization: u32,
-        share_id: u32,
-        petition_id: u32,
-        // if none, give it to everyone in the share_id group
-        accounts: Option<Vec<AccountId>>,
-    ) -> DispatchResult;
-}
-
-pub trait GetFullVetoContext<AccountId>: EmpowerWithVeto<AccountId> {
-    type VetoContext;
-    fn get_full_veto_context(
-        organization: u32,
-        share_id: u32,
-        petition_id: u32,
-    ) -> Option<Vec<(AccountId, Self::VetoContext)>>;
-}
+// get full veto context by filtering on the `SignatureLogger` map O(n)
 
 pub trait RequestChanges<AccountId, Hash>: SignPetition<AccountId, Hash> {
     fn request_changes(
-        organization: u32,
-        share_id: u32,
-        petition_id: u32,
+        petition_id: Self::VoteId,
         signer: AccountId,
         justification: Hash,
     ) -> Result<Option<Self::Outcome>, DispatchError>;
     fn accept_changes(
-        organization: u32,
-        share_id: u32,
-        petition_id: u32,
+        petition_id: Self::VoteId,
         signer: AccountId,
     ) -> Result<Option<Self::Outcome>, DispatchError>;
 }
 
 pub trait UpdatePetition<AccountId, Hash>: SignPetition<AccountId, Hash> {
-    fn update_petition(
-        organization: u32,
-        share_id: u32,
-        petition_id: u32,
-        new_topic: Hash,
-    ) -> Result<u32, DispatchError>;
+    fn update_petition(petition_id: u32, new_topic: Hash) -> DispatchResult;
 } // do we need a delete petition when we want to close it
 
 // ---------- Shares Atomic Logic ----------
@@ -318,14 +263,14 @@ pub trait LockableProfile<AccountId> {
 
 /// Retrieves the outcome of a vote associated with the vote identifier `vote_id`
 pub trait GetVoteOutcome {
-    type Signal: Parameter + Member + AtLeast32Bit + Codec;
-    type Outcome: Approved;
+    type VoteId;
+    type Outcome;
 
-    fn get_vote_outcome(
-        organization: u32,
-        share_id: u32,
-        vote_id: u32,
-    ) -> Result<Self::Outcome, DispatchError>;
+    fn get_vote_outcome(vote_id: Self::VoteId) -> Result<Self::Outcome, DispatchError>;
+}
+
+pub trait ThresholdVote {
+    type Signal: Parameter + Member + AtLeast32Bit + Codec;
 }
 
 /// Derives the threshold requirement from turnout (for `ThresholdConfig`)
@@ -343,7 +288,7 @@ pub trait ConsistentThresholdStructure {
 
 /// Open a new vote for the organization, share_id and a custom threshold requirement
 pub trait OpenShareGroupVote<AccountId, BlockNumber, FineArithmetic: PerThing>:
-    GetVoteOutcome
+    GetVoteOutcome + ThresholdVote
 {
     type ThresholdConfig: DeriveThresholdRequirement<Self::Signal>
         + ConsistentThresholdStructure
@@ -354,25 +299,17 @@ pub trait OpenShareGroupVote<AccountId, BlockNumber, FineArithmetic: PerThing>:
     fn open_share_group_vote(
         organization: u32,
         share_id: u32,
-        // uuid generation should default happen when this is called (None is default)
-        vote_id: Option<u32>,
         vote_type: Self::VoteType,
         threshold_config: Self::ThresholdConfig,
         duration: Option<BlockNumber>,
-    ) -> Result<u32, DispatchError>;
+    ) -> Result<Self::VoteId, DispatchError>;
 }
 
 /// Define the rate at which signal is minted for shares in an organization
 pub trait MintableSignal<AccountId, BlockNumber, FineArithmetic: PerThing>:
     OpenShareGroupVote<AccountId, BlockNumber, FineArithmetic>
 {
-    fn mint_custom_signal_for_account(
-        organization: u32,
-        share_id: u32,
-        vote_id: u32,
-        who: &AccountId,
-        signal: Self::Signal,
-    );
+    fn mint_custom_signal_for_account(vote_id: u32, who: &AccountId, signal: Self::Signal);
 
     fn batch_mint_signal_for_1p1v_share_group(
         organization: u32,
@@ -423,7 +360,7 @@ pub trait VoteVector<Signal, Direction> {
 }
 
 /// Applies vote in the context of the existing module instance
-pub trait ApplyVote: GetVoteOutcome {
+pub trait ApplyVote: GetVoteOutcome + ThresholdVote {
     type Direction;
     type Vote: VoteVector<Self::Signal, Self::Direction>;
     type State: Approved + Apply<Self::Vote> + Revert<Self::Vote>;
