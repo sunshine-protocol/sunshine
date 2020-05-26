@@ -98,6 +98,16 @@ where
     /// Required turnout
     turnout_required: ThresholdType<Signal, FineArithmetic>,
 }
+impl<Signal: From<u32>, FineArithmetic: PerThing> From<(u32, u32)>
+    for ThresholdConfig<Signal, FineArithmetic>
+{
+    fn from(other: (u32, u32)) -> ThresholdConfig<Signal, FineArithmetic> {
+        ThresholdConfig {
+            support_required: ThresholdType::Count(other.0.into()),
+            turnout_required: ThresholdType::Count(other.1.into()),
+        }
+    }
+}
 
 use crate::schedule::{ThresholdConfigBuilder, ThresholdTypeBuilder};
 // local extension
@@ -201,7 +211,7 @@ where
     all_possible_turnout: Signal,
     /// The threshold configuration for passage
     threshold: ThresholdConfig<Signal, FineArithmetic>,
-    /// The time at which this is initialized (4_TTL_C_l8r)
+    /// The time at which this is initialized
     initialized: BlockNumber,
     /// The time at which this vote state expired, now an Option
     expires: Option<BlockNumber>,
@@ -250,6 +260,9 @@ impl<
     }
     pub fn threshold(&self) -> ThresholdConfig<Signal, FineArithmetic> {
         self.threshold
+    }
+    pub fn outcome(&self) -> VoteOutcome {
+        self.outcome
     }
 
     pub fn add_in_favor_vote(&self, magnitude: Signal) -> Self {
@@ -376,7 +389,7 @@ impl<
     }
 }
 
-#[derive(PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
+#[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
 #[non_exhaustive]
 /// The vote's state and outcome
 pub enum VoteOutcome {

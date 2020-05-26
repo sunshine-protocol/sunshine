@@ -130,7 +130,7 @@ fn create_petition_happy_path() {
         let one = Origin::signed(1);
         let ten = Origin::signed(10);
         let new_topic = random(10);
-        assert_eq!(VotePetition::petition_id_counter(1, 1), 0);
+        assert_eq!(VotePetition::petition_id_counter(), 0);
         // auth only allows sudo or organization supervisor
         assert_err!(
             VotePetition::create_petition(
@@ -174,28 +174,5 @@ fn create_petition_happy_path() {
             new_petition_state,
             VotePetition::petition_states(prefix, 1).unwrap()
         );
-    });
-}
-
-#[test]
-fn test_getter_of_those_empowered_with_veto() {
-    new_test_ext().execute_with(|| {
-        let one = Origin::signed(1);
-        let new_topic = random(10);
-        assert_ok!(VotePetition::create_petition(
-            one,
-            1,
-            1,
-            None,
-            new_topic.clone(),
-            4,
-            None,
-            None,
-            Some(None)
-        ));
-        let vetoer_group = VotePetition::get_those_empowered_with_veto(1, 1, 1);
-        let empty_group = VotePetition::get_those_empowered_with_veto(1, 1, 2);
-        assert!(vetoer_group.is_some()); // TODO: could check that this is the same as (1, 1) share group
-        assert!(empty_group.is_none());
     });
 }

@@ -263,7 +263,7 @@ pub trait LockableProfile<AccountId> {
 
 /// Retrieves the outcome of a vote associated with the vote identifier `vote_id`
 pub trait GetVoteOutcome {
-    type VoteId;
+    type VoteId: Into<u32>; // Into<u32> is necessary to make it work
     type Outcome;
 
     fn get_vote_outcome(vote_id: Self::VoteId) -> Result<Self::Outcome, DispatchError>;
@@ -314,15 +314,13 @@ pub trait MintableSignal<AccountId, BlockNumber, FineArithmetic: PerThing>:
     fn batch_mint_signal_for_1p1v_share_group(
         organization: u32,
         share_id: u32,
-        vote_id: u32,
-    ) -> Result<Self::Signal, DispatchError>;
+    ) -> Result<(Self::VoteId, Self::Signal), DispatchError>;
 
     /// Mints signal for all accounts participating in the vote based on group share allocation from the ShareData module
     fn batch_mint_signal_for_weighted_share_group(
         organization: u32,
         share_id: u32,
-        vote_id: u32,
-    ) -> Result<Self::Signal, DispatchError>;
+    ) -> Result<(Self::VoteId, Self::Signal), DispatchError>;
 }
 
 /// Define the rate at which signal is burned to unreserve shares in an organization
@@ -369,7 +367,7 @@ pub trait ApplyVote: GetVoteOutcome + ThresholdVote {
         state: Self::State,
         new_vote: Self::Vote,
         old_vote: Option<Self::Vote>,
-    ) -> Result<Self::State, DispatchError>;
+    ) -> Result<(Self::State, Option<(bool, Self::Signal)>), DispatchError>;
 }
 
 /// For the module to check the status of the vote in the context of the existing module instance
@@ -383,8 +381,6 @@ pub trait VoteOnProposal<AccountId, Hash, BlockNumber, FineArithmetic: PerThing>
     OpenShareGroupVote<AccountId, BlockNumber, FineArithmetic> + CheckVoteStatus
 {
     fn vote_on_proposal(
-        organization: u32,
-        share_id: u32,
         vote_id: u32,
         voter: AccountId,
         direction: Self::Direction,

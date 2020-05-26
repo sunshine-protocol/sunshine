@@ -143,7 +143,7 @@ impl<AccountId> From<ReviewBoard> for WithdrawalPermissions<AccountId> {
                     ShareID::Flat(flat_share_id),
                 )
             }
-            ReviewBoard::WeightedThresholdReview(org_id, weighted_share_id, _) => {
+            ReviewBoard::WeightedThresholdReview(org_id, weighted_share_id) => {
                 WithdrawalPermissions::AnyMemberOfOrgShareGroup(
                     org_id,
                     ShareID::WeightedAtomic(weighted_share_id),

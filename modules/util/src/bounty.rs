@@ -77,9 +77,16 @@ pub enum ReviewBoard {
     /// Uses petition but only requires a single approver from the group
     /// - anyone can veto as well
     SimpleFlatReview(u32, u32),
-    /// Weighted threshold
-    WeightedThresholdReview(u32, u32, u32),
+    /// Weighted threshold, Count(u32)
+    WeightedThresholdReview(u32, u32),
 } //PetitionReview(u32, u32, u32, u32, u32)
+
+#[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug)]
+/// Strongly typed vote identifier
+pub enum VoteID {
+    Petition(u32),
+    Threshold(u32),
+}
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub struct MilestoneSubmission<Hash, Currency, Status> {
@@ -110,7 +117,7 @@ impl<Hash, Currency, Status> MilestoneSubmission<Hash, Currency, Status> {
 pub enum ApplicationState {
     SubmittedAwaitingResponse,
     // wraps a VoteId for the acceptance committee
-    UnderReviewByAcceptanceCommittee(u32),
+    UnderReviewByAcceptanceCommittee(VoteID),
     // however many individuals are left that need to consent
     ApprovedByFoundationAwaitingTeamConsent,
     // current milestone identifier

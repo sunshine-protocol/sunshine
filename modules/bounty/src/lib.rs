@@ -17,21 +17,22 @@ use util::{
     bank::{BankMapID, OnChainTreasuryID},
     bounty::{
         ApplicationState, BountyInformation, BountyMapID, BountyPaymentTracker, GrantApplication,
-        MilestoneSubmission, ReviewBoard,
+        MilestoneSubmission, ReviewBoard, VoteID,
     },
     organization::{ShareID, TermsOfAgreement},
     traits::{
         ApplyVote, ApproveGrantApplication, BankDepositsAndSpends, BankReservations, BankSpends,
         BankStorageInfo, CheckBankBalances, CheckVoteStatus, CreateBounty, DepositIntoBank,
-        EmpowerWithVeto, FoundationParts, GenerateUniqueID, GenerateUniqueKeyID,
-        GetInnerOuterShareGroups, GetPetitionStatus, GetVoteOutcome, IDIsAvailable, MintableSignal,
-        OnChainBank, OpenPetition, OpenShareGroupVote, OrgChecks, OrganizationDNS,
-        OwnershipProportionCalculations, RegisterBankAccount, RegisterFoundation,
-        RegisterShareGroup, RequestChanges, SeededGenerateUniqueID, ShareGroupChecks, SignPetition,
-        SubmitGrantApplication, SupervisorPermissions, TermSheetExit, UpdatePetition,
-        VoteOnProposal, WeightedShareIssuanceWrapper, WeightedShareWrapper,
+        FoundationParts, GenerateUniqueID, GenerateUniqueKeyID, GetInnerOuterShareGroups,
+        GetVoteOutcome, IDIsAvailable, MintableSignal, OnChainBank, OpenPetition,
+        OpenShareGroupVote, OrgChecks, OrganizationDNS, OwnershipProportionCalculations,
+        RegisterBankAccount, RegisterFoundation, RegisterShareGroup, RequestChanges,
+        SeededGenerateUniqueID, ShareGroupChecks, SignPetition, SubmitGrantApplication,
+        SupervisorPermissions, TermSheetExit, UpdatePetition, VoteOnProposal,
+        WeightedShareIssuanceWrapper, WeightedShareWrapper,
     },
     uuid::UUID3,
+    voteyesno::{SupportedVoteTypes, ThresholdConfig},
 };
 
 /// Common ipfs type alias for our modules
@@ -87,8 +88,7 @@ pub trait Trait: frame_system::Trait {
     // TODO: use this when adding TRIGGER => VOTE => OUTCOME framework for util::bank::Spends
     type VotePetition: IDIsAvailable<UUID3>
         + GenerateUniqueID<UUID3>
-        + GetPetitionStatus
-        + EmpowerWithVeto<Self::AccountId>
+        + GetVoteOutcome
         + OpenPetition<IpfsReference, Self::BlockNumber>
         + SignPetition<Self::AccountId, IpfsReference>
         + RequestChanges<Self::AccountId, IpfsReference>
@@ -244,7 +244,7 @@ impl<T: Trait> Module<T> {
                     u32, T::AccountId
                 >>::check_membership_in_share_group(org_id, ShareID::Flat(share_id).into(), account)
             },
-            ReviewBoard::WeightedThresholdReview(org_id, share_id, _) => {
+            ReviewBoard::WeightedThresholdReview(org_id, share_id) => {
                 <<T as Trait>::Organization as ShareGroupChecks<
                     u32, T::AccountId
                 >>::check_membership_in_share_group(org_id, ShareID::WeightedAtomic(share_id).into(), account)
@@ -256,24 +256,46 @@ impl<T: Trait> Module<T> {
         topic: IpfsReference,
         required_support: u32,
         required_against: Option<u32>,
-        duration: Option<BlockNumber>,
-    ) -> Result<u32, DispatchError> {
+        duration: Option<T::BlockNumber>,
+    ) -> Result<VoteID, DispatchError> {
         let new_vote_id = match committee {
             ReviewBoard::SimpleFlatReview(org_id, share_id) => {
                 // dispatch single approval vote (any vetos possible) in petition
-                let id: u32 = <<T as Trait>::VotePetition as OpenPetition<IpfsReference, T::BlockNumber>>::open_petition(
+                let id: u32 = <<T as Trait>::VotePetition as OpenPetition<
+                    IpfsReference,
+                    T::BlockNumber,
+                >>::open_petition(
                     org_id,
                     share_id,
                     topic,
                     required_support,
                     required_against,
-                    duration
-                )?.into();
-                Ok(id)
-            },
-            ReviewBoard::WeightedThresholdReview(org_id, share_id, threshold) => {
+                    duration,
+                )?
+                .into();
+                VoteID::Petition(id)
+            }
+            ReviewBoard::WeightedThresholdReview(org_id, share_id) => {
                 // dispatch weighted threshold review in vote-yesno
-            },
+                // dispatch single approval vote (any vetos possible) in petition
+                let standard_threshold = ThresholdConfig::new_percentage_threshold(
+                    Permill::from_percent(75),
+                    Permill::from_percent(51),
+                );
+                let id: u32 = <<T as Trait>::VoteYesNo as OpenShareGroupVote<
+                    T::AccountId,
+                    T::BlockNumber,
+                    Permill,
+                >>::open_share_group_vote(
+                    org_id,
+                    share_id,
+                    SupportedVoteTypes::ShareWeighted.into(),
+                    standard_threshold.into(),
+                    duration,
+                )?
+                .into();
+                VoteID::Threshold(id)
+            }
         };
         Ok(new_vote_id)
     }
@@ -514,8 +536,6 @@ impl<T: Trait> ApproveGrantApplication<BalanceOf<T>, T::AccountId, IpfsReference
             Error::<T>::AccountNotAuthorizedToTriggerApplicationReview
         );
         // vote should dispatch based on the acceptance_committee variant here
-
-        // TODO: look into the syntax fo dispatching a simple vote here
 
         // change the application status on the Applications
 
