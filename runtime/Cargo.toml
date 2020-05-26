@@ -39,7 +39,6 @@ std = [
     'shares-membership/std',
     'shares-atomic/std',
     'sunshine-org/std',
-    'bank-onchain/std',
 ]
 
 [build-dependencies]
