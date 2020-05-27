@@ -6,7 +6,6 @@ use sp_runtime::{testing::Header, traits::IdentityLookup, Perbill};
 // type aliases
 pub type AccountId = u64;
 pub type Shares = u64;
-pub type Signal = u64;
 pub type BlockNumber = u64;
 
 impl_outer_origin! {
@@ -24,8 +23,7 @@ impl_outer_event! {
         membership<T>,
         shares_membership<T>,
         shares_atomic<T>,
-        vote_yesno<T>,
-        vote_petition<T>,
+        org<T>,
         bank<T>,
     }
 }
@@ -52,6 +50,7 @@ impl frame_system::Trait for Test {
     type Event = TestEvent;
     type BlockHashCount = BlockHashCount;
     type MaximumBlockWeight = MaximumBlockWeight;
+    type MaximumExtrinsicWeight = MaximumBlockWeight;
     type DbWeight = ();
     type BlockExecutionWeight = ();
     type ExtrinsicBaseWeight = ();
@@ -80,38 +79,37 @@ impl shares_membership::Trait for Test {
     type Event = TestEvent;
     type OrgData = membership::Module<Test>;
 }
-impl vote_petition::Trait for Test {
-    type Event = TestEvent;
-    type OrgData = membership::Module<Test>;
-    type ShareData = shares_membership::Module<Test>;
-}
+// impl vote_petition::Trait for Test {
+//     type Event = TestEvent;
+//     type OrgData = membership::Module<Test>;
+//     type ShareData = shares_membership::Module<Test>;
+// }
 impl shares_atomic::Trait for Test {
     type Event = TestEvent;
     type OrgData = membership::Module<Test>;
     type Shares = Shares;
     type ReservationLimit = ReservationLimit;
 }
-impl vote_yesno::Trait for Test {
+impl org::Trait for Test {
     type Event = TestEvent;
-    type Signal = Signal;
-    type OrgData = membership::Module<Test>;
-    type FlatShareData = shares_membership::Module<Test>;
-    type WeightedShareData = shares_atomic::Module<Test>;
+    type OrgData = OrgMembership;
+    type FlatShareData = FlatShareData;
+    type WeightedShareData = WeightedShareData;
+}
+parameter_types! {
+    // minimum deposit to register an on-chain bank
+    pub const MinimumInitialDeposit: u64 = 1;
 }
 impl Trait for Test {
     type Event = TestEvent;
     type Currency = Balances;
-    type OrgData = OrgMembership;
-    type FlatShareData = FlatShareData;
-    type VotePetition = VotePetition;
-    type WeightedShareData = WeightedShareData;
-    type VoteYesNo = VoteYesNo;
+    type Organization = OrganizationWrapper;
+    type MinimumInitialDeposit = MinimumInitialDeposit;
 }
 pub type System = frame_system::Module<Test>;
 pub type Balances = pallet_balances::Module<Test>;
 pub type OrgMembership = membership::Module<Test>;
 pub type FlatShareData = shares_membership::Module<Test>;
 pub type WeightedShareData = shares_atomic::Module<Test>;
-pub type VotePetition = vote_petition::Module<Test>;
-pub type VoteYesNo = vote_yesno::Module<Test>;
+pub type OrganizationWrapper = org::Module<Test>;
 pub type Bank = Module<Test>;

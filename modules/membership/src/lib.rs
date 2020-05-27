@@ -11,13 +11,13 @@ mod mock;
 mod tests;
 
 use util::traits::{
-    ChangeGroupMembership, GenerateUniqueID, GetGroupSize, GroupMembership, IDIsAvailable,
-    SudoKeyManagement, SupervisorKeyManagement,
+    ChainSudoPermissions, ChangeGroupMembership, GenerateUniqueID, GetGroupSize, GroupMembership,
+    IDIsAvailable, OrganizationSupervisorPermissions,
 };
 
 use frame_support::{decl_error, decl_event, decl_module, decl_storage, ensure};
 use frame_system::{self as system, ensure_signed};
-use sp_runtime::{DispatchError, DispatchResult};
+use sp_runtime::DispatchResult;
 use sp_std::prelude::*;
 
 pub type OrgId = u32;
@@ -195,37 +195,33 @@ impl<T: Trait> IDIsAvailable<OrgId> for Module<T> {
 }
 
 impl<T: Trait> GenerateUniqueID<OrgId> for Module<T> {
-    fn generate_unique_id(proposed_id: OrgId) -> OrgId {
-        if !Self::id_is_available(proposed_id) {
-            let mut id_counter = OrgIdNonce::get() + 1u32;
-            while ClaimedOrganizationIdentity::get(id_counter) {
-                // TODO: add overflow check here
-                id_counter += 1u32;
-            }
-            OrgIdNonce::put(id_counter);
-            id_counter
-        } else {
-            proposed_id
+    fn generate_unique_id() -> OrgId {
+        let mut id_counter = OrgIdNonce::get() + 1u32;
+        while ClaimedOrganizationIdentity::get(id_counter) {
+            // TODO: add overflow check here
+            id_counter += 1u32;
         }
+        OrgIdNonce::put(id_counter);
+        id_counter
     }
 }
 
-impl<T: Trait> SudoKeyManagement<T::AccountId> for Module<T> {
+impl<T: Trait> ChainSudoPermissions<T::AccountId> for Module<T> {
     fn is_sudo_key(who: &T::AccountId) -> bool {
         if let Some(okey) = <SudoKey<T>>::get() {
             return who == &okey;
         }
         false
     }
+    fn put_sudo_key(who: T::AccountId) {
+        <SudoKey<T>>::put(who);
+    }
     // only the sudo key can swap the sudo key (todo experiment: key recovery from some number of supervisors?)
-    fn swap_sudo_key(
-        old_key: T::AccountId,
-        new_key: T::AccountId,
-    ) -> Result<T::AccountId, DispatchError> {
+    fn set_sudo_key(old_key: &T::AccountId, new_key: T::AccountId) -> DispatchResult {
         if let Some(okey) = <SudoKey<T>>::get() {
-            if old_key == okey {
-                <SudoKey<T>>::put(new_key.clone());
-                return Ok(new_key);
+            if old_key == &okey {
+                <SudoKey<T>>::put(new_key);
+                return Ok(());
             }
             return Err(Error::<T>::UnAuthorizedSwapSudoRequest.into());
         }
@@ -233,29 +229,28 @@ impl<T: Trait> SudoKeyManagement<T::AccountId> for Module<T> {
     }
 }
 
-impl<T: Trait> SupervisorKeyManagement<T::AccountId> for Module<T> {
-    fn is_organization_supervisor(uuid: OrgId, who: &T::AccountId) -> bool {
-        if let Some(supervisor) = Self::organization_supervisor(uuid) {
+impl<T: Trait> OrganizationSupervisorPermissions<u32, T::AccountId> for Module<T> {
+    fn is_organization_supervisor(org: u32, who: &T::AccountId) -> bool {
+        if let Some(supervisor) = Self::organization_supervisor(org) {
             return who == &supervisor;
         }
         false
     }
     // set the supervisor for the organization in whatever context
-    fn set_supervisor(uuid: OrgId, supervisor: T::AccountId) -> DispatchResult {
-        <OrganizationSupervisor<T>>::insert(uuid, supervisor);
-        Ok(())
+    fn put_organization_supervisor(org: u32, who: T::AccountId) {
+        <OrganizationSupervisor<T>>::insert(org, who);
     }
     // sudo key and the current supervisor have the power to change the supervisor
-    fn swap_supervisor(
-        uuid: OrgId,
-        old_key: T::AccountId,
-        new_key: T::AccountId,
-    ) -> Result<T::AccountId, DispatchError> {
-        let authentication: bool =
-            Self::is_organization_supervisor(uuid, &old_key) || Self::is_sudo_key(&old_key);
+    fn set_organization_supervisor(
+        org: OrgId,
+        old_supervisor: &T::AccountId,
+        new_supervisor: T::AccountId,
+    ) -> DispatchResult {
+        let authentication: bool = Self::is_organization_supervisor(org, &old_supervisor)
+            || Self::is_sudo_key(&old_supervisor);
         if authentication {
-            <OrganizationSupervisor<T>>::insert(uuid, new_key.clone());
-            return Ok(new_key);
+            <OrganizationSupervisor<T>>::insert(org, new_supervisor);
+            return Ok(());
         }
         Err(Error::<T>::UnAuthorizedRequestToSwapSupervisor.into())
     }

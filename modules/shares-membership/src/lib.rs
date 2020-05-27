@@ -12,8 +12,9 @@ mod tests;
 
 use util::{
     traits::{
-        ChangeGroupMembership, GenerateUniqueID, GetFlatShareGroup, GetGroupSize, GroupMembership,
-        IDIsAvailable, SubSupervisorKeyManagement, SudoKeyManagement, SupervisorKeyManagement,
+        ChainSudoPermissions, ChangeGroupMembership, GenerateUniqueID, GetFlatShareGroup,
+        GetGroupSize, GroupMembership, IDIsAvailable, OrganizationSupervisorPermissions,
+        SeededGenerateUniqueID, SubGroupSupervisorPermissions,
     },
     uuid::UUID2,
 };
@@ -22,7 +23,7 @@ use frame_support::{
     decl_error, decl_event, decl_module, decl_storage, ensure, storage::IterableStorageDoubleMap,
 };
 use frame_system::{self as system, ensure_signed};
-use sp_runtime::{DispatchError, DispatchResult};
+use sp_runtime::DispatchResult;
 use sp_std::prelude::*;
 
 /// The organization identifier type
@@ -38,8 +39,8 @@ pub trait Trait: system::Trait {
         + GroupMembership<Self::AccountId>
         + IDIsAvailable<OrgId>
         + GenerateUniqueID<OrgId>
-        + SudoKeyManagement<Self::AccountId>
-        + SupervisorKeyManagement<Self::AccountId>
+        + ChainSudoPermissions<Self::AccountId>
+        + OrganizationSupervisorPermissions<u32, Self::AccountId>
         + ChangeGroupMembership<Self::AccountId>;
 }
 
@@ -94,6 +95,7 @@ decl_storage! {
             hasher(opaque_blake2_256) T::AccountId => u32;
 
         /// The map to track organizational membership by share class
+        // (OrgId, ShareId)
         ShareHolders get(fn share_holders): double_map hasher(blake2_128_concat) UUID2, hasher(blake2_128_concat) T::AccountId => bool;
 
         ShareGroupSize get(fn share_group_size): double_map
@@ -142,7 +144,7 @@ decl_module! {
             let caller = ensure_signed(origin)?;
             let authentication: bool = Self::check_if_sudo_account(&caller)
                                     || Self::check_if_organization_supervisor_account(organization, &caller)
-                                    || Self::is_sub_organization_supervisor(organization, share_id, &caller);
+                                    || Self::is_sub_group_supervisor(organization, share_id, &caller);
             ensure!(authentication, Error::<T>::NotAuthorizedToChangeMembership);
             let prefix = UUID2::new(organization, share_id);
             Self::add_group_member(prefix, new_member.clone(), false);
@@ -161,7 +163,7 @@ decl_module! {
             let caller = ensure_signed(origin)?;
             let authentication: bool = Self::check_if_sudo_account(&caller)
                                     || Self::check_if_organization_supervisor_account(organization, &caller)
-                                    || Self::is_sub_organization_supervisor(organization, share_id, &caller);
+                                    || Self::is_sub_group_supervisor(organization, share_id, &caller);
             ensure!(authentication, Error::<T>::NotAuthorizedToChangeMembership);
             let prefix = UUID2::new(organization, share_id);
             Self::remove_group_member(prefix, old_member.clone(), false);
@@ -180,7 +182,7 @@ decl_module! {
             let caller = ensure_signed(origin)?;
             let authentication: bool = Self::check_if_sudo_account(&caller)
                                     || Self::check_if_organization_supervisor_account(organization, &caller)
-                                    || Self::is_sub_organization_supervisor(organization, share_id, &caller);
+                                    || Self::is_sub_group_supervisor(organization, share_id, &caller);
             ensure!(authentication, Error::<T>::NotAuthorizedToChangeMembership);
             let prefix = UUID2::new(organization, share_id);
             Self::batch_add_group_members(prefix, new_members);
@@ -199,7 +201,7 @@ decl_module! {
             let caller = ensure_signed(origin)?;
             let authentication: bool = Self::check_if_sudo_account(&caller)
                                     || Self::check_if_organization_supervisor_account(organization, &caller)
-                                    || Self::is_sub_organization_supervisor(organization, share_id, &caller);
+                                    || Self::is_sub_group_supervisor(organization, share_id, &caller);
             ensure!(authentication, Error::<T>::NotAuthorizedToChangeMembership);
             let prefix = UUID2::new(organization, share_id);
             Self::batch_remove_group_members(prefix, old_members);
@@ -222,10 +224,13 @@ impl<T: Trait> Module<T> {
         <<T as Trait>::OrgData as GroupMembership<<T as frame_system::Trait>::AccountId>>::is_member_of_group(organization, account)
     }
     fn check_if_sudo_account(who: &T::AccountId) -> bool {
-        <<T as Trait>::OrgData as SudoKeyManagement<<T as frame_system::Trait>::AccountId>>::is_sudo_key(who)
+        <<T as Trait>::OrgData as ChainSudoPermissions<<T as frame_system::Trait>::AccountId>>::is_sudo_key(who)
     }
     fn check_if_organization_supervisor_account(organization: OrgId, who: &T::AccountId) -> bool {
-        <<T as Trait>::OrgData as SupervisorKeyManagement<<T as frame_system::Trait>::AccountId>>::is_organization_supervisor(organization, who)
+        <<T as Trait>::OrgData as OrganizationSupervisorPermissions<
+            u32,
+            <T as frame_system::Trait>::AccountId,
+        >>::is_organization_supervisor(organization, who)
     }
     /// Add Member from Organization
     fn add_org_member(organization: OrgId, new_member: T::AccountId) {
@@ -267,6 +272,7 @@ impl<T: Trait> GetFlatShareGroup<T::AccountId> for Module<T> {
         // TODO: update once https://github.com/paritytech/substrate/pull/5335 is merged and pulled into local version
         if !Self::id_is_available(prefix) {
             Some(
+                // is this the same performance as a get() with Key=Vec<AccountId>
                 <ShareHolders<T>>::iter()
                     .filter(|(uuidtwo, _, _)| uuidtwo == &prefix)
                     .map(|(_, account, _)| account)
@@ -278,46 +284,40 @@ impl<T: Trait> GetFlatShareGroup<T::AccountId> for Module<T> {
     }
 }
 
-impl<T: Trait> GenerateUniqueID<UUID2> for Module<T> {
-    fn generate_unique_id(proposed_id: UUID2) -> UUID2 {
-        if !Self::id_is_available(proposed_id) {
-            let static_org = proposed_id.one();
-            let mut id_counter = <ShareIdCounter>::get(static_org) + 1u32;
-            while ClaimedShareIdentity::get(static_org, id_counter) {
-                // TODO: add overflow check here
-                id_counter += 1u32;
-            }
-            <ShareIdCounter>::insert(static_org, id_counter);
-            UUID2::new(static_org, id_counter)
-        } else {
-            proposed_id
+impl<T: Trait> SeededGenerateUniqueID<ShareId, OrgId> for Module<T> {
+    fn seeded_generate_unique_id(seed: OrgId) -> ShareId {
+        let mut id_counter = <ShareIdCounter>::get(seed) + 1u32;
+        while ClaimedShareIdentity::get(seed, id_counter) {
+            // TODO: add overflow check here
+            id_counter += 1u32;
         }
+        <ShareIdCounter>::insert(seed, id_counter);
+        id_counter
     }
 }
 
-impl<T: Trait> SubSupervisorKeyManagement<T::AccountId> for Module<T> {
-    fn is_sub_organization_supervisor(uuid: u32, uuid2: u32, who: &T::AccountId) -> bool {
-        if let Some(supervisor) = Self::organization_share_supervisor(uuid, uuid2) {
+impl<T: Trait> SubGroupSupervisorPermissions<u32, u32, T::AccountId> for Module<T> {
+    fn is_sub_group_supervisor(org: u32, sub_group: u32, who: &T::AccountId) -> bool {
+        if let Some(supervisor) = Self::organization_share_supervisor(org, sub_group) {
             return who == &supervisor;
         }
         false
     }
-    fn set_sub_supervisor(uuid: u32, uuid2: u32, who: T::AccountId) -> DispatchResult {
-        <OrganizationShareSupervisor<T>>::insert(uuid, uuid2, who);
-        Ok(())
+    fn put_sub_group_supervisor(org: u32, sub_group: u32, who: T::AccountId) {
+        <OrganizationShareSupervisor<T>>::insert(org, sub_group, who)
     }
-    fn swap_sub_supervisor(
-        uuid: u32,
-        uuid2: u32,
-        old_key: T::AccountId,
-        new_key: T::AccountId,
-    ) -> Result<T::AccountId, DispatchError> {
-        let authentication: bool = Self::check_if_sudo_account(&old_key)
-            || Self::check_if_organization_supervisor_account(uuid, &old_key)
-            || Self::is_sub_organization_supervisor(uuid, uuid2, &old_key);
+    fn set_sub_group_supervisor(
+        org: u32,
+        sub_group: u32,
+        old_supervisor: &T::AccountId,
+        new_supervisor: T::AccountId,
+    ) -> DispatchResult {
+        let authentication: bool = Self::check_if_sudo_account(old_supervisor)
+            || Self::check_if_organization_supervisor_account(org, old_supervisor)
+            || Self::is_sub_group_supervisor(org, sub_group, old_supervisor);
         if authentication {
-            <OrganizationShareSupervisor<T>>::insert(uuid, uuid2, new_key.clone());
-            return Ok(new_key);
+            <OrganizationShareSupervisor<T>>::insert(org, sub_group, new_supervisor);
+            return Ok(());
         }
         Err(Error::<T>::UnAuthorizedRequestToSwapSupervisor.into())
     }

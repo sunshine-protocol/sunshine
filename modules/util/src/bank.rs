@@ -1,13 +1,18 @@
 use crate::{
     organization::ShareID,
     share::SimpleShareGenesis,
-    traits::{AccessGenesis, DepositWithdrawalOps},
+    traits::{
+        AccessGenesis, CommitSpendReservation, DepositSpendOps, FreeToReserved, GetBalance,
+        MoveFundsOutCommittedOnly, MoveFundsOutUnCommittedOnly,
+    },
 };
 use codec::{Codec, Decode, Encode};
 use frame_support::Parameter;
 use sp_core::TypeId;
-use sp_runtime::traits::{AtLeast32Bit, Member, Zero};
-use sp_runtime::{PerThing, Permill};
+use sp_runtime::{
+    traits::{AtLeast32Bit, Member, Zero},
+    Permill,
+};
 use sp_std::{marker::PhantomData, prelude::*};
 
 /// An off-chain treasury id
@@ -30,90 +35,95 @@ impl TypeId for OnChainTreasuryID {
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
-pub struct DepositInfo<AccountId, Hash, Currency, FineArithmetic> {
-    // for uniqueness
-    salt: u32,
-    depositer: AccountId,
-    // TODO: change this to an enum, it might wrap an IpfsReference (which is what this hash was for anyway)
-    reason: Hash,
-    amount: Currency,
-    // default None is no capital reserved for savings
-    // TODO: add configurable API for bank's enforcing savings on deposits with certain reasons
-    savings_pct: Option<FineArithmetic>,
+/// All the other counter identifiers in this module that track state associated with bank account governance
+pub enum BankMapID {
+    Deposit(u32),
+    Reservation(u32),
+    InternalTransfer(u32),
 }
-impl<AccountId: Clone, Hash: Clone, Currency: Clone, FineArithmetic: PerThing>
-    DepositInfo<AccountId, Hash, Currency, FineArithmetic>
-{
-    pub fn new(
-        salt: u32,
-        depositer: AccountId,
-        reason: Hash,
-        amount: Currency,
-        savings_pct: Option<FineArithmetic>,
-    ) -> DepositInfo<AccountId, Hash, Currency, FineArithmetic> {
-        DepositInfo {
-            salt,
-            depositer,
-            reason,
-            amount,
-            savings_pct,
+
+#[derive(PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
+pub struct BankTrackerIdentifier {
+    treasury_id: OnChainTreasuryID,
+    tracker_id: BankTrackerID,
+}
+
+impl BankTrackerIdentifier {
+    pub fn new(treasury_id: OnChainTreasuryID, tracker_id: BankTrackerID) -> BankTrackerIdentifier {
+        BankTrackerIdentifier {
+            treasury_id,
+            tracker_id,
         }
     }
-    pub fn depositer(&self) -> AccountId {
-        self.depositer.clone()
+}
+
+impl From<(OnChainTreasuryID, BankTrackerID)> for BankTrackerIdentifier {
+    fn from(other: (OnChainTreasuryID, BankTrackerID)) -> BankTrackerIdentifier {
+        BankTrackerIdentifier::new(other.0, other.1)
     }
-    pub fn amount(&self) -> Currency {
-        self.amount.clone()
+}
+
+#[derive(PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
+/// Identifiers for tracking actions by specific individual AccountId to _eventually_ enforce limits on this behavior
+pub enum BankTrackerID {
+    // acceptable only if the withdrawer burns their ownership
+    SpentFromFree,
+    // allowed from any member of the bank's controller
+    ReservedSpend,
+    // wraos reservation_id, allowed from any member of bank's controller
+    UnReservedSpendFromUnCommitted(u32),
+    // wraps reservation_id, allowed from any member of reservation's controller
+    UnReservedSpendFromCommitted(u32),
+    // wraps reservation_id, allowed from any member of spend reservation's controller
+    CommitSpend(u32),
+    // wraps reservation_id, allowed from any member of the controller in the reference
+    InternalTransferMade(u32),
+    // wraps transfer_id, only acceptable withdrawal from reserved, must follow configured decision process
+    SpentFromReserved(u32),
+}
+
+impl Into<u32> for BankMapID {
+    fn into(self) -> u32 {
+        match self {
+            BankMapID::Deposit(id) => id,
+            BankMapID::Reservation(id) => id,
+            BankMapID::InternalTransfer(id) => id,
+        }
     }
-    pub fn savings_pct(&self) -> Option<FineArithmetic> {
-        self.savings_pct
-    }
-    // TODO: make this take &mut instead? is changing it better than all these inner clones?
-    pub fn iterate_salt(&self) -> Self {
-        DepositInfo {
-            salt: self.salt + 1u32,
-            depositer: self.depositer.clone(),
-            reason: self.reason.clone(),
-            amount: self.amount.clone(),
-            savings_pct: self.savings_pct,
+}
+
+impl BankMapID {
+    pub fn iterate(&self) -> Self {
+        match self {
+            BankMapID::Deposit(val) => BankMapID::Deposit(val + 1u32),
+            BankMapID::Reservation(val) => BankMapID::Reservation(val + 1u32),
+            BankMapID::InternalTransfer(val) => BankMapID::InternalTransfer(val + 1u32),
         }
     }
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
-/// This is the state for an OnChainBankId, associated with each bank registered in the runtime
-/// INVARIANT: savings + reserved_for_grant_payouts = T::Currency::total_balance(Self::account_id(OnChainBankId))
-pub struct BankState<AccountId, Currency> {
-    /// Reserved only for liquidation upon burning shares OR vote-based spending by the collective
-    savings: Currency,
-    /// Reserved only for withdrawal by grant team, some portion might be moved to savings if the group prefers this structure
-    reserved_for_spends: Currency,
-    /// Permissions for making withdrawals
-    permissions: WithdrawalPermissions<AccountId>,
+/// the simplest `GovernanceConfig`
+pub enum WithdrawalPermissions<AccountId> {
+    // two accounts can reserve free capital for spending
+    // TODO: add this up to 5 accounts?
+    AnyOfTwoAccounts(AccountId, AccountId),
+    // any account in org
+    AnyAccountInOrg(u32),
+    // all accounts in this organization can reserve free capital for spending
+    AnyMemberOfOrgShareGroup(u32, ShareID),
 }
 
-impl<AccountId: Clone + PartialEq, Currency: Zero + AtLeast32Bit + Clone>
-    BankState<AccountId, Currency>
-{
-    pub fn savings(&self) -> Currency {
-        self.savings.clone()
+impl<AccountId> Default for WithdrawalPermissions<AccountId> {
+    fn default() -> WithdrawalPermissions<AccountId> {
+        WithdrawalPermissions::AnyAccountInOrg(0u32)
     }
-    pub fn reserved_for_spends(&self) -> Currency {
-        self.reserved_for_spends.clone()
-    }
-    pub fn permissions(&self) -> WithdrawalPermissions<AccountId> {
-        self.permissions.clone()
-    }
-    // getter helper to verify permissions for target groups
-    pub fn verify_sudo(&self, account: &AccountId) -> bool {
-        match &self.permissions {
-            WithdrawalPermissions::Sudo(acc) => acc == account,
-            _ => false,
-        }
-    }
-    pub fn extract_weighted_share_group_id(&self) -> Option<(u32, u32)> {
-        match &self.permissions {
-            WithdrawalPermissions::RegisteredShareGroup(org_id, wrapped_share_id) => {
+}
+
+impl<AccountId> WithdrawalPermissions<AccountId> {
+    pub fn extract_org_weighted_share_id(&self) -> Option<(u32, u32)> {
+        match self {
+            WithdrawalPermissions::AnyMemberOfOrgShareGroup(org_id, wrapped_share_id) => {
                 match wrapped_share_id {
                     ShareID::WeightedAtomic(share_id) => Some((*org_id, *share_id)),
                     _ => None,
@@ -122,89 +132,361 @@ impl<AccountId: Clone + PartialEq, Currency: Zero + AtLeast32Bit + Clone>
             _ => None,
         }
     }
-    pub fn init(
-        beginning_balance: Currency,
-        pct_reserved_for_spends: Option<Permill>,
-        permissions: WithdrawalPermissions<AccountId>,
-    ) -> BankState<AccountId, Currency> {
-        let reserved_for_spends = if let Some(pct) = pct_reserved_for_spends {
-            pct * beginning_balance.clone()
-        } else {
-            Currency::zero()
-        };
-        let savings = beginning_balance - reserved_for_spends;
-        BankState {
-            savings,
-            reserved_for_spends: Currency::zero(),
-            permissions,
+}
+use crate::bounty::ReviewBoard;
+impl<AccountId> From<ReviewBoard> for WithdrawalPermissions<AccountId> {
+    fn from(other: ReviewBoard) -> WithdrawalPermissions<AccountId> {
+        match other {
+            ReviewBoard::SimpleFlatReview(org_id, flat_share_id) => {
+                WithdrawalPermissions::AnyMemberOfOrgShareGroup(
+                    org_id,
+                    ShareID::Flat(flat_share_id),
+                )
+            }
+            ReviewBoard::WeightedThresholdReview(org_id, weighted_share_id) => {
+                WithdrawalPermissions::AnyMemberOfOrgShareGroup(
+                    org_id,
+                    ShareID::WeightedAtomic(weighted_share_id),
+                )
+            }
         }
     }
 }
 
-impl<AccountId: Clone + PartialEq, Currency: Zero + AtLeast32Bit + Clone>
-    DepositWithdrawalOps<Currency, Permill> for BankState<AccountId, Currency>
+#[derive(PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
+/// This is the state for an OnChainBankId, associated with each bank registered in the runtime
+pub struct BankState<GovernanceConfig, Currency> {
+    /// Registered organization identifier
+    registered_org: u32,
+    // free capital, available for spends
+    free: Currency,
+    // set aside for future spends, already allocated but can only be _liquidated_ after free == 0?
+    reserved: Currency,
+    // owner of vault, likely WithdrawalPermissions<AccountId>
+    owner_s: GovernanceConfig,
+}
+
+impl<GovernanceConfig: Clone + PartialEq, Currency: Zero + AtLeast32Bit + Clone>
+    BankState<GovernanceConfig, Currency>
 {
-    fn apply_deposit(
+    pub fn new_from_deposit(
+        registered_org: u32,
+        amount: Currency,
+        owner_s: GovernanceConfig,
+    ) -> Self {
+        BankState {
+            registered_org,
+            free: amount,
+            reserved: Currency::zero(),
+            owner_s,
+        }
+    }
+    pub fn registered_org(&self) -> u32 {
+        self.registered_org
+    }
+    pub fn free(&self) -> Currency {
+        self.free.clone()
+    }
+    pub fn reserved(&self) -> Currency {
+        self.reserved.clone()
+    }
+    pub fn owner_s(&self) -> GovernanceConfig {
+        self.owner_s.clone()
+    }
+    pub fn is_owner_s(&self, cmp_owner: GovernanceConfig) -> bool {
+        cmp_owner == self.owner_s
+    }
+}
+
+impl<
+        GovernanceConfig: Clone + PartialEq,
+        Currency: Zero + AtLeast32Bit + Clone + sp_std::ops::Add + sp_std::ops::Sub,
+    > FreeToReserved<Currency> for BankState<GovernanceConfig, Currency>
+{
+    fn move_from_free_to_reserved(&self, amount: Currency) -> Option<Self> {
+        if self.free() >= amount {
+            // safe because of above conditional
+            let new_free = self.free() - amount.clone();
+            let new_reserved = self.reserved() + amount;
+            Some(BankState {
+                registered_org: self.registered_org(),
+                free: new_free,
+                reserved: new_reserved,
+                owner_s: self.owner_s(),
+            })
+        } else {
+            // failed, not enough in free to make reservation of amount
+            None
+        }
+    }
+}
+
+impl<
+        GovernanceConfig: Clone + PartialEq,
+        Currency: Zero + AtLeast32Bit + Clone + sp_std::ops::Add,
+    > GetBalance<Currency> for BankState<GovernanceConfig, Currency>
+{
+    fn total_free_funds(&self) -> Currency {
+        self.free()
+    }
+    fn total_reserved_funds(&self) -> Currency {
+        self.reserved()
+    }
+    fn total_funds(&self) -> Currency {
+        self.free() + self.reserved()
+    }
+}
+
+impl<GovernanceConfig: Clone + PartialEq, Currency: Zero + AtLeast32Bit + Clone>
+    DepositSpendOps<Currency> for BankState<GovernanceConfig, Currency>
+{
+    // infallible
+    fn deposit_into_free(&self, amount: Currency) -> Self {
+        let new_free = self.free() + amount;
+        BankState {
+            registered_org: self.registered_org(),
+            free: new_free,
+            reserved: self.reserved(),
+            owner_s: self.owner_s(),
+        }
+    }
+    fn deposit_into_reserved(&self, amount: Currency) -> Self {
+        let new_reserved = self.reserved() + amount;
+        BankState {
+            registered_org: self.registered_org(),
+            free: self.free(),
+            reserved: new_reserved,
+            owner_s: self.owner_s(),
+        }
+    }
+    // fallible, not enough capital in relative account
+    fn spend_from_free(&self, amount: Currency) -> Option<Self> {
+        if self.free() >= amount {
+            let new_free = self.free() - amount;
+            Some(BankState {
+                registered_org: self.registered_org(),
+                free: new_free,
+                reserved: self.reserved(),
+                owner_s: self.owner_s(),
+            })
+        } else {
+            // not enough capital in account, spend failed
+            None
+        }
+    }
+    fn spend_from_reserved(&self, amount: Currency) -> Option<Self> {
+        if self.reserved() >= amount {
+            let new_reserved = self.reserved() - amount;
+            Some(BankState {
+                registered_org: self.registered_org(),
+                free: self.free(),
+                reserved: new_reserved,
+                owner_s: self.owner_s(),
+            })
+        } else {
+            // not enough capital in account, spend failed
+            None
+        }
+    }
+}
+
+#[derive(PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
+pub struct CommitmentInfo<Hash, Currency> {
+    reason: Hash,
+    amount: Currency,
+}
+
+impl<Hash: Clone, Currency: Clone> CommitmentInfo<Hash, Currency> {
+    pub fn new(reason: Hash, amount: Currency) -> CommitmentInfo<Hash, Currency> {
+        CommitmentInfo { reason, amount }
+    }
+    pub fn amount(&self) -> Currency {
+        self.amount.clone()
+    }
+    pub fn reason(&self) -> Hash {
+        self.reason.clone()
+    }
+}
+
+#[derive(PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
+pub struct DepositInfo<AccountId, Hash, Currency> {
+    // Depositer's identity
+    depositer: AccountId,
+    // Reason for the deposit, an ipfs reference
+    reason: Hash,
+    // Total amount of deposit into bank account (before fees, if any)
+    amount: Currency,
+} // TODO: attach an enum Tax<AccountId, Currency, FineArithmetic> { Flat(account, currency), PercentofAmount(account, permill, currency), }
+
+impl<AccountId: Clone, Hash: Clone, Currency: Clone> DepositInfo<AccountId, Hash, Currency> {
+    pub fn new(
+        depositer: AccountId,
+        reason: Hash,
+        amount: Currency,
+    ) -> DepositInfo<AccountId, Hash, Currency> {
+        DepositInfo {
+            depositer,
+            reason,
+            amount,
+        }
+    }
+    pub fn depositer(&self) -> AccountId {
+        self.depositer.clone()
+    }
+    pub fn reason(&self) -> Hash {
+        self.reason.clone()
+    }
+    pub fn amount(&self) -> Currency {
+        self.amount.clone()
+    }
+}
+
+#[derive(PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
+/// This provides record of reservation of capital for specific purpose,
+/// it makes `free` capital illiquid and effectively transfers control over this capital
+/// - in v1, acceptance_committee only requires membership to authorize internal transfers which actually transfer withdrawal control
+pub struct ReservationInfo<Hash, Currency, GovernanceConfig> {
+    // the reason for the reservation, an ipfs reference
+    reason: Hash,
+    // the amount reserved
+    amount: Currency,
+    // the amount committed, must be less than or equal to reserved
+    committed: Option<Currency>,
+    // the committee for transferring liquidity rights to this capital and possibly enabling liquidity
+    controller: GovernanceConfig,
+}
+
+impl<
+        Hash: Clone,
+        Currency: Clone
+            + sp_std::ops::Add<Output = Currency>
+            + sp_std::ops::Sub<Output = Currency>
+            + PartialOrd,
+        GovernanceConfig: Clone,
+    > ReservationInfo<Hash, Currency, GovernanceConfig>
+{
+    pub fn new(
+        reason: Hash,
+        amount: Currency,
+        controller: GovernanceConfig,
+    ) -> ReservationInfo<Hash, Currency, GovernanceConfig> {
+        ReservationInfo {
+            reason,
+            amount,
+            committed: None,
+            controller,
+        }
+    }
+    pub fn amount(&self) -> Currency {
+        self.amount.clone()
+    }
+    pub fn committed(&self) -> Option<Currency> {
+        self.committed.clone()
+    }
+    pub fn reason(&self) -> Hash {
+        self.reason.clone()
+    }
+    pub fn controller(&self) -> GovernanceConfig {
+        self.controller.clone()
+    }
+}
+
+impl<
+        Hash: Clone,
+        Currency: Clone
+            + sp_std::ops::Add<Output = Currency>
+            + sp_std::ops::Sub<Output = Currency>
+            + PartialOrd,
+        GovernanceConfig: Clone,
+    > CommitSpendReservation<Currency> for ReservationInfo<Hash, Currency, GovernanceConfig>
+{
+    fn commit_spend_reservation(
         &self,
         amount: Currency,
-        reserved_for_savings: Option<Permill>,
-    ) -> BankState<AccountId, Currency> {
-        let increase_in_savings = if let Some(pctage_to_save) = reserved_for_savings {
-            pctage_to_save * amount.clone()
-        } else {
-            Currency::zero()
-        };
-        let increase_in_reserved_for_grant_payouts = amount - increase_in_savings.clone();
-        let savings = self.savings() + increase_in_savings;
-        let reserved_for_spends =
-            self.reserved_for_spends() + increase_in_reserved_for_grant_payouts;
-        let permissions = self.permissions();
-        BankState {
-            savings,
-            reserved_for_spends,
-            permissions,
-        }
-    }
-    fn spend_from_total(&self, amount: Currency) -> Option<Self> {
-        let total_accessible_capital_for_sudo =
-            self.savings.clone() + self.reserved_for_spends.clone();
-        if amount <= total_accessible_capital_for_sudo {
-            let new_balance = if let Some(new_savings) = self.savings.clone().checked_sub(&amount) {
-                (new_savings, self.reserved_for_spends.clone())
+    ) -> Option<ReservationInfo<Hash, Currency, GovernanceConfig>> {
+        if let Some(amount_committed_already) = self.committed() {
+            let new_committed = amount_committed_already + amount;
+            if new_committed <= self.amount() {
+                Some(ReservationInfo {
+                    reason: self.reason(),
+                    amount: self.amount(),
+                    committed: Some(new_committed),
+                    controller: self.controller(),
+                })
             } else {
-                let amount_to_withdraw_from_reserved = amount - self.savings.clone();
-                let new_reserved_for_spends =
-                    self.reserved_for_spends.clone() - amount_to_withdraw_from_reserved;
-                (Currency::zero(), new_reserved_for_spends)
-            };
-            Some(BankState {
-                savings: new_balance.0,
-                reserved_for_spends: new_balance.1,
-                permissions: self.permissions.clone(),
+                None
+            }
+        } else if amount <= self.amount() {
+            Some(ReservationInfo {
+                reason: self.reason(),
+                amount: self.amount(),
+                committed: Some(amount),
+                controller: self.controller(),
             })
         } else {
             None
         }
     }
-    fn spend_from_reserved_spends(&self, amount: Currency) -> Option<Self> {
-        if amount <= self.reserved_for_spends.clone() {
-            let new_reserved_for_spends = self.reserved_for_spends.clone() - amount;
-            Some(BankState {
-                savings: self.savings.clone(),
-                reserved_for_spends: new_reserved_for_spends,
-                permissions: self.permissions.clone(),
+}
+
+impl<
+        Hash: Clone,
+        Currency: Clone
+            + sp_std::ops::Add<Output = Currency>
+            + sp_std::ops::Sub<Output = Currency>
+            + PartialOrd,
+        GovernanceConfig: Clone,
+    > MoveFundsOutUnCommittedOnly<Currency> for ReservationInfo<Hash, Currency, GovernanceConfig>
+{
+    fn move_funds_out_uncommitted_only(&self, amount: Currency) -> Option<Self> {
+        let uncommitted_amount = if let Some(committed_count) = self.committed() {
+            // ASSUMED INVARIANT, should hold here (if it doesn't ever,
+            // we're mixing error branches here w/ two sources for output None)
+            if self.amount() >= committed_count {
+                self.amount() - committed_count
+            } else {
+                return None;
+            }
+        } else {
+            self.amount()
+        };
+        // difference between this impl and InternalTransferInfo is this is restricted by uncommitted value
+        // -- it returns None if the uncommitted_amount < the_amount_requested
+        if uncommitted_amount >= amount {
+            let new_amount = uncommitted_amount - amount;
+            Some(ReservationInfo {
+                reason: self.reason(),
+                amount: new_amount,
+                committed: self.committed(),
+                controller: self.controller(),
             })
         } else {
             None
         }
     }
-    fn spend_from_savings(&self, amount: Currency) -> Option<Self> {
-        if amount <= self.savings.clone() {
-            let new_savings = self.savings.clone() - amount;
-            Some(BankState {
-                savings: new_savings,
-                reserved_for_spends: self.reserved_for_spends.clone(),
-                permissions: self.permissions.clone(),
+}
+
+impl<
+        Hash: Clone,
+        Currency: Clone
+            + sp_std::ops::Add<Output = Currency>
+            + sp_std::ops::Sub<Output = Currency>
+            + PartialOrd,
+        GovernanceConfig: Clone,
+    > MoveFundsOutCommittedOnly<Currency> for ReservationInfo<Hash, Currency, GovernanceConfig>
+{
+    fn move_funds_out_committed_only(&self, amount: Currency) -> Option<Self> {
+        let committed_amount = self.committed()?;
+        // difference between this impl and ReservationInfo is this is restricted by committed value
+        // -- it returns None if the committed_amount < the_amount_requested
+        if committed_amount >= amount {
+            let new_amount = self.amount() - amount.clone();
+            let new_committed = committed_amount - amount;
+            Some(ReservationInfo {
+                reason: self.reason(),
+                amount: new_amount,
+                committed: Some(new_committed),
+                controller: self.controller(),
             })
         } else {
             None
@@ -213,20 +495,72 @@ impl<AccountId: Clone + PartialEq, Currency: Zero + AtLeast32Bit + Clone>
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
-pub enum WithdrawalPermissions<AccountId> {
-    // a single account controls withdrawal permissions, can approve on-chain requests
-    Sudo(AccountId),
-    // flat group, implied equal withdrawal permissions \forall members
-    RegisteredOrganizationFlatMembership(u32),
-    // The members in a registered share group can withdraw as per their proportion of ownership
-    // HAPPY PATH!
-    RegisteredShareGroup(u32, ShareID),
+/// Transfers withdrawal control to the new_controller
+/// - them referencing this item in storage is the authentication necessary for withdrawals from the Bank
+pub struct InternalTransferInfo<Hash, Currency, GovernanceConfig> {
+    // the referenced Reservation from which this originated
+    reference_id: u32,
+    // the reason for this transfer
+    reason: Hash,
+    // the amount transferred
+    amount: Currency,
+    // governance type, should be possible to liquidate to the accounts that comprise this `GovernanceConfig` (dispatch proportional payment)
+    controller: GovernanceConfig,
 }
 
-impl<AccountId> Default for WithdrawalPermissions<AccountId> {
-    fn default() -> WithdrawalPermissions<AccountId> {
-        // this will be the address for ecosystem governance of taxes
-        WithdrawalPermissions::RegisteredOrganizationFlatMembership(0u32)
+impl<Hash: Clone, Currency: Clone, GovernanceConfig: Clone>
+    InternalTransferInfo<Hash, Currency, GovernanceConfig>
+{
+    pub fn new(
+        reference_id: u32,
+        reason: Hash,
+        amount: Currency,
+        controller: GovernanceConfig,
+    ) -> InternalTransferInfo<Hash, Currency, GovernanceConfig> {
+        InternalTransferInfo {
+            reference_id,
+            reason,
+            amount,
+            controller,
+        }
+    }
+    pub fn id(&self) -> u32 {
+        self.reference_id
+    }
+    pub fn reason(&self) -> Hash {
+        self.reason.clone()
+    }
+    pub fn amount(&self) -> Currency {
+        self.amount.clone()
+    }
+    pub fn controller(&self) -> GovernanceConfig {
+        self.controller.clone()
+    }
+}
+
+impl<
+        Hash: Clone,
+        Currency: Clone + sp_std::ops::Sub<Output = Currency> + PartialOrd,
+        GovernanceConfig: Clone,
+    > MoveFundsOutCommittedOnly<Currency>
+    for InternalTransferInfo<Hash, Currency, GovernanceConfig>
+{
+    fn move_funds_out_committed_only(
+        &self,
+        amount: Currency,
+    ) -> Option<InternalTransferInfo<Hash, Currency, GovernanceConfig>> {
+        if self.amount() >= amount {
+            let new_amount = self.amount() - amount;
+            Some(InternalTransferInfo {
+                reference_id: self.id(),
+                reason: self.reason(),
+                amount: new_amount,
+                controller: self.controller(),
+            })
+        } else {
+            // not enough funds
+            None
+        }
     }
 }
 

@@ -13,9 +13,10 @@ mod tests;
 use util::{
     share::{AtomicShareProfile, SimpleShareGenesis},
     traits::{
-        AccessGenesis, ChangeGroupMembership, GenerateUniqueID, GetGroupSize, GroupMembership,
-        IDIsAvailable, LockableProfile, ReservableProfile, ShareBank, SubSupervisorKeyManagement,
-        SudoKeyManagement, SupervisorKeyManagement, VerifyShape, WeightedShareGroup,
+        AccessGenesis, ChainSudoPermissions, ChangeGroupMembership, GenerateUniqueID, GetGroupSize,
+        GroupMembership, IDIsAvailable, LockableProfile, OrganizationSupervisorPermissions,
+        ReservableProfile, SeededGenerateUniqueID, ShareBank, SubGroupSupervisorPermissions,
+        VerifyShape, WeightedShareGroup,
     },
     uuid::UUID2,
 };
@@ -47,8 +48,8 @@ pub trait Trait: system::Trait {
         + GroupMembership<Self::AccountId>
         + IDIsAvailable<OrgId>
         + GenerateUniqueID<OrgId>
-        + SudoKeyManagement<Self::AccountId>
-        + SupervisorKeyManagement<Self::AccountId>
+        + ChainSudoPermissions<Self::AccountId>
+        + OrganizationSupervisorPermissions<u32, Self::AccountId>
         + ChangeGroupMembership<Self::AccountId>;
 
     /// The ownership value for each member in the context of a (OrgId, ShareId)
@@ -175,13 +176,13 @@ decl_storage! {
             }
             if let Some(mem) = &config.shareholder_membership {
                 mem.iter().for_each(|(org_id, share_id, account, shares)| {
-                    let share_supervisor = ShareGroupSupervisor::<T>::get(org_id, share_id).expect("share supervisor must exist in order to add members at genesis");
-                    <Module<T>>::issue_shares(
-                        T::Origin::from(Some(share_supervisor).into()),
+                    let _ = ShareGroupSupervisor::<T>::get(org_id, share_id).expect("share supervisor must exist in order to add members at genesis");
+                    <Module<T>>::issue(
                         *org_id,
                         *share_id,
                         account.clone(),
                         *shares,
+                        false
                     ).expect("genesis member could not be added to the organization");
                 });
             }
@@ -204,7 +205,7 @@ decl_module! {
             // second check is that this is an authorized party for issuance
             let authentication: bool = Self::check_if_sudo_account(&issuer)
                                     || Self::check_if_organization_supervisor_account(organization, &issuer)
-                                    || Self::is_sub_organization_supervisor(organization, share_id, &issuer);
+                                    || Self::is_sub_group_supervisor(organization, share_id, &issuer);
             ensure!(authentication, Error::<T>::NotAuthorizedToIssueShares);
 
             Self::issue(organization, share_id, who.clone(), shares, false)?;
@@ -235,7 +236,7 @@ decl_module! {
             // second check is that this is an authorized party for issuance
             let authentication: bool = Self::check_if_sudo_account(&issuer)
                                     || Self::check_if_organization_supervisor_account(organization, &issuer)
-                                    || Self::is_sub_organization_supervisor(organization, share_id, &issuer);
+                                    || Self::is_sub_group_supervisor(organization, share_id, &issuer);
             ensure!(authentication, Error::<T>::NotAuthorizedToIssueShares);
             let genesis: SimpleShareGenesis<T::AccountId, T::Shares> = new_accounts.into();
             let total_new_shares_minted = genesis.total();
@@ -252,7 +253,7 @@ decl_module! {
             // second check is that this is an authorized party for burning
             let authentication: bool = Self::check_if_sudo_account(&issuer)
                                     || Self::check_if_organization_supervisor_account(organization, &issuer)
-                                    || Self::is_sub_organization_supervisor(organization, share_id, &issuer);
+                                    || Self::is_sub_group_supervisor(organization, share_id, &issuer);
             ensure!(authentication, Error::<T>::NotAuthorizedToBurnShares);
             let genesis: SimpleShareGenesis<T::AccountId, T::Shares> = old_accounts.into();
             let total_new_shares_burned = genesis.total();
@@ -269,7 +270,7 @@ decl_module! {
             // second check is that this is an authorized party for locking shares
             let authentication: bool = Self::check_if_sudo_account(&locker)
                                     || Self::check_if_organization_supervisor_account(organization, &locker)
-                                    || Self::is_sub_organization_supervisor(organization, share_id, &locker)
+                                    || Self::is_sub_group_supervisor(organization, share_id, &locker)
                                     || locker == who;
             ensure!(authentication, Error::<T>::NotAuthorizedToLockShares);
 
@@ -286,7 +287,7 @@ decl_module! {
             // second check is that this is an authorized party for unlocking shares
             let authentication: bool = Self::check_if_sudo_account(&unlocker)
                                     || Self::check_if_organization_supervisor_account(organization, &unlocker)
-                                    || Self::is_sub_organization_supervisor(organization, share_id, &unlocker)
+                                    || Self::is_sub_group_supervisor(organization, share_id, &unlocker)
                                     || unlocker == who;
             ensure!(authentication, Error::<T>::NotAuthorizedToUnLockShares);
 
@@ -305,7 +306,7 @@ decl_module! {
             // second check is that this is an authorized party for unlocking shares
             let authentication: bool = Self::check_if_sudo_account(&reserver)
                                     || Self::check_if_organization_supervisor_account(organization, &reserver)
-                                    || Self::is_sub_organization_supervisor(organization, share_id, &reserver)
+                                    || Self::is_sub_group_supervisor(organization, share_id, &reserver)
                                     || reserver == who;
             ensure!(authentication, Error::<T>::NotAuthorizedToReserveShares);
 
@@ -326,7 +327,7 @@ decl_module! {
             // second check is that this is an authorized party for unlocking shares
             let authentication: bool = Self::check_if_sudo_account(&unreserver)
                                     || Self::check_if_organization_supervisor_account(organization, &unreserver)
-                                    || Self::is_sub_organization_supervisor(organization, share_id, &unreserver)
+                                    || Self::is_sub_group_supervisor(organization, share_id, &unreserver)
                                     || unreserver == who;
             ensure!(authentication, Error::<T>::NotAuthorizedToUnReserveShares);
 
@@ -360,10 +361,13 @@ impl<T: Trait> Module<T> {
         !<<T as Trait>::OrgData as IDIsAvailable<OrgId>>::id_is_available(organization)
     }
     fn check_if_sudo_account(who: &T::AccountId) -> bool {
-        <<T as Trait>::OrgData as SudoKeyManagement<<T as frame_system::Trait>::AccountId>>::is_sudo_key(who)
+        <<T as Trait>::OrgData as ChainSudoPermissions<<T as frame_system::Trait>::AccountId>>::is_sudo_key(who)
     }
     fn check_if_organization_supervisor_account(organization: OrgId, who: &T::AccountId) -> bool {
-        <<T as Trait>::OrgData as SupervisorKeyManagement<<T as frame_system::Trait>::AccountId>>::is_organization_supervisor(organization, who)
+        <<T as Trait>::OrgData as OrganizationSupervisorPermissions<
+            u32,
+            <T as frame_system::Trait>::AccountId,
+        >>::is_organization_supervisor(organization, who)
     }
     /// Add Member
     fn add_new_member(organization: OrgId, new_member: T::AccountId) {
@@ -385,46 +389,40 @@ impl<T: Trait> IDIsAvailable<UUID2> for Module<T> {
     }
 }
 
-impl<T: Trait> GenerateUniqueID<UUID2> for Module<T> {
-    fn generate_unique_id(proposed_id: UUID2) -> UUID2 {
-        if !Self::id_is_available(proposed_id) {
-            let organization = proposed_id.one();
-            let mut id_counter = ShareIdCounter::get(organization);
-            while ClaimedShareIdentity::get(organization, id_counter) || id_counter == 0 {
-                // TODO: add overflow check here
-                id_counter += 1u32;
-            }
-            ShareIdCounter::insert(organization, id_counter);
-            UUID2::new(organization, id_counter)
-        } else {
-            proposed_id
+impl<T: Trait> SeededGenerateUniqueID<OrgId, ShareId> for Module<T> {
+    fn seeded_generate_unique_id(seed: OrgId) -> ShareId {
+        let mut id_counter = ShareIdCounter::get(seed) + 1;
+        while ClaimedShareIdentity::get(seed, id_counter) {
+            // TODO: add overflow check here
+            id_counter += 1u32;
         }
+        ShareIdCounter::insert(seed, id_counter);
+        id_counter
     }
 }
 
-impl<T: Trait> SubSupervisorKeyManagement<T::AccountId> for Module<T> {
-    fn is_sub_organization_supervisor(uuid: u32, uuid2: u32, who: &T::AccountId) -> bool {
-        if let Some(supervisor) = Self::share_group_supervisor(uuid, uuid2) {
+impl<T: Trait> SubGroupSupervisorPermissions<u32, u32, T::AccountId> for Module<T> {
+    fn is_sub_group_supervisor(org: u32, sub_group: u32, who: &T::AccountId) -> bool {
+        if let Some(supervisor) = Self::share_group_supervisor(org, sub_group) {
             return who == &supervisor;
         }
         false
     }
-    fn set_sub_supervisor(uuid: u32, uuid2: u32, supervisor: T::AccountId) -> DispatchResult {
-        <ShareGroupSupervisor<T>>::insert(uuid, uuid2, supervisor);
-        Ok(())
+    fn put_sub_group_supervisor(org: u32, sub_group: u32, supervisor: T::AccountId) {
+        <ShareGroupSupervisor<T>>::insert(org, sub_group, supervisor)
     }
-    fn swap_sub_supervisor(
-        uuid: u32,
-        uuid2: u32,
-        old_key: T::AccountId,
-        new_key: T::AccountId,
-    ) -> Result<T::AccountId, DispatchError> {
-        let authentication: bool = Self::check_if_sudo_account(&old_key)
-            || Self::check_if_organization_supervisor_account(uuid, &old_key)
-            || Self::is_sub_organization_supervisor(uuid, uuid2, &old_key);
+    fn set_sub_group_supervisor(
+        org: u32,
+        sub_group: u32,
+        old_supervisor: &T::AccountId,
+        new_supervisor: T::AccountId,
+    ) -> DispatchResult {
+        let authentication: bool = Self::check_if_sudo_account(&old_supervisor)
+            || Self::check_if_organization_supervisor_account(org, &old_supervisor)
+            || Self::is_sub_group_supervisor(org, sub_group, &old_supervisor);
         if authentication {
-            <ShareGroupSupervisor<T>>::insert(uuid, uuid2, new_key.clone());
-            return Ok(new_key);
+            <ShareGroupSupervisor<T>>::insert(org, sub_group, new_supervisor);
+            return Ok(());
         }
         Err(Error::<T>::UnAuthorizedRequestToSwapSupervisor.into())
     }
@@ -563,6 +561,7 @@ impl<T: Trait> LockableProfile<T::AccountId> for Module<T> {
 
 impl<T: Trait> WeightedShareGroup<T::AccountId> for Module<T> {
     type Shares = T::Shares;
+    type Profile = AtomicShareProfile<T::Shares>;
     type Genesis = SimpleShareGenesis<T::AccountId, T::Shares>;
     fn outstanding_shares(organization: OrgId, share_id: ShareId) -> Option<T::Shares> {
         <TotalIssuance<T>>::get(organization, share_id)
@@ -571,14 +570,9 @@ impl<T: Trait> WeightedShareGroup<T::AccountId> for Module<T> {
         organization: OrgId,
         share_id: ShareId,
         who: &T::AccountId,
-    ) -> Result<T::Shares, DispatchError> {
+    ) -> Option<Self::Profile> {
         let prefix_key = UUID2::new(organization, share_id);
-        let wrapped_profile = Profile::<T>::get(prefix_key, who);
-        if let Some(profile) = wrapped_profile {
-            Ok(profile.total())
-        } else {
-            Err(Error::<T>::ProfileNotInstantiated.into())
-        }
+        Profile::<T>::get(prefix_key, who)
     }
     fn shareholder_membership(organization: OrgId, share_id: ShareId) -> Option<Self::Genesis> {
         let prefix = UUID2::new(organization, share_id);

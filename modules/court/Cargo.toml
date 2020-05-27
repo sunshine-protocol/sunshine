@@ -5,7 +5,7 @@ authors = ["Amar Singh <asinghchrony@protonmail.com>"]
 edition = "2018"
 
 license = "GPL-3.0"
-repository = "https://github.com/web3garden/sunshine-runtime-module-library"
+repository = "https://github.com/web3garden/sunshine-node"
 description = "dispute resolution"
 keywords = ["sunshine", "substrate", "blockchain"]
 
@@ -13,17 +13,17 @@ keywords = ["sunshine", "substrate", "blockchain"]
 # local deps
 serde = { version = "1.0.104", optional = true }
 codec = { package = "parity-scale-codec", version = "1.2.0", default-features = false, features = ["derive"] }
-sp-std = { version = "2.0.0-alpha.7", default-features = false }
-sp-runtime = { version = "2.0.0-alpha.7", default-features = false }
-frame-support = { version = "2.0.0-alpha.7", default-features = false }
-frame-system = { version = "2.0.0-alpha.7", default-features = false }
-pallet-balances = { version = "2.0.0-alpha.7", default-features = false }
+sp-std = { version = "2.0.0-rc2", default-features = false }
+sp-runtime = { version = "2.0.0-rc2", default-features = false }
+frame-support = { version = "2.0.0-rc2", default-features = false }
+frame-system = { version = "2.0.0-rc2", default-features = false }
+pallet-balances = { version = "2.0.0-rc2", default-features = false }
 util = { package = "sunshine-util", path = "../util", default-features=false}
 clear_on_drop = { version = "0.2.3", features = ["no_cc"] }	# https://github.com/paritytech/substrate/issues/4179
 
 [dev-dependencies]
-sp-io = { version = "2.0.0-alpha.7", default-features = false }
-sp-core = { version = "2.0.0-alpha.7", default-features = false }
+sp-io = { version = "2.0.0-rc2", default-features = false }
+sp-core = { version = "2.0.0-rc2", default-features = false }
 
 [features]
 default = ["std"]

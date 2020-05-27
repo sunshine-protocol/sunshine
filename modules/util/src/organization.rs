@@ -13,20 +13,20 @@ pub struct TermsOfAgreement<AccountId> {
 
 #[derive(PartialEq, Eq, Default, Clone, Encode, Decode, RuntimeDebug)]
 /// Defined paths for how the terms of agreement can change
-pub struct FullTermsOfAgreement<AccountId> {
+pub struct FullTermsOfAgreement<AccountId, OrgId, ShareId, BlockNumber> {
     /// The starting state for the group
     basic_terms: TermsOfAgreement<AccountId>,
     /// This represents the metagovernance configuration, how the group can coordinate changes
     allowed_changes: Vec<(
         Catalyst<AccountId>,
-        Option<RequiredVote>,
+        Option<VoteConfig<AccountId, OrgId, ShareId, BlockNumber>>,
         Option<EnforcedOutcome<AccountId>>,
     )>,
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 /// Authenticates that the given user can do the action in question to
-/// trigger the `RequiredVote`
+/// trigger the `VoteConfig`
 pub enum Catalyst<AccountId> {
     ReportBadBehavior(AccountId),
     SubmitMilestone(AccountId),
@@ -35,13 +35,86 @@ pub enum Catalyst<AccountId> {
 } // TODO: upgrade path from suborganization to separate organization
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-/// TODO: Add VoteConfig = enum { 1p1v_count, 1p1v_percentage, share_weighted_count, share_weighted_percentage }
-/// - each of which has two thresholds!
-pub enum RequiredVote {
-    /// Only one supervisor approval is required but everyone has veto rights
-    OneSupervisorApprovalWithVetoRights(u32, u32),
-    /// Two supervisor approvals is required but everyone has veto rights
-    TwoSupervisorsApprovalWithVetoRights(u32, u32),
+/// These are all the vote configs planned to be supported
+/// TODO: we have n = 1, 2 so do it with AccountId, up to `12`, one day somehow
+pub enum VoteConfig<AccountId, OrgId, ShareId, BlockNumber> {
+    /// Only one supervisor approval is required but everyone has veto rights, for BlockNumber after approval
+    OneSupervisorApprovalWithFullOrgShareVetoRights(AccountId, OrgId, ShareId, BlockNumber),
+    /// Two supervisor approvals is required but everyone has veto rights, for BlockNumber after approval
+    TwoSupervisorsApprovalWithFullOrgShareVetoRights(
+        AccountId,
+        AccountId,
+        OrgId,
+        ShareId,
+        BlockNumber,
+    ),
+    /// Only one supervisor approval is required but everyone can vote to veto must reach threshold, for BlockNumber after approval
+    OneSupervisorApprovalWith1P1VCountThresholdVetoRights(
+        AccountId,
+        OrgId,
+        ShareId,
+        u32,
+        BlockNumber,
+    ),
+    /// Two supervisor approvals is required but everyone can vote to veto must reach threshold, for BlockNumber after approval
+    TwoSupervisorsApprovalWith1P1VCountThresholdVetoRights(
+        AccountId,
+        AccountId,
+        OrgId,
+        ShareId,
+        u32,
+        BlockNumber,
+    ),
+    /// Only one supervisor approval is required but everyone can vote to veto must reach share weighted threshold, for BlockNumber after approval
+    OneSupervisorApprovalWithShareWeightedVetoRights(AccountId, OrgId, ShareId, u32, BlockNumber),
+    /// Two supervisor approvals is required but everyone can vote to veto must reach share weighted threshold, for BlockNumber after approval
+    TwoSupervisorsApprovalWithShareWeightedVetoRights(
+        AccountId,
+        AccountId,
+        OrgId,
+        ShareId,
+        u32,
+        BlockNumber,
+    ),
+    /// Warning: Dictatorial and Centralized Governance, some say _practical_
+    OnePersonOneVoteThresholdWithOneSupervisorVetoRights(
+        OrgId,
+        ShareId,
+        u32,
+        AccountId,
+        BlockNumber,
+    ),
+    OnePersonOneVoteThresholdWithTwoSupervisorsVetoRights(
+        OrgId,
+        ShareId,
+        u32,
+        AccountId,
+        AccountId,
+        BlockNumber,
+    ),
+    ShareWeightedVoteThresholdWithOneSupervisorVetoRights(
+        OrgId,
+        ShareId,
+        u32,
+        AccountId,
+        BlockNumber,
+    ),
+    ShareWeightedVoteThresholdWithTwoSupervisorsVetoRights(
+        OrgId,
+        ShareId,
+        u32,
+        AccountId,
+        AccountId,
+        BlockNumber,
+    ),
+    /// 1 person 1 vote, u32 threshold for approval, but everyone has veto rights, for BlockNumber after approval
+    OnePersonOneVoteThresholdWithFullOrgShareVetoRights(OrgId, ShareId, u32, BlockNumber),
+    /// 1 person 1 vote, u32 threshold; only the second share group has veto rights (also must be flat!), for BlockNumber after approval
+    OnePersonOneVoteThresholdANDVetoEnabledGroup(OrgId, ShareId, u32, ShareId, BlockNumber),
+    /// ShareWeighted vote, u32 threshold for approval, but everyone has veto rights, for BlockNumber after approval
+    ShareWeightedVoteThresholdWithFullOrgShareVetoRights(OrgId, ShareId, u32, BlockNumber),
+    /// ShareWeighted vote, u32 threshold for approval, but everyone has veto rights, for BlockNumber after approval
+    ShareWeightedVoteThresholdANDVetoEnabledGroup(OrgId, ShareId, u32, ShareId, BlockNumber),
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
@@ -101,6 +174,13 @@ pub enum FormedOrganization {
     FlatOrg(u32),
     FlatShares(u32, u32),
     WeightedShares(u32, u32),
+}
+
+impl Default for FormedOrganization {
+    fn default() -> FormedOrganization {
+        // The organization that controls the chain
+        FormedOrganization::FlatOrg(1u32)
+    }
 }
 
 impl From<u32> for FormedOrganization {

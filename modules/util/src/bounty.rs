@@ -1,143 +1,193 @@
-use crate::organization::TermsOfAgreement;
+use crate::{bank::OnChainTreasuryID, organization::TermsOfAgreement, traits::StartReview};
 use codec::{Decode, Encode};
 use frame_support::Parameter;
 use sp_runtime::RuntimeDebug;
 use sp_std::prelude::*;
 
-/*
-An experiment to reduce the total number of generics by just type aliasing identifiers
-instead of setting them as the module's associated type:
-*/
-pub type BountyId = u32;
-pub type ApplicationId = u32;
-pub type MilestoneId = u32;
-pub type TaskId = u32;
-
 #[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug)]
-pub struct Requirements;
-// impl some traits on this and use them to check the team's application
+pub enum BountyMapID {
+    ApplicationId,
+    MilestoneId,
+}
 
-#[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug)]
-/// The on-chain information for a bounty with keys (OrgId, BountyId)
+impl Default for BountyMapID {
+    fn default() -> BountyMapID {
+        BountyMapID::ApplicationId
+    }
+}
+
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+/// The information most often read after a specific bounty is GOT
 pub struct BountyInformation<Hash, Currency> {
+    // Storage cid
+    // - title, description, team requirements (all subjective metadata uses one reference)
     description: Hash,
-    team_requirements: Option<Requirements>,
-    pot: Currency,
+    // registered organization associated with bounty
+    foundation_id: u32,
+    // On chain bank account associated with this bounty
+    bank_account: OnChainTreasuryID,
+    // Spend reservation identifier
+    spend_reservation_id: u32,
+    // Collateral amount in the bank account (TODO: refresh method for syncing balance)
+    funding_reserved: Currency,
+    // Amount claimed to have on hand to fund projects related to the bounty
+    // - used to derive the collateral ratio for this bounty, which must be above the module lower bound
+    claimed_funding_available: Currency,
+    // Committee metadata for approving an application
+    acceptance_committee: ReviewBoard,
+    // Committee metadata for approving milestones
+    // -- if None, same as acceptance_committee by default
+    supervision_committee: Option<ReviewBoard>,
 }
 
 impl<Hash: Parameter, Currency: Parameter> BountyInformation<Hash, Currency> {
     pub fn new(
         description: Hash,
-        team_requirements: Option<Requirements>,
-        pot: Currency,
+        foundation_id: u32,
+        bank_account: OnChainTreasuryID,
+        spend_reservation_id: u32,
+        funding_reserved: Currency,
+        claimed_funding_available: Currency,
+        acceptance_committee: ReviewBoard,
+        supervision_committee: Option<ReviewBoard>,
     ) -> BountyInformation<Hash, Currency> {
         BountyInformation {
             description,
-            team_requirements,
-            pot,
+            foundation_id,
+            bank_account,
+            spend_reservation_id,
+            funding_reserved,
+            claimed_funding_available,
+            acceptance_committee,
+            supervision_committee,
+        }
+    }
+    pub fn claimed_funding_available(&self) -> Currency {
+        self.claimed_funding_available.clone()
+    }
+    pub fn acceptance_committee(&self) -> ReviewBoard {
+        self.acceptance_committee
+    }
+}
+
+#[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug)]
+/// Metadata that represents pre-dispatch, grant milestone reviews
+/// - TODO: build a variant in which one person is sudo but the role is revocable and can be reassigned
+pub enum ReviewBoard {
+    /// Uses petition but only requires a single approver from the group
+    /// - anyone can veto as well
+    SimpleFlatReview(u32, u32),
+    /// Weighted threshold, Count(u32)
+    WeightedThresholdReview(u32, u32),
+} //PetitionReview(u32, u32, u32, u32, u32)
+
+#[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug)]
+/// Strongly typed vote identifier
+pub enum VoteID {
+    Petition(u32),
+    Threshold(u32),
+}
+
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+pub struct MilestoneSubmission<Hash, Currency, Status> {
+    // the team application for which this submission pertains
+    application_id: u32,
+    submission: Hash,
+    amount: Currency,
+    // the review status, none upon immediate submission
+    review: Option<Status>,
+}
+
+impl<Hash, Currency, Status> MilestoneSubmission<Hash, Currency, Status> {
+    pub fn new(
+        application_id: u32,
+        submission: Hash,
+        amount: Currency,
+    ) -> MilestoneSubmission<Hash, Currency, Status> {
+        MilestoneSubmission {
+            application_id,
+            submission,
+            amount,
+            review: None,
         }
     }
 }
 
 #[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug)]
-/// Set this alongside ShareId to define these governance structures with the allocation defined in the ShareId registration
-pub enum VoteConfig<FineArithmetic> {
-    /// (OrgId, ShareId, Support Percentage Threshold, Turnout Percentage Threshold)
-    CreateShareWeightedPercentageThresholdVote(u32, u32, FineArithmetic, FineArithmetic),
-    /// (OrgId, ShareId, Support Count Threshold, Turnout Percentage Threshold)
-    CreateShareWeightedCountThresholdVote(u32, u32, u32, u32),
-    /// (OrgId, ShareId, Support 1P1V Count Threshold, Turnout 1P1V Count Threshold)
-    Create1P1VCountThresholdVote(u32, u32, u32, u32),
-}
-
-#[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug)]
-/// Each task
-/// - TODO: add accountability such that there is some subset of the membership group
-/// assigned to this task?
-pub struct Task<Hash> {
-    id: TaskId,
-    description: Hash,
+pub enum ApplicationState {
+    SubmittedAwaitingResponse,
+    // wraps a VoteId for the acceptance committee
+    UnderReviewByAcceptanceCommittee(VoteID),
+    // however many individuals are left that need to consent
+    ApprovedByFoundationAwaitingTeamConsent(VoteID),
+    // current milestone identifier
+    ApprovedAndLive(u32),
+    // closed for some reason
+    Closed,
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-/// (OrgId, BountyId, MilestoneId) => Milestone
-pub struct Milestone<Currency, Hash> {
-    id: MilestoneId,
+pub struct GrantApplication<AccountId, Currency, Hash> {
+    /// The ipfs reference to the application information
     description: Hash,
-    reward: Currency,
-    tasks: Vec<Task<Hash>>,
-}
-
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-/// The schedule for grant milestones
-/// (OrgId, BountyId) => MilestoneSchedule
-/// TODO: should be easy to pop a milestone from this vec and pop it onto completed in `BountyPaymentTracker`
-pub struct MilestoneSchedule<Currency> {
-    /// The sum of the rewards for all milestones in the other field
-    total_reward: Currency,
-    /// All the milestone identifiers for this MilestoneSchedule
-    milestones: Vec<MilestoneId>,
-}
-
-impl<Currency: Copy> MilestoneSchedule<Currency> {
-    pub fn reward(&self) -> Currency {
-        self.total_reward
-    }
-}
-
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-/// (OrgId, BountyId), ApplicationId => BountyApplication<AccountId, Shares, Currency, Hash>
-pub struct BountyApplication<AccountId, Currency, Hash> {
-    /// The description that goes
-    description: Hash,
-    /// The milestone proposed by the applying team, hashes need to be authenticated with data off-chain
-    proposed_milestone_schedule: MilestoneSchedule<Currency>,
+    /// total amount
+    total_amount: Currency,
     /// The terms of agreement that must agreed to by all members before the bounty execution starts
-    basic_terms_of_agreement: TermsOfAgreement<AccountId>,
+    terms_of_agreement: TermsOfAgreement<AccountId>,
+    /// state of the application
+    state: ApplicationState,
 }
 
-impl<AccountId: Clone, Currency, Hash> BountyApplication<AccountId, Currency, Hash> {
+impl<AccountId: Clone, Currency: Clone, Hash: Clone> GrantApplication<AccountId, Currency, Hash> {
     pub fn new(
         description: Hash,
-        proposed_milestone_schedule: MilestoneSchedule<Currency>,
-        basic_terms_of_agreement: TermsOfAgreement<AccountId>,
-    ) -> BountyApplication<AccountId, Currency, Hash> {
-        BountyApplication {
+        total_amount: Currency,
+        terms_of_agreement: TermsOfAgreement<AccountId>,
+    ) -> GrantApplication<AccountId, Currency, Hash> {
+        GrantApplication {
             description,
-            proposed_milestone_schedule,
-            basic_terms_of_agreement,
+            total_amount,
+            terms_of_agreement,
+            state: ApplicationState::SubmittedAwaitingResponse,
         }
     }
+    pub fn state(&self) -> ApplicationState {
+        self.state
+    }
+    pub fn total_amount(&self) -> Currency {
+        self.total_amount.clone()
+    }
+    pub fn terms_of_agreement(&self) -> TermsOfAgreement<AccountId> {
+        self.terms_of_agreement.clone()
+    }
+}
 
-    // TODO: make this a trait on BountyApplication object more generally once traitifying Bounty to make it more configurable
-    pub fn terms(&self) -> TermsOfAgreement<AccountId> {
-        self.basic_terms_of_agreement.clone()
+impl<AccountId: Clone, Currency: Clone, Hash: Clone> StartReview<VoteID>
+    for GrantApplication<AccountId, Currency, Hash>
+{
+    fn start_review(&self, vote_id: VoteID) -> Self {
+        GrantApplication {
+            description: self.description.clone(),
+            total_amount: self.total_amount.clone(),
+            terms_of_agreement: self.terms_of_agreement.clone(),
+            state: ApplicationState::UnderReviewByAcceptanceCommittee(vote_id),
+        }
+    }
+    fn get_review_id(&self) -> Option<VoteID> {
+        match self.state() {
+            ApplicationState::UnderReviewByAcceptanceCommittee(vote_id) => Some(vote_id),
+            _ => None,
+        }
     }
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 /// This struct is designed to track the payment for an ongoing bounty
 pub struct BountyPaymentTracker<Currency> {
-    /// Added once milestone is completed and removed once the recipient indicates they've
-    /// received the payment
+    received: Currency,
     due: Currency,
-    /// Completed milestones
-    completed: Vec<MilestoneId>,
-    /// Milestones left
-    schedule: MilestoneSchedule<Currency>,
 }
 
 // upon posting a grant, the organization should assign reviewers for applications and state a formal review process for every bounty posted
 
 // upon accepting a grant, the organization giving it should assign supervisors `=>` easy to make reviewers the supervisors
-
-#[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug)]
-/// This vote metadata describes the review of the milestone
-/// - first the shareholder acknowledge the submission with submission hash
-/// - then a vote is dispatched as per the review process
-pub struct MilestoneReview {
-    organization: u32,
-    share_id: u32,
-    support_requirement: u32,
-    veto_rights: bool,
-}

@@ -26,6 +26,12 @@ impl UUID2 {
     }
 }
 
+impl Into<(u32, u32)> for UUID2 {
+    fn into(self) -> (u32, u32) {
+        (self.one(), self.two())
+    }
+}
+
 #[derive(PartialEq, Eq, Default, Copy, Clone, Encode, Decode, RuntimeDebug)]
 pub struct UUID3(u32, u32, u32);
 
@@ -72,4 +78,13 @@ impl UUID4 {
     pub fn four(&self) -> u32 {
         self.3
     }
+}
+
+use crate::organization::FormedOrganization;
+
+#[derive(PartialEq, Eq, Default, Copy, Clone, Encode, Decode, RuntimeDebug)]
+// intended usage is FormedOrg + BountyId prefix for other storage items in `bounty`
+pub struct FormedOrgUUID23<T> {
+    org: FormedOrganization,
+    id: T,
 }

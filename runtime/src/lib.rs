@@ -1,4 +1,4 @@
-//! The Substrate Node Template runtime. This can be compiled with `#[no_std]`, ready for Wasm.
+#![allow(clippy::large_enum_variant)]
 #![cfg_attr(not(feature = "std"), no_std)]
 // `construct_runtime!` does a lot of recursion and requires us to increase the limit to 256.
 #![recursion_limit = "256"]
@@ -9,12 +9,12 @@ include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
 use codec::Encode;
 use pallet_grandpa::fg_primitives;
-use pallet_grandpa::AuthorityList as GrandpaAuthorityList;
+use pallet_grandpa::{AuthorityId, AuthorityList as GrandpaAuthorityList};
 use sp_api::impl_runtime_apis;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
-use sp_core::OpaqueMetadata;
+use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
 use sp_runtime::traits::{
-    BlakeTwo256, Block as BlockT, ConvertInto, IdentifyAccount, StaticLookup, Verify,
+    BlakeTwo256, Block as BlockT, IdentifyAccount, NumberFor, Saturating, StaticLookup, Verify,
 };
 use sp_runtime::{
     create_runtime_str, generic, impl_opaque_keys, transaction_validity::TransactionValidity,
@@ -28,10 +28,10 @@ use sp_version::RuntimeVersion;
 // A few exports that help ease life for downstream crates.
 pub use frame_support::{
     construct_runtime, debug, parameter_types,
-    traits::Randomness,
+    traits::{KeyOwnerProofSystem, Randomness},
     weights::{
         constants::{BlockExecutionWeight, ExtrinsicBaseWeight, RocksDbWeight, WEIGHT_PER_SECOND},
-        Weight,
+        IdentityFee, Weight,
     },
     StorageValue,
 };
@@ -115,7 +115,8 @@ where
             // so the actual block number is `n`.
             .saturating_sub(1);
         let extra: SignedExtra = (
-            frame_system::CheckVersion::<Runtime>::new(),
+            frame_system::CheckSpecVersion::<Runtime>::new(),
+            frame_system::CheckTxVersion::<Runtime>::new(),
             frame_system::CheckGenesis::<Runtime>::new(),
             frame_system::CheckEra::<Runtime>::from(generic::Era::mortal(period, current_block)),
             frame_system::CheckNonce::<Runtime>::from(nonce),
@@ -184,6 +185,9 @@ parameter_types! {
     /// We allow for 2 seconds of compute with a 6 second average block time.
     pub const MaximumBlockWeight: Weight = 2 * WEIGHT_PER_SECOND;
     pub const AvailableBlockRatio: Perbill = Perbill::from_percent(75);
+    /// Assume 10% of weight for average on_initialize calls.
+    pub const MaximumExtrinsicWeight: Weight = AvailableBlockRatio::get()
+        .saturating_sub(Perbill::from_percent(10)) * MaximumBlockWeight::get();
     pub const MaximumBlockLength: u32 = 5 * 1024 * 1024;
     pub const Version: RuntimeVersion = VERSION;
 }
@@ -225,6 +229,8 @@ impl frame_system::Trait for Runtime {
     /// The base weight of any extrinsic processed by the runtime, independent of the
     /// logic of that extrinsic. (Signature verification, nonce increment, fee, etc...)
     type ExtrinsicBaseWeight = ExtrinsicBaseWeight;
+    /// The maximum weight for any extrinsic
+    type MaximumExtrinsicWeight = MaximumExtrinsicWeight;
     /// Version of the runtime.
     type Version = Version;
     /// Converts a module to the index of the module in `construct_runtime!`.
@@ -245,6 +251,19 @@ impl pallet_aura::Trait for Runtime {
 
 impl pallet_grandpa::Trait for Runtime {
     type Event = Event;
+    type Call = Call;
+
+    type KeyOwnerProofSystem = ();
+
+    type KeyOwnerProof =
+        <Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(KeyTypeId, AuthorityId)>>::Proof;
+
+    type KeyOwnerIdentification = <Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(
+        KeyTypeId,
+        AuthorityId,
+    )>>::IdentificationTuple;
+
+    type HandleEquivocation = ();
 }
 
 parameter_types! {
@@ -291,7 +310,7 @@ impl pallet_transaction_payment::Trait for Runtime {
     type Currency = pallet_balances::Module<Runtime>;
     type OnTransactionPayment = ();
     type TransactionByteFee = TransactionByteFee;
-    type WeightToFee = ConvertInto;
+    type WeightToFee = IdentityFee<Balance>;
     type FeeMultiplierUpdate = ();
 }
 impl pallet_sudo::Trait for Runtime {
@@ -334,15 +353,38 @@ impl vote_yesno::Trait for Runtime {
     type FlatShareData = SharesMembership;
     type WeightedShareData = SharesAtomic;
 }
-pub use bank;
-impl bank::Trait for Runtime {
+pub use sunshine_org;
+impl sunshine_org::Trait for Runtime {
     type Event = Event;
-    type Currency = Balances;
     type OrgData = Membership;
     type FlatShareData = SharesMembership;
-    type VotePetition = VotePetition;
     type WeightedShareData = SharesAtomic;
+}
+parameter_types! {
+    pub const MinimumInitialDeposit: u128 = 5;
+}
+pub use bank_onchain;
+impl bank_onchain::Trait for Runtime {
+    type Event = Event;
+    type Currency = Balances;
+    type Organization = SunshineOrg;
+    type MinimumInitialDeposit = MinimumInitialDeposit;
+}
+// => every bounty has at least 10 reserved behind it
+parameter_types! {
+    pub const MinimumBountyCollateralRatio: Permill = Permill::from_percent(50);
+    pub const BountyLowerBound: u128 = 20;
+}
+pub use bounty;
+impl bounty::Trait for Runtime {
+    type Event = Event;
+    type Currency = Balances;
+    type Organization = SunshineOrg;
+    type Bank = BankOnChain;
+    type VotePetition = VotePetition;
     type VoteYesNo = VoteYesNo;
+    type MinimumBountyCollateralRatio = MinimumBountyCollateralRatio;
+    type BountyLowerBound = BountyLowerBound;
 }
 
 construct_runtime!(
@@ -366,7 +408,9 @@ construct_runtime!(
         SharesAtomic: shares_atomic::{Module, Call, Config<T>, Storage, Event<T>},
         VotePetition: vote_petition::{Module, Call, Storage, Event<T>},
         VoteYesNo: vote_yesno::{Module, Call, Storage, Event<T>},
-        Bank: bank::{Module, Call, Config<T>, Storage, Event<T>},
+        SunshineOrg: sunshine_org::{Module, Call, Config<T>, Storage, Event<T>},
+        BankOnChain: bank_onchain::{Module, Call, Storage, Event<T>},
+        Bounty: bounty::{Module, Call, Storage, Event<T>},
     }
 );
 
@@ -382,7 +426,8 @@ pub type SignedBlock = generic::SignedBlock<Block>;
 pub type BlockId = generic::BlockId<Block>;
 /// The SignedExtension to the basic transaction logic.
 pub type SignedExtra = (
-    frame_system::CheckVersion<Runtime>,
+    frame_system::CheckSpecVersion<Runtime>,
+    frame_system::CheckTxVersion<Runtime>,
     frame_system::CheckGenesis<Runtime>,
     frame_system::CheckEra<Runtime>,
     frame_system::CheckNonce<Runtime>,
@@ -486,6 +531,25 @@ impl_runtime_apis! {
     impl fg_primitives::GrandpaApi<Block> for Runtime {
         fn grandpa_authorities() -> GrandpaAuthorityList {
             Grandpa::grandpa_authorities()
+        }
+        fn submit_report_equivocation_extrinsic(
+            _equivocation_proof: fg_primitives::EquivocationProof<
+                <Block as BlockT>::Hash,
+                NumberFor<Block>,
+            >,
+            _key_owner_proof: fg_primitives::OpaqueKeyOwnershipProof,
+        ) -> Option<()> {
+            None
+        }
+
+        fn generate_key_ownership_proof(
+            _set_id: fg_primitives::SetId,
+            _authority_id: AuthorityId,
+        ) -> Option<fg_primitives::OpaqueKeyOwnershipProof> {
+            // NOTE: this is the only implementation possible since we've
+            // defined our key owner proof type as a bottom type (i.e. a type
+            // with no values).
+            None
         }
     }
 }
