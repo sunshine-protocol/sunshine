@@ -1,6 +1,7 @@
 #![allow(clippy::string_lit_as_bytes)]
 #![allow(clippy::redundant_closure_call)]
 #![allow(clippy::type_complexity)]
+#![allow(clippy::too_many_arguments)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
 mod tests;
@@ -16,9 +17,9 @@ use sp_std::prelude::*;
 use util::{
     bank::{BankMapID, OnChainTreasuryID},
     bounty::{
-        ApplicationState, BountyInformation, BountyMapID, BountyPaymentTracker, GrantApplication,
-        MilestoneSubmission, ReviewBoard, VoteID,
-    },
+        ApplicationState, BountyInformation, BountyMapID, GrantApplication, MilestoneSubmission,
+        ReviewBoard, VoteID,
+    }, //BountyPaymentTracker
     organization::{ShareID, TermsOfAgreement},
     traits::{
         ApplyVote, ApproveGrantApplication, Approved, BankDepositsAndSpends, BankReservations,
@@ -27,12 +28,11 @@ use util::{
         GetInnerOuterShareGroups, GetVoteOutcome, IDIsAvailable, MintableSignal, OnChainBank,
         OpenPetition, OpenShareGroupVote, OrgChecks, OrganizationDNS,
         OwnershipProportionCalculations, RegisterBankAccount, RegisterFoundation,
-        RegisterShareGroup, RequestChanges, RequestConsentOnTermsOfAgreement,
-        SeededGenerateUniqueID, ShareGroupChecks, SignPetition, StartReview,
-        SubmitGrantApplication, SupervisorPermissions, TermSheetExit, ThresholdVote,
-        UpdatePetition, VoteOnProposal, WeightedShareIssuanceWrapper, WeightedShareWrapper,
-    },
-    uuid::UUID3,
+        RegisterShareGroup, RequestConsentOnTermsOfAgreement, SeededGenerateUniqueID,
+        ShareGroupChecks, SignPetition, StartReview, SubmitGrantApplication, SupervisorPermissions,
+        TermSheetExit, ThresholdVote, UpdatePetition, VoteOnProposal, WeightedShareIssuanceWrapper,
+        WeightedShareWrapper,
+    }, //RequestChanges
     voteyesno::{SupportedVoteTypes, ThresholdConfig},
 };
 
@@ -282,7 +282,7 @@ impl<T: Trait> Module<T> {
         duration: Option<T::BlockNumber>,
     ) -> Result<VoteID, DispatchError> {
         let new_vote_id = match committee {
-            ReviewBoard::SimpleFlatReview(org_id, share_id) => {
+            ReviewBoard::SimpleFlatReview(_, _) => {
                 return Err(Error::<T>::ReviewBoardFlatShapeDoesntSupportThresholdReview.into());
             }
             ReviewBoard::WeightedThresholdReview(org_id, share_id) => {
@@ -327,7 +327,7 @@ impl<T: Trait> Module<T> {
                 .into();
                 VoteID::Petition(id)
             }
-            ReviewBoard::WeightedThresholdReview(org_id, share_id) => {
+            ReviewBoard::WeightedThresholdReview(_, _) => {
                 return Err(Error::<T>::ReviewBoardWeightedShapeDoesntSupportPetitionReview.into());
             }
         };
@@ -395,9 +395,9 @@ impl<T: Trait> RegisterFoundation<BalanceOf<T>, T::AccountId> for Module<T> {
     // -> it should register an on-chain bank account and return the on-chain bank account identifier
     // TODO
     fn register_foundation_from_donation_deposit(
-        from: T::AccountId,
-        for_org: Self::OrgId,
-        amount: BalanceOf<T>,
+        _from: T::AccountId,
+        _for_org: Self::OrgId,
+        _amount: BalanceOf<T>,
     ) -> Result<Self::BankId, DispatchError> {
         todo!()
     }
@@ -436,13 +436,13 @@ impl<T: Trait> CreateBounty<BalanceOf<T>, T::AccountId, IpfsReference> for Modul
         );
         // enforce module constraints for all posted bounties
         ensure!(
-            amount_claimed_available.clone() >= T::BountyLowerBound::get(),
+            amount_claimed_available >= T::BountyLowerBound::get(),
             Error::<T>::MinimumBountyClaimedAmountMustMeetModuleLowerBound
         );
         ensure!(
             Self::collateral_satisfies_module_limits(
-                amount_reserved_for_bounty.clone(),
-                amount_claimed_available.clone(),
+                amount_reserved_for_bounty,
+                amount_claimed_available,
             ),
             Error::<T>::BountyCollateralRatioMustMeetModuleRequirements
         );
@@ -509,8 +509,8 @@ impl<T: Trait> CreateBounty<BalanceOf<T>, T::AccountId, IpfsReference> for Modul
 impl<T: Trait> RequestConsentOnTermsOfAgreement<T::AccountId> for Module<T> {
     type TermsOfAgreement = TermsOfAgreement<T::AccountId>;
     fn request_consent_on_terms_of_agreement(
-        bounty_id: Self::BountyId,
-        terms: TermsOfAgreement<T::AccountId>,
+        _bounty_id: Self::BountyId,
+        _terms: TermsOfAgreement<T::AccountId>,
     ) -> Option<VoteID> {
         // register an appropriate flat share identity for this terms
 
@@ -582,7 +582,7 @@ impl<T: Trait> ApproveGrantApplication<BalanceOf<T>, T::AccountId, IpfsReference
             Error::<T>::AccountNotAuthorizedToTriggerApplicationReview
         );
         // vote should dispatch based on the acceptance_committee variant here
-        let acceptance_committee = bounty_info.acceptance_committee().clone();
+        let acceptance_committee = bounty_info.acceptance_committee();
         // TODO: can I make this neater instead of this match statement execution
         let new_vote_id = match bounty_info.acceptance_committee() {
             ReviewBoard::SimpleFlatReview(_, _) => {
@@ -622,7 +622,7 @@ impl<T: Trait> ApproveGrantApplication<BalanceOf<T>, T::AccountId, IpfsReference
         application_id: u32,
     ) -> Result<Self::AppState, DispatchError> {
         // get the bounty information
-        let bounty_info = <FoundationSponsoredBounties<T>>::get(bounty_id)
+        let _ = <FoundationSponsoredBounties<T>>::get(bounty_id)
             .ok_or(Error::<T>::CannotPollApplicationIfBountyDNE)?;
         // get the application information
         let application_under_review = <BountyApplications<T>>::get(bounty_id, application_id)

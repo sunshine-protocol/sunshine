@@ -27,7 +27,7 @@ membership = { package = "sunshine-membership", path = "../membership", default-
 shares-membership = { package = "sunshine-shares-membership", path = "../shares-membership", default-features = false }
 shares-atomic = { package = "sunshine-shares-atomic", path = "../shares-atomic", default-features = false }
 org = { package = "sunshine-org", path = "../org", default-features=false}
-bank = { package = "sunshine-bank-onchain", path = "../bank-onchain", default-features=false}
+bank-onchain = { package = "sunshine-bank-onchain", path = "../bank-onchain", default-features=false}
 vote-petition = { package = "sunshine-vote-petition", path = "../vote-petition", default-features=false}
 vote-yesno = { package = "sunshine-vote-yesno", path = "../vote-yesno", default-features=false}
 

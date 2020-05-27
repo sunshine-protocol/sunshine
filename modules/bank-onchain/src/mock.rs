@@ -50,6 +50,7 @@ impl frame_system::Trait for Test {
     type Event = TestEvent;
     type BlockHashCount = BlockHashCount;
     type MaximumBlockWeight = MaximumBlockWeight;
+    type MaximumExtrinsicWeight = MaximumBlockWeight;
     type DbWeight = ();
     type BlockExecutionWeight = ();
     type ExtrinsicBaseWeight = ();

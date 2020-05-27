@@ -13,9 +13,7 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-use frame_support::{
-    decl_error, decl_event, decl_module, decl_storage, ensure, storage::IterableStorageDoubleMap,
-};
+use frame_support::{decl_error, decl_event, decl_module, decl_storage, ensure}; // storage::IterableStorageDoubleMap
 use frame_system::{self as system, ensure_signed};
 use sp_runtime::{DispatchError, DispatchResult};
 use sp_std::prelude::*;
@@ -24,9 +22,9 @@ use util::{
     traits::{
         Apply, Approved, ChainSudoPermissions, ChangeGroupMembership, GenerateUniqueID,
         GetFlatShareGroup, GetGroupSize, GetVoteOutcome, GroupMembership, IDIsAvailable,
-        OpenPetition, OrganizationSupervisorPermissions, Rejected, RequestChanges, SignPetition,
+        OpenPetition, OrganizationSupervisorPermissions, Rejected, SignPetition,
         SubGroupSupervisorPermissions, UpdatePetition, UpdatePetitionTerms,
-    },
+    }, // RequestChanges
     uuid::UUID2,
 };
 

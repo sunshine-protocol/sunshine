@@ -506,19 +506,17 @@ impl<T: Trait> VoteOnProposal<T::AccountId, IpfsReference, T::BlockNumber, Permi
                 ensure!(mintable_signal >= amt, Error::<T>::NotEnoughSignalToVote);
                 mintable_signal -= amt;
             }
+        } else if let Some(mag) = magnitude {
+            ensure!(mintable_signal >= mag, Error::<T>::NotEnoughSignalToVote);
+            mintable_signal -= mag;
         } else {
-            if let Some(mag) = magnitude {
-                ensure!(mintable_signal >= mag, Error::<T>::NotEnoughSignalToVote);
-                mintable_signal -= mag
-            } else {
-                // full minted signal used in this vote
-                mintable_signal = 0u32.into();
-            }
+            // full minted signal used in this vote
+            mintable_signal = 0u32.into();
         }
         // set the new vote for the voter's profile
         <VoteLogger<T>>::insert(vote_id, voter.clone(), new_vote);
         // commit new vote state to storage
-        <VoteStates<T>>::insert(vote_id, new_state.clone());
+        <VoteStates<T>>::insert(vote_id, new_state);
         <MintedSignal<T>>::insert(vote_id, voter, mintable_signal);
         Ok(())
     }

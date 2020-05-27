@@ -7,7 +7,6 @@ use suntime::{
     AccountId,
     AuraConfig,
     BalancesConfig,
-    BankConfig,
     GenesisConfig,
     GrandpaConfig,
     IndicesConfig,
@@ -17,6 +16,7 @@ use suntime::{
     SharesMembershipConfig,
     Signature,
     SudoConfig,
+    SunshineOrgConfig,
     SystemConfig,
     WASM_BINARY, // Signal, VoteId
 };
@@ -191,7 +191,7 @@ pub fn testnet_genesis(
             share_supervisors: weighted_share_supervisors,
             shareholder_membership: weighted_share_membership,
         }),
-        bank: Some(BankConfig {
+        sunshine_org: Some(SunshineOrgConfig {
             first_organization_supervisor: root_key.clone(),
             first_organization_value_constitution: first_org_value_constitution,
             first_organization_flat_membership: first_org_flat_membership,
