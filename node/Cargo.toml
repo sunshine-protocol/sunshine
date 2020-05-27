@@ -17,7 +17,7 @@ vergen = "3.1.0"
 futures = "0.3.5"
 log = "0.4.8"
 sc-basic-authorship = { version = "0.8.0-rc2", default-features = false }
-sc-cli = { version = "0.8.0-rc2", default-features = false }
+sc-cli = { version = "0.8.0-rc2", optional = true, default-features = false }
 sc-consensus = { version = "0.8.0-rc2", default-features = false }
 sc-client-api = { version = "2.0.0-rc2", default-features = false }
 sc-consensus-aura = { version = "0.8.0-rc2", default-features = false }
@@ -34,9 +34,6 @@ sp-inherents = { version = "2.0.0-rc2", default-features = false }
 sp-runtime = { version = "2.0.0-rc2", default-features = false }
 sp-transaction-pool = { version = "2.0.0-rc2", default-features = false }
 suntime = { path = "../runtime" }
-
-# node dependencies
-sc-cli = { version = "0.8.0-alpha.7", default-features = false, optional = true }
 structopt = { version = "0.3.14", optional = true }
 
 [features]
