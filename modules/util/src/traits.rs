@@ -1017,7 +1017,7 @@ pub trait SubmitGrantApplication<Currency, AccountId, Hash>:
     ) -> Result<u32, DispatchError>; // returns application identifier
 }
 
-pub trait ApproveGrantApplication<Currency, AccountId, Hash>:
+pub trait SuperviseGrantApplication<Currency, AccountId, Hash>:
     CreateBounty<Currency, AccountId, Hash> + RequestConsentOnTermsOfAgreement<AccountId>
 {
     type AppState;
@@ -1026,6 +1026,11 @@ pub trait ApproveGrantApplication<Currency, AccountId, Hash>:
         bounty_id: u32,
         application_id: u32,
     ) -> Result<Self::AppState, DispatchError>;
+    fn trigger_team_consent(
+        trigger: AccountId, // must be authorized to trigger in context of objects
+        bounty_id: u32,
+        application_id: u32,
+    ) -> Result<(ShareID, VoteID), DispatchError>;
     fn poll_application(
         bounty_id: u32,
         application_id: u32,

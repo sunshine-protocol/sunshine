@@ -22,7 +22,7 @@ use util::{
     }, //BountyPaymentTracker
     organization::{ShareID, TermsOfAgreement},
     traits::{
-        ApplyVote, ApproveGrantApplication, Approved, BankDepositsAndSpends, BankReservations,
+        ApplyVote, SuperviseGrantApplication, Approved, BankDepositsAndSpends, BankReservations,
         BankSpends, BankStorageInfo, CheckBankBalances, CheckVoteStatus, CreateBounty,
         DepositIntoBank, FoundationParts, GenerateUniqueID, GenerateUniqueKeyID,
         GetInnerOuterShareGroups, GetVoteOutcome, IDIsAvailable, MintableSignal, OnChainBank,
@@ -554,7 +554,7 @@ impl<T: Trait> SubmitGrantApplication<BalanceOf<T>, T::AccountId, IpfsReference>
     }
 }
 
-impl<T: Trait> ApproveGrantApplication<BalanceOf<T>, T::AccountId, IpfsReference> for Module<T> {
+impl<T: Trait> SuperviseGrantApplication<BalanceOf<T>, T::AccountId, IpfsReference> for Module<T> {
     type AppState = ApplicationState;
     fn trigger_application_review(
         trigger: T::AccountId, // must be authorized to trigger in context of objects
@@ -634,6 +634,8 @@ impl<T: Trait> ApproveGrantApplication<BalanceOf<T>, T::AccountId, IpfsReference
         let passed = Self::check_vote_status(under_review)?;
         // if the vote has passed, start the next vote to get consent on terms from team members
         if passed {
+            // TODO: dispatch this vote with unanimous requirements from `vote-petition`
+            // store the VoteID somewhere, this is data that should be tracked long-term
             // RequestUnanimousConsentOnTermsOfAgreement
             todo!()
         } else {
