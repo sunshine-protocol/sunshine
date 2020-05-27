@@ -1,53 +1,35 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
-// This file is part of Substrate.
-
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
-
-use crate::chain_spec;
 use crate::cli::Cli;
-use crate::service;
+use crate::{chain_spec, service};
 use sc_cli::SubstrateCli;
 use sp_consensus_aura::sr25519::AuthorityPair as AuraPair;
 
 impl SubstrateCli for Cli {
     fn impl_name() -> &'static str {
-        "Sunshine Node"
+        crate::IMPL_NAME
     }
 
     fn impl_version() -> &'static str {
-        // env!("SUBSTRATE_CLI_IMPL_VERSION")
-        env!("CARGO_PKG_DESCRIPTION")
+        crate::IMPL_VERSION
     }
 
     fn description() -> &'static str {
-        env!("CARGO_PKG_DESCRIPTION")
+        crate::DESCRIPTION
     }
 
     fn author() -> &'static str {
-        env!("CARGO_PKG_AUTHORS")
+        crate::AUTHOR
     }
 
     fn support_url() -> &'static str {
-        "https://joinsunshine.com"
+        crate::SUPPORT_URL
     }
 
     fn copyright_start_year() -> i32 {
-        2020
+        crate::COPYRIGHT_START_YEAR
     }
 
     fn executable_name() -> &'static str {
-        env!("CARGO_PKG_NAME")
+        crate::EXECUTABLE_NAME
     }
 
     fn load_spec(&self, id: &str) -> Result<Box<dyn sc_service::ChainSpec>, String> {
