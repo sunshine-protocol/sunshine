@@ -18,20 +18,20 @@ use util::{
     bank::{BankMapID, OnChainTreasuryID},
     bounty::{
         ApplicationState, BountyInformation, BountyMapID, GrantApplication, MilestoneSubmission,
-        ReviewBoard, VoteID,
+        ReviewBoard, TeamID, VoteID,
     }, //BountyPaymentTracker
     organization::{ShareID, TermsOfAgreement},
     traits::{
-        ApplyVote, SuperviseGrantApplication, Approved, BankDepositsAndSpends, BankReservations,
-        BankSpends, BankStorageInfo, CheckBankBalances, CheckVoteStatus, CreateBounty,
-        DepositIntoBank, FoundationParts, GenerateUniqueID, GenerateUniqueKeyID,
-        GetInnerOuterShareGroups, GetVoteOutcome, IDIsAvailable, MintableSignal, OnChainBank,
-        OpenPetition, OpenShareGroupVote, OrgChecks, OrganizationDNS,
-        OwnershipProportionCalculations, RegisterBankAccount, RegisterFoundation,
-        RegisterShareGroup, RequestConsentOnTermsOfAgreement, SeededGenerateUniqueID,
-        ShareGroupChecks, SignPetition, StartReview, SubmitGrantApplication, SupervisorPermissions,
-        TermSheetExit, ThresholdVote, UpdatePetition, VoteOnProposal, WeightedShareIssuanceWrapper,
-        WeightedShareWrapper,
+        ApplyVote, ApproveGrant, Approved, BankDepositsAndSpends, BankReservations, BankSpends,
+        BankStorageInfo, CheckBankBalances, CheckVoteStatus, CreateBounty, DepositIntoBank,
+        FoundationParts, GenerateUniqueID, GenerateUniqueKeyID, GetInnerOuterShareGroups,
+        GetVoteOutcome, IDIsAvailable, MintableSignal, OnChainBank, OpenPetition,
+        OpenShareGroupVote, OrgChecks, OrganizationDNS, OwnershipProportionCalculations,
+        RegisterBankAccount, RegisterFoundation, RegisterShareGroup, SeededGenerateUniqueID,
+        ShareGroupChecks, SignPetition, StartApplicationReviewPetition, StartTeamConsentPetition,
+        SubmitGrantApplication, SuperviseGrantApplication, SupervisorPermissions, TermSheetExit,
+        ThresholdVote, UpdatePetition, UseTermsOfAgreement, VoteOnProposal,
+        WeightedShareIssuanceWrapper, WeightedShareWrapper,
     }, //RequestChanges
     voteyesno::{SupportedVoteTypes, ThresholdConfig},
 };
@@ -63,12 +63,12 @@ pub trait Trait: frame_system::Trait {
     /// This type wraps `membership`, `shares-membership`, and `shares-atomic`
     /// - it MUST be the same instance inherited by the bank module associated type
     type Organization: OrgChecks<u32, Self::AccountId>
-        + ShareGroupChecks<u32, Self::AccountId>
-        + GetInnerOuterShareGroups<u32, Self::AccountId>
-        + SupervisorPermissions<u32, Self::AccountId>
+        + ShareGroupChecks<u32, ShareID, Self::AccountId>
+        + GetInnerOuterShareGroups<u32, ShareID, Self::AccountId>
+        + SupervisorPermissions<u32, ShareID, Self::AccountId>
         + WeightedShareWrapper<u32, u32, Self::AccountId>
         + WeightedShareIssuanceWrapper<u32, u32, Self::AccountId, Permill>
-        + RegisterShareGroup<u32, u32, Self::AccountId, SharesOf<Self>>
+        + RegisterShareGroup<u32, ShareID, Self::AccountId, SharesOf<Self>>
         + OrganizationDNS<u32, Self::AccountId, IpfsReference>;
 
     // TODO: start with spending functionality with balances for milestones
@@ -249,12 +249,16 @@ impl<T: Trait> Module<T> {
         match acceptance_committee {
             ReviewBoard::SimpleFlatReview(org_id, share_id) => {
                 <<T as Trait>::Organization as ShareGroupChecks<
-                    u32, T::AccountId
+                    u32,
+                    ShareID,
+                    T::AccountId,
                 >>::check_membership_in_share_group(org_id, ShareID::Flat(share_id).into(), account)
             },
             ReviewBoard::WeightedThresholdReview(org_id, share_id) => {
                 <<T as Trait>::Organization as ShareGroupChecks<
-                    u32, T::AccountId
+                    u32,
+                    ShareID,
+                    T::AccountId,
                 >>::check_membership_in_share_group(org_id, ShareID::WeightedAtomic(share_id).into(), account)
             },
         }
@@ -276,62 +280,62 @@ impl<T: Trait> Module<T> {
         }
     }
     fn dispatch_threshold_review(
-        committee: ReviewBoard,
+        organization: u32,
+        weighted_share_id: u32,
         vote_type: SupportedVoteTypes<SignalOf<T>>,
         threshold: ThresholdConfig<SignalOf<T>, Permill>,
         duration: Option<T::BlockNumber>,
     ) -> Result<VoteID, DispatchError> {
-        let new_vote_id = match committee {
-            ReviewBoard::SimpleFlatReview(_, _) => {
-                return Err(Error::<T>::ReviewBoardFlatShapeDoesntSupportThresholdReview.into());
-            }
-            ReviewBoard::WeightedThresholdReview(org_id, share_id) => {
-                let id: u32 = <<T as Trait>::VoteYesNo as OpenShareGroupVote<
-                    T::AccountId,
-                    T::BlockNumber,
-                    Permill,
-                >>::open_share_group_vote(
-                    org_id,
-                    share_id,
-                    vote_type.into(),
-                    threshold.into(),
-                    duration,
-                )?
-                .into();
-                VoteID::Threshold(id)
-            }
-        };
-        Ok(new_vote_id)
+        let id: u32 = <<T as Trait>::VoteYesNo as OpenShareGroupVote<
+            T::AccountId,
+            T::BlockNumber,
+            Permill,
+        >>::open_share_group_vote(
+            organization,
+            weighted_share_id,
+            vote_type.into(),
+            threshold.into(),
+            duration,
+        )?
+        .into();
+        Ok(VoteID::Threshold(id))
+    }
+    fn dispatch_unanimous_petition_review(
+        organization: u32,
+        flat_share_id: u32,
+        topic: Option<IpfsReference>,
+        duration: Option<T::BlockNumber>,
+    ) -> Result<VoteID, DispatchError> {
+        let id: u32 = <<T as Trait>::VotePetition as OpenPetition<
+            IpfsReference,
+            T::BlockNumber,
+        >>::open_unanimous_approval_petition(
+            organization, flat_share_id, topic, duration
+        )?
+        .into();
+        Ok(VoteID::Petition(id))
     }
     fn dispatch_petition_review(
-        committee: ReviewBoard,
-        topic: IpfsReference,
+        organization: u32,
+        flat_share_id: u32,
+        topic: Option<IpfsReference>,
         required_support: u32,
         required_against: Option<u32>,
         duration: Option<T::BlockNumber>,
     ) -> Result<VoteID, DispatchError> {
-        let new_vote_id = match committee {
-            ReviewBoard::SimpleFlatReview(org_id, share_id) => {
-                // dispatch single approval vote (any vetos possible) in petition
-                let id: u32 = <<T as Trait>::VotePetition as OpenPetition<
-                    IpfsReference,
-                    T::BlockNumber,
-                >>::open_petition(
-                    org_id,
-                    share_id,
-                    topic,
-                    required_support,
-                    required_against,
-                    duration,
-                )?
-                .into();
-                VoteID::Petition(id)
-            }
-            ReviewBoard::WeightedThresholdReview(_, _) => {
-                return Err(Error::<T>::ReviewBoardWeightedShapeDoesntSupportPetitionReview.into());
-            }
-        };
-        Ok(new_vote_id)
+        let id: u32 = <<T as Trait>::VotePetition as OpenPetition<
+            IpfsReference,
+            T::BlockNumber,
+        >>::open_petition(
+            organization,
+            flat_share_id,
+            topic,
+            required_support,
+            required_against,
+            duration,
+        )?
+        .into();
+        Ok(VoteID::Petition(id))
     }
 }
 
@@ -387,6 +391,8 @@ impl<T: Trait> FoundationParts for Module<T> {
     type OrgId = OrgId;
     type BountyId = BountyId;
     type BankId = OnChainTreasuryID;
+    type TeamId = TeamID;
+    type MultiShareId = ShareID;
     type MultiVoteId = VoteID;
 }
 
@@ -506,19 +512,6 @@ impl<T: Trait> CreateBounty<BalanceOf<T>, T::AccountId, IpfsReference> for Modul
     }
 }
 
-impl<T: Trait> RequestConsentOnTermsOfAgreement<T::AccountId> for Module<T> {
-    type TermsOfAgreement = TermsOfAgreement<T::AccountId>;
-    fn request_consent_on_terms_of_agreement(
-        _bounty_id: Self::BountyId,
-        _terms: TermsOfAgreement<T::AccountId>,
-    ) -> Option<VoteID> {
-        // register an appropriate flat share identity for this terms
-
-        // get consent on the terms for the bounty
-        None
-    }
-}
-
 impl<T: Trait> SubmitGrantApplication<BalanceOf<T>, T::AccountId, IpfsReference> for Module<T> {
     type GrantApp = GrantApplication<T::AccountId, BalanceOf<T>, IpfsReference>;
     fn form_grant_application(
@@ -554,6 +547,41 @@ impl<T: Trait> SubmitGrantApplication<BalanceOf<T>, T::AccountId, IpfsReference>
     }
 }
 
+impl<T: Trait> UseTermsOfAgreement<T::AccountId> for Module<T> {
+    type TermsOfAgreement = TermsOfAgreement<T::AccountId>;
+    // should only be called from `poll_application`
+    fn request_consent_on_terms_of_agreement(
+        application_id: u32,
+        bounty_org: u32, // org that supervises the relevant bounty
+        terms: TermsOfAgreement<T::AccountId>,
+    ) -> Result<(ShareID, VoteID), DispatchError> {
+        // register an appropriate flat share identity for this team as an outer share group in the org
+        let outer_flat_share_id_for_team =
+            <<T as Trait>::Organization as RegisterShareGroup<
+                u32,
+                ShareID,
+                T::AccountId,
+                SharesOf<T>,
+            >>::register_outer_flat_share_group(bounty_org, terms.flat())?;
+        // consider caching this registration somewhere associated with the application_id
+
+        let rewrapped_share_id: ShareID = outer_flat_share_id_for_team.into();
+        let unwrapped_share_id: u32 = outer_flat_share_id_for_team.into();
+        // dispatch vote on consent on the terms for the bounty, requires full consent
+        let vote_id =
+            Self::dispatch_unanimous_petition_review(bounty_org, unwrapped_share_id, None, None)?;
+        Ok((rewrapped_share_id, vote_id))
+    }
+    fn approve_grant_to_register_team(
+        application_id: u32,
+        bounty_org: u32,
+        flat_share_id: u32,
+        terms: Self::TermsOfAgreement,
+    ) -> Result<Self::TeamId, DispatchError> {
+        todo!()
+    }
+}
+
 impl<T: Trait> SuperviseGrantApplication<BalanceOf<T>, T::AccountId, IpfsReference> for Module<T> {
     type AppState = ApplicationState;
     fn trigger_application_review(
@@ -585,25 +613,20 @@ impl<T: Trait> SuperviseGrantApplication<BalanceOf<T>, T::AccountId, IpfsReferen
         let acceptance_committee = bounty_info.acceptance_committee();
         // TODO: can I make this neater instead of this match statement execution
         let new_vote_id = match bounty_info.acceptance_committee() {
-            ReviewBoard::SimpleFlatReview(_, _) => {
+            ReviewBoard::SimpleFlatReview(org_id, flat_share_id) => {
                 // TODO: create two defaults (1) global for unset, here
                 // (2) for each foundation, enable setting a default for this?
-                Self::dispatch_petition_review(
-                    acceptance_committee,
-                    IpfsReference::default(),
-                    1u32,
-                    None,
-                    None,
-                )?
+                Self::dispatch_petition_review(org_id, flat_share_id, None, 1u32, None, None)?
             }
-            ReviewBoard::WeightedThresholdReview(_, _) => {
+            ReviewBoard::WeightedThresholdReview(org_id, weighted_share_id) => {
                 // any one vote suffices, equivalent to petition_review default
                 let threshold_config = ThresholdConfig::new_percentage_threshold(
                     Permill::from_percent(1),
                     Permill::from_percent(0),
                 );
                 Self::dispatch_threshold_review(
-                    acceptance_committee,
+                    org_id,
+                    weighted_share_id,
                     SupportedVoteTypes::OneAccountOneVote,
                     threshold_config,
                     None,
@@ -611,7 +634,7 @@ impl<T: Trait> SuperviseGrantApplication<BalanceOf<T>, T::AccountId, IpfsReferen
             }
         };
         // change the application status such that review is started
-        let new_application = application_to_review.start_review(new_vote_id);
+        let new_application = application_to_review.start_application_review_petition(new_vote_id);
         let app_state = new_application.state();
         // insert new application into relevant map
         <BountyApplications<T>>::insert(bounty_id, application_id, new_application);
@@ -622,25 +645,58 @@ impl<T: Trait> SuperviseGrantApplication<BalanceOf<T>, T::AccountId, IpfsReferen
         application_id: u32,
     ) -> Result<Self::AppState, DispatchError> {
         // get the bounty information
-        let _ = <FoundationSponsoredBounties<T>>::get(bounty_id)
+        let bounty_info = <FoundationSponsoredBounties<T>>::get(bounty_id)
             .ok_or(Error::<T>::CannotPollApplicationIfBountyDNE)?;
         // get the application information
         let application_under_review = <BountyApplications<T>>::get(bounty_id, application_id)
             .ok_or(Error::<T>::CannotPollApplicationIfApplicationDNE)?;
-        let under_review = application_under_review
-            .get_review_id()
-            .ok_or(Error::<T>::ApplicationMustBeUnderReviewToPoll)?;
-        // call helper method to check the status of the vote
-        let passed = Self::check_vote_status(under_review)?;
-        // if the vote has passed, start the next vote to get consent on terms from team members
-        if passed {
-            // TODO: dispatch this vote with unanimous requirements from `vote-petition`
-            // store the VoteID somewhere, this is data that should be tracked long-term
-            // RequestUnanimousConsentOnTermsOfAgreement
-            todo!()
-        } else {
-            // nothing changed, return relevant application state
-            Ok(application_under_review.state())
+        match application_under_review.state() {
+            ApplicationState::UnderReviewByAcceptanceCommittee(wrapped_vote_id) => {
+                // check the vote status
+                let status = Self::check_vote_status(wrapped_vote_id)?;
+                if status {
+                    // passed vote, push state machine along by dispatching triggering team consent
+                    let (team_flat_share_id, team_consent_vote_id) =
+                        Self::request_consent_on_terms_of_agreement(
+                            application_id,
+                            bounty_info.foundation(), // org that supervises the relevant bounty
+                            application_under_review.terms_of_agreement(),
+                        )?;
+                    let new_application = application_under_review
+                        .start_team_consent_petition(team_flat_share_id, team_consent_vote_id);
+                    // insert into map because application.state() changed => application changed
+                    let new_state = new_application.state();
+                    <BountyApplications<T>>::insert(bounty_id, application_id, new_application);
+                    Ok(new_state)
+                } else {
+                    Ok(application_under_review.state())
+                }
+            }
+            // TODO: clean up the outer_flat_share_id dispatched for team consent if NOT formally approved
+            ApplicationState::ApprovedByFoundationAwaitingTeamConsent(
+                wrapped_share_id,
+                wrapped_vote_id,
+            ) => {
+                // check the vote status
+                let status = Self::check_vote_status(wrapped_vote_id)?;
+                if status {
+                    let newly_registered_team_id = Self::approve_grant_to_register_team(
+                        application_id,
+                        bounty_info.foundation(),
+                        wrapped_share_id.into(),
+                        application_under_review.terms_of_agreement(),
+                    )?;
+                    let new_application =
+                        application_under_review.approve_grant(newly_registered_team_id);
+                    let new_state = new_application.state();
+                    <BountyApplications<T>>::insert(bounty_id, application_id, new_application);
+                    Ok(new_state)
+                } else {
+                    Ok(application_under_review.state())
+                }
+            }
+            //
+            _ => Ok(application_under_review.state()),
         }
     }
 }

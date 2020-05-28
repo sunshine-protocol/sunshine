@@ -64,12 +64,12 @@ pub trait Trait: system::Trait {
     type Currency: Currency<Self::AccountId>;
 
     type Organization: OrgChecks<u32, Self::AccountId>
-        + ShareGroupChecks<u32, Self::AccountId>
-        + GetInnerOuterShareGroups<u32, Self::AccountId>
-        + SupervisorPermissions<u32, Self::AccountId>
+        + ShareGroupChecks<u32, ShareID, Self::AccountId>
+        + GetInnerOuterShareGroups<u32, ShareID, Self::AccountId>
+        + SupervisorPermissions<u32, ShareID, Self::AccountId>
         + WeightedShareWrapper<u32, u32, Self::AccountId>
         + WeightedShareIssuanceWrapper<u32, u32, Self::AccountId, Permill>
-        + RegisterShareGroup<u32, u32, Self::AccountId, SharesOf<Self>>
+        + RegisterShareGroup<u32, ShareID, Self::AccountId, SharesOf<Self>>
         + OrganizationDNS<u32, Self::AccountId, IpfsReference>;
 
     type MinimumInitialDeposit: Get<BalanceOf<Self>>;
@@ -305,12 +305,12 @@ impl<T: Trait> Module<T> {
         id.into_account()
     }
     fn is_sudo_account(who: &T::AccountId) -> bool {
-        <<T as Trait>::Organization as SupervisorPermissions<u32, T::AccountId>>::is_sudo_account(
+        <<T as Trait>::Organization as SupervisorPermissions<u32, ShareID, T::AccountId>>::is_sudo_account(
             who,
         )
     }
     fn is_organization_supervisor(organization: u32, who: &T::AccountId) -> bool {
-        <<T as Trait>::Organization as SupervisorPermissions<u32, T::AccountId>>::is_organization_supervisor(organization, who)
+        <<T as Trait>::Organization as SupervisorPermissions<u32, ShareID, T::AccountId>>::is_organization_supervisor(organization, who)
     }
     // fn is_share_supervisor(organization: u32, share_id: ShareID, who: &T::AccountId) -> bool {
     //     <<T as Trait>::Organization as SupervisorPermissions<u32, T::AccountId>>::is_share_supervisor(organization, share_id.into(), who)
@@ -330,7 +330,7 @@ impl<T: Trait> Module<T> {
             },
             // HAPPY PATH, pls use this for bank controllers for structured liquidity from account.free() as well
             WithdrawalPermissions::AnyMemberOfOrgShareGroup(org_id, wrapped_share_id) => {
-                <<T as Trait>::Organization as ShareGroupChecks<u32, T::AccountId>>::check_share_group_existence(org_id, wrapped_share_id.into())
+                <<T as Trait>::Organization as ShareGroupChecks<u32, ShareID, T::AccountId>>::check_share_group_existence(org_id, wrapped_share_id.into())
             },
         }
         // a more granular check might require inner share membership for example in the org
@@ -345,7 +345,7 @@ impl<T: Trait> Module<T> {
                 <<T as Trait>::Organization as OrgChecks<u32, T::AccountId>>::check_membership_in_org(org_id, who)
             },
             WithdrawalPermissions::AnyMemberOfOrgShareGroup(org_id, wrapped_share_id) => {
-                <<T as Trait>::Organization as ShareGroupChecks<u32, T::AccountId>>::check_membership_in_share_group(org_id, wrapped_share_id.into(), who)
+                <<T as Trait>::Organization as ShareGroupChecks<u32, ShareID, T::AccountId>>::check_membership_in_share_group(org_id, wrapped_share_id.into(), who)
             },
         }
     }
@@ -469,6 +469,7 @@ impl<T: Trait> OwnershipProportionCalculations<T::AccountId, BalanceOf<T>, Permi
                     ShareID::Flat(share_id) => {
                         let share_group_size = <<T as Trait>::Organization as ShareGroupChecks<
                             u32,
+                            ShareID,
                             T::AccountId,
                         >>::get_share_group_size(
                             org_id, ShareID::Flat(share_id).into()

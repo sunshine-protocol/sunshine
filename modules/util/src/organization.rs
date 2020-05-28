@@ -11,6 +11,16 @@ pub struct TermsOfAgreement<AccountId> {
     share_metadata: Vec<(AccountId, u32)>,
 }
 
+impl<AccountId: Clone> TermsOfAgreement<AccountId> {
+    pub fn flat(&self) -> Vec<AccountId> {
+        self.share_metadata
+            .clone()
+            .into_iter()
+            .map(|(account, _)| account)
+            .collect::<Vec<AccountId>>()
+    }
+}
+
 #[derive(PartialEq, Eq, Default, Clone, Encode, Decode, RuntimeDebug)]
 /// Defined paths for how the terms of agreement can change
 pub struct FullTermsOfAgreement<AccountId, OrgId, ShareId, BlockNumber> {
@@ -140,6 +150,14 @@ pub enum ShareID {
 impl Default for ShareID {
     fn default() -> Self {
         ShareID::Flat(0u32)
+    }
+}
+impl Into<u32> for ShareID {
+    fn into(self) -> u32 {
+        match self {
+            ShareID::Flat(val) => val,
+            ShareID::WeightedAtomic(val) => val,
+        }
     }
 }
 

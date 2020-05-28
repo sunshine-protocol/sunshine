@@ -133,7 +133,7 @@ fn create_petition_happy_path() {
         assert_eq!(VotePetition::petition_id_nonce(), 0);
         // auth only allows sudo or organization supervisor
         assert_err!(
-            VotePetition::create_petition(ten, 1, 1, new_topic.clone(), 4, None, None,),
+            VotePetition::create_petition(ten, 1, 1, Some(new_topic.clone()), 4, None, None,),
             Error::<Test>::NotAuthorizedToCreatePetition
         );
         assert_eq!(VotePetition::petition_id_nonce(), 0);
@@ -141,7 +141,7 @@ fn create_petition_happy_path() {
             one,
             1,
             1,
-            new_topic.clone(),
+            Some(new_topic.clone()),
             4,
             None,
             None,
@@ -151,7 +151,8 @@ fn create_petition_happy_path() {
         //     TestEvent::vote_petition(RawEvent::NewPetitionStarted(1, 1, 1, 1, true));
         // assert!(System::events().iter().any(|a| a.event == petition_started));
 
-        let new_petition_state = PetitionState::new(new_topic, (1, 1), 4, None, 12, None).unwrap();
+        let new_petition_state =
+            PetitionState::new(Some(new_topic), (1, 1), 4, None, 12, None).unwrap();
         assert_eq!(
             new_petition_state,
             VotePetition::petition_states(1).unwrap()

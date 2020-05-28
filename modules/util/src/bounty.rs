@@ -1,4 +1,8 @@
-use crate::{bank::OnChainTreasuryID, organization::TermsOfAgreement, traits::StartReview};
+use crate::{
+    bank::OnChainTreasuryID,
+    organization::{ShareID, TermsOfAgreement},
+    traits::{ApproveGrant, StartApplicationReviewPetition, StartTeamConsentPetition},
+};
 use codec::{Decode, Encode};
 use frame_support::Parameter;
 use sp_runtime::RuntimeDebug;
@@ -62,6 +66,10 @@ impl<Hash: Parameter, Currency: Parameter> BountyInformation<Hash, Currency> {
             supervision_committee,
         }
     }
+    // get OrgId for sponsor org basically
+    pub fn foundation(&self) -> u32 {
+        self.foundation_id
+    }
     pub fn claimed_funding_available(&self) -> Currency {
         self.claimed_funding_available.clone()
     }
@@ -114,14 +122,23 @@ impl<Hash, Currency, Status> MilestoneSubmission<Hash, Currency, Status> {
 }
 
 #[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug)]
+/// Identifier for each registered team
+/// -> RULE: same org as bounty_info.foundation()
+pub struct TeamID {
+    org: u32,
+    flat_share_id: u32,
+    weighted_share_id: u32,
+}
+
+#[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug)]
 pub enum ApplicationState {
     SubmittedAwaitingResponse,
     // wraps a VoteId for the acceptance committee
     UnderReviewByAcceptanceCommittee(VoteID),
-    // however many individuals are left that need to consent
-    ApprovedByFoundationAwaitingTeamConsent(VoteID),
-    // current milestone identifier
-    ApprovedAndLive(u32),
+    // includes the flat_share_id, and the
+    ApprovedByFoundationAwaitingTeamConsent(ShareID, VoteID),
+    // wraps outer_weighted_share_id associated with the team
+    ApprovedAndLive(TeamID),
     // closed for some reason
     Closed,
 }
@@ -162,10 +179,10 @@ impl<AccountId: Clone, Currency: Clone, Hash: Clone> GrantApplication<AccountId,
     }
 }
 
-impl<AccountId: Clone, Currency: Clone, Hash: Clone> StartReview<VoteID>
+impl<AccountId: Clone, Currency: Clone, Hash: Clone> StartApplicationReviewPetition<VoteID>
     for GrantApplication<AccountId, Currency, Hash>
 {
-    fn start_review(&self, vote_id: VoteID) -> Self {
+    fn start_application_review_petition(&self, vote_id: VoteID) -> Self {
         GrantApplication {
             description: self.description.clone(),
             total_amount: self.total_amount.clone(),
@@ -173,9 +190,56 @@ impl<AccountId: Clone, Currency: Clone, Hash: Clone> StartReview<VoteID>
             state: ApplicationState::UnderReviewByAcceptanceCommittee(vote_id),
         }
     }
-    fn get_review_id(&self) -> Option<VoteID> {
+    fn get_application_review_id(&self) -> Option<VoteID> {
         match self.state() {
             ApplicationState::UnderReviewByAcceptanceCommittee(vote_id) => Some(vote_id),
+            _ => None,
+        }
+    }
+}
+
+impl<AccountId: Clone, Currency: Clone, Hash: Clone> StartTeamConsentPetition<ShareID, VoteID>
+    for GrantApplication<AccountId, Currency, Hash>
+{
+    fn start_team_consent_petition(&self, share_id: ShareID, vote_id: VoteID) -> Self {
+        // could type check the flat_share_id and vote_petition_id
+        GrantApplication {
+            description: self.description.clone(),
+            total_amount: self.total_amount.clone(),
+            terms_of_agreement: self.terms_of_agreement.clone(),
+            state: ApplicationState::ApprovedByFoundationAwaitingTeamConsent(share_id, vote_id),
+        }
+    }
+    fn get_team_flat_id(&self) -> Option<ShareID> {
+        match self.state() {
+            ApplicationState::ApprovedByFoundationAwaitingTeamConsent(share_id, _) => {
+                Some(share_id)
+            }
+            _ => None,
+        }
+    }
+    fn get_team_consent_id(&self) -> Option<VoteID> {
+        match self.state() {
+            ApplicationState::ApprovedByFoundationAwaitingTeamConsent(_, vote_id) => Some(vote_id),
+            _ => None,
+        }
+    }
+}
+
+impl<AccountId: Clone, Currency: Clone, Hash: Clone> ApproveGrant<TeamID>
+    for GrantApplication<AccountId, Currency, Hash>
+{
+    fn approve_grant(&self, team_id: TeamID) -> Self {
+        GrantApplication {
+            description: self.description.clone(),
+            total_amount: self.total_amount.clone(),
+            terms_of_agreement: self.terms_of_agreement.clone(),
+            state: ApplicationState::ApprovedAndLive(team_id),
+        }
+    }
+    fn get_full_team_id(&self) -> Option<TeamID> {
+        match self.state() {
+            ApplicationState::ApprovedAndLive(team_id) => Some(team_id),
             _ => None,
         }
     }

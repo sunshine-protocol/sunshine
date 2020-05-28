@@ -130,10 +130,18 @@ pub trait OpenPetition<Hash, BlockNumber>: GetVoteOutcome {
     fn open_petition(
         organization: u32,
         share_id: u32,
-        topic: Hash,
+        topic: Option<Hash>,
         required_support: u32,
         require_against: Option<u32>,
-        ends: Option<BlockNumber>,
+        duration: Option<BlockNumber>,
+    ) -> Result<Self::VoteId, DispatchError>;
+    // why do we need this? because we only have context for total_electorate in this method,
+    // not outside of it so we can't just pass total_electorate into `open_petition`
+    fn open_unanimous_approval_petition(
+        organization: u32,
+        share_id: u32,
+        topic: Option<Hash>,
+        duration: Option<BlockNumber>,
     ) -> Result<Self::VoteId, DispatchError>;
 }
 
@@ -502,33 +510,26 @@ pub trait OrgChecks<OrgId, AccountId> {
 }
 
 // helpers, they are just abstractions over inherited functions
-pub trait ShareGroupChecks<OrgId, AccountId> {
-    type MultiShareIdentifier: From<crate::organization::ShareID>; // organization::ShareID
-    fn check_share_group_existence(org: OrgId, share_group: Self::MultiShareIdentifier) -> bool;
+pub trait ShareGroupChecks<OrgId, ShareId, AccountId> {
+    fn check_share_group_existence(org: OrgId, share_group: ShareId) -> bool;
     fn check_membership_in_share_group(
         org: OrgId,
-        share_group: Self::MultiShareIdentifier,
+        share_group: ShareId,
         account: &AccountId,
     ) -> bool;
-    fn get_share_group_size(org: OrgId, share_group: Self::MultiShareIdentifier) -> u32;
+    fn get_share_group_size(org: OrgId, share_group: ShareId) -> u32;
 }
 
-pub trait SupervisorPermissions<OrgId, AccountId>: ShareGroupChecks<OrgId, AccountId> {
+pub trait SupervisorPermissions<OrgId, ShareId, AccountId>:
+    ShareGroupChecks<OrgId, ShareId, AccountId>
+{
     fn is_sudo_account(who: &AccountId) -> bool;
     fn is_organization_supervisor(organization: OrgId, who: &AccountId) -> bool;
-    fn is_share_supervisor(
-        organization: OrgId,
-        share_id: Self::MultiShareIdentifier,
-        who: &AccountId,
-    ) -> bool;
+    fn is_share_supervisor(organization: OrgId, share_id: ShareId, who: &AccountId) -> bool;
     // infallible, not protected in any way
     fn put_sudo_account(who: AccountId);
     fn put_organization_supervisor(organization: OrgId, who: AccountId);
-    fn put_share_group_supervisor(
-        organization: OrgId,
-        share_id: Self::MultiShareIdentifier,
-        who: AccountId,
-    );
+    fn put_share_group_supervisor(organization: OrgId, share_id: ShareId, who: AccountId);
     // CAS by default to enforce existing permissions and isolate logic
     fn set_sudo_account(setter: &AccountId, new: AccountId) -> DispatchResult;
     fn set_organization_supervisor(
@@ -538,13 +539,12 @@ pub trait SupervisorPermissions<OrgId, AccountId>: ShareGroupChecks<OrgId, Accou
     ) -> DispatchResult;
     fn set_share_supervisor(
         organization: OrgId,
-        share_id: Self::MultiShareIdentifier,
+        share_id: ShareId,
         setter: &AccountId,
         new: AccountId,
     ) -> DispatchResult;
 }
 
-// TODO: make `ShareGroupChecks` inherit this && WeightedShareWrapper
 pub trait FlatShareWrapper<OrgId, FlatShareId, AccountId> {
     fn get_flat_share_group(
         organization: OrgId,
@@ -594,35 +594,32 @@ pub trait WeightedShareIssuanceWrapper<OrgId, WeightedShareId, AccountId, FineAr
     ) -> Result<Self::Shares, DispatchError>;
 }
 
-// TODO: FlatShareGroup utilities
-pub trait RegisterShareGroup<OrgId, WeightedShareId, AccountId, Shares>:
-    ShareGroupChecks<OrgId, AccountId> + WeightedShareWrapper<OrgId, WeightedShareId, AccountId>
+pub trait RegisterShareGroup<OrgId, ShareId, AccountId, Shares>:
+    ShareGroupChecks<OrgId, ShareId, AccountId>
 {
     fn register_inner_flat_share_group(
-        organization: u32,
+        organization: OrgId,
         group: Vec<AccountId>,
-    ) -> Result<Self::MultiShareIdentifier, DispatchError>;
+    ) -> Result<ShareId, DispatchError>;
     fn register_inner_weighted_share_group(
-        organization: u32,
+        organization: OrgId,
         group: Vec<(AccountId, Shares)>,
-    ) -> Result<Self::MultiShareIdentifier, DispatchError>;
+    ) -> Result<ShareId, DispatchError>;
     fn register_outer_flat_share_group(
         organization: u32,
         group: Vec<AccountId>,
-    ) -> Result<Self::MultiShareIdentifier, DispatchError>;
+    ) -> Result<ShareId, DispatchError>;
     fn register_outer_weighted_share_group(
         organization: u32,
         group: Vec<(AccountId, Shares)>,
-    ) -> Result<Self::MultiShareIdentifier, DispatchError>;
+    ) -> Result<ShareId, DispatchError>;
 }
 
-pub trait GetInnerOuterShareGroups<OrgId, AccountId>: ShareGroupChecks<OrgId, AccountId> {
-    fn get_inner_share_group_identifiers(
-        organization: OrgId,
-    ) -> Option<Vec<Self::MultiShareIdentifier>>;
-    fn get_outer_share_group_identifiers(
-        organization: OrgId,
-    ) -> Option<Vec<Self::MultiShareIdentifier>>;
+pub trait GetInnerOuterShareGroups<OrgId, ShareId, AccountId>:
+    ShareGroupChecks<OrgId, ShareId, AccountId>
+{
+    fn get_inner_share_group_identifiers(organization: OrgId) -> Option<Vec<ShareId>>;
+    fn get_outer_share_group_identifiers(organization: OrgId) -> Option<Vec<ShareId>>;
 }
 
 pub trait OrganizationDNS<OrgId, AccountId, Hash>: OrgChecks<OrgId, AccountId> {
@@ -939,7 +936,9 @@ pub trait FoundationParts {
     type OrgId;
     type BountyId;
     type BankId;
+    type MultiShareId;
     type MultiVoteId;
+    type TeamId;
 }
 
 // TODO: this could be removed if we didn't cache the ownership of on-chain
@@ -986,23 +985,45 @@ pub trait CreateBounty<Currency, AccountId, Hash>: RegisterFoundation<Currency, 
     ) -> Result<Self::BountyId, DispatchError>;
 }
 
-pub trait RequestConsentOnTermsOfAgreement<AccountId>: FoundationParts {
+pub trait UseTermsOfAgreement<AccountId>: FoundationParts {
     type TermsOfAgreement;
     fn request_consent_on_terms_of_agreement(
-        bounty_id: Self::BountyId,
+        application_id: u32,
+        bounty_org: u32,
         terms: Self::TermsOfAgreement,
-    ) -> Option<Self::MultiVoteId>;
+    ) -> Result<(Self::MultiShareId, Self::MultiVoteId), DispatchError>;
+    fn approve_grant_to_register_team(
+        application_id: u32,
+        bounty_org: u32,
+        flat_share_id: u32,
+        terms: Self::TermsOfAgreement,
+    ) -> Result<Self::TeamId, DispatchError>;
 }
 
-pub trait StartReview<VoteID> {
-    fn start_review(&self, vote_id: VoteID) -> Self;
-    fn get_review_id(&self) -> Option<VoteID>;
+pub trait StartApplicationReviewPetition<VoteID> {
+    fn start_application_review_petition(&self, vote_id: VoteID) -> Self;
+    fn get_application_review_id(&self) -> Option<VoteID>;
 }
+
+pub trait StartTeamConsentPetition<ShareID, VoteID> {
+    fn start_team_consent_petition(&self, share_id: ShareID, vote_id: VoteID) -> Self;
+    fn get_team_consent_id(&self) -> Option<VoteID>;
+    fn get_team_flat_id(&self) -> Option<ShareID>;
+}
+
+// TODO: clean up the outer_flat_share_id dispatched for team consent if NOT formally approved
+pub trait ApproveGrant<TeamID> {
+    fn approve_grant(&self, team_id: TeamID) -> Self;
+    fn get_full_team_id(&self) -> Option<TeamID>;
+}
+// TODO: RevokeApprovedGrant<VoteID> => vote to take away the team's grant and clean storage
 
 pub trait SubmitGrantApplication<Currency, AccountId, Hash>:
-    CreateBounty<Currency, AccountId, Hash> + RequestConsentOnTermsOfAgreement<AccountId>
+    CreateBounty<Currency, AccountId, Hash> + UseTermsOfAgreement<AccountId>
 {
-    type GrantApp: StartReview<Self::MultiVoteId>;
+    type GrantApp: StartApplicationReviewPetition<Self::MultiVoteId>
+        + StartTeamConsentPetition<Self::MultiShareId, Self::MultiVoteId>
+        + ApproveGrant<Self::TeamId>;
     fn form_grant_application(
         bounty_id: u32,
         description: Hash,
@@ -1018,19 +1039,18 @@ pub trait SubmitGrantApplication<Currency, AccountId, Hash>:
 }
 
 pub trait SuperviseGrantApplication<Currency, AccountId, Hash>:
-    CreateBounty<Currency, AccountId, Hash> + RequestConsentOnTermsOfAgreement<AccountId>
+    CreateBounty<Currency, AccountId, Hash> + UseTermsOfAgreement<AccountId>
 {
     type AppState;
+    // TODO: where do each of these relevant VoteIDs go
+    // where does the second generated flat share group ShareID go?
+    // - generate it as an outer subgroup but functionality may be limited to
+    // unweighted approval of this variety (like team agreement consent)
     fn trigger_application_review(
         trigger: AccountId, // must be authorized to trigger in context of objects
         bounty_id: u32,
         application_id: u32,
     ) -> Result<Self::AppState, DispatchError>;
-    fn trigger_team_consent(
-        trigger: AccountId, // must be authorized to trigger in context of objects
-        bounty_id: u32,
-        application_id: u32,
-    ) -> Result<(ShareID, VoteID), DispatchError>;
     fn poll_application(
         bounty_id: u32,
         application_id: u32,
