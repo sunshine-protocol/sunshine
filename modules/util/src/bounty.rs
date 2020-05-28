@@ -22,7 +22,7 @@ impl Default for BountyMapID {
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 /// The information most often read after a specific bounty is GOT
-pub struct BountyInformation<Hash, Currency> {
+pub struct BountyInformation<AccountId, Hash, WeightedThreshold, Currency> {
     // Storage cid
     // - title, description, team requirements (all subjective metadata uses one reference)
     description: Hash,
@@ -30,7 +30,8 @@ pub struct BountyInformation<Hash, Currency> {
     foundation_id: u32,
     // On chain bank account associated with this bounty
     bank_account: OnChainTreasuryID,
-    // Spend reservation identifier
+    // Spend reservation identifier for funds set aside for bounty
+    // TODO: update when funds are spent and a new spend reservation is required (gc)
     spend_reservation_id: u32,
     // Collateral amount in the bank account (TODO: refresh method for syncing balance)
     funding_reserved: Currency,
@@ -38,13 +39,15 @@ pub struct BountyInformation<Hash, Currency> {
     // - used to derive the collateral ratio for this bounty, which must be above the module lower bound
     claimed_funding_available: Currency,
     // Committee metadata for approving an application
-    acceptance_committee: ReviewBoard,
+    acceptance_committee: ReviewBoard<AccountId, Hash, WeightedThreshold>,
     // Committee metadata for approving milestones
     // -- if None, same as acceptance_committee by default
-    supervision_committee: Option<ReviewBoard>,
+    supervision_committee: Option<ReviewBoard<AccountId, Hash, WeightedThreshold>>,
 }
 
-impl<Hash: Parameter, Currency: Parameter> BountyInformation<Hash, Currency> {
+impl<AccountId: Clone, Hash: Parameter, WeightedThreshold: Clone, Currency: Parameter>
+    BountyInformation<AccountId, Hash, WeightedThreshold, Currency>
+{
     pub fn new(
         description: Hash,
         foundation_id: u32,
@@ -52,9 +55,9 @@ impl<Hash: Parameter, Currency: Parameter> BountyInformation<Hash, Currency> {
         spend_reservation_id: u32,
         funding_reserved: Currency,
         claimed_funding_available: Currency,
-        acceptance_committee: ReviewBoard,
-        supervision_committee: Option<ReviewBoard>,
-    ) -> BountyInformation<Hash, Currency> {
+        acceptance_committee: ReviewBoard<AccountId, Hash, WeightedThreshold>,
+        supervision_committee: Option<ReviewBoard<AccountId, Hash, WeightedThreshold>>,
+    ) -> BountyInformation<AccountId, Hash, WeightedThreshold, Currency> {
         BountyInformation {
             description,
             foundation_id,
@@ -73,22 +76,54 @@ impl<Hash: Parameter, Currency: Parameter> BountyInformation<Hash, Currency> {
     pub fn claimed_funding_available(&self) -> Currency {
         self.claimed_funding_available.clone()
     }
-    pub fn acceptance_committee(&self) -> ReviewBoard {
-        self.acceptance_committee
+    pub fn acceptance_committee(&self) -> ReviewBoard<AccountId, Hash, WeightedThreshold> {
+        self.acceptance_committee.clone()
     }
 }
 
-// - TODO: build a variant in which one person is sudo but the role is revocable and can be reassigned
-// -> REUSE THIS LOGIC BETWEEN TEAMID and REVIEWBOARD
+#[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug)]
+/// Identifier for each registered team
+/// -> RULE: same org as bounty_info.foundation()
+pub struct TeamID<AccountId> {
+    org: u32,
+    // this should be optional and in the future, I want to orient it towards revocable representative democracy
+    team_sudo: Option<AccountId>,
+    flat_share_id: u32,
+    weighted_share_id: u32,
+}
+
+impl<AccountId: Clone> TeamID<AccountId> {
+    pub fn new(
+        org: u32,
+        team_sudo: Option<AccountId>,
+        flat_share_id: u32,
+        weighted_share_id: u32,
+    ) -> TeamID<AccountId> {
+        TeamID {
+            org,
+            team_sudo,
+            flat_share_id,
+            weighted_share_id,
+        }
+    }
+}
+
 #[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug)]
 /// Metadata that represents pre-dispatch, grant milestone reviews
-pub enum ReviewBoard {
-    /// Uses petition but only requires a single approver from the group
-    /// - anyone can veto as well
-    SimpleFlatReview(u32, u32),
-    /// Weighted threshold, Count(u32)
-    WeightedThresholdReview(u32, u32),
-} //PetitionReview(u32, u32, u32, u32, u32)
+pub enum ReviewBoard<AccountId, Hash, WeightedThreshold> {
+    /// Petition pre-call-metadata
+    /// optional sudo, org_id, flat_share_id, signature_approval_threshold, signature_rejection_threshold, topic
+    FlatPetitionReview(Option<AccountId>, u32, u32, u32, Option<u32>, Option<Hash>),
+    /// Vote-YesNo pre-call-metadata
+    /// optional sudo, org_id, weighted_share_id, threshold expressed generically
+    WeightedThresholdReview(
+        Option<AccountId>,
+        u32,
+        u32,
+        crate::voteyesno::SupportedVoteTypes,
+        WeightedThreshold,
+    ),
+}
 
 #[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug)]
 /// Strongly typed vote identifier
@@ -118,33 +153,6 @@ impl<Hash, Currency, Status> MilestoneSubmission<Hash, Currency, Status> {
             submission,
             amount,
             review: None,
-        }
-    }
-}
-
-#[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug)]
-/// Identifier for each registered team
-/// -> RULE: same org as bounty_info.foundation()
-pub struct TeamID<AccountId> {
-    org: u32,
-    // this should be optional and in the future, I want to orient it towards revocable representative democracy
-    team_sudo: Option<AccountId>,
-    flat_share_id: u32,
-    weighted_share_id: u32,
-}
-
-impl<AccountId: Clone> TeamID<AccountId> {
-    pub fn new(
-        org: u32,
-        team_sudo: Option<AccountId>,
-        flat_share_id: u32,
-        weighted_share_id: u32,
-    ) -> TeamID<AccountId> {
-        TeamID {
-            org,
-            team_sudo,
-            flat_share_id,
-            weighted_share_id,
         }
     }
 }

@@ -302,7 +302,7 @@ pub trait OpenShareGroupVote<AccountId, BlockNumber, FineArithmetic: PerThing>:
         + ConsistentThresholdStructure
         + From<ThresholdConfig<Self::Signal, FineArithmetic>>
         + From<ThresholdConfigBuilder<FineArithmetic>>; // NOTE: this forces FineArithmetic generic parameter for traits and all inherited
-    type VoteType: Default + From<SupportedVoteTypes<Self::Signal>>;
+    type VoteType: Default + From<SupportedVoteTypes>;
 
     fn open_share_group_vote(
         organization: u32,
@@ -668,30 +668,28 @@ pub trait OnChainBank {
     type OrgId: From<u32>;
     type TreasuryId: Clone + From<OnChainTreasuryID>;
 }
-use crate::bounty::ReviewBoard;
-pub trait RegisterBankAccount<AccountId, Currency>: OnChainBank {
-    type GovernanceConfig: From<ReviewBoard>;
+pub trait RegisterBankAccount<AccountId, GovernanceConfig, Currency>: OnChainBank {
     // requires a deposit of some size above the minimum and returns the OnChainTreasuryID
     fn register_on_chain_bank_account(
         registered_org: Self::OrgId,
         from: AccountId,
         amount: Currency,
-        owner_s: Self::GovernanceConfig,
+        owner_s: GovernanceConfig,
     ) -> Result<Self::TreasuryId, DispatchError>;
     fn check_bank_owner(bank_id: Self::TreasuryId, org: Self::OrgId) -> bool;
 } // people should be eventually able to solicit loans from others to SEED a bank account but they cede some or all of the control...
 
-pub trait OwnershipProportionCalculations<AccountId, Currency, FineArithmetic>:
-    RegisterBankAccount<AccountId, Currency>
+pub trait OwnershipProportionCalculations<AccountId, GovernanceConfig, Currency, FineArithmetic>:
+    RegisterBankAccount<AccountId, GovernanceConfig, Currency>
 {
     fn calculate_proportion_ownership_for_account(
         account: AccountId,
-        group: Self::GovernanceConfig,
+        group: GovernanceConfig,
     ) -> Option<FineArithmetic>;
     fn calculate_proportional_amount_for_account(
         amount: Currency,
         account: AccountId,
-        group: Self::GovernanceConfig,
+        group: GovernanceConfig,
     ) -> Option<Currency>;
 }
 
@@ -738,8 +736,8 @@ pub trait CheckBankBalances<Currency>: OnChainBank + BankDepositsAndSpends<Curre
     fn calculate_total_bank_balance_from_balances(bank_id: Self::TreasuryId) -> Option<Currency>;
 }
 
-pub trait DepositIntoBank<AccountId, Hash, Currency>:
-    RegisterBankAccount<AccountId, Currency> + BankDepositsAndSpends<Currency>
+pub trait DepositIntoBank<AccountId, GovernanceConfig, Hash, Currency>:
+    RegisterBankAccount<AccountId, GovernanceConfig, Currency> + BankDepositsAndSpends<Currency>
 {
     // get the bank corresponding to bank_id call infallible deposit
     // - only fails if `from` doesn't have enough Currency
@@ -762,8 +760,8 @@ pub trait DepositIntoBank<AccountId, Hash, Currency>:
 // get the storage item in this method (because we don't pass it in and I
 // struggle to see a clean design in which we pass it in but don't
 // encourage/enable unsafe puts)
-pub trait BankReservations<AccountId, Currency, Hash>:
-    RegisterBankAccount<AccountId, Currency>
+pub trait BankReservations<AccountId, GovernanceConfig, Currency, Hash>:
+    RegisterBankAccount<AccountId, GovernanceConfig, Currency>
 {
     fn reserve_for_spend(
         caller: AccountId, // must be in owner_s: GovernanceConfig for BankState, that's the auth
@@ -771,7 +769,7 @@ pub trait BankReservations<AccountId, Currency, Hash>:
         reason: Hash,
         amount: Currency,
         // acceptance committee for approving set aside spends below the amount
-        controller: Self::GovernanceConfig,
+        controller: GovernanceConfig,
     ) -> Result<u32, DispatchError>;
     // only reserve.controller() can unreserve funds after commitment (with method further down)
     fn commit_reserved_spend_for_transfer(
@@ -780,7 +778,7 @@ pub trait BankReservations<AccountId, Currency, Hash>:
         reservation_id: u32,
         reason: Hash,
         amount: Currency,
-        expected_future_owner: Self::GovernanceConfig,
+        expected_future_owner: GovernanceConfig,
     ) -> DispatchResult;
     // bank controller can unreserve if not committed
     fn unreserve_uncommitted_to_make_free(
@@ -805,12 +803,12 @@ pub trait BankReservations<AccountId, Currency, Hash>:
         reservation_id: u32,
         amount: Currency,
         // move control of funds to new outer group which can reserve or withdraw directly
-        new_controller: Self::GovernanceConfig,
+        new_controller: GovernanceConfig,
     ) -> DispatchResult;
 }
 
-pub trait BankSpends<AccountId, Currency>:
-    OnChainBank + RegisterBankAccount<AccountId, Currency>
+pub trait BankSpends<AccountId, GovernanceConfig, Currency>:
+    OnChainBank + RegisterBankAccount<AccountId, GovernanceConfig, Currency>
 {
     fn spend_from_free(
         from_bank_id: Self::TreasuryId,
@@ -888,7 +886,9 @@ pub trait MoveFundsOutCommittedOnly<Currency>: Sized {
     fn move_funds_out_committed_only(&self, amount: Currency) -> Option<Self>;
 }
 
-pub trait BankStorageInfo<AccountId, Currency>: RegisterBankAccount<AccountId, Currency> {
+pub trait BankStorageInfo<AccountId, GovernanceConfig, Currency>:
+    RegisterBankAccount<AccountId, GovernanceConfig, Currency>
+{
     type DepositInfo;
     type ReservationInfo: MoveFundsOutUnCommittedOnly<Currency>
         + MoveFundsOutCommittedOnly<Currency>;
@@ -909,11 +909,11 @@ pub trait BankStorageInfo<AccountId, Currency>: RegisterBankAccount<AccountId, C
     ) -> Option<Currency>;
     fn get_reservations_for_governance_config(
         bank_id: Self::TreasuryId,
-        invoker: Self::GovernanceConfig,
+        invoker: GovernanceConfig,
     ) -> Option<Vec<Self::ReservationInfo>>;
     fn total_capital_reserved_for_governance_config(
         bank_id: Self::TreasuryId,
-        invoker: Self::GovernanceConfig,
+        invoker: GovernanceConfig,
     ) -> Currency;
     // transfers
     fn get_amount_left_in_approved_transfer(
@@ -922,11 +922,11 @@ pub trait BankStorageInfo<AccountId, Currency>: RegisterBankAccount<AccountId, C
     ) -> Option<Currency>;
     fn get_transfers_for_governance_config(
         bank_id: Self::TreasuryId,
-        invoker: Self::GovernanceConfig,
+        invoker: GovernanceConfig,
     ) -> Option<Vec<Self::TransferInfo>>;
     fn total_capital_transferred_to_governance_config(
         bank_id: Self::TreasuryId,
-        invoker: Self::GovernanceConfig,
+        invoker: GovernanceConfig,
     ) -> Currency;
 }
 

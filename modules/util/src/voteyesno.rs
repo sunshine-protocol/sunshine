@@ -9,17 +9,17 @@ use sp_std::prelude::*;
 
 #[derive(Clone, Copy, PartialEq, Eq, Encode, Decode, sp_runtime::RuntimeDebug)]
 /// The types of vote weightings supported by default in `vote-yesno`
-pub enum SupportedVoteTypes<Signal> {
+pub enum SupportedVoteTypes {
     /// 1 account 1 vote
     OneAccountOneVote,
     /// Defaults to share weights
     ShareWeighted,
-    /// WARNING: this has no restrictions and shouldn't be exposed in any public API
-    Custom(Signal),
+    /// Special signal minting policy?
+    Custom,
 }
 
-impl<Signal> Default for SupportedVoteTypes<Signal> {
-    fn default() -> SupportedVoteTypes<Signal> {
+impl Default for SupportedVoteTypes {
+    fn default() -> SupportedVoteTypes {
         SupportedVoteTypes::ShareWeighted
     }
 }

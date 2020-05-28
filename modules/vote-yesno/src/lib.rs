@@ -372,7 +372,7 @@ impl<T: Trait> ThresholdVote for Module<T> {
 
 impl<T: Trait> OpenShareGroupVote<T::AccountId, T::BlockNumber, Permill> for Module<T> {
     type ThresholdConfig = ThresholdConfig<T::Signal, Permill>;
-    type VoteType = SupportedVoteTypes<T::Signal>;
+    type VoteType = SupportedVoteTypes;
     fn open_share_group_vote(
         organization: OrgId,
         share_id: ShareId,

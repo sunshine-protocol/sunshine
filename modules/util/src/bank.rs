@@ -103,10 +103,13 @@ impl BankMapID {
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
-/// the simplest `GovernanceConfig`
+/// The simplest `GovernanceConfig`
+/// - has no magnitude context and is limited for that reason
+/// - future version will use revocable representative governance
 pub enum WithdrawalPermissions<AccountId> {
+    // only this account can make withdrawal
+    Sudo(AccountId),
     // two accounts can reserve free capital for spending
-    // TODO: add this up to 5 accounts?
     AnyOfTwoAccounts(AccountId, AccountId),
     // any account in org
     AnyAccountInOrg(u32),
@@ -134,19 +137,20 @@ impl<AccountId> WithdrawalPermissions<AccountId> {
     }
 }
 use crate::bounty::ReviewBoard;
-impl<AccountId> From<ReviewBoard> for WithdrawalPermissions<AccountId> {
-    fn from(other: ReviewBoard) -> WithdrawalPermissions<AccountId> {
+impl<AccountId, Hash, WeightThreshold> From<ReviewBoard<AccountId, Hash, WeightThreshold>>
+    for WithdrawalPermissions<AccountId>
+{
+    fn from(
+        other: ReviewBoard<AccountId, Hash, WeightThreshold>,
+    ) -> WithdrawalPermissions<AccountId> {
         match other {
-            ReviewBoard::SimpleFlatReview(org_id, flat_share_id) => {
-                WithdrawalPermissions::AnyMemberOfOrgShareGroup(
-                    org_id,
-                    ShareID::Flat(flat_share_id),
-                )
+            ReviewBoard::FlatPetitionReview(_, org_id, share_id, _, _, _) => {
+                WithdrawalPermissions::AnyMemberOfOrgShareGroup(org_id, ShareID::Flat(share_id))
             }
-            ReviewBoard::WeightedThresholdReview(org_id, weighted_share_id) => {
+            ReviewBoard::WeightedThresholdReview(_, org_id, share_id, _, _) => {
                 WithdrawalPermissions::AnyMemberOfOrgShareGroup(
                     org_id,
-                    ShareID::WeightedAtomic(weighted_share_id),
+                    ShareID::WeightedAtomic(share_id),
                 )
             }
         }

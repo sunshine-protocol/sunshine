@@ -315,8 +315,8 @@ impl<T: Trait> Module<T> {
     // fn is_share_supervisor(organization: u32, share_id: ShareID, who: &T::AccountId) -> bool {
     //     <<T as Trait>::Organization as SupervisorPermissions<u32, T::AccountId>>::is_share_supervisor(organization, share_id.into(), who)
     // }
-    /// This method simply checks membership in group,
-    /// note: `WithdrawalPermissions` lacks context for magnitude requirement
+    /// This helper just checks existence in context of inherited modules
+    /// -> NO checks are done on the AccountIds because no context is provided
     fn governance_config_satisfies_org_controller_registration_requirements(
         org: u32,
         governance_config: WithdrawalPermissions<T::AccountId>,
@@ -335,6 +335,8 @@ impl<T: Trait> Module<T> {
         }
         // a more granular check might require inner share membership for example in the org
     }
+    /// This method simply checks membership in group,
+    /// note: `WithdrawalPermissions` lacks context for magnitude requirement
     fn account_satisfies_withdrawal_permissions(
         who: &T::AccountId,
         governance_config: WithdrawalPermissions<T::AccountId>,
@@ -406,13 +408,14 @@ impl<T: Trait> OnChainBank for Module<T> {
     type TreasuryId = OnChainTreasuryID;
 }
 
-impl<T: Trait> RegisterBankAccount<T::AccountId, BalanceOf<T>> for Module<T> {
-    type GovernanceConfig = WithdrawalPermissions<T::AccountId>;
+impl<T: Trait> RegisterBankAccount<T::AccountId, WithdrawalPermissions<T::AccountId>, BalanceOf<T>>
+    for Module<T>
+{
     fn register_on_chain_bank_account(
         registered_org: Self::OrgId,
         from: T::AccountId,
         amount: BalanceOf<T>, // TODO: ADD MINIMUM AMOUNT TO OPEN BANK
-        owner_s: Self::GovernanceConfig,
+        owner_s: WithdrawalPermissions<T::AccountId>,
     ) -> Result<Self::TreasuryId, DispatchError> {
         // check that the owner_s is in the `registered_org` because those are our tacit requirements
         // => cannot create bank and assign an outside organization or outside share group its controller permissions
@@ -441,12 +444,19 @@ impl<T: Trait> RegisterBankAccount<T::AccountId, BalanceOf<T>> for Module<T> {
     }
 }
 
-impl<T: Trait> OwnershipProportionCalculations<T::AccountId, BalanceOf<T>, Permill> for Module<T> {
+impl<T: Trait>
+    OwnershipProportionCalculations<
+        T::AccountId,
+        WithdrawalPermissions<T::AccountId>,
+        BalanceOf<T>,
+        Permill,
+    > for Module<T>
+{
     // TODO: this is a good example of when to transition to a Result from an Option because
     // when it returns None, we don't really provide great context on why...
     fn calculate_proportion_ownership_for_account(
         account: T::AccountId,
-        group: Self::GovernanceConfig,
+        group: WithdrawalPermissions<T::AccountId>,
     ) -> Option<Permill> {
         match group {
             WithdrawalPermissions::AnyOfTwoAccounts(acc1, acc2) => {
@@ -516,7 +526,7 @@ impl<T: Trait> OwnershipProportionCalculations<T::AccountId, BalanceOf<T>, Permi
     fn calculate_proportional_amount_for_account(
         amount: BalanceOf<T>,
         account: T::AccountId,
-        group: Self::GovernanceConfig,
+        group: WithdrawalPermissions<T::AccountId>,
     ) -> Option<BalanceOf<T>> {
         if let Some(ownership_pct) =
             Self::calculate_proportion_ownership_for_account(account, group)
@@ -571,7 +581,10 @@ impl<T: Trait> CheckBankBalances<BalanceOf<T>> for Module<T> {
     }
 }
 
-impl<T: Trait> DepositIntoBank<T::AccountId, IpfsReference, BalanceOf<T>> for Module<T> {
+impl<T: Trait>
+    DepositIntoBank<T::AccountId, WithdrawalPermissions<T::AccountId>, IpfsReference, BalanceOf<T>>
+    for Module<T>
+{
     fn deposit_into_bank(
         from: T::AccountId,
         to_bank_id: Self::TreasuryId,
@@ -599,14 +612,17 @@ impl<T: Trait> DepositIntoBank<T::AccountId, IpfsReference, BalanceOf<T>> for Mo
     }
 }
 
-impl<T: Trait> BankReservations<T::AccountId, BalanceOf<T>, IpfsReference> for Module<T> {
+impl<T: Trait>
+    BankReservations<T::AccountId, WithdrawalPermissions<T::AccountId>, BalanceOf<T>, IpfsReference>
+    for Module<T>
+{
     fn reserve_for_spend(
         caller: T::AccountId, // must be in owner_s: GovernanceConfig for BankState, that's the auth
         bank_id: Self::TreasuryId,
         reason: IpfsReference,
         amount: BalanceOf<T>,
         // acceptance committee for approving set aside spends below the amount
-        controller: Self::GovernanceConfig, // default WithdrawalRules
+        controller: WithdrawalPermissions<T::AccountId>, // default WithdrawalRules
     ) -> Result<u32, DispatchError> {
         let bank_account = <BankStores<T>>::get(bank_id)
             .ok_or(Error::<T>::BankAccountNotFoundForSpendReservation)?;
@@ -649,7 +665,7 @@ impl<T: Trait> BankReservations<T::AccountId, BalanceOf<T>, IpfsReference> for M
         reservation_id: u32,
         reason: IpfsReference,
         amount: BalanceOf<T>,
-        expected_future_owner: Self::GovernanceConfig,
+        expected_future_owner: WithdrawalPermissions<T::AccountId>,
     ) -> DispatchResult {
         let _ = <BankStores<T>>::get(bank_id)
             .ok_or(Error::<T>::BankAccountNotFoundForSpendReservation)?;
@@ -796,7 +812,7 @@ impl<T: Trait> BankReservations<T::AccountId, BalanceOf<T>, IpfsReference> for M
         reservation_id: u32,
         amount: BalanceOf<T>,
         // move control of funds to new outer group which can reserve or withdraw directly
-        new_controller: Self::GovernanceConfig,
+        new_controller: WithdrawalPermissions<T::AccountId>,
     ) -> DispatchResult {
         // no authentication but the caller is logged in the BankTracker
         let _ = <BankStores<T>>::get(bank_id)
@@ -852,7 +868,9 @@ impl<T: Trait> BankReservations<T::AccountId, BalanceOf<T>, IpfsReference> for M
     }
 }
 
-impl<T: Trait> BankSpends<T::AccountId, BalanceOf<T>> for Module<T> {
+impl<T: Trait> BankSpends<T::AccountId, WithdrawalPermissions<T::AccountId>, BalanceOf<T>>
+    for Module<T>
+{
     /// This method authenticates the spend by checking that the caller
     /// input follows the same shape as the bank's controller...
     /// => any method that calls this one will need to define local
@@ -928,7 +946,9 @@ impl<T: Trait> BankSpends<T::AccountId, BalanceOf<T>> for Module<T> {
     }
 }
 
-impl<T: Trait> BankStorageInfo<T::AccountId, BalanceOf<T>> for Module<T> {
+impl<T: Trait> BankStorageInfo<T::AccountId, WithdrawalPermissions<T::AccountId>, BalanceOf<T>>
+    for Module<T>
+{
     type DepositInfo = DepositInfo<T::AccountId, IpfsReference, BalanceOf<T>>;
     type ReservationInfo =
         ReservationInfo<IpfsReference, BalanceOf<T>, WithdrawalPermissions<T::AccountId>>;
@@ -972,7 +992,7 @@ impl<T: Trait> BankStorageInfo<T::AccountId, BalanceOf<T>> for Module<T> {
     }
     fn get_reservations_for_governance_config(
         bank_id: Self::TreasuryId,
-        invoker: Self::GovernanceConfig,
+        invoker: WithdrawalPermissions<T::AccountId>,
     ) -> Option<Vec<Self::ReservationInfo>> {
         let ret = <SpendReservations<T>>::iter()
             .filter(|(id, _, reservation)| id == &bank_id && reservation.controller() == invoker)
@@ -986,7 +1006,7 @@ impl<T: Trait> BankStorageInfo<T::AccountId, BalanceOf<T>> for Module<T> {
     }
     fn total_capital_reserved_for_governance_config(
         bank_id: Self::TreasuryId,
-        invoker: Self::GovernanceConfig,
+        invoker: WithdrawalPermissions<T::AccountId>,
     ) -> BalanceOf<T> {
         <SpendReservations<T>>::iter()
             .filter(|(id, _, reservation)| id == &bank_id && reservation.controller() == invoker)
@@ -1007,7 +1027,7 @@ impl<T: Trait> BankStorageInfo<T::AccountId, BalanceOf<T>> for Module<T> {
     }
     fn get_transfers_for_governance_config(
         bank_id: Self::TreasuryId,
-        invoker: Self::GovernanceConfig,
+        invoker: WithdrawalPermissions<T::AccountId>,
     ) -> Option<Vec<Self::TransferInfo>> {
         let ret = <InternalTransfers<T>>::iter()
             .filter(|(id, _, transfer)| id == &bank_id && transfer.controller() == invoker)
@@ -1021,7 +1041,7 @@ impl<T: Trait> BankStorageInfo<T::AccountId, BalanceOf<T>> for Module<T> {
     }
     fn total_capital_transferred_to_governance_config(
         bank_id: Self::TreasuryId,
-        invoker: Self::GovernanceConfig,
+        invoker: WithdrawalPermissions<T::AccountId>,
     ) -> BalanceOf<T> {
         <InternalTransfers<T>>::iter()
             .filter(|(id, _, transfer)| id == &bank_id && transfer.controller() == invoker)

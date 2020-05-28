@@ -15,7 +15,7 @@ use sp_runtime::{DispatchError, DispatchResult, Permill};
 use sp_std::prelude::*;
 
 use util::{
-    bank::{BankMapID, OnChainTreasuryID},
+    bank::{BankMapID, OnChainTreasuryID, WithdrawalPermissions},
     bounty::{
         ApplicationState, BountyInformation, BountyMapID, GrantApplication, MilestoneSubmission,
         ReviewBoard, TeamID, VoteID,
@@ -78,14 +78,29 @@ pub trait Trait: frame_system::Trait {
         + GenerateUniqueKeyID<(OnChainTreasuryID, BankMapID)>
         + GenerateUniqueID<OnChainTreasuryID>
         + OnChainBank
-        + RegisterBankAccount<Self::AccountId, BalanceOf<Self>>
-        + OwnershipProportionCalculations<Self::AccountId, BalanceOf<Self>, Permill>
-        + BankDepositsAndSpends<BalanceOf<Self>>
+        + RegisterBankAccount<
+            Self::AccountId,
+            WithdrawalPermissions<Self::AccountId>,
+            BalanceOf<Self>,
+        > + OwnershipProportionCalculations<
+            Self::AccountId,
+            WithdrawalPermissions<Self::AccountId>,
+            BalanceOf<Self>,
+            Permill,
+        > + BankDepositsAndSpends<BalanceOf<Self>>
         + CheckBankBalances<BalanceOf<Self>>
-        + DepositIntoBank<Self::AccountId, IpfsReference, BalanceOf<Self>>
-        + BankReservations<Self::AccountId, BalanceOf<Self>, IpfsReference>
-        + BankSpends<Self::AccountId, BalanceOf<Self>>
-        + BankStorageInfo<Self::AccountId, BalanceOf<Self>>
+        + DepositIntoBank<
+            Self::AccountId,
+            WithdrawalPermissions<Self::AccountId>,
+            IpfsReference,
+            BalanceOf<Self>,
+        > + BankReservations<
+            Self::AccountId,
+            WithdrawalPermissions<Self::AccountId>,
+            BalanceOf<Self>,
+            IpfsReference,
+        > + BankSpends<Self::AccountId, WithdrawalPermissions<Self::AccountId>, BalanceOf<Self>>
+        + BankStorageInfo<Self::AccountId, WithdrawalPermissions<Self::AccountId>, BalanceOf<Self>>
         + TermSheetExit<Self::AccountId, BalanceOf<Self>>;
 
     // TODO: use this when adding TRIGGER => VOTE => OUTCOME framework for util::bank::Spends
@@ -168,7 +183,9 @@ decl_storage! {
 
         // TODO: helper method for getting all the bounties for an organization
         FoundationSponsoredBounties get(fn foundation_sponsored_bounties): map
-            hasher(opaque_blake2_256) BountyId => Option<BountyInformation<IpfsReference, BalanceOf<T>>>;
+            hasher(opaque_blake2_256) BountyId => Option<
+                BountyInformation<T::AccountId, IpfsReference, ThresholdConfig<SignalOf<T>, Permill>, BalanceOf<T>>
+            >;
 
         // second key is an ApplicationId
         BountyApplications get(fn bounty_applications): double_map
@@ -208,8 +225,8 @@ decl_module! {
             bank_account: OnChainTreasuryID,
             amount_reserved_for_bounty: BalanceOf<T>, // collateral requirement
             amount_claimed_available: BalanceOf<T>,  // claimed available amount, not necessarily liquid
-            acceptance_committee: ReviewBoard,
-            supervision_committee: Option<ReviewBoard>,
+            acceptance_committee: ReviewBoard<T::AccountId, IpfsReference, ThresholdConfig<SignalOf<T>, Permill>>,
+            supervision_committee: Option<ReviewBoard<T::AccountId, IpfsReference, ThresholdConfig<SignalOf<T>, Permill>>>,
         ) -> DispatchResult {
             let bounty_creator = ensure_signed(origin)?;
             // TODO: need to verify bank_account ownership by registered_organization somehow
@@ -248,17 +265,21 @@ impl<T: Trait> Module<T> {
     // (which is what the method that calls this is doing...)
     fn account_can_trigger_application_review(
         account: &T::AccountId,
-        acceptance_committee: ReviewBoard,
+        acceptance_committee: ReviewBoard<
+            T::AccountId,
+            IpfsReference,
+            ThresholdConfig<SignalOf<T>, Permill>,
+        >,
     ) -> bool {
         match acceptance_committee {
-            ReviewBoard::SimpleFlatReview(org_id, share_id) => {
+            ReviewBoard::FlatPetitionReview(_, org_id, share_id, _, _, _) => {
                 <<T as Trait>::Organization as ShareGroupChecks<
                     u32,
                     ShareID,
                     T::AccountId,
                 >>::check_membership_in_share_group(org_id, ShareID::Flat(share_id).into(), account)
             },
-            ReviewBoard::WeightedThresholdReview(org_id, share_id) => {
+            ReviewBoard::WeightedThresholdReview(_, org_id, share_id, _, _) => {
                 <<T as Trait>::Organization as ShareGroupChecks<
                     u32,
                     ShareID,
@@ -286,7 +307,7 @@ impl<T: Trait> Module<T> {
     fn dispatch_threshold_review(
         organization: u32,
         weighted_share_id: u32,
-        vote_type: SupportedVoteTypes<SignalOf<T>>,
+        vote_type: SupportedVoteTypes,
         threshold: ThresholdConfig<SignalOf<T>, Permill>,
         duration: Option<T::BlockNumber>,
     ) -> Result<VoteID, DispatchError> {
@@ -416,7 +437,11 @@ impl<T: Trait> RegisterFoundation<BalanceOf<T>, T::AccountId> for Module<T> {
         bank: Self::BankId,
     ) -> DispatchResult {
         ensure!(
-            <<T as Trait>::Bank as RegisterBankAccount<T::AccountId, BalanceOf<T>>>::check_bank_owner(bank.into(), org.into()),
+            <<T as Trait>::Bank as RegisterBankAccount<
+                T::AccountId,
+                WithdrawalPermissions<T::AccountId>,
+                BalanceOf<T>,
+            >>::check_bank_owner(bank.into(), org.into()),
             Error::<T>::CannotRegisterFoundationFromOrgBankRelationshipThatDNE
         );
         RegisteredFoundations::insert(org, bank, true);
@@ -425,9 +450,15 @@ impl<T: Trait> RegisterFoundation<BalanceOf<T>, T::AccountId> for Module<T> {
 }
 
 impl<T: Trait> CreateBounty<BalanceOf<T>, T::AccountId, IpfsReference> for Module<T> {
-    type BountyInfo = BountyInformation<IpfsReference, BalanceOf<T>>;
+    type BountyInfo = BountyInformation<
+        T::AccountId,
+        IpfsReference,
+        ThresholdConfig<SignalOf<T>, Permill>,
+        BalanceOf<T>,
+    >;
     // smpl vote config for this module in particular
-    type ReviewCommittee = ReviewBoard;
+    type ReviewCommittee =
+        ReviewBoard<T::AccountId, IpfsReference, ThresholdConfig<SignalOf<T>, Permill>>;
     // helper to screen, prepare and form bounty information object
     fn screen_bounty_creation(
         foundation: u32, // registered OrgId
@@ -460,6 +491,7 @@ impl<T: Trait> CreateBounty<BalanceOf<T>, T::AccountId, IpfsReference> for Modul
         // reserve `amount_reserved_for_bounty` here by calling into `bank-onchain`
         let spend_reservation_id = <<T as Trait>::Bank as BankReservations<
             T::AccountId,
+            WithdrawalPermissions<T::AccountId>,
             BalanceOf<T>,
             IpfsReference,
         >>::reserve_for_spend(
@@ -630,28 +662,41 @@ impl<T: Trait> SuperviseGrantApplication<BalanceOf<T>, T::AccountId, IpfsReferen
         );
         // vote should dispatch based on the acceptance_committee variant here
         let new_vote_id = match bounty_info.acceptance_committee() {
-            ReviewBoard::SimpleFlatReview(org_id, flat_share_id) => {
+            ReviewBoard::FlatPetitionReview(
+                _,
+                org_id,
+                flat_share_id,
+                required_support,
+                required_against,
+                _,
+            ) => {
                 // TODO: create two defaults (1) global for unset, here
                 // (2) for each foundation, enable setting a default for this?
-                Self::dispatch_petition_review(org_id, flat_share_id, None, 1u32, None, None)?
+                Self::dispatch_petition_review(
+                    org_id,
+                    flat_share_id,
+                    None,
+                    required_support,
+                    required_against,
+                    None,
+                )?
             }
             // TODO: add thresholds to this ReviewBoard variant instead of relying on passed defaults
             // - or we could get the thresholds from some config stored somewhere and gotten
             // in the called helper methods (`dispatch_threshold_review`)
-            ReviewBoard::WeightedThresholdReview(org_id, weighted_share_id) => {
-                // any one vote suffices, equivalent to petition_review default
-                let threshold_config = ThresholdConfig::new_percentage_threshold(
-                    Permill::from_percent(1),
-                    Permill::from_percent(0),
-                );
-                Self::dispatch_threshold_review(
-                    org_id,
-                    weighted_share_id,
-                    SupportedVoteTypes::OneAccountOneVote,
-                    threshold_config,
-                    None,
-                )?
-            }
+            ReviewBoard::WeightedThresholdReview(
+                _,
+                org_id,
+                weighted_share_id,
+                vote_type,
+                threshold,
+            ) => Self::dispatch_threshold_review(
+                org_id,
+                weighted_share_id,
+                vote_type,
+                threshold,
+                None,
+            )?,
         };
         // change the application status such that review is started
         let new_application = application_to_review.start_application_review_petition(new_vote_id);
