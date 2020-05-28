@@ -988,12 +988,10 @@ pub trait CreateBounty<Currency, AccountId, Hash>: RegisterFoundation<Currency, 
 pub trait UseTermsOfAgreement<AccountId>: FoundationParts {
     type TermsOfAgreement;
     fn request_consent_on_terms_of_agreement(
-        application_id: u32,
         bounty_org: u32,
         terms: Self::TermsOfAgreement,
     ) -> Result<(Self::MultiShareId, Self::MultiVoteId), DispatchError>;
     fn approve_grant_to_register_team(
-        application_id: u32,
         bounty_org: u32,
         flat_share_id: u32,
         terms: Self::TermsOfAgreement,
@@ -1042,15 +1040,13 @@ pub trait SuperviseGrantApplication<Currency, AccountId, Hash>:
     CreateBounty<Currency, AccountId, Hash> + UseTermsOfAgreement<AccountId>
 {
     type AppState;
-    // TODO: where do each of these relevant VoteIDs go
-    // where does the second generated flat share group ShareID go?
-    // - generate it as an outer subgroup but functionality may be limited to
-    // unweighted approval of this variety (like team agreement consent)
     fn trigger_application_review(
         trigger: AccountId, // must be authorized to trigger in context of objects
         bounty_id: u32,
         application_id: u32,
     ) -> Result<Self::AppState, DispatchError>;
+    // this returns the AppState but also pushes it along if necessary
+    // - it should be called in on_finalize periodically
     fn poll_application(
         bounty_id: u32,
         application_id: u32,

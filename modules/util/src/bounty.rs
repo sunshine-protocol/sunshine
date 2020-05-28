@@ -78,9 +78,10 @@ impl<Hash: Parameter, Currency: Parameter> BountyInformation<Hash, Currency> {
     }
 }
 
+// - TODO: build a variant in which one person is sudo but the role is revocable and can be reassigned
+// -> REUSE THIS LOGIC BETWEEN TEAMID and REVIEWBOARD
 #[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug)]
 /// Metadata that represents pre-dispatch, grant milestone reviews
-/// - TODO: build a variant in which one person is sudo but the role is revocable and can be reassigned
 pub enum ReviewBoard {
     /// Uses petition but only requires a single approver from the group
     /// - anyone can veto as well
@@ -124,43 +125,63 @@ impl<Hash, Currency, Status> MilestoneSubmission<Hash, Currency, Status> {
 #[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug)]
 /// Identifier for each registered team
 /// -> RULE: same org as bounty_info.foundation()
-pub struct TeamID {
+pub struct TeamID<AccountId> {
     org: u32,
+    // this should be optional and in the future, I want to orient it towards revocable representative democracy
+    team_sudo: Option<AccountId>,
     flat_share_id: u32,
     weighted_share_id: u32,
 }
 
+impl<AccountId: Clone> TeamID<AccountId> {
+    pub fn new(
+        org: u32,
+        team_sudo: Option<AccountId>,
+        flat_share_id: u32,
+        weighted_share_id: u32,
+    ) -> TeamID<AccountId> {
+        TeamID {
+            org,
+            team_sudo,
+            flat_share_id,
+            weighted_share_id,
+        }
+    }
+}
+
 #[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug)]
-pub enum ApplicationState {
+pub enum ApplicationState<AccountId> {
     SubmittedAwaitingResponse,
     // wraps a VoteId for the acceptance committee
     UnderReviewByAcceptanceCommittee(VoteID),
     // includes the flat_share_id, and the
     ApprovedByFoundationAwaitingTeamConsent(ShareID, VoteID),
     // wraps outer_weighted_share_id associated with the team
-    ApprovedAndLive(TeamID),
+    ApprovedAndLive(TeamID<AccountId>),
     // closed for some reason
     Closed,
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-pub struct GrantApplication<AccountId, Currency, Hash> {
+pub struct GrantApplication<AccountId, Shares, Currency, Hash> {
     /// The ipfs reference to the application information
     description: Hash,
     /// total amount
     total_amount: Currency,
     /// The terms of agreement that must agreed to by all members before the bounty execution starts
-    terms_of_agreement: TermsOfAgreement<AccountId>,
+    terms_of_agreement: TermsOfAgreement<AccountId, Shares>,
     /// state of the application
-    state: ApplicationState,
+    state: ApplicationState<AccountId>,
 }
 
-impl<AccountId: Clone, Currency: Clone, Hash: Clone> GrantApplication<AccountId, Currency, Hash> {
+impl<AccountId: Clone, Shares: Clone, Currency: Clone, Hash: Clone>
+    GrantApplication<AccountId, Shares, Currency, Hash>
+{
     pub fn new(
         description: Hash,
         total_amount: Currency,
-        terms_of_agreement: TermsOfAgreement<AccountId>,
-    ) -> GrantApplication<AccountId, Currency, Hash> {
+        terms_of_agreement: TermsOfAgreement<AccountId, Shares>,
+    ) -> GrantApplication<AccountId, Shares, Currency, Hash> {
         GrantApplication {
             description,
             total_amount,
@@ -168,19 +189,19 @@ impl<AccountId: Clone, Currency: Clone, Hash: Clone> GrantApplication<AccountId,
             state: ApplicationState::SubmittedAwaitingResponse,
         }
     }
-    pub fn state(&self) -> ApplicationState {
-        self.state
+    pub fn state(&self) -> ApplicationState<AccountId> {
+        self.state.clone()
     }
     pub fn total_amount(&self) -> Currency {
         self.total_amount.clone()
     }
-    pub fn terms_of_agreement(&self) -> TermsOfAgreement<AccountId> {
+    pub fn terms_of_agreement(&self) -> TermsOfAgreement<AccountId, Shares> {
         self.terms_of_agreement.clone()
     }
 }
 
-impl<AccountId: Clone, Currency: Clone, Hash: Clone> StartApplicationReviewPetition<VoteID>
-    for GrantApplication<AccountId, Currency, Hash>
+impl<AccountId: Clone, Shares: Clone, Currency: Clone, Hash: Clone>
+    StartApplicationReviewPetition<VoteID> for GrantApplication<AccountId, Shares, Currency, Hash>
 {
     fn start_application_review_petition(&self, vote_id: VoteID) -> Self {
         GrantApplication {
@@ -198,8 +219,9 @@ impl<AccountId: Clone, Currency: Clone, Hash: Clone> StartApplicationReviewPetit
     }
 }
 
-impl<AccountId: Clone, Currency: Clone, Hash: Clone> StartTeamConsentPetition<ShareID, VoteID>
-    for GrantApplication<AccountId, Currency, Hash>
+impl<AccountId: Clone, Shares: Clone, Currency: Clone, Hash: Clone>
+    StartTeamConsentPetition<ShareID, VoteID>
+    for GrantApplication<AccountId, Shares, Currency, Hash>
 {
     fn start_team_consent_petition(&self, share_id: ShareID, vote_id: VoteID) -> Self {
         // could type check the flat_share_id and vote_petition_id
@@ -226,10 +248,10 @@ impl<AccountId: Clone, Currency: Clone, Hash: Clone> StartTeamConsentPetition<Sh
     }
 }
 
-impl<AccountId: Clone, Currency: Clone, Hash: Clone> ApproveGrant<TeamID>
-    for GrantApplication<AccountId, Currency, Hash>
+impl<AccountId: Clone, Shares: Clone, Currency: Clone, Hash: Clone> ApproveGrant<TeamID<AccountId>>
+    for GrantApplication<AccountId, Shares, Currency, Hash>
 {
-    fn approve_grant(&self, team_id: TeamID) -> Self {
+    fn approve_grant(&self, team_id: TeamID<AccountId>) -> Self {
         GrantApplication {
             description: self.description.clone(),
             total_amount: self.total_amount.clone(),
@@ -237,7 +259,7 @@ impl<AccountId: Clone, Currency: Clone, Hash: Clone> ApproveGrant<TeamID>
             state: ApplicationState::ApprovedAndLive(team_id),
         }
     }
-    fn get_full_team_id(&self) -> Option<TeamID> {
+    fn get_full_team_id(&self) -> Option<TeamID<AccountId>> {
         match self.state() {
             ApplicationState::ApprovedAndLive(team_id) => Some(team_id),
             _ => None,

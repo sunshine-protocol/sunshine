@@ -162,6 +162,10 @@ decl_storage! {
             hasher(blake2_128_concat) OrgId,
             hasher(blake2_128_concat) OnChainTreasuryID => bool;
 
+        // Teams that are pursuing live grants
+        RegisteredTeams get(fn registered_teams): map
+            hasher(blake2_128_concat) TeamID<T::AccountId> => bool;
+
         // TODO: helper method for getting all the bounties for an organization
         FoundationSponsoredBounties get(fn foundation_sponsored_bounties): map
             hasher(opaque_blake2_256) BountyId => Option<BountyInformation<IpfsReference, BalanceOf<T>>>;
@@ -169,7 +173,7 @@ decl_storage! {
         // second key is an ApplicationId
         BountyApplications get(fn bounty_applications): double_map
             hasher(opaque_blake2_256) BountyId,
-            hasher(opaque_blake2_256) u32 => Option<GrantApplication<T::AccountId, BalanceOf<T>, IpfsReference>>;
+            hasher(opaque_blake2_256) u32 => Option<GrantApplication<T::AccountId, SharesOf<T>, BalanceOf<T>, IpfsReference>>;
 
         // second key is a MilestoneId
         MilestoneSubmissions get(fn milestone_submissions): double_map
@@ -391,7 +395,7 @@ impl<T: Trait> FoundationParts for Module<T> {
     type OrgId = OrgId;
     type BountyId = BountyId;
     type BankId = OnChainTreasuryID;
-    type TeamId = TeamID;
+    type TeamId = TeamID<T::AccountId>;
     type MultiShareId = ShareID;
     type MultiVoteId = VoteID;
 }
@@ -513,7 +517,7 @@ impl<T: Trait> CreateBounty<BalanceOf<T>, T::AccountId, IpfsReference> for Modul
 }
 
 impl<T: Trait> SubmitGrantApplication<BalanceOf<T>, T::AccountId, IpfsReference> for Module<T> {
-    type GrantApp = GrantApplication<T::AccountId, BalanceOf<T>, IpfsReference>;
+    type GrantApp = GrantApplication<T::AccountId, SharesOf<T>, BalanceOf<T>, IpfsReference>;
     fn form_grant_application(
         bounty_id: u32,
         description: IpfsReference,
@@ -548,12 +552,11 @@ impl<T: Trait> SubmitGrantApplication<BalanceOf<T>, T::AccountId, IpfsReference>
 }
 
 impl<T: Trait> UseTermsOfAgreement<T::AccountId> for Module<T> {
-    type TermsOfAgreement = TermsOfAgreement<T::AccountId>;
+    type TermsOfAgreement = TermsOfAgreement<T::AccountId, SharesOf<T>>;
     // should only be called from `poll_application`
     fn request_consent_on_terms_of_agreement(
-        application_id: u32,
         bounty_org: u32, // org that supervises the relevant bounty
-        terms: TermsOfAgreement<T::AccountId>,
+        terms: TermsOfAgreement<T::AccountId, SharesOf<T>>,
     ) -> Result<(ShareID, VoteID), DispatchError> {
         // register an appropriate flat share identity for this team as an outer share group in the org
         let outer_flat_share_id_for_team =
@@ -563,8 +566,6 @@ impl<T: Trait> UseTermsOfAgreement<T::AccountId> for Module<T> {
                 T::AccountId,
                 SharesOf<T>,
             >>::register_outer_flat_share_group(bounty_org, terms.flat())?;
-        // consider caching this registration somewhere associated with the application_id
-
         let rewrapped_share_id: ShareID = outer_flat_share_id_for_team.into();
         let unwrapped_share_id: u32 = outer_flat_share_id_for_team.into();
         // dispatch vote on consent on the terms for the bounty, requires full consent
@@ -573,17 +574,35 @@ impl<T: Trait> UseTermsOfAgreement<T::AccountId> for Module<T> {
         Ok((rewrapped_share_id, vote_id))
     }
     fn approve_grant_to_register_team(
-        application_id: u32,
         bounty_org: u32,
         flat_share_id: u32,
         terms: Self::TermsOfAgreement,
     ) -> Result<Self::TeamId, DispatchError> {
-        todo!()
+        // use the terms to register the team
+        let weighted_share_id =
+            <<T as Trait>::Organization as RegisterShareGroup<
+                u32,
+                ShareID,
+                T::AccountId,
+                SharesOf<T>,
+            >>::register_outer_weighted_share_group(bounty_org, terms.weighted())?;
+        // TODO: enum with `TermsOfAgreement` OR the registered suborg identifier
+        // and check if there is already a registered team and put that TeamID here instead
+        // create the new team object
+        let new_team = TeamID::new(
+            bounty_org,
+            terms.supervisor(),
+            flat_share_id,
+            weighted_share_id.into(),
+        );
+        // insert the new team object into storage
+        <RegisteredTeams<T>>::insert(new_team.clone(), true);
+        Ok(new_team)
     }
 }
 
 impl<T: Trait> SuperviseGrantApplication<BalanceOf<T>, T::AccountId, IpfsReference> for Module<T> {
-    type AppState = ApplicationState;
+    type AppState = ApplicationState<T::AccountId>;
     fn trigger_application_review(
         trigger: T::AccountId, // must be authorized to trigger in context of objects
         bounty_id: u32,
@@ -610,14 +629,15 @@ impl<T: Trait> SuperviseGrantApplication<BalanceOf<T>, T::AccountId, IpfsReferen
             Error::<T>::AccountNotAuthorizedToTriggerApplicationReview
         );
         // vote should dispatch based on the acceptance_committee variant here
-        let acceptance_committee = bounty_info.acceptance_committee();
-        // TODO: can I make this neater instead of this match statement execution
         let new_vote_id = match bounty_info.acceptance_committee() {
             ReviewBoard::SimpleFlatReview(org_id, flat_share_id) => {
                 // TODO: create two defaults (1) global for unset, here
                 // (2) for each foundation, enable setting a default for this?
                 Self::dispatch_petition_review(org_id, flat_share_id, None, 1u32, None, None)?
             }
+            // TODO: add thresholds to this ReviewBoard variant instead of relying on passed defaults
+            // - or we could get the thresholds from some config stored somewhere and gotten
+            // in the called helper methods (`dispatch_threshold_review`)
             ReviewBoard::WeightedThresholdReview(org_id, weighted_share_id) => {
                 // any one vote suffices, equivalent to petition_review default
                 let threshold_config = ThresholdConfig::new_percentage_threshold(
@@ -640,6 +660,8 @@ impl<T: Trait> SuperviseGrantApplication<BalanceOf<T>, T::AccountId, IpfsReferen
         <BountyApplications<T>>::insert(bounty_id, application_id, new_application);
         Ok(app_state)
     }
+    /// This returns the AppState but also pushes it along if necessary
+    /// - it should be called in on_finalize periodically
     fn poll_application(
         bounty_id: u32,
         application_id: u32,
@@ -658,7 +680,6 @@ impl<T: Trait> SuperviseGrantApplication<BalanceOf<T>, T::AccountId, IpfsReferen
                     // passed vote, push state machine along by dispatching triggering team consent
                     let (team_flat_share_id, team_consent_vote_id) =
                         Self::request_consent_on_terms_of_agreement(
-                            application_id,
                             bounty_info.foundation(), // org that supervises the relevant bounty
                             application_under_review.terms_of_agreement(),
                         )?;
@@ -681,7 +702,6 @@ impl<T: Trait> SuperviseGrantApplication<BalanceOf<T>, T::AccountId, IpfsReferen
                 let status = Self::check_vote_status(wrapped_vote_id)?;
                 if status {
                     let newly_registered_team_id = Self::approve_grant_to_register_team(
-                        application_id,
                         bounty_info.foundation(),
                         wrapped_share_id.into(),
                         application_under_review.terms_of_agreement(),

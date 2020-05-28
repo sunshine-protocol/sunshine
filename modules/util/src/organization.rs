@@ -4,14 +4,17 @@ use sp_std::prelude::*;
 
 #[derive(PartialEq, Eq, Default, Clone, Encode, Decode, RuntimeDebug)]
 /// Static terms of agreement, define how the enforced payout structure for grants
-pub struct TermsOfAgreement<AccountId> {
+pub struct TermsOfAgreement<AccountId, Shares> {
     /// If Some(account), then account is the sudo for the duration of the grant
     supervisor: Option<AccountId>,
     /// The share allocation for metadata
-    share_metadata: Vec<(AccountId, u32)>,
+    share_metadata: Vec<(AccountId, Shares)>,
 }
 
-impl<AccountId: Clone> TermsOfAgreement<AccountId> {
+impl<AccountId: Clone, Shares: Clone> TermsOfAgreement<AccountId, Shares> {
+    pub fn supervisor(&self) -> Option<AccountId> {
+        self.supervisor.clone()
+    }
     pub fn flat(&self) -> Vec<AccountId> {
         self.share_metadata
             .clone()
@@ -19,13 +22,16 @@ impl<AccountId: Clone> TermsOfAgreement<AccountId> {
             .map(|(account, _)| account)
             .collect::<Vec<AccountId>>()
     }
+    pub fn weighted(&self) -> Vec<(AccountId, Shares)> {
+        self.share_metadata.clone()
+    }
 }
 
 #[derive(PartialEq, Eq, Default, Clone, Encode, Decode, RuntimeDebug)]
 /// Defined paths for how the terms of agreement can change
-pub struct FullTermsOfAgreement<AccountId, OrgId, ShareId, BlockNumber> {
+pub struct FullTermsOfAgreement<AccountId, Shares, OrgId, ShareId, BlockNumber> {
     /// The starting state for the group
-    basic_terms: TermsOfAgreement<AccountId>,
+    basic_terms: TermsOfAgreement<AccountId, Shares>,
     /// This represents the metagovernance configuration, how the group can coordinate changes
     allowed_changes: Vec<(
         Catalyst<AccountId>,
