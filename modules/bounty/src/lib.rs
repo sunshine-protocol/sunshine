@@ -29,8 +29,8 @@ use util::{
         OpenShareGroupVote, OrgChecks, OrganizationDNS, OwnershipProportionCalculations,
         RegisterBankAccount, RegisterFoundation, RegisterShareGroup, SeededGenerateUniqueID,
         ShareGroupChecks, SignPetition, StartApplicationReviewPetition, StartTeamConsentPetition,
-        SubmitGrantApplication, SuperviseGrantApplication, SupervisorPermissions, TermSheetExit,
-        ThresholdVote, UpdatePetition, UseTermsOfAgreement, VoteOnProposal,
+        SubmitGrantApplication, SubmitMilestone, SuperviseGrantApplication, SupervisorPermissions,
+        TermSheetExit, ThresholdVote, UpdatePetition, UseTermsOfAgreement, VoteOnProposal,
         WeightedShareIssuanceWrapper, WeightedShareWrapper,
     }, //RequestChanges
     voteyesno::{SupportedVoteTypes, ThresholdConfig},
@@ -156,6 +156,10 @@ decl_error! {
         CannotReviewApplicationIfApplicationDNE,
         CannotPollApplicationIfBountyDNE,
         CannotPollApplicationIfApplicationDNE,
+        CannotSudoApproveIfBountyDNE,
+        CannotSudoApproveAppIfNotAssignedSudo,
+        CannotSudoApproveIfGrantAppDNE,
+        AppStateCannotBeSudoApprovedForAGrantFromCurrentState,
         ApplicationMustBeSubmittedAwaitingResponseToTriggerReview,
         AccountNotAuthorizedToTriggerApplicationReview,
         ReviewBoardWeightedShapeDoesntSupportPetitionReview,
@@ -705,6 +709,42 @@ impl<T: Trait> SuperviseGrantApplication<BalanceOf<T>, T::AccountId, IpfsReferen
         <BountyApplications<T>>::insert(bounty_id, application_id, new_application);
         Ok(app_state)
     }
+    /// Check if the bounty's ReviewBoard has a sudo and if it does, let this person push things through
+    /// on behalf of the group but otherwise DO NOT and return an error instead
+    /// -> vision is that this person is a SELECTED, TEMPORARY leader
+    fn sudo_approve_application(
+        caller: T::AccountId,
+        bounty_id: u32,
+        application_id: u32,
+    ) -> Result<Self::AppState, DispatchError> {
+        // get the bounty information
+        let bounty_info = <FoundationSponsoredBounties<T>>::get(bounty_id)
+            .ok_or(Error::<T>::CannotSudoApproveIfBountyDNE)?;
+        // check that the caller is indeed the sudo
+        ensure!(
+            bounty_info.acceptance_committee().is_sudo(&caller),
+            Error::<T>::CannotSudoApproveAppIfNotAssignedSudo
+        );
+        // get the application information
+        let app = <BountyApplications<T>>::get(bounty_id, application_id)
+            .ok_or(Error::<T>::CannotSudoApproveIfGrantAppDNE)?;
+        // check that the state of the application satisfies the requirements for approval
+        ensure!(
+            app.state().live(),
+            Error::<T>::AppStateCannotBeSudoApprovedForAGrantFromCurrentState
+        );
+        // sudo approve vote, push state machine along by dispatching team consent
+        let (team_flat_share_id, team_consent_vote_id) =
+            Self::request_consent_on_terms_of_agreement(
+                bounty_info.foundation(),
+                app.terms_of_agreement(),
+            )?;
+        let new_application =
+            app.start_team_consent_petition(team_flat_share_id, team_consent_vote_id);
+        let ret_state = new_application.state();
+        <BountyApplications<T>>::insert(bounty_id, application_id, new_application);
+        Ok(ret_state)
+    }
     /// This returns the AppState but also pushes it along if necessary
     /// - it should be called in on_finalize periodically
     fn poll_application(
@@ -763,5 +803,63 @@ impl<T: Trait> SuperviseGrantApplication<BalanceOf<T>, T::AccountId, IpfsReferen
             //
             _ => Ok(application_under_review.state()),
         }
+    }
+}
+
+impl<T: Trait> SubmitMilestone<BalanceOf<T>, T::AccountId, IpfsReference> for Module<T> {
+    type MilestoneState = u32; // TODO: change
+    fn submit_milestone(
+        caller: T::AccountId, // must be from the team, maybe check sudo || flat_org_member
+        bounty_id: u32,
+        application_id: u32,
+        team_id: Self::TeamId,
+        submission_reference: IpfsReference,
+        amount_requested: BalanceOf<T>,
+    ) -> Result<u32, DispatchError> { // returns milestone_id
+        // check that the application is in the right state
+
+        // check that the team_id corresponds to this application's state
+
+        // check that the caller is a member of the TeamId flat shares
+
+        // form the milestone
+
+        // submit the milestone
+        todo!()
+    }
+    fn trigger_milestone_review(
+        bounty_id: u32,
+        milestone_id: u32,
+    ) -> Result<Self::MilestoneState, DispatchError> {
+        // get the milestone
+
+        // check that it is in a valid state to trigger a review
+
+        // trigger the review and return the VoteId in the review somehow
+        todo!()
+    }
+    // someone can try to call this and only the sudo can push things through at whim
+    fn sudo_approves_milestone(
+        caller: T::AccountId,
+        bounty_id: u32,
+        milestone_id: u32,
+    ) -> Result<Self::MilestoneState, DispatchError> {
+        // get the milestone
+
+        // check that it is in a valid state to approve
+
+        // approve and return the MilestoneState which should contain a transfer_id
+        todo!()
+    }
+    fn poll_milestone(
+        bounty_id: u32,
+        milestone_id: u32,
+    ) -> Result<Self::MilestoneState, DispatchError> {
+        // get the milestone
+
+        // match on the state
+        // -> if there is a review, check the result of it
+        // --> if it passes, approve and return the MilestoneState which should contain a transfer_id
+        todo!()
     }
 }

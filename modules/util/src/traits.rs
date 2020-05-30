@@ -1045,10 +1045,45 @@ pub trait SuperviseGrantApplication<Currency, AccountId, Hash>:
         bounty_id: u32,
         application_id: u32,
     ) -> Result<Self::AppState, DispatchError>;
+    // someone can try to call this and only the sudo can push things through at whim
+    // -> notably no sudo deny for demo functionality
+    fn sudo_approve_application(
+        sudo: AccountId,
+        bounty_id: u32,
+        application_id: u32,
+    ) -> Result<Self::AppState, DispatchError>;
     // this returns the AppState but also pushes it along if necessary
     // - it should be called in on_finalize periodically
     fn poll_application(
         bounty_id: u32,
         application_id: u32,
     ) -> Result<Self::AppState, DispatchError>;
+}
+
+pub trait SubmitMilestone<Currency, AccountId, Hash>:
+    SuperviseGrantApplication<Currency, AccountId, Hash>
+{
+    type MilestoneState;
+    fn submit_milestone(
+        caller: AccountId, // must be from the team, maybe check sudo || flat_org_member
+        bounty_id: u32,
+        application_id: u32,
+        team_id: Self::TeamId,
+        submission_reference: Hash,
+        amount_requested: Currency,
+    ) -> Result<u32, DispatchError>; // returns milestone_id
+    fn trigger_milestone_review(
+        bounty_id: u32,
+        milestone_id: u32,
+    ) -> Result<Self::MilestoneState, DispatchError>;
+    // someone can try to call this and only the sudo can push things through at whim
+    fn sudo_approves_milestone(
+        caller: AccountId,
+        bounty_id: u32,
+        milestone_id: u32,
+    ) -> Result<Self::MilestoneState, DispatchError>;
+    fn poll_milestone(
+        bounty_id: u32,
+        milestone_id: u32,
+    ) -> Result<Self::MilestoneState, DispatchError>;
 }

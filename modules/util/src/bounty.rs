@@ -125,6 +125,18 @@ pub enum ReviewBoard<AccountId, Hash, WeightedThreshold> {
     ),
 }
 
+impl<AccountId: PartialEq, Hash, WeightedThreshold>
+    ReviewBoard<AccountId, Hash, WeightedThreshold>
+{
+    pub fn is_sudo(&self, acc: &AccountId) -> bool {
+        match self {
+            ReviewBoard::FlatPetitionReview(Some(the_sudo), _, _, _, _, _) => the_sudo == acc,
+            ReviewBoard::WeightedThresholdReview(Some(the_sudo), _, _, _, _) => the_sudo == acc,
+            _ => false,
+        }
+    }
+}
+
 #[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug)]
 /// Strongly typed vote identifier
 pub enum VoteID {
@@ -132,24 +144,28 @@ pub enum VoteID {
     Threshold(u32),
 }
 
+#[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug)]
+pub enum MilestoneStatus {
+    SubmittedAwaitingResponse,
+    SubmittedReviewStarted(VoteID),
+    ChangesRequestedAwaitingChanges(VoteID),
+    ApprovedAndTransferEnabled,
+}
+
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub struct MilestoneSubmission<Hash, Currency, Status> {
-    // the team application for which this submission pertains
-    application_id: u32,
     submission: Hash,
     amount: Currency,
     // the review status, none upon immediate submission
     review: Option<Status>,
 }
 
-impl<Hash, Currency, Status> MilestoneSubmission<Hash, Currency, Status> {
+impl<Hash, Currency, MilestoneStatus> MilestoneSubmission<Hash, Currency, MilestoneStatus> {
     pub fn new(
-        application_id: u32,
         submission: Hash,
         amount: Currency,
-    ) -> MilestoneSubmission<Hash, Currency, Status> {
+    ) -> MilestoneSubmission<Hash, Currency, MilestoneStatus> {
         MilestoneSubmission {
-            application_id,
             submission,
             amount,
             review: None,
@@ -168,6 +184,23 @@ pub enum ApplicationState<AccountId> {
     ApprovedAndLive(TeamID<AccountId>),
     // closed for some reason
     Closed,
+}
+
+impl<AccountId: PartialEq> ApplicationState<AccountId> {
+    // basically, can be approved (notably not when already approved)
+    pub fn live(&self) -> bool {
+        match self {
+            ApplicationState::SubmittedAwaitingResponse => true,
+            ApplicationState::UnderReviewByAcceptanceCommittee(_) => true,
+            _ => false,
+        }
+    }
+    pub fn matches_registered_team(&self, team_id: TeamID<AccountId>) -> bool {
+        match self {
+            ApplicationState::ApprovedAndLive(tid) => tid == &team_id,
+            _ => false,
+        }
+    }
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
