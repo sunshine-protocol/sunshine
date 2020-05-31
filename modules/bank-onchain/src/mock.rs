@@ -98,7 +98,7 @@ impl org::Trait for Test {
 }
 parameter_types! {
     // minimum deposit to register an on-chain bank
-    pub const MinimumInitialDeposit: u64 = 1;
+    pub const MinimumInitialDeposit: u64 = 5;
 }
 impl Trait for Test {
     type Event = TestEvent;

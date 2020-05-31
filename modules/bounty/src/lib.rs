@@ -141,6 +141,7 @@ decl_event!(
         <T as frame_system::Trait>::AccountId,
         Currency = BalanceOf<T>,
     {
+        FoundationRegisteredFromOnChainBank(OrgId, OnChainTreasuryID),
         FoundationPostedBounty(AccountId, OrgId, BountyId, OnChainTreasuryID, IpfsReference, Currency, Currency),
     }
 );
@@ -232,7 +233,7 @@ decl_module! {
             let _ = ensure_signed(origin)?;
             // any authorization would need to be HERE
             Self::register_foundation_from_existing_bank(registered_organization, bank_account)?;
-            // TODO: deposit relevant event
+            Self::deposit_event(RawEvent::FoundationRegisteredFromOnChainBank(registered_organization, bank_account));
             Ok(())
         }
 
@@ -440,10 +441,10 @@ impl<T: Trait> FoundationParts for Module<T> {
 }
 
 impl<T: Trait> RegisterFoundation<BalanceOf<T>, T::AccountId> for Module<T> {
-    // helper method to quickly bootstrap an organization form a donation
+    // helper method to quickly bootstrap an organization from a donation
     // -> it should register an on-chain bank account and return the on-chain bank account identifier
     // TODO
-    fn register_foundation_from_donation_deposit(
+    fn register_foundation_from_deposit(
         _from: T::AccountId,
         _for_org: Self::OrgId,
         _amount: BalanceOf<T>,

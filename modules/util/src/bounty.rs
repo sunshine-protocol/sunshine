@@ -153,6 +153,32 @@ pub enum ReviewBoard<AccountId, Hash, WeightedThreshold> {
 impl<AccountId: PartialEq, Hash, WeightedThreshold>
     ReviewBoard<AccountId, Hash, WeightedThreshold>
 {
+    pub fn new_flat_petition_review(
+        sudo: Option<AccountId>,
+        org_id: u32,
+        flat_share_id: u32,
+        approval_threshold: u32,
+        reject_threshold: Option<u32>,
+        topic: Option<Hash>,
+    ) -> ReviewBoard<AccountId, Hash, WeightedThreshold> {
+        ReviewBoard::FlatPetitionReview(
+            sudo,
+            org_id,
+            flat_share_id,
+            approval_threshold,
+            reject_threshold,
+            topic,
+        )
+    }
+    pub fn new_weighted_threshold_review(
+        sudo: Option<AccountId>,
+        org_id: u32,
+        weighted_share_id: u32,
+        vote_type: crate::voteyesno::SupportedVoteTypes,
+        threshold: WeightedThreshold,
+    ) -> ReviewBoard<AccountId, Hash, WeightedThreshold> {
+        ReviewBoard::WeightedThresholdReview(sudo, org_id, weighted_share_id, vote_type, threshold)
+    }
     pub fn is_sudo(&self, acc: &AccountId) -> bool {
         match self {
             ReviewBoard::FlatPetitionReview(Some(the_sudo), _, _, _, _, _) => the_sudo == acc,

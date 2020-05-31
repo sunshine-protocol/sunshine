@@ -119,6 +119,7 @@ decl_error! {
         InternalTransferRequestExceedsReferencedSpendCommitment,
         SpendCommitmentNotFoundForInternalTransfer,
         GovernanceConfigDoesNotSatisfyOrgRequirementsForBankRegistration,
+        RegistrationMustDepositAboveModuleMinimum,
     }
 }
 
@@ -410,6 +411,10 @@ impl<T: Trait> RegisterBankAccount<T::AccountId, WithdrawalPermissions<T::Accoun
         amount: BalanceOf<T>, // TODO: ADD MINIMUM AMOUNT TO OPEN BANK
         owner_s: WithdrawalPermissions<T::AccountId>,
     ) -> Result<Self::TreasuryId, DispatchError> {
+        ensure!(
+            amount >= T::MinimumInitialDeposit::get(),
+            Error::<T>::RegistrationMustDepositAboveModuleMinimum
+        );
         // check that the owner_s is in the `registered_org` because those are our tacit requirements
         // => cannot create bank and assign an outside organization or outside share group its controller permissions
         ensure!(

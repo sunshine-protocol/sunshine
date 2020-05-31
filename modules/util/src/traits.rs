@@ -956,7 +956,7 @@ pub trait FoundationParts {
 // to bank but I don't think it's the worst thing to have for V1
 pub trait RegisterFoundation<Currency, AccountId>: FoundationParts {
     // should still be some minimum enforced in bank
-    fn register_foundation_from_donation_deposit(
+    fn register_foundation_from_deposit(
         from: AccountId,
         for_org: Self::OrgId,
         amount: Currency,
