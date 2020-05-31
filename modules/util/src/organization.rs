@@ -12,6 +12,15 @@ pub struct TermsOfAgreement<AccountId, Shares> {
 }
 
 impl<AccountId: Clone, Shares: Clone> TermsOfAgreement<AccountId, Shares> {
+    pub fn new(
+        supervisor: Option<AccountId>,
+        share_metadata: Vec<(AccountId, Shares)>,
+    ) -> TermsOfAgreement<AccountId, Shares> {
+        TermsOfAgreement {
+            supervisor,
+            share_metadata,
+        }
+    }
     pub fn supervisor(&self) -> Option<AccountId> {
         self.supervisor.clone()
     }

@@ -328,6 +328,8 @@ impl<AccountId: PartialEq> ApplicationState<AccountId> {
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub struct GrantApplication<AccountId, Shares, Currency, Hash> {
+    /// Useful and necessary metadata
+    submitter: AccountId,
     /// The ipfs reference to the application information
     description: Hash,
     /// total amount
@@ -342,11 +344,13 @@ impl<AccountId: Clone, Shares: Clone, Currency: Clone, Hash: Clone>
     GrantApplication<AccountId, Shares, Currency, Hash>
 {
     pub fn new(
+        submitter: AccountId,
         description: Hash,
         total_amount: Currency,
         terms_of_agreement: TermsOfAgreement<AccountId, Shares>,
     ) -> GrantApplication<AccountId, Shares, Currency, Hash> {
         GrantApplication {
+            submitter,
             description,
             total_amount,
             terms_of_agreement,
@@ -369,6 +373,7 @@ impl<AccountId: Clone, Shares: Clone, Currency: Clone, Hash: Clone> StartReview<
 {
     fn start_review(&self, vote_id: VoteID) -> Self {
         GrantApplication {
+            submitter: self.submitter.clone(),
             description: self.description.clone(),
             total_amount: self.total_amount.clone(),
             terms_of_agreement: self.terms_of_agreement.clone(),
@@ -390,6 +395,7 @@ impl<AccountId: Clone, Shares: Clone, Currency: Clone, Hash: Clone>
     fn start_team_consent_petition(&self, share_id: ShareID, vote_id: VoteID) -> Self {
         // could type check the flat_share_id and vote_petition_id
         GrantApplication {
+            submitter: self.submitter.clone(),
             description: self.description.clone(),
             total_amount: self.total_amount.clone(),
             terms_of_agreement: self.terms_of_agreement.clone(),
@@ -417,6 +423,7 @@ impl<AccountId: Clone, Shares: Clone, Currency: Clone, Hash: Clone> ApproveGrant
 {
     fn approve_grant(&self, team_id: TeamID<AccountId>) -> Self {
         GrantApplication {
+            submitter: self.submitter.clone(),
             description: self.description.clone(),
             total_amount: self.total_amount.clone(),
             terms_of_agreement: self.terms_of_agreement.clone(),

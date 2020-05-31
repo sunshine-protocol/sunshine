@@ -1040,12 +1040,14 @@ pub trait SubmitGrantApplication<Currency, AccountId, Hash>:
         + StartTeamConsentPetition<Self::MultiShareId, Self::MultiVoteId>
         + ApproveGrant<Self::TeamId>;
     fn form_grant_application(
+        caller: AccountId,
         bounty_id: u32,
         description: Hash,
         total_amount: Currency,
         terms_of_agreement: Self::TermsOfAgreement,
     ) -> Result<Self::GrantApp, DispatchError>;
     fn submit_grant_application(
+        caller: AccountId,
         bounty_id: u32,
         description: Hash,
         total_amount: Currency,

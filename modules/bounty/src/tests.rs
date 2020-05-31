@@ -247,7 +247,7 @@ fn genesis_config_works() {
 // }
 
 #[test]
-fn register_foundation_comma_post_bounty() {
+fn register_foundation_comma_post_bounty_comma_submit_grant_app() {
     new_test_ext().execute_with(|| {
         let one = Origin::signed(1);
         let expected_treasury_id = OnChainTreasuryID([0, 0, 0, 0, 0, 0, 0, 1]);
@@ -321,6 +321,46 @@ fn register_foundation_comma_post_bounty() {
                 IpfsReference::default(), // description
                 5,                        // amount reserved for bounty
                 10                        // amount claimed available for bounty
+            )
+        );
+        // -- TEST 3 -- SUBMIT GRANT APPLICATION
+        let team_one_share_metadata = vec![(1, 10), (2, 10), (3, 10), (4, 10)];
+        let team_one_terms_of_agreement = TermsOfAgreement::new(Some(1), team_one_share_metadata);
+        assert_noop!(
+            Bounty::directly_submit_grant_application(
+                one.clone(),
+                1,
+                IpfsReference::default(),
+                11,
+                team_one_terms_of_agreement.clone()
+            ),
+            Error::<TestRuntime>::GrantRequestExceedsAvailableBountyFunds
+        );
+        assert_noop!(
+            Bounty::directly_submit_grant_application(
+                one.clone(),
+                2,
+                IpfsReference::default(),
+                10,
+                team_one_terms_of_agreement.clone()
+            ),
+            Error::<TestRuntime>::GrantApplicationFailsIfBountyDNE
+        );
+        assert_ok!(Bounty::directly_submit_grant_application(
+            one.clone(),
+            1,
+            IpfsReference::default(),
+            10,
+            team_one_terms_of_agreement
+        ));
+        assert_eq!(
+            get_last_event(),
+            RawEvent::GrantApplicationSubmittedForBounty(
+                1,                        // submitter
+                1,                        // bounty id
+                1,                        // grant app id
+                IpfsReference::default(), // description
+                10,
             )
         );
     });

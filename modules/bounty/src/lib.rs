@@ -143,6 +143,8 @@ decl_event!(
     {
         FoundationRegisteredFromOnChainBank(OrgId, OnChainTreasuryID),
         FoundationPostedBounty(AccountId, OrgId, BountyId, OnChainTreasuryID, IpfsReference, Currency, Currency),
+        // second u32 is the new GrantId
+        GrantApplicationSubmittedForBounty(AccountId, BountyId, u32, IpfsReference, Currency),
     }
 );
 
@@ -272,6 +274,26 @@ decl_module! {
             ));
             Ok(())
         }
+        #[weight = 0]
+        fn directly_submit_grant_application(
+            origin,
+            bounty_id: BountyId,
+            description: IpfsReference,
+            total_amount: BalanceOf<T>,
+            terms_of_agreement: TermsOfAgreement<T::AccountId, SharesOf<T>>,
+        ) -> DispatchResult {
+            let submitter = ensure_signed(origin)?;
+            let new_grant_app_id = Self::submit_grant_application(submitter.clone(), bounty_id, description.clone(), total_amount, terms_of_agreement)?;
+            Self::deposit_event(RawEvent::GrantApplicationSubmittedForBounty(submitter, bounty_id, new_grant_app_id, description, total_amount));
+            Ok(())
+        }
+        // trigger application review
+        // sudo approve application
+        // poll application
+        // submit milestone
+        // trigger milestone review
+        // sudo approve milestone
+        // poll milestone
     }
 }
 
@@ -570,6 +592,7 @@ impl<T: Trait> CreateBounty<BalanceOf<T>, T::AccountId, IpfsReference> for Modul
 impl<T: Trait> SubmitGrantApplication<BalanceOf<T>, T::AccountId, IpfsReference> for Module<T> {
     type GrantApp = GrantApplication<T::AccountId, SharesOf<T>, BalanceOf<T>, IpfsReference>;
     fn form_grant_application(
+        caller: T::AccountId,
         bounty_id: u32,
         description: IpfsReference,
         total_amount: BalanceOf<T>,
@@ -584,17 +607,24 @@ impl<T: Trait> SubmitGrantApplication<BalanceOf<T>, T::AccountId, IpfsReference>
             Error::<T>::GrantRequestExceedsAvailableBountyFunds
         );
         // form the grant app object and return it
-        let grant_app = GrantApplication::new(description, total_amount, terms_of_agreement);
+        let grant_app =
+            GrantApplication::new(caller, description, total_amount, terms_of_agreement);
         Ok(grant_app)
     }
     fn submit_grant_application(
+        caller: T::AccountId,
         bounty_id: u32,
         description: IpfsReference,
         total_amount: BalanceOf<T>,
         terms_of_agreement: Self::TermsOfAgreement,
     ) -> Result<u32, DispatchError> {
-        let formed_grant_app =
-            Self::form_grant_application(bounty_id, description, total_amount, terms_of_agreement)?;
+        let formed_grant_app = Self::form_grant_application(
+            caller,
+            bounty_id,
+            description,
+            total_amount,
+            terms_of_agreement,
+        )?;
         let new_application_id =
             Self::seeded_generate_unique_id((bounty_id, BountyMapID::ApplicationId));
         <BountyApplications<T>>::insert(bounty_id, new_application_id, formed_grant_app);
