@@ -18,11 +18,11 @@ use util::{
     organization::ShareID,
     traits::{
         AccessProfile, BankDepositsAndSpends, BankReservations, BankSpends, BankStorageInfo,
-        CheckBankBalances, CommitSpendReservation, DepositIntoBank, DepositSpendOps,
-        FreeToReserved, GenerateUniqueID, GenerateUniqueKeyID, GetInnerOuterShareGroups,
-        IDIsAvailable, MoveFundsOutCommittedOnly, MoveFundsOutUnCommittedOnly, OnChainBank,
-        OrgChecks, OrganizationDNS, OwnershipProportionCalculations, RegisterBankAccount,
-        RegisterShareGroup, ShareGroupChecks, SupervisorPermissions, TermSheetExit,
+        CheckBankBalances, CommitAndTransfer, CommitSpendReservation, DepositIntoBank,
+        DepositSpendOps, FreeToReserved, GenerateUniqueID, GetInnerOuterShareGroups, IDIsAvailable,
+        MoveFundsOutCommittedOnly, MoveFundsOutUnCommittedOnly, OnChainBank, OrgChecks,
+        OrganizationDNS, OwnershipProportionCalculations, RegisterBankAccount, RegisterShareGroup,
+        SeededGenerateUniqueID, ShareGroupChecks, SupervisorPermissions, TermSheetExit,
         WeightedShareIssuanceWrapper, WeightedShareWrapper,
     },
 };
@@ -126,6 +126,10 @@ decl_storage! {
     trait Store for Module<T: Trait> as Bank {
 
         BankIDNonce get(fn bank_id_nonce): OnChainTreasuryID;
+
+        BankAssociatedNonces get(fn bank_associated_nonces): double_map
+            hasher(opaque_blake2_256) OnChainTreasuryID,
+            hasher(opaque_blake2_256) BankMapID => u32;
 
         /// Source of truth for OnChainTreasuryId uniqueness checks
         /// WARNING: do not append a prefix because the keyspace is used directly for checking uniqueness
@@ -360,35 +364,24 @@ impl<T: Trait> IDIsAvailable<OnChainTreasuryID> for Module<T> {
     }
 }
 
-impl<T: Trait> IDIsAvailable<(OnChainTreasuryID, BankMapID)> for Module<T> {
-    fn id_is_available(id: (OnChainTreasuryID, BankMapID)) -> bool {
+impl<T: Trait> IDIsAvailable<(OnChainTreasuryID, BankMapID, u32)> for Module<T> {
+    fn id_is_available(id: (OnChainTreasuryID, BankMapID, u32)) -> bool {
         match id.1 {
-            BankMapID::Deposit(proposed_deposit_id) => {
-                <Deposits<T>>::get(id.0, proposed_deposit_id).is_none()
-            }
-            BankMapID::Reservation(proposed_reservation_id) => {
-                <SpendReservations<T>>::get(id.0, proposed_reservation_id).is_none()
-            }
-            BankMapID::InternalTransfer(proposed_transfer_id) => {
-                <InternalTransfers<T>>::get(id.0, proposed_transfer_id).is_none()
-            }
+            BankMapID::Deposit => <Deposits<T>>::get(id.0, id.2).is_none(),
+            BankMapID::Reservation => <SpendReservations<T>>::get(id.0, id.2).is_none(),
+            BankMapID::InternalTransfer => <InternalTransfers<T>>::get(id.0, id.2).is_none(),
         }
     }
 }
 
-impl<T: Trait> GenerateUniqueKeyID<(OnChainTreasuryID, BankMapID)> for Module<T> {
-    fn generate_unique_key_id(
-        proposed: (OnChainTreasuryID, BankMapID),
-    ) -> (OnChainTreasuryID, BankMapID) {
-        if !Self::id_is_available(proposed.clone()) {
-            let mut new_id = proposed.1.iterate();
-            while !Self::id_is_available((proposed.0, new_id.clone())) {
-                new_id = new_id.iterate();
-            }
-            (proposed.0, new_id)
-        } else {
-            proposed
+impl<T: Trait> SeededGenerateUniqueID<u32, (OnChainTreasuryID, BankMapID)> for Module<T> {
+    fn seeded_generate_unique_id(seed: (OnChainTreasuryID, BankMapID)) -> u32 {
+        let mut new_id = <BankAssociatedNonces>::get(seed.0, seed.1) + 1u32;
+        while !Self::id_is_available((seed.0, seed.1, new_id)) {
+            new_id += 1u32;
         }
+        <BankAssociatedNonces>::insert(seed.0, seed.1, new_id);
+        new_id
     }
 }
 
@@ -404,7 +397,7 @@ impl<T: Trait> GenerateUniqueID<OnChainTreasuryID> for Module<T> {
 }
 
 impl<T: Trait> OnChainBank for Module<T> {
-    type OrgId = u32; // TODO: here is where I should export the OrgId type from the Organization subtype
+    type OrgId = u32; // TODO: here is where I should export the OrgId type from the Organization subtype once it is added as an associated type
     type TreasuryId = OnChainTreasuryID;
 }
 
@@ -602,8 +595,7 @@ impl<T: Trait>
         // form the deposit, no savings_pct allocated
         let new_deposit = DepositInfo::new(from, reason, amount);
         // generate unique deposit
-        let unique_deposit = Self::generate_unique_key_id((to_bank_id, BankMapID::Deposit(1u32)));
-        let deposit_id: u32 = unique_deposit.1.into();
+        let deposit_id = Self::seeded_generate_unique_id((to_bank_id, BankMapID::Deposit));
 
         // TODO: when will we delete this, how long is this going to stay in storage?
         <Deposits<T>>::insert(to_bank_id, deposit_id, new_deposit);
@@ -648,9 +640,7 @@ impl<T: Trait>
             .move_from_free_to_reserved(amount)
             .ok_or(Error::<T>::NotEnoughFundsInFreeToAllowReservation)?;
         let reservation_id: u32 =
-            Self::generate_unique_key_id((bank_id, BankMapID::Reservation(1u32)))
-                .1
-                .into();
+            Self::seeded_generate_unique_id((bank_id, BankMapID::Reservation));
         // insert new bank account
         <BankStores<T>>::insert(bank_id, new_bank);
         <BankTracker<T>>::insert(bank_tracker_id, caller, new_reserved_sum_by_caller);
@@ -813,7 +803,7 @@ impl<T: Trait>
         amount: BalanceOf<T>,
         // move control of funds to new outer group which can reserve or withdraw directly
         new_controller: WithdrawalPermissions<T::AccountId>,
-    ) -> DispatchResult {
+    ) -> Result<u32, DispatchError> {
         // no authentication but the caller is logged in the BankTracker
         let _ = <BankStores<T>>::get(bank_id)
             .ok_or(Error::<T>::BankAccountNotFoundForInternalTransfer)?;
@@ -853,9 +843,7 @@ impl<T: Trait>
             InternalTransferInfo::new(reservation_id, reason, amount, new_controller.clone());
         // generate the unique transfer_id
         let new_transfer_id: u32 =
-            Self::generate_unique_key_id((bank_id, BankMapID::InternalTransfer(1u32)))
-                .1
-                .into();
+            Self::seeded_generate_unique_id((bank_id, BankMapID::InternalTransfer));
         // insert transfer_info, thereby unlocking the capital for the `new_controller` group
         <InternalTransfers<T>>::insert(bank_id, new_transfer_id, new_transfer);
         // insert update reservation info after the transfer was made
@@ -864,7 +852,61 @@ impl<T: Trait>
         <SpendCommitments<T>>::insert(commitment_tracker, new_controller, new_spend_commitment);
         // insert new bank tracker info
         <BankTracker<T>>::insert(bank_tracker_id, caller, new_bank_tracker_amount);
-        Ok(())
+        Ok(new_transfer_id)
+    }
+}
+
+impl<T: Trait>
+    CommitAndTransfer<
+        T::AccountId,
+        WithdrawalPermissions<T::AccountId>,
+        BalanceOf<T>,
+        IpfsReference,
+    > for Module<T>
+{
+    // in one step, needs to be permissioned to a sudo of a power outside of this module
+    // -> NO PERMISSIONS CHECK IN THIS METHOD
+    fn commit_and_transfer_spending_power(
+        caller: T::AccountId,
+        bank_id: Self::TreasuryId,
+        reservation_id: u32,
+        reason: IpfsReference,
+        amount: BalanceOf<T>,
+        new_controller: WithdrawalPermissions<T::AccountId>,
+    ) -> Result<u32, DispatchError> {
+        let _ = <BankStores<T>>::get(bank_id)
+            .ok_or(Error::<T>::BankAccountNotFoundForInternalTransfer)?;
+        let spend_reservation = <SpendReservations<T>>::get(bank_id, reservation_id)
+            .ok_or(Error::<T>::SpendReservationNotFound)?;
+        // ensure that the amount is less than the spend reservation amount
+        let new_spend_reservation = spend_reservation
+            .move_funds_out_uncommitted_only(amount) // notably does not reach into committed funds!
+            .ok_or(Error::<T>::NotEnoughFundsCommittedToEnableInternalTransfer)?;
+        let bank_tracker_id = BankTrackerIdentifier::new(
+            bank_id,
+            BankTrackerID::InternalTransferMade(reservation_id),
+        );
+        let new_bank_tracker_amount = if let Some(existing_balance) =
+            <BankTracker<T>>::get(bank_tracker_id.clone(), &caller)
+        {
+            // here is where you might enforce some limit per account with an ensure check
+            existing_balance + amount
+        } else {
+            amount
+        };
+        // form a transfer_info
+        let new_transfer =
+            InternalTransferInfo::new(reservation_id, reason, amount, new_controller.clone());
+        // generate the unique transfer_id
+        let new_transfer_id: u32 =
+            Self::seeded_generate_unique_id((bank_id, BankMapID::InternalTransfer));
+        // insert transfer_info, thereby unlocking the capital for the `new_controller` group
+        <InternalTransfers<T>>::insert(bank_id, new_transfer_id, new_transfer);
+        // insert update reservation info after the transfer was made
+        <SpendReservations<T>>::insert(bank_id, reservation_id, new_spend_reservation);
+        // insert new bank tracker info
+        <BankTracker<T>>::insert(bank_tracker_id, caller, new_bank_tracker_amount);
+        Ok(new_transfer_id)
     }
 }
 

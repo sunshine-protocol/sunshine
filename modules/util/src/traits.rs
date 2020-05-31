@@ -26,10 +26,6 @@ pub trait SeededGenerateUniqueID<Id, Seed> {
     fn seeded_generate_unique_id(seed: Seed) -> Id;
 }
 
-pub trait GenerateUniqueKeyID<KeyId> {
-    fn generate_unique_key_id(proposed: KeyId) -> KeyId;
-}
-
 // ====== Permissions ACL ======
 
 pub trait ChainSudoPermissions<AccountId> {
@@ -804,7 +800,21 @@ pub trait BankReservations<AccountId, GovernanceConfig, Currency, Hash>:
         amount: Currency,
         // move control of funds to new outer group which can reserve or withdraw directly
         new_controller: GovernanceConfig,
-    ) -> DispatchResult;
+    ) -> Result<u32, DispatchError>; // returns transfer_id
+}
+
+pub trait CommitAndTransfer<AccountId, GovernanceConfig, Currency, Hash>:
+    BankReservations<AccountId, GovernanceConfig, Currency, Hash>
+{
+    // in one step
+    fn commit_and_transfer_spending_power(
+        caller: AccountId,
+        bank_id: Self::TreasuryId,
+        reservation_id: u32,
+        reason: Hash,
+        amount: Currency,
+        new_controller: GovernanceConfig,
+    ) -> Result<u32, DispatchError>;
 }
 
 pub trait BankSpends<AccountId, GovernanceConfig, Currency>:
@@ -998,9 +1008,16 @@ pub trait UseTermsOfAgreement<AccountId>: FoundationParts {
     ) -> Result<Self::TeamId, DispatchError>;
 }
 
-pub trait StartApplicationReviewPetition<VoteID> {
-    fn start_application_review_petition(&self, vote_id: VoteID) -> Self;
-    fn get_application_review_id(&self) -> Option<VoteID>;
+// used for application and milestone review dispatch and diagnostics
+pub trait StartReview<VoteID> {
+    fn start_review(&self, vote_id: VoteID) -> Self;
+    fn get_review_id(&self) -> Option<VoteID>;
+}
+
+pub trait SetMakeTransfer<BankId, TransferId>: Sized {
+    fn set_make_transfer(&self, bank_id: BankId, transfer_id: TransferId) -> Self;
+    fn get_bank_id(&self) -> Option<BankId>;
+    fn get_transfer_id(&self) -> Option<TransferId>;
 }
 
 pub trait StartTeamConsentPetition<ShareID, VoteID> {
@@ -1019,7 +1036,7 @@ pub trait ApproveGrant<TeamID> {
 pub trait SubmitGrantApplication<Currency, AccountId, Hash>:
     CreateBounty<Currency, AccountId, Hash> + UseTermsOfAgreement<AccountId>
 {
-    type GrantApp: StartApplicationReviewPetition<Self::MultiVoteId>
+    type GrantApp: StartReview<Self::MultiVoteId>
         + StartTeamConsentPetition<Self::MultiShareId, Self::MultiVoteId>
         + ApproveGrant<Self::TeamId>;
     fn form_grant_application(
@@ -1063,6 +1080,7 @@ pub trait SuperviseGrantApplication<Currency, AccountId, Hash>:
 pub trait SubmitMilestone<Currency, AccountId, Hash>:
     SuperviseGrantApplication<Currency, AccountId, Hash>
 {
+    type Milestone: StartReview<Self::MultiVoteId> + SetMakeTransfer<Self::BankId, u32>;
     type MilestoneState;
     fn submit_milestone(
         caller: AccountId, // must be from the team, maybe check sudo || flat_org_member
@@ -1073,6 +1091,7 @@ pub trait SubmitMilestone<Currency, AccountId, Hash>:
         amount_requested: Currency,
     ) -> Result<u32, DispatchError>; // returns milestone_id
     fn trigger_milestone_review(
+        caller: AccountId,
         bounty_id: u32,
         milestone_id: u32,
     ) -> Result<Self::MilestoneState, DispatchError>;
@@ -1083,6 +1102,7 @@ pub trait SubmitMilestone<Currency, AccountId, Hash>:
         milestone_id: u32,
     ) -> Result<Self::MilestoneState, DispatchError>;
     fn poll_milestone(
+        caller: AccountId,
         bounty_id: u32,
         milestone_id: u32,
     ) -> Result<Self::MilestoneState, DispatchError>;

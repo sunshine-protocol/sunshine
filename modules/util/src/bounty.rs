@@ -1,7 +1,7 @@
 use crate::{
     bank::OnChainTreasuryID,
     organization::{ShareID, TermsOfAgreement},
-    traits::{ApproveGrant, StartApplicationReviewPetition, StartTeamConsentPetition},
+    traits::{ApproveGrant, SetMakeTransfer, StartReview, StartTeamConsentPetition},
 };
 use codec::{Decode, Encode};
 use frame_support::Parameter;
@@ -73,11 +73,20 @@ impl<AccountId: Clone, Hash: Parameter, WeightedThreshold: Clone, Currency: Para
     pub fn foundation(&self) -> u32 {
         self.foundation_id
     }
+    pub fn bank_account(&self) -> OnChainTreasuryID {
+        self.bank_account
+    }
+    pub fn spend_reservation(&self) -> u32 {
+        self.spend_reservation_id
+    }
     pub fn claimed_funding_available(&self) -> Currency {
         self.claimed_funding_available.clone()
     }
     pub fn acceptance_committee(&self) -> ReviewBoard<AccountId, Hash, WeightedThreshold> {
         self.acceptance_committee.clone()
+    }
+    pub fn supervision_committee(&self) -> Option<ReviewBoard<AccountId, Hash, WeightedThreshold>> {
+        self.supervision_committee.clone()
     }
 }
 
@@ -87,23 +96,39 @@ impl<AccountId: Clone, Hash: Parameter, WeightedThreshold: Clone, Currency: Para
 pub struct TeamID<AccountId> {
     org: u32,
     // this should be optional and in the future, I want to orient it towards revocable representative democracy
-    team_sudo: Option<AccountId>,
+    sudo: Option<AccountId>,
     flat_share_id: u32,
     weighted_share_id: u32,
 }
 
-impl<AccountId: Clone> TeamID<AccountId> {
+impl<AccountId: Clone + PartialEq> TeamID<AccountId> {
     pub fn new(
         org: u32,
-        team_sudo: Option<AccountId>,
+        sudo: Option<AccountId>,
         flat_share_id: u32,
         weighted_share_id: u32,
     ) -> TeamID<AccountId> {
         TeamID {
             org,
-            team_sudo,
+            sudo,
             flat_share_id,
             weighted_share_id,
+        }
+    }
+    pub fn org(&self) -> u32 {
+        self.org
+    }
+    pub fn flat_share_id(&self) -> u32 {
+        self.flat_share_id
+    }
+    pub fn weighted_share_id(&self) -> u32 {
+        self.weighted_share_id
+    }
+    pub fn is_sudo(&self, who: &AccountId) -> bool {
+        if let Some(the_sudo) = &self.sudo {
+            the_sudo == who
+        } else {
+            false
         }
     }
 }
@@ -148,27 +173,99 @@ pub enum VoteID {
 pub enum MilestoneStatus {
     SubmittedAwaitingResponse,
     SubmittedReviewStarted(VoteID),
-    ChangesRequestedAwaitingChanges(VoteID),
-    ApprovedAndTransferEnabled,
+    // wraps transfer_id (bank_id is provided for convenient lookup, must equal bounty.bank)
+    ApprovedAndTransferEnabled(OnChainTreasuryID, u32),
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-pub struct MilestoneSubmission<Hash, Currency, Status> {
+pub struct MilestoneSubmission<Hash, Currency, AccountId> {
+    submitter: AccountId,
+    team: TeamID<AccountId>, // to save a storage lookup at application_id
     submission: Hash,
     amount: Currency,
     // the review status, none upon immediate submission
-    review: Option<Status>,
+    state: MilestoneStatus,
 }
 
-impl<Hash, Currency, MilestoneStatus> MilestoneSubmission<Hash, Currency, MilestoneStatus> {
+impl<Hash: Clone, Currency: Clone, AccountId: Clone>
+    MilestoneSubmission<Hash, Currency, AccountId>
+{
     pub fn new(
+        submitter: AccountId,
+        team: TeamID<AccountId>,
         submission: Hash,
         amount: Currency,
-    ) -> MilestoneSubmission<Hash, Currency, MilestoneStatus> {
+    ) -> MilestoneSubmission<Hash, Currency, AccountId> {
         MilestoneSubmission {
+            submitter,
+            team,
             submission,
             amount,
-            review: None,
+            state: MilestoneStatus::SubmittedAwaitingResponse,
+        }
+    }
+    pub fn team(&self) -> TeamID<AccountId> {
+        self.team.clone()
+    }
+    pub fn submission(&self) -> Hash {
+        self.submission.clone()
+    }
+    pub fn amount(&self) -> Currency {
+        self.amount.clone()
+    }
+    pub fn state(&self) -> MilestoneStatus {
+        self.state
+    }
+    pub fn ready_for_review(&self) -> bool {
+        match self.state {
+            MilestoneStatus::SubmittedAwaitingResponse => true,
+            _ => false,
+        }
+    }
+}
+
+impl<Hash: Clone, Currency: Clone, AccountId: Clone> StartReview<VoteID>
+    for MilestoneSubmission<Hash, Currency, AccountId>
+{
+    fn start_review(&self, vote_id: VoteID) -> Self {
+        MilestoneSubmission {
+            submitter: self.submitter.clone(),
+            team: self.team.clone(),
+            submission: self.submission.clone(),
+            amount: self.amount.clone(),
+            state: MilestoneStatus::SubmittedReviewStarted(vote_id),
+        }
+    }
+    fn get_review_id(&self) -> Option<VoteID> {
+        match self.state {
+            MilestoneStatus::SubmittedReviewStarted(vote_id) => Some(vote_id),
+            _ => None,
+        }
+    }
+}
+
+impl<Hash: Clone, Currency: Clone, AccountId: Clone> SetMakeTransfer<OnChainTreasuryID, u32>
+    for MilestoneSubmission<Hash, Currency, AccountId>
+{
+    fn set_make_transfer(&self, bank_id: OnChainTreasuryID, transfer_id: u32) -> Self {
+        MilestoneSubmission {
+            submitter: self.submitter.clone(),
+            team: self.team.clone(),
+            submission: self.submission.clone(),
+            amount: self.amount.clone(),
+            state: MilestoneStatus::ApprovedAndTransferEnabled(bank_id, transfer_id),
+        }
+    }
+    fn get_bank_id(&self) -> Option<OnChainTreasuryID> {
+        match self.state {
+            MilestoneStatus::ApprovedAndTransferEnabled(bank_id, _) => Some(bank_id),
+            _ => None,
+        }
+    }
+    fn get_transfer_id(&self) -> Option<u32> {
+        match self.state {
+            MilestoneStatus::ApprovedAndTransferEnabled(_, transfer_id) => Some(transfer_id),
+            _ => None,
         }
     }
 }
@@ -241,10 +338,10 @@ impl<AccountId: Clone, Shares: Clone, Currency: Clone, Hash: Clone>
     }
 }
 
-impl<AccountId: Clone, Shares: Clone, Currency: Clone, Hash: Clone>
-    StartApplicationReviewPetition<VoteID> for GrantApplication<AccountId, Shares, Currency, Hash>
+impl<AccountId: Clone, Shares: Clone, Currency: Clone, Hash: Clone> StartReview<VoteID>
+    for GrantApplication<AccountId, Shares, Currency, Hash>
 {
-    fn start_application_review_petition(&self, vote_id: VoteID) -> Self {
+    fn start_review(&self, vote_id: VoteID) -> Self {
         GrantApplication {
             description: self.description.clone(),
             total_amount: self.total_amount.clone(),
@@ -252,7 +349,7 @@ impl<AccountId: Clone, Shares: Clone, Currency: Clone, Hash: Clone>
             state: ApplicationState::UnderReviewByAcceptanceCommittee(vote_id),
         }
     }
-    fn get_application_review_id(&self) -> Option<VoteID> {
+    fn get_review_id(&self) -> Option<VoteID> {
         match self.state() {
             ApplicationState::UnderReviewByAcceptanceCommittee(vote_id) => Some(vote_id),
             _ => None,

@@ -12,10 +12,10 @@ use util::{
     court::Evidence,
     organization::{FormedOrganization, ShareID},
     traits::{
-        GenerateUniqueID, GenerateUniqueKeyID, GetInnerOuterShareGroups, IDIsAvailable,
-        OffChainBank, OrgChecks, OrganizationDNS, RegisterOffChainBankAccount, RegisterShareGroup,
-        ShareGroupChecks, SupervisorPermissions, SupportedOrganizationShapes,
-        WeightedShareIssuanceWrapper, WeightedShareWrapper,
+        GenerateUniqueID, GetInnerOuterShareGroups, IDIsAvailable, OffChainBank, OrgChecks,
+        OrganizationDNS, RegisterOffChainBankAccount, RegisterShareGroup, ShareGroupChecks,
+        SupervisorPermissions, SupportedOrganizationShapes, WeightedShareIssuanceWrapper,
+        WeightedShareWrapper,
     },
 };
 
@@ -239,6 +239,12 @@ impl<T: Trait> IDIsAvailable<(OffChainTreasuryID, Payment<T::AccountId, BalanceO
     fn id_is_available(id: (OffChainTreasuryID, Payment<T::AccountId, BalanceOf<T>>)) -> bool {
         <OffChainTransfers<T>>::get(id.0, id.1).is_none()
     }
+}
+
+// TODO: delete this and change this module's storage structure to prefer `u32`s in the keys
+// like bank-onchain and bounty
+pub trait GenerateUniqueKeyID<KeyId> {
+    fn generate_unique_key_id(proposed: KeyId) -> KeyId;
 }
 
 impl<T: Trait> GenerateUniqueKeyID<(OffChainTreasuryID, Payment<T::AccountId, BalanceOf<T>>)>
