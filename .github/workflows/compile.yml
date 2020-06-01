@@ -43,11 +43,11 @@ jobs:
         target: wasm32-unknown-unknown
         default: true
 
-    - name: Build Runtime
-      run: cd runtime && cargo build --release
+    - name: Enter Node
+      run: cd node
 
-    - name: Build Node
-      run: cd node && cargo build --release
+    - name: Node build
+      run: cargo build --release
 
   lint:
     runs-on: ubuntu-latest
@@ -70,14 +70,11 @@ jobs:
         target: wasm32-unknown-unknown
         default: true
 
-    - name: Node cargo fmt
-      run: cd node && cargo fmt --all -- --check
+    - name: Enter Node
+        run: cd node
 
-    - name: Node cargo clippy
-      run: cd node && cargo clippy -- -D warnings
+    - name: Node fmt
+      run: cargo fmt --all -- --check
 
-    - name: Runtime cargo fmt
-      run: cd runtime && cargo fmt --all -- --check
-
-    - name: Runtime cargo clippy
-      run: cd runtime && cargo clippy -- -D warnings
+    - name: Node clippy
+      run: cargo clippy -- -D warnings
