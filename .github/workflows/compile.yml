@@ -4,9 +4,17 @@ on:
   pull_request:
     branches:
     - master
+    paths:
+      - 'modules/*'
+      - 'runtime/*'
+      - 'node/*'
   push:
     branches:
     - master
+    paths:
+      - 'modules/*'
+      - 'runtime/*'
+      - 'node/*'
 
 jobs:
   ci:
@@ -43,10 +51,7 @@ jobs:
         target: wasm32-unknown-unknown
         default: true
 
-    - name: Enter Node
-      run: cd node
-
-    - name: Node build
+    - name: Build release
       run: cargo build --release
 
   lint:
@@ -70,11 +75,8 @@ jobs:
         target: wasm32-unknown-unknown
         default: true
 
-    - name: Enter Node
-      run: cd node
-
-    - name: Node fmt
+    - name: FMT checks
       run: cargo fmt --all -- --check
 
-    - name: Node clippy
+    - name: Clippy checks
       run: cargo clippy -- -D warnings
