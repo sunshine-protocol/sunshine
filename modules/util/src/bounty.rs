@@ -1,7 +1,10 @@
 use crate::{
     bank::OnChainTreasuryID,
     organization::{ShareID, TermsOfAgreement},
-    traits::{ApproveGrant, SetMakeTransfer, StartReview, StartTeamConsentPetition},
+    traits::{
+        ApproveGrant, ApproveWithoutTransfer, SetMakeTransfer, SpendApprovedGrant, StartReview,
+        StartTeamConsentPetition,
+    },
 };
 use codec::{Decode, Encode};
 use frame_support::Parameter;
@@ -199,13 +202,19 @@ pub enum VoteID {
 pub enum MilestoneStatus {
     SubmittedAwaitingResponse,
     SubmittedReviewStarted(VoteID),
-    // wraps transfer_id (bank_id is provided for convenient lookup, must equal bounty.bank)
+    // if the milestone is approved but the approved application does not
+    // have enough funds to satisfy milestone requirement, then this is set and we try again later...
+    ApprovedButNotTransferred,
+    // wraps Some(transfer_id) (bank_id is provided for convenient lookup, must equal bounty.bank)
+    // None if the transfer wasn't able to be afforded at the time so it hasn't happened yet
     ApprovedAndTransferEnabled(OnChainTreasuryID, u32),
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub struct MilestoneSubmission<Hash, Currency, AccountId> {
     submitter: AccountId,
+    // the approved application from which the milestone derives its legitimacy
+    referenced_application: u32,
     team: TeamID<AccountId>, // to save a storage lookup at application_id
     submission: Hash,
     amount: Currency,
@@ -218,17 +227,22 @@ impl<Hash: Clone, Currency: Clone, AccountId: Clone>
 {
     pub fn new(
         submitter: AccountId,
+        referenced_application: u32,
         team: TeamID<AccountId>,
         submission: Hash,
         amount: Currency,
     ) -> MilestoneSubmission<Hash, Currency, AccountId> {
         MilestoneSubmission {
             submitter,
+            referenced_application,
             team,
             submission,
             amount,
             state: MilestoneStatus::SubmittedAwaitingResponse,
         }
+    }
+    pub fn application_id(&self) -> u32 {
+        self.referenced_application
     }
     pub fn team(&self) -> TeamID<AccountId> {
         self.team.clone()
@@ -256,6 +270,7 @@ impl<Hash: Clone, Currency: Clone, AccountId: Clone> StartReview<VoteID>
     fn start_review(&self, vote_id: VoteID) -> Self {
         MilestoneSubmission {
             submitter: self.submitter.clone(),
+            referenced_application: self.referenced_application,
             team: self.team.clone(),
             submission: self.submission.clone(),
             amount: self.amount.clone(),
@@ -270,12 +285,28 @@ impl<Hash: Clone, Currency: Clone, AccountId: Clone> StartReview<VoteID>
     }
 }
 
+impl<Hash: Clone, Currency: Clone, AccountId: Clone> ApproveWithoutTransfer
+    for MilestoneSubmission<Hash, Currency, AccountId>
+{
+    fn approve_without_transfer(&self) -> Self {
+        MilestoneSubmission {
+            submitter: self.submitter.clone(),
+            referenced_application: self.referenced_application,
+            team: self.team.clone(),
+            submission: self.submission.clone(),
+            amount: self.amount.clone(),
+            state: MilestoneStatus::ApprovedButNotTransferred,
+        }
+    }
+}
+
 impl<Hash: Clone, Currency: Clone, AccountId: Clone> SetMakeTransfer<OnChainTreasuryID, u32>
     for MilestoneSubmission<Hash, Currency, AccountId>
 {
     fn set_make_transfer(&self, bank_id: OnChainTreasuryID, transfer_id: u32) -> Self {
         MilestoneSubmission {
             submitter: self.submitter.clone(),
+            referenced_application: self.referenced_application,
             team: self.team.clone(),
             submission: self.submission.clone(),
             amount: self.amount.clone(),
@@ -433,6 +464,36 @@ impl<AccountId: Clone, Shares: Clone, Currency: Clone, Hash: Clone> ApproveGrant
     fn get_full_team_id(&self) -> Option<TeamID<AccountId>> {
         match self.state() {
             ApplicationState::ApprovedAndLive(team_id) => Some(team_id),
+            _ => None,
+        }
+    }
+}
+
+impl<
+        AccountId: Clone,
+        Shares: Clone,
+        Currency: Clone + sp_std::ops::Sub<Currency, Output = Currency> + PartialOrd,
+        Hash: Clone,
+    > SpendApprovedGrant<Currency> for GrantApplication<AccountId, Shares, Currency, Hash>
+{
+    fn spend_approved_grant(&self, amount: Currency) -> Option<Self> {
+        match self.state {
+            // grant must be in an approved state
+            ApplicationState::ApprovedAndLive(_) => {
+                // && amount must be below the grant application's amount
+                if self.total_amount() >= amount {
+                    let new_amount = self.total_amount() - amount;
+                    Some(GrantApplication {
+                        submitter: self.submitter.clone(),
+                        description: self.description.clone(),
+                        total_amount: new_amount,
+                        terms_of_agreement: self.terms_of_agreement.clone(),
+                        state: self.state.clone(),
+                    })
+                } else {
+                    None
+                }
+            }
             _ => None,
         }
     }

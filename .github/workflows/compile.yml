@@ -43,12 +43,11 @@ jobs:
         target: wasm32-unknown-unknown
         default: true
 
-    - name: Build Node
-      run: cargo build --release
+    - name: Build Runtime
+      run: cd runtime && cargo build --release
 
-    - name: Test modules
-      if: matrix.platform.cross != true
-      run: cargo test
+    - name: Build Node
+      run: cd node && cargo build --release
 
   lint:
     runs-on: ubuntu-latest
@@ -71,8 +70,14 @@ jobs:
         target: wasm32-unknown-unknown
         default: true
 
-    - name: cargo fmt
-      run: cargo fmt --all -- --check
+    - name: Node cargo fmt
+      run: cd node && cargo fmt --all -- --check
 
-    - name: cargo clippy
-      run: cargo clippy -- -D warnings
+    - name: Node cargo clippy
+      run: cd node && cargo clippy -- -D warnings
+
+    - name: Runtime cargo fmt
+      run: cd runtime && cargo fmt --all -- --check
+
+    - name: Runtime cargo clippy
+      run: cd runtime && cargo clippy -- -D warnings

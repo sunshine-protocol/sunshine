@@ -1014,6 +1014,10 @@ pub trait StartReview<VoteID> {
     fn get_review_id(&self) -> Option<VoteID>;
 }
 
+pub trait ApproveWithoutTransfer {
+    fn approve_without_transfer(&self) -> Self;
+}
+
 pub trait SetMakeTransfer<BankId, TransferId>: Sized {
     fn set_make_transfer(&self, bank_id: BankId, transfer_id: TransferId) -> Self;
     fn get_bank_id(&self) -> Option<BankId>;
@@ -1032,6 +1036,10 @@ pub trait ApproveGrant<TeamID> {
     fn get_full_team_id(&self) -> Option<TeamID>;
 }
 // TODO: RevokeApprovedGrant<VoteID> => vote to take away the team's grant and clean storage
+
+pub trait SpendApprovedGrant<Currency>: Sized {
+    fn spend_approved_grant(&self, amount: Currency) -> Option<Self>;
+}
 
 pub trait SubmitGrantApplication<Currency, AccountId, Hash>:
     CreateBounty<Currency, AccountId, Hash> + UseTermsOfAgreement<AccountId>
@@ -1082,7 +1090,9 @@ pub trait SuperviseGrantApplication<Currency, AccountId, Hash>:
 pub trait SubmitMilestone<Currency, AccountId, Hash>:
     SuperviseGrantApplication<Currency, AccountId, Hash>
 {
-    type Milestone: StartReview<Self::MultiVoteId> + SetMakeTransfer<Self::BankId, u32>;
+    type Milestone: StartReview<Self::MultiVoteId>
+        + ApproveWithoutTransfer
+        + SetMakeTransfer<Self::BankId, u32>;
     type MilestoneState;
     fn submit_milestone(
         caller: AccountId, // must be from the team, maybe check sudo || flat_org_member
