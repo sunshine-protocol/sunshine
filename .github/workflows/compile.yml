@@ -71,7 +71,7 @@ jobs:
         default: true
 
     - name: Enter Node
-        run: cd node
+      run: cd node
 
     - name: Node fmt
       run: cargo fmt --all -- --check
