@@ -2,6 +2,8 @@
 #![allow(clippy::redundant_closure_call)]
 #![allow(clippy::type_complexity)]
 #![allow(clippy::too_many_arguments)]
+#![allow(non_snake_case)]
+// this syntax for the runtime methods makes sense to me bc of existence of direct helper methods in trait impls
 #![cfg_attr(not(feature = "std"), no_std)]
 
 mod tests;
@@ -140,11 +142,16 @@ decl_event!(
     where
         <T as frame_system::Trait>::AccountId,
         Currency = BalanceOf<T>,
+        AppState = ApplicationState<<T as frame_system::Trait>::AccountId>,
     {
         FoundationRegisteredFromOnChainBank(OrgId, OnChainTreasuryID),
         FoundationPostedBounty(AccountId, OrgId, BountyId, OnChainTreasuryID, IpfsReference, Currency, Currency),
-        // second u32 is the new GrantId
+        // BountyId, Application Id (u32s)
         GrantApplicationSubmittedForBounty(AccountId, BountyId, u32, IpfsReference, Currency),
+        // BountyId, Application Id (u32s)
+        ApplicationReviewTriggered(AccountId, u32, u32, AppState),
+        SudoApprovedApplication(AccountId, u32, u32, AppState),
+        ApplicationPolled(u32, u32, AppState),
     }
 );
 
@@ -227,7 +234,7 @@ decl_module! {
         fn deposit_event() = default;
 
         #[weight = 0]
-        fn register_foundation_from_existing_on_chain_bank(
+        pub fn direct__register_foundation_from_existing_bank(
             origin,
             registered_organization: OrgId,
             bank_account: OnChainTreasuryID,
@@ -240,7 +247,7 @@ decl_module! {
         }
 
         #[weight = 0]
-        fn create_bounty_on_behalf_of_foundation(
+        pub fn direct__create_bounty(
             origin,
             registered_organization: OrgId,
             description: IpfsReference,
@@ -275,7 +282,7 @@ decl_module! {
             Ok(())
         }
         #[weight = 0]
-        fn directly_submit_grant_application(
+        pub fn direct__submit_grant_application(
             origin,
             bounty_id: BountyId,
             description: IpfsReference,
@@ -287,9 +294,40 @@ decl_module! {
             Self::deposit_event(RawEvent::GrantApplicationSubmittedForBounty(submitter, bounty_id, new_grant_app_id, description, total_amount));
             Ok(())
         }
-        // trigger application review
-        // sudo approve application
-        // poll application
+        #[weight = 0]
+        pub fn direct__trigger_application_review(
+            origin,
+            bounty_id: BountyId,
+            application_id: u32,
+        ) -> DispatchResult {
+            let trigger = ensure_signed(origin)?;
+            let application_state = Self::trigger_application_review(trigger.clone(), bounty_id, application_id)?;
+            Self::deposit_event(RawEvent::ApplicationReviewTriggered(trigger, bounty_id, application_id, application_state));
+            Ok(())
+        }
+        #[weight = 0]
+        pub fn direct__sudo_approve_application(
+            origin,
+            bounty_id: BountyId,
+            application_id: u32,
+        ) -> DispatchResult {
+            let purported_sudo = ensure_signed(origin)?;
+            let app_state = Self::sudo_approve_application(purported_sudo.clone(), bounty_id, application_id)?;
+            Self::deposit_event(RawEvent::SudoApprovedApplication(purported_sudo.clone(), bounty_id, application_id, app_state));
+            Ok(())
+        }
+        #[weight = 0]
+        fn any_acc__poll_application(
+            origin,
+            bounty_id: BountyId,
+            application_id: u32,
+        ) -> DispatchResult {
+            let _ = ensure_signed(origin)?;
+            let app_state = Self::poll_application(bounty_id, application_id)?;
+            Self::deposit_event(RawEvent::ApplicationPolled(bounty_id, application_id, app_state));
+            Ok(())
+        }
+
         // submit milestone
         // trigger milestone review
         // sudo approve milestone

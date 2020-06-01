@@ -144,7 +144,7 @@ pub type VoteYesNo = vote_yesno::Module<TestRuntime>;
 pub type VotePetition = vote_petition::Module<TestRuntime>;
 pub type Bounty = Module<TestRuntime>;
 
-fn get_last_event() -> RawEvent<u64, u64> {
+fn get_last_event() -> RawEvent<u64, u64, ApplicationState<u64>> {
     System::events()
         .into_iter()
         .map(|r| r.event)
@@ -247,7 +247,7 @@ fn genesis_config_works() {
 // }
 
 #[test]
-fn register_foundation_comma_post_bounty_comma_submit_grant_app() {
+fn register_foundation() {
     new_test_ext().execute_with(|| {
         let one = Origin::signed(1);
         let expected_treasury_id = OnChainTreasuryID([0, 0, 0, 0, 0, 0, 0, 1]);
@@ -268,14 +268,55 @@ fn register_foundation_comma_post_bounty_comma_submit_grant_app() {
         // 1 is not the bank owner for this fake_treasury_id
         let fake_treasury_id = OnChainTreasuryID::default();
         assert_noop!(
-            Bounty::register_foundation_from_existing_on_chain_bank(
+            Bounty::direct__register_foundation_from_existing_bank(
                 one.clone(),
                 1,
                 fake_treasury_id
             ),
             Error::<TestRuntime>::CannotRegisterFoundationFromOrgBankRelationshipThatDNE
         );
-        assert_ok!(Bounty::register_foundation_from_existing_on_chain_bank(
+        assert_ok!(Bounty::direct__register_foundation_from_existing_bank(
+            one.clone(),
+            1,
+            expected_treasury_id
+        ));
+        assert_eq!(
+            get_last_event(),
+            RawEvent::FoundationRegisteredFromOnChainBank(1, expected_treasury_id,)
+        );
+    });
+}
+
+#[test]
+fn post_bounty() {
+    new_test_ext().execute_with(|| {
+        let one = Origin::signed(1);
+        let expected_treasury_id = OnChainTreasuryID([0, 0, 0, 0, 0, 0, 0, 1]);
+        // bank-onchain registration boilerplate
+        let weighted_share_group_controller =
+            WithdrawalPermissions::AnyMemberOfOrgShareGroup(1u32, ShareID::WeightedAtomic(1u32));
+        let group = vec![(1, 5), (2, 5), (3, 5), (4, 5)];
+        assert_ok!(OrganizationInterface::register_inner_weighted_share_group(
+            1, group
+        ));
+        assert_ok!(Bank::register_on_chain_bank_account(
+            1,
+            1,
+            10,
+            weighted_share_group_controller.clone()
+        ));
+        // -- TEST 1 -- REGISTER FOUNDATION FROM EXISTING ONCHAIN BANK ACCOUNT
+        // 1 is not the bank owner for this fake_treasury_id
+        let fake_treasury_id = OnChainTreasuryID::default();
+        assert_noop!(
+            Bounty::direct__register_foundation_from_existing_bank(
+                one.clone(),
+                1,
+                fake_treasury_id
+            ),
+            Error::<TestRuntime>::CannotRegisterFoundationFromOrgBankRelationshipThatDNE
+        );
+        assert_ok!(Bounty::direct__register_foundation_from_existing_bank(
             one.clone(),
             1,
             expected_treasury_id
@@ -289,7 +330,7 @@ fn register_foundation_comma_post_bounty_comma_submit_grant_app() {
         let new_review_board = ReviewBoard::new_flat_petition_review(Some(1), 1, 1, 3, None, None);
         // Cannot open a bounty below the minimum for this module
         assert_noop!(
-            Bounty::create_bounty_on_behalf_of_foundation(
+            Bounty::direct__create_bounty(
                 one.clone(),
                 1,
                 IpfsReference::default(),
@@ -301,7 +342,87 @@ fn register_foundation_comma_post_bounty_comma_submit_grant_app() {
             ),
             Error::<TestRuntime>::MinimumBountyClaimedAmountMustMeetModuleLowerBound
         );
-        assert_ok!(Bounty::create_bounty_on_behalf_of_foundation(
+        assert_ok!(Bounty::direct__create_bounty(
+            one.clone(),
+            1,
+            IpfsReference::default(),
+            expected_treasury_id,
+            5,
+            10,
+            new_review_board,
+            None,
+        ));
+        assert_eq!(
+            get_last_event(),
+            RawEvent::FoundationPostedBounty(
+                1, // bounty_creator
+                1, // registered org id
+                1, // bounty identifier
+                expected_treasury_id,
+                IpfsReference::default(), // description
+                5,                        // amount reserved for bounty
+                10                        // amount claimed available for bounty
+            )
+        );
+    });
+}
+
+#[test]
+fn submit_grant_app() {
+    new_test_ext().execute_with(|| {
+        let one = Origin::signed(1);
+        let expected_treasury_id = OnChainTreasuryID([0, 0, 0, 0, 0, 0, 0, 1]);
+        // bank-onchain registration boilerplate
+        let weighted_share_group_controller =
+            WithdrawalPermissions::AnyMemberOfOrgShareGroup(1u32, ShareID::WeightedAtomic(1u32));
+        let group = vec![(1, 5), (2, 5), (3, 5), (4, 5)];
+        assert_ok!(OrganizationInterface::register_inner_weighted_share_group(
+            1, group
+        ));
+        assert_ok!(Bank::register_on_chain_bank_account(
+            1,
+            1,
+            10,
+            weighted_share_group_controller.clone()
+        ));
+        // -- TEST 1 -- REGISTER FOUNDATION FROM EXISTING ONCHAIN BANK ACCOUNT
+        // 1 is not the bank owner for this fake_treasury_id
+        let fake_treasury_id = OnChainTreasuryID::default();
+        assert_noop!(
+            Bounty::direct__register_foundation_from_existing_bank(
+                one.clone(),
+                1,
+                fake_treasury_id
+            ),
+            Error::<TestRuntime>::CannotRegisterFoundationFromOrgBankRelationshipThatDNE
+        );
+        assert_ok!(Bounty::direct__register_foundation_from_existing_bank(
+            one.clone(),
+            1,
+            expected_treasury_id
+        ));
+        assert_eq!(
+            get_last_event(),
+            RawEvent::FoundationRegisteredFromOnChainBank(1, expected_treasury_id,)
+        );
+        // -- TEST 2 -- Create Bounty
+        // -> I would put this in a separate test but fuck all that boilerplate repeated in every test
+        let new_review_board = ReviewBoard::new_flat_petition_review(Some(1), 1, 1, 3, None, None);
+        // Cannot open a bounty below the minimum for this module
+        assert_noop!(
+            Bounty::direct__create_bounty(
+                one.clone(),
+                1,
+                IpfsReference::default(),
+                expected_treasury_id,
+                1,
+                2,
+                new_review_board.clone(),
+                None,
+            ),
+            Error::<TestRuntime>::MinimumBountyClaimedAmountMustMeetModuleLowerBound
+        );
+        assert_ok!(Bounty::direct__create_bounty(
             one.clone(),
             1,
             IpfsReference::default(),
@@ -327,7 +448,7 @@ fn register_foundation_comma_post_bounty_comma_submit_grant_app() {
         let team_one_share_metadata = vec![(1, 10), (2, 10), (3, 10), (4, 10)];
         let team_one_terms_of_agreement = TermsOfAgreement::new(Some(1), team_one_share_metadata);
         assert_noop!(
-            Bounty::directly_submit_grant_application(
+            Bounty::direct__submit_grant_application(
                 one.clone(),
                 1,
                 IpfsReference::default(),
@@ -337,7 +458,7 @@ fn register_foundation_comma_post_bounty_comma_submit_grant_app() {
             Error::<TestRuntime>::GrantRequestExceedsAvailableBountyFunds
         );
         assert_noop!(
-            Bounty::directly_submit_grant_application(
+            Bounty::direct__submit_grant_application(
                 one.clone(),
                 2,
                 IpfsReference::default(),
@@ -346,7 +467,7 @@ fn register_foundation_comma_post_bounty_comma_submit_grant_app() {
             ),
             Error::<TestRuntime>::GrantApplicationFailsIfBountyDNE
         );
-        assert_ok!(Bounty::directly_submit_grant_application(
+        assert_ok!(Bounty::direct__submit_grant_application(
             one.clone(),
             1,
             IpfsReference::default(),
@@ -361,6 +482,609 @@ fn register_foundation_comma_post_bounty_comma_submit_grant_app() {
                 1,                        // grant app id
                 IpfsReference::default(), // description
                 10,
+            )
+        );
+    });
+}
+
+#[test]
+fn trigger_app_review() {
+    new_test_ext().execute_with(|| {
+        let one = Origin::signed(1);
+        let expected_treasury_id = OnChainTreasuryID([0, 0, 0, 0, 0, 0, 0, 1]);
+        // bank-onchain registration boilerplate
+        let weighted_share_group_controller =
+            WithdrawalPermissions::AnyMemberOfOrgShareGroup(1u32, ShareID::WeightedAtomic(1u32));
+        let group = vec![(1, 5), (2, 5), (3, 5), (4, 5)];
+        assert_ok!(OrganizationInterface::register_inner_weighted_share_group(
+            1, group
+        ));
+        assert_ok!(Bank::register_on_chain_bank_account(
+            1,
+            1,
+            10,
+            weighted_share_group_controller.clone()
+        ));
+        // -- TEST 1 -- REGISTER FOUNDATION FROM EXISTING ONCHAIN BANK ACCOUNT
+        // 1 is not the bank owner for this fake_treasury_id
+        let fake_treasury_id = OnChainTreasuryID::default();
+        assert_noop!(
+            Bounty::direct__register_foundation_from_existing_bank(
+                one.clone(),
+                1,
+                fake_treasury_id
+            ),
+            Error::<TestRuntime>::CannotRegisterFoundationFromOrgBankRelationshipThatDNE
+        );
+        assert_ok!(Bounty::direct__register_foundation_from_existing_bank(
+            one.clone(),
+            1,
+            expected_treasury_id
+        ));
+        assert_eq!(
+            get_last_event(),
+            RawEvent::FoundationRegisteredFromOnChainBank(1, expected_treasury_id,)
+        );
+        // -- TEST 2 -- Create Bounty
+        // -> I would put this in a separate test but fuck all that boilerplate repeated in every test
+        let new_review_board = ReviewBoard::new_flat_petition_review(Some(1), 1, 1, 3, None, None);
+        // Cannot open a bounty below the minimum for this module
+        assert_noop!(
+            Bounty::direct__create_bounty(
+                one.clone(),
+                1,
+                IpfsReference::default(),
+                expected_treasury_id,
+                1,
+                2,
+                new_review_board.clone(),
+                None,
+            ),
+            Error::<TestRuntime>::MinimumBountyClaimedAmountMustMeetModuleLowerBound
+        );
+        assert_ok!(Bounty::direct__create_bounty(
+            one.clone(),
+            1,
+            IpfsReference::default(),
+            expected_treasury_id,
+            5,
+            10,
+            new_review_board,
+            None,
+        ));
+        assert_eq!(
+            get_last_event(),
+            RawEvent::FoundationPostedBounty(
+                1, // bounty_creator
+                1, // registered org id
+                1, // bounty identifier
+                expected_treasury_id,
+                IpfsReference::default(), // description
+                5,                        // amount reserved for bounty
+                10                        // amount claimed available for bounty
+            )
+        );
+        // -- TEST 3 -- SUBMIT GRANT APPLICATION
+        let team_one_share_metadata = vec![(1, 10), (2, 10), (3, 10), (4, 10)];
+        let team_one_terms_of_agreement = TermsOfAgreement::new(Some(1), team_one_share_metadata);
+        assert_noop!(
+            Bounty::direct__submit_grant_application(
+                one.clone(),
+                1,
+                IpfsReference::default(),
+                11,
+                team_one_terms_of_agreement.clone()
+            ),
+            Error::<TestRuntime>::GrantRequestExceedsAvailableBountyFunds
+        );
+        assert_noop!(
+            Bounty::direct__submit_grant_application(
+                one.clone(),
+                2,
+                IpfsReference::default(),
+                10,
+                team_one_terms_of_agreement.clone()
+            ),
+            Error::<TestRuntime>::GrantApplicationFailsIfBountyDNE
+        );
+        assert_ok!(Bounty::direct__submit_grant_application(
+            one.clone(),
+            1,
+            IpfsReference::default(),
+            10,
+            team_one_terms_of_agreement
+        ));
+        assert_eq!(
+            get_last_event(),
+            RawEvent::GrantApplicationSubmittedForBounty(
+                1,                        // submitter
+                1,                        // bounty id
+                1,                        // grant app id
+                IpfsReference::default(), // description
+                10,
+            )
+        );
+        // -- TEST 4 -- TRIGGER APPLICATION REVIEW
+        assert_noop!(
+            Bounty::direct__trigger_application_review(one.clone(), 2, 1,),
+            Error::<TestRuntime>::CannotReviewApplicationIfBountyDNE
+        );
+        assert_noop!(
+            Bounty::direct__trigger_application_review(one.clone(), 1, 2,),
+            Error::<TestRuntime>::CannotReviewApplicationIfApplicationDNE
+        );
+        // caller from outside of the acceptance committee
+        let sixnine = Origin::signed(69);
+        assert_noop!(
+            Bounty::direct__trigger_application_review(sixnine.clone(), 1, 1,),
+            Error::<TestRuntime>::AccountNotAuthorizedToTriggerApplicationReview
+        );
+        assert_ok!(Bounty::direct__trigger_application_review(
+            one.clone(),
+            1,
+            1,
+        ));
+    });
+}
+
+#[test]
+fn sudo_approve_grant_app() {
+    new_test_ext().execute_with(|| {
+        let one = Origin::signed(1);
+        let expected_treasury_id = OnChainTreasuryID([0, 0, 0, 0, 0, 0, 0, 1]);
+        // bank-onchain registration boilerplate
+        let weighted_share_group_controller =
+            WithdrawalPermissions::AnyMemberOfOrgShareGroup(1u32, ShareID::WeightedAtomic(1u32));
+        let group = vec![(1, 5), (2, 5), (3, 5), (4, 5)];
+        assert_ok!(OrganizationInterface::register_inner_weighted_share_group(
+            1, group
+        ));
+        assert_ok!(Bank::register_on_chain_bank_account(
+            1,
+            1,
+            10,
+            weighted_share_group_controller.clone()
+        ));
+        // -- TEST 1 -- REGISTER FOUNDATION FROM EXISTING ONCHAIN BANK ACCOUNT
+        // 1 is not the bank owner for this fake_treasury_id
+        let fake_treasury_id = OnChainTreasuryID::default();
+        assert_noop!(
+            Bounty::direct__register_foundation_from_existing_bank(
+                one.clone(),
+                1,
+                fake_treasury_id
+            ),
+            Error::<TestRuntime>::CannotRegisterFoundationFromOrgBankRelationshipThatDNE
+        );
+        assert_ok!(Bounty::direct__register_foundation_from_existing_bank(
+            one.clone(),
+            1,
+            expected_treasury_id
+        ));
+        assert_eq!(
+            get_last_event(),
+            RawEvent::FoundationRegisteredFromOnChainBank(1, expected_treasury_id,)
+        );
+        // -- TEST 2 -- Create Bounty
+        let new_review_board = ReviewBoard::new_flat_petition_review(Some(1), 1, 1, 3, None, None);
+        // Cannot open a bounty below the minimum for this module
+        assert_noop!(
+            Bounty::direct__create_bounty(
+                one.clone(),
+                1,
+                IpfsReference::default(),
+                expected_treasury_id,
+                1,
+                2,
+                new_review_board.clone(),
+                None,
+            ),
+            Error::<TestRuntime>::MinimumBountyClaimedAmountMustMeetModuleLowerBound
+        );
+        assert_ok!(Bounty::direct__create_bounty(
+            one.clone(),
+            1,
+            IpfsReference::default(),
+            expected_treasury_id,
+            5,
+            10,
+            new_review_board,
+            None,
+        ));
+        assert_eq!(
+            get_last_event(),
+            RawEvent::FoundationPostedBounty(
+                1, // bounty_creator
+                1, // registered org id
+                1, // bounty identifier
+                expected_treasury_id,
+                IpfsReference::default(), // description
+                5,                        // amount reserved for bounty
+                10                        // amount claimed available for bounty
+            )
+        );
+        // -- TEST 3 -- SUBMIT GRANT APPLICATION
+        let team_one_share_metadata = vec![(1, 10), (2, 10), (3, 10), (4, 10)];
+        let team_one_terms_of_agreement = TermsOfAgreement::new(Some(1), team_one_share_metadata);
+        assert_noop!(
+            Bounty::direct__submit_grant_application(
+                one.clone(),
+                1,
+                IpfsReference::default(),
+                11,
+                team_one_terms_of_agreement.clone()
+            ),
+            Error::<TestRuntime>::GrantRequestExceedsAvailableBountyFunds
+        );
+        assert_noop!(
+            Bounty::direct__submit_grant_application(
+                one.clone(),
+                2,
+                IpfsReference::default(),
+                10,
+                team_one_terms_of_agreement.clone()
+            ),
+            Error::<TestRuntime>::GrantApplicationFailsIfBountyDNE
+        );
+        assert_ok!(Bounty::direct__submit_grant_application(
+            one.clone(),
+            1,
+            IpfsReference::default(),
+            10,
+            team_one_terms_of_agreement
+        ));
+        assert_eq!(
+            get_last_event(),
+            RawEvent::GrantApplicationSubmittedForBounty(
+                1,                        // submitter
+                1,                        // bounty id
+                1,                        // grant app id
+                IpfsReference::default(), // description
+                10,
+            )
+        );
+        // -- TEST 4 -- SUDO APPROVE GRANT APPLICATION
+        assert_noop!(
+            Bounty::direct__sudo_approve_application(one.clone(), 2, 1,),
+            Error::<TestRuntime>::CannotSudoApproveIfBountyDNE
+        );
+        assert_noop!(
+            Bounty::direct__sudo_approve_application(one.clone(), 1, 2,),
+            Error::<TestRuntime>::CannotSudoApproveIfGrantAppDNE
+        );
+        let sixnine = Origin::signed(69);
+        assert_noop!(
+            Bounty::direct__sudo_approve_application(sixnine.clone(), 1, 1,),
+            Error::<TestRuntime>::CannotSudoApproveAppIfNotAssignedSudo
+        );
+        assert_ok!(Bounty::direct__sudo_approve_application(one.clone(), 1, 1,));
+        assert_noop!(
+            Bounty::direct__sudo_approve_application(one.clone(), 1, 1,),
+            Error::<TestRuntime>::AppStateCannotBeSudoApprovedForAGrantFromCurrentState
+        );
+    });
+}
+
+#[test]
+fn poll_application_status_from_review_board_path_to_team_consent() {
+    new_test_ext().execute_with(|| {
+        let one = Origin::signed(1);
+        let expected_treasury_id = OnChainTreasuryID([0, 0, 0, 0, 0, 0, 0, 1]);
+        // bank-onchain registration boilerplate
+        let weighted_share_group_controller =
+            WithdrawalPermissions::AnyMemberOfOrgShareGroup(1u32, ShareID::WeightedAtomic(1u32));
+        let group = vec![(1, 5), (2, 5), (3, 5), (4, 5)];
+        assert_ok!(OrganizationInterface::register_inner_weighted_share_group(
+            1, group
+        ));
+        assert_ok!(Bank::register_on_chain_bank_account(
+            1,
+            1,
+            10,
+            weighted_share_group_controller.clone()
+        ));
+        // -- TEST 1 -- REGISTER FOUNDATION FROM EXISTING ONCHAIN BANK ACCOUNT
+        // 1 is not the bank owner for this fake_treasury_id
+        let fake_treasury_id = OnChainTreasuryID::default();
+        assert_noop!(
+            Bounty::direct__register_foundation_from_existing_bank(
+                one.clone(),
+                1,
+                fake_treasury_id
+            ),
+            Error::<TestRuntime>::CannotRegisterFoundationFromOrgBankRelationshipThatDNE
+        );
+        assert_ok!(Bounty::direct__register_foundation_from_existing_bank(
+            one.clone(),
+            1,
+            expected_treasury_id
+        ));
+        assert_eq!(
+            get_last_event(),
+            RawEvent::FoundationRegisteredFromOnChainBank(1, expected_treasury_id,)
+        );
+        // -- TEST 2 -- Create Bounty
+        let new_review_board = ReviewBoard::new_flat_petition_review(Some(1), 1, 1, 3, None, None);
+        // Cannot open a bounty below the minimum for this module
+        assert_noop!(
+            Bounty::direct__create_bounty(
+                one.clone(),
+                1,
+                IpfsReference::default(),
+                expected_treasury_id,
+                1,
+                2,
+                new_review_board.clone(),
+                None,
+            ),
+            Error::<TestRuntime>::MinimumBountyClaimedAmountMustMeetModuleLowerBound
+        );
+        assert_ok!(Bounty::direct__create_bounty(
+            one.clone(),
+            1,
+            IpfsReference::default(),
+            expected_treasury_id,
+            5,
+            10,
+            new_review_board,
+            None,
+        ));
+        assert_eq!(
+            get_last_event(),
+            RawEvent::FoundationPostedBounty(
+                1, // bounty_creator
+                1, // registered org id
+                1, // bounty identifier
+                expected_treasury_id,
+                IpfsReference::default(), // description
+                5,                        // amount reserved for bounty
+                10                        // amount claimed available for bounty
+            )
+        );
+        // -- TEST 3 -- SUBMIT GRANT APPLICATION
+        let team_one_share_metadata = vec![(1, 10), (2, 10), (3, 10), (4, 10)];
+        let team_one_terms_of_agreement = TermsOfAgreement::new(Some(1), team_one_share_metadata);
+        assert_noop!(
+            Bounty::direct__submit_grant_application(
+                one.clone(),
+                1,
+                IpfsReference::default(),
+                11,
+                team_one_terms_of_agreement.clone()
+            ),
+            Error::<TestRuntime>::GrantRequestExceedsAvailableBountyFunds
+        );
+        assert_noop!(
+            Bounty::direct__submit_grant_application(
+                one.clone(),
+                2,
+                IpfsReference::default(),
+                10,
+                team_one_terms_of_agreement.clone()
+            ),
+            Error::<TestRuntime>::GrantApplicationFailsIfBountyDNE
+        );
+        assert_ok!(Bounty::direct__submit_grant_application(
+            one.clone(),
+            1,
+            IpfsReference::default(),
+            10,
+            team_one_terms_of_agreement
+        ));
+        assert_eq!(
+            get_last_event(),
+            RawEvent::GrantApplicationSubmittedForBounty(
+                1,                        // submitter
+                1,                        // bounty id
+                1,                        // grant app id
+                IpfsReference::default(), // description
+                10,
+            )
+        );
+        // -- TEST 4 -- POLL APPLICATION
+        assert_ok!(Bounty::any_acc__poll_application(one.clone(), 1, 1,));
+        assert_eq!(
+            get_last_event(),
+            RawEvent::ApplicationPolled(
+                1, // bounty id
+                1, // grant app id
+                ApplicationState::SubmittedAwaitingResponse,
+            )
+        );
+        assert_ok!(Bounty::direct__trigger_application_review(
+            one.clone(),
+            1,
+            1,
+        ));
+        assert_ok!(Bounty::any_acc__poll_application(one.clone(), 1, 1,));
+        assert_eq!(
+            get_last_event(),
+            RawEvent::ApplicationPolled(
+                1, // bounty id
+                1, // grant app id
+                ApplicationState::UnderReviewByAcceptanceCommittee(VoteID::Petition(1)),
+            )
+        );
+        // ShareID::Flat(1) = {1, 2, 3, 4}
+        // add 3 approvals to meet threshold for `new_review_board` declared and assigned further above
+        for i in 1u64..4u64 {
+            assert_ok!(VotePetition::sign_petition(
+                1,
+                i,
+                util::petition::PetitionView::Assent(IpfsReference::default()),
+            ));
+        }
+        assert_ok!(Bounty::any_acc__poll_application(one.clone(), 1, 1,));
+        assert_eq!(
+            get_last_event(),
+            RawEvent::ApplicationPolled(
+                1, // bounty id
+                1, // grant app id
+                ApplicationState::ApprovedByFoundationAwaitingTeamConsent(
+                    ShareID::Flat(2),
+                    VoteID::Petition(2)
+                ),
+            )
+        );
+    });
+} // team consent -> approval in next test
+
+#[test]
+fn poll_application_status_from_sudo_approve_to_team_consent_to_approval() {
+    new_test_ext().execute_with(|| {
+        let one = Origin::signed(1);
+        let expected_treasury_id = OnChainTreasuryID([0, 0, 0, 0, 0, 0, 0, 1]);
+        // bank-onchain registration boilerplate
+        let weighted_share_group_controller =
+            WithdrawalPermissions::AnyMemberOfOrgShareGroup(1u32, ShareID::WeightedAtomic(1u32));
+        let group = vec![(1, 5), (2, 5), (3, 5), (4, 5)];
+        assert_ok!(OrganizationInterface::register_inner_weighted_share_group(
+            1, group
+        ));
+        assert_ok!(Bank::register_on_chain_bank_account(
+            1,
+            1,
+            10,
+            weighted_share_group_controller.clone()
+        ));
+        // -- TEST 1 -- REGISTER FOUNDATION FROM EXISTING ONCHAIN BANK ACCOUNT
+        // 1 is not the bank owner for this fake_treasury_id
+        let fake_treasury_id = OnChainTreasuryID::default();
+        assert_noop!(
+            Bounty::direct__register_foundation_from_existing_bank(
+                one.clone(),
+                1,
+                fake_treasury_id
+            ),
+            Error::<TestRuntime>::CannotRegisterFoundationFromOrgBankRelationshipThatDNE
+        );
+        assert_ok!(Bounty::direct__register_foundation_from_existing_bank(
+            one.clone(),
+            1,
+            expected_treasury_id
+        ));
+        assert_eq!(
+            get_last_event(),
+            RawEvent::FoundationRegisteredFromOnChainBank(1, expected_treasury_id,)
+        );
+        // -- TEST 2 -- Create Bounty
+        let new_review_board = ReviewBoard::new_flat_petition_review(Some(1), 1, 1, 3, None, None);
+        // Cannot open a bounty below the minimum for this module
+        assert_noop!(
+            Bounty::direct__create_bounty(
+                one.clone(),
+                1,
+                IpfsReference::default(),
+                expected_treasury_id,
+                1,
+                2,
+                new_review_board.clone(),
+                None,
+            ),
+            Error::<TestRuntime>::MinimumBountyClaimedAmountMustMeetModuleLowerBound
+        );
+        assert_ok!(Bounty::direct__create_bounty(
+            one.clone(),
+            1,
+            IpfsReference::default(),
+            expected_treasury_id,
+            5,
+            10,
+            new_review_board,
+            None,
+        ));
+        assert_eq!(
+            get_last_event(),
+            RawEvent::FoundationPostedBounty(
+                1, // bounty_creator
+                1, // registered org id
+                1, // bounty identifier
+                expected_treasury_id,
+                IpfsReference::default(), // description
+                5,                        // amount reserved for bounty
+                10                        // amount claimed available for bounty
+            )
+        );
+        // -- TEST 3 -- SUBMIT GRANT APPLICATION
+        let team_one_share_metadata = vec![(1, 10), (2, 10), (3, 10), (4, 10)];
+        let team_one_terms_of_agreement = TermsOfAgreement::new(Some(1), team_one_share_metadata);
+        assert_noop!(
+            Bounty::direct__submit_grant_application(
+                one.clone(),
+                1,
+                IpfsReference::default(),
+                11,
+                team_one_terms_of_agreement.clone()
+            ),
+            Error::<TestRuntime>::GrantRequestExceedsAvailableBountyFunds
+        );
+        assert_noop!(
+            Bounty::direct__submit_grant_application(
+                one.clone(),
+                2,
+                IpfsReference::default(),
+                10,
+                team_one_terms_of_agreement.clone()
+            ),
+            Error::<TestRuntime>::GrantApplicationFailsIfBountyDNE
+        );
+        assert_ok!(Bounty::direct__submit_grant_application(
+            one.clone(),
+            1,
+            IpfsReference::default(),
+            10,
+            team_one_terms_of_agreement
+        ));
+        assert_eq!(
+            get_last_event(),
+            RawEvent::GrantApplicationSubmittedForBounty(
+                1,                        // submitter
+                1,                        // bounty id
+                1,                        // grant app id
+                IpfsReference::default(), // description
+                10,
+            )
+        );
+        // -- TEST 4 -- POLL APPLICATION
+        assert_ok!(Bounty::any_acc__poll_application(one.clone(), 1, 1,));
+        assert_eq!(
+            get_last_event(),
+            RawEvent::ApplicationPolled(
+                1, // bounty id
+                1, // grant app id
+                ApplicationState::SubmittedAwaitingResponse,
+            )
+        );
+        assert_ok!(Bounty::direct__sudo_approve_application(one.clone(), 1, 1,));
+        assert_ok!(Bounty::any_acc__poll_application(one.clone(), 1, 1,));
+        assert_eq!(
+            get_last_event(),
+            RawEvent::ApplicationPolled(
+                1, // bounty id
+                1, // grant app id
+                ApplicationState::ApprovedByFoundationAwaitingTeamConsent(
+                    ShareID::Flat(2),
+                    VoteID::Petition(1)
+                ),
+            )
+        );
+        // ShareID::Flat(2) = {1, 2, 3, 4}
+        // impl UNANIMOUS CONSENT
+        for i in 1u64..5u64 {
+            assert_ok!(VotePetition::sign_petition(
+                1,
+                i,
+                util::petition::PetitionView::Assent(IpfsReference::default()),
+            ));
+        }
+        assert_ok!(Bounty::any_acc__poll_application(one.clone(), 1, 1,));
+        let expected_team_id = TeamID::new(1, Some(1), 2, 2);
+        assert_eq!(
+            get_last_event(),
+            RawEvent::ApplicationPolled(
+                1, // bounty id
+                1, // grant app id
+                ApplicationState::ApprovedAndLive(expected_team_id),
             )
         );
     });
