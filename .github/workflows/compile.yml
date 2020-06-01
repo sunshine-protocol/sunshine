@@ -4,17 +4,9 @@ on:
   pull_request:
     branches:
     - master
-    paths:
-      - 'modules/*'
-      - 'runtime/*'
-      - 'node/*'
   push:
     branches:
     - master
-    paths:
-      - 'modules/*'
-      - 'runtime/*'
-      - 'node/*'
 
 jobs:
   ci:
