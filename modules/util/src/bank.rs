@@ -23,7 +23,7 @@ pub type OffChainTreasuryID = u32;
 pub struct OnChainTreasuryID(pub [u8; 8]);
 
 impl OnChainTreasuryID {
-    pub fn iterate(&self) -> OnChainTreasuryID {
+    pub fn iterate(self) -> OnChainTreasuryID {
         let old_inner = u64::from_be_bytes(self.0);
         let new_inner = old_inner.saturating_add(1u64);
         OnChainTreasuryID(new_inner.to_be_bytes())

@@ -1,10 +1,8 @@
 #![allow(clippy::type_complexity)]
 #![allow(clippy::too_many_arguments)]
 #![cfg_attr(not(feature = "std"), no_std)]
-//! `util` contains all behavior and relationships for all sunshine modules:
-//! - [`shares-atomic`](../shares_atomic/index.html)
-//! - [`vote-yesno`](../vote_yesno/index.html)
-//! - [`bank`](../bank/index.html)
+//! `util` contains all objects and relationships for all sunshine modules
+//! - see `traits.rs` for behavioral definitions and other files for object impls
 
 pub mod bank;
 pub mod bounty;

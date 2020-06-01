@@ -39,16 +39,16 @@ impl UUID3 {
     pub fn new(one: u32, two: u32, three: u32) -> UUID3 {
         UUID3(one, two, three)
     }
-    pub fn one_two(&self) -> UUID2 {
+    pub fn one_two(self) -> UUID2 {
         UUID2::new(self.0, self.1)
     }
-    pub fn one(&self) -> u32 {
+    pub fn one(self) -> u32 {
         self.0
     }
-    pub fn two(&self) -> u32 {
+    pub fn two(self) -> u32 {
         self.1
     }
-    pub fn three(&self) -> u32 {
+    pub fn three(self) -> u32 {
         self.2
     }
 }
