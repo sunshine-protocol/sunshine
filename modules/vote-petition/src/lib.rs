@@ -108,7 +108,7 @@ decl_module! {
             origin,
             organization: OrgId,
             share_id: ShareId,
-            topic: IpfsReference,
+            topic: Option<IpfsReference>,
             required_support: u32,
             required_against: Option<u32>,
             ends: Option<T::BlockNumber>,
@@ -243,20 +243,58 @@ impl<T: Trait> OpenPetition<IpfsReference, T::BlockNumber> for Module<T> {
     fn open_petition(
         organization: u32,
         share_id: u32,
-        topic: IpfsReference,
+        topic: Option<IpfsReference>,
         required_support: u32,
         require_against: Option<u32>,
-        ends: Option<T::BlockNumber>,
+        duration: Option<T::BlockNumber>,
     ) -> Result<Self::VoteId, DispatchError> {
         // get the total size of the electorate
         let prefix = UUID2::new(organization, share_id);
         let total_electorate = <<T as Trait>::ShareData as GetGroupSize>::get_size_of_group(prefix);
-        // returns an error if total_electorate < required_support || total_electorate < required_vetos_to_freeze
+        let ends: Option<T::BlockNumber> = if let Some(time_after_now) = duration {
+            let current_time = <frame_system::Module<T>>::block_number();
+            Some(current_time + time_after_now)
+        } else {
+            None
+        };
+        // returns an error if total_electorate < required_support
         let new_petition_state = PetitionState::new(
             topic,
             prefix.into(),
             required_support,
             require_against,
+            total_electorate,
+            ends,
+        )
+        .ok_or(Error::<T>::PetitionDoesNotSatisfyCreationConstraints)?;
+        // insert petition state
+        let petition_id = Self::generate_unique_id();
+        <PetitionStates<T>>::insert(petition_id, new_petition_state);
+        Ok(petition_id)
+    }
+    // why do we need this? because we only have context for total_electorate in this method,
+    // not outside of it so we can't just pass total_electorate into `open_petition`
+    fn open_unanimous_approval_petition(
+        organization: u32,
+        share_id: u32,
+        topic: Option<IpfsReference>,
+        duration: Option<T::BlockNumber>,
+    ) -> Result<Self::VoteId, DispatchError> {
+        // get the total size of the electorate
+        let prefix = UUID2::new(organization, share_id);
+        let total_electorate = <<T as Trait>::ShareData as GetGroupSize>::get_size_of_group(prefix);
+        let ends: Option<T::BlockNumber> = if let Some(time_after_now) = duration {
+            let current_time = <frame_system::Module<T>>::block_number();
+            Some(current_time + time_after_now)
+        } else {
+            None
+        };
+        // returns an error if total_electorate < required_support || total_electorate < required_vetos_to_freeze
+        let new_petition_state = PetitionState::new(
+            topic,
+            prefix.into(),
+            total_electorate,
+            None,
             total_electorate,
             ends,
         )

@@ -12,10 +12,10 @@ use util::{
     court::Evidence,
     organization::{FormedOrganization, ShareID},
     traits::{
-        GenerateUniqueID, GenerateUniqueKeyID, GetInnerOuterShareGroups, IDIsAvailable,
-        OffChainBank, OrgChecks, OrganizationDNS, RegisterOffChainBankAccount, RegisterShareGroup,
-        ShareGroupChecks, SupervisorPermissions, SupportedOrganizationShapes,
-        WeightedShareIssuanceWrapper, WeightedShareWrapper,
+        GenerateUniqueID, GetInnerOuterShareGroups, IDIsAvailable, OffChainBank, OrgChecks,
+        OrganizationDNS, RegisterOffChainBankAccount, RegisterShareGroup, ShareGroupChecks,
+        SupervisorPermissions, SupportedOrganizationShapes, WeightedShareIssuanceWrapper,
+        WeightedShareWrapper,
     },
 };
 
@@ -44,12 +44,12 @@ pub trait Trait: system::Trait {
     type Currency: Currency<Self::AccountId>;
 
     type Organization: OrgChecks<u32, Self::AccountId>
-        + ShareGroupChecks<u32, Self::AccountId>
-        + GetInnerOuterShareGroups<u32, Self::AccountId>
-        + SupervisorPermissions<u32, Self::AccountId>
+        + ShareGroupChecks<u32, ShareID, Self::AccountId>
+        + GetInnerOuterShareGroups<u32, ShareID, Self::AccountId>
+        + SupervisorPermissions<u32, ShareID, Self::AccountId>
         + WeightedShareWrapper<u32, u32, Self::AccountId>
         + WeightedShareIssuanceWrapper<u32, u32, Self::AccountId, Permill>
-        + RegisterShareGroup<u32, u32, Self::AccountId, SharesOf<Self>>
+        + RegisterShareGroup<u32, ShareID, Self::AccountId, SharesOf<Self>>
         + OrganizationDNS<u32, Self::AccountId, IpfsReference>;
 }
 
@@ -199,12 +199,12 @@ decl_module! {
 
 impl<T: Trait> Module<T> {
     fn is_sudo_account(who: &T::AccountId) -> bool {
-        <<T as Trait>::Organization as SupervisorPermissions<u32, T::AccountId>>::is_sudo_account(
+        <<T as Trait>::Organization as SupervisorPermissions<u32, ShareID, T::AccountId>>::is_sudo_account(
             who,
         )
     }
     fn is_organization_supervisor(organization: u32, who: &T::AccountId) -> bool {
-        <<T as Trait>::Organization as SupervisorPermissions<u32, T::AccountId>>::is_organization_supervisor(organization, who)
+        <<T as Trait>::Organization as SupervisorPermissions<u32, ShareID, T::AccountId>>::is_organization_supervisor(organization, who)
     }
     // fn is_share_supervisor(organization: u32, share_id: ShareID, who: &T::AccountId) -> bool {
     //     <<T as Trait>::Organization as SupervisorPermissions<u32, T::AccountId>>::is_share_supervisor(organization, share_id.into(), who)
@@ -218,10 +218,10 @@ impl<T: Trait> Module<T> {
                 <<T as Trait>::Organization as OrgChecks<u32, T::AccountId>>::check_membership_in_org(org_id, who)
             },
             FormedOrganization::FlatShares(org_id, share_id) => {
-                <<T as Trait>::Organization as ShareGroupChecks<u32, T::AccountId>>::check_membership_in_share_group(org_id, ShareID::Flat(share_id).into(), who)
+                <<T as Trait>::Organization as ShareGroupChecks<u32, ShareID, T::AccountId>>::check_membership_in_share_group(org_id, ShareID::Flat(share_id), who)
             },
             FormedOrganization::WeightedShares(org_id, share_id) => {
-                <<T as Trait>::Organization as ShareGroupChecks<u32, T::AccountId>>::check_membership_in_share_group(org_id, ShareID::WeightedAtomic(share_id).into(), who)
+                <<T as Trait>::Organization as ShareGroupChecks<u32, ShareID, T::AccountId>>::check_membership_in_share_group(org_id, ShareID::WeightedAtomic(share_id), who)
             },
         }
     }
@@ -239,6 +239,12 @@ impl<T: Trait> IDIsAvailable<(OffChainTreasuryID, Payment<T::AccountId, BalanceO
     fn id_is_available(id: (OffChainTreasuryID, Payment<T::AccountId, BalanceOf<T>>)) -> bool {
         <OffChainTransfers<T>>::get(id.0, id.1).is_none()
     }
+}
+
+// TODO: delete this and change this module's storage structure to prefer `u32`s in the keys
+// like bank-onchain and bounty
+pub trait GenerateUniqueKeyID<KeyId> {
+    fn generate_unique_key_id(proposed: KeyId) -> KeyId;
 }
 
 impl<T: Trait> GenerateUniqueKeyID<(OffChainTreasuryID, Payment<T::AccountId, BalanceOf<T>>)>

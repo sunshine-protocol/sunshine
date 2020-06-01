@@ -229,9 +229,8 @@ impl<T: Trait> OrgChecks<u32, T::AccountId> for Module<T> {
     }
 }
 
-impl<T: Trait> ShareGroupChecks<u32, T::AccountId> for Module<T> {
-    type MultiShareIdentifier = ShareID;
-    fn check_share_group_existence(org_id: u32, share_group: Self::MultiShareIdentifier) -> bool {
+impl<T: Trait> ShareGroupChecks<u32, ShareID, T::AccountId> for Module<T> {
+    fn check_share_group_existence(org_id: u32, share_group: ShareID) -> bool {
         match share_group {
             ShareID::Flat(sid) => {
                 let prefix = UUID2::new(org_id, sid);
@@ -245,7 +244,7 @@ impl<T: Trait> ShareGroupChecks<u32, T::AccountId> for Module<T> {
     }
     fn check_membership_in_share_group(
         org_id: u32,
-        share_group: Self::MultiShareIdentifier,
+        share_group: ShareID,
         account: &T::AccountId,
     ) -> bool {
         match share_group {
@@ -263,7 +262,7 @@ impl<T: Trait> ShareGroupChecks<u32, T::AccountId> for Module<T> {
             }
         }
     }
-    fn get_share_group_size(org: u32, share_group: Self::MultiShareIdentifier) -> u32 {
+    fn get_share_group_size(org: u32, share_group: ShareID) -> u32 {
         match share_group {
             ShareID::Flat(share_id) => {
                 let group_id = UUID2::new(org, share_id);
@@ -277,7 +276,7 @@ impl<T: Trait> ShareGroupChecks<u32, T::AccountId> for Module<T> {
     }
 }
 
-impl<T: Trait> SupervisorPermissions<u32, T::AccountId> for Module<T> {
+impl<T: Trait> SupervisorPermissions<u32, ShareID, T::AccountId> for Module<T> {
     fn is_sudo_account(who: &T::AccountId) -> bool {
         <<T as Trait>::OrgData as ChainSudoPermissions<<T as frame_system::Trait>::AccountId>>::is_sudo_key(who)
     }
@@ -287,11 +286,7 @@ impl<T: Trait> SupervisorPermissions<u32, T::AccountId> for Module<T> {
             <T as frame_system::Trait>::AccountId,
         >>::is_organization_supervisor(organization, who)
     }
-    fn is_share_supervisor(
-        organization: u32,
-        share_id: Self::MultiShareIdentifier,
-        who: &T::AccountId,
-    ) -> bool {
+    fn is_share_supervisor(organization: u32, share_id: ShareID, who: &T::AccountId) -> bool {
         match share_id {
             ShareID::Flat(sid) => <<T as Trait>::FlatShareData as SubGroupSupervisorPermissions<
                 u32,
@@ -319,11 +314,7 @@ impl<T: Trait> SupervisorPermissions<u32, T::AccountId> for Module<T> {
             <T as frame_system::Trait>::AccountId,
         >>::put_organization_supervisor(organization, who);
     }
-    fn put_share_group_supervisor(
-        organization: u32,
-        share_id: Self::MultiShareIdentifier,
-        who: T::AccountId,
-    ) {
+    fn put_share_group_supervisor(organization: u32, share_id: ShareID, who: T::AccountId) {
         match share_id {
             ShareID::Flat(sid) => {
                 <<T as Trait>::FlatShareData as SubGroupSupervisorPermissions<
@@ -359,7 +350,7 @@ impl<T: Trait> SupervisorPermissions<u32, T::AccountId> for Module<T> {
     }
     fn set_share_supervisor(
         organization: u32,
-        share_id: Self::MultiShareIdentifier,
+        share_id: ShareID,
         setter: &T::AccountId,
         new: T::AccountId,
     ) -> DispatchResult {
@@ -485,11 +476,11 @@ impl<T: Trait> WeightedShareIssuanceWrapper<u32, u32, T::AccountId, Permill> for
     }
 }
 
-impl<T: Trait> RegisterShareGroup<u32, u32, T::AccountId, SharesOf<T>> for Module<T> {
+impl<T: Trait> RegisterShareGroup<u32, ShareID, T::AccountId, SharesOf<T>> for Module<T> {
     fn register_inner_flat_share_group(
         organization: u32,
         group: Vec<T::AccountId>,
-    ) -> Result<Self::MultiShareIdentifier, DispatchError> {
+    ) -> Result<ShareID, DispatchError> {
         let raw_share_id = Self::generate_unique_flat_share_id(organization);
         Self::add_members_to_flat_share_group(organization, raw_share_id, group);
         let new_share_id = ShareID::Flat(raw_share_id);
@@ -499,7 +490,7 @@ impl<T: Trait> RegisterShareGroup<u32, u32, T::AccountId, SharesOf<T>> for Modul
     fn register_inner_weighted_share_group(
         organization: u32,
         group: Vec<(T::AccountId, SharesOf<T>)>,
-    ) -> Result<Self::MultiShareIdentifier, DispatchError> {
+    ) -> Result<ShareID, DispatchError> {
         let raw_share_id = Self::issue_weighted_shares_from_accounts(organization, group)?;
         let new_share_id = ShareID::WeightedAtomic(raw_share_id);
         OrganizationInnerShares::insert(organization, new_share_id, true);
@@ -508,7 +499,7 @@ impl<T: Trait> RegisterShareGroup<u32, u32, T::AccountId, SharesOf<T>> for Modul
     fn register_outer_flat_share_group(
         organization: u32,
         group: Vec<T::AccountId>,
-    ) -> Result<Self::MultiShareIdentifier, DispatchError> {
+    ) -> Result<ShareID, DispatchError> {
         let raw_share_id = Self::generate_unique_flat_share_id(organization);
         Self::add_members_to_flat_share_group(organization, raw_share_id, group);
         let new_share_id = ShareID::Flat(raw_share_id);
@@ -518,7 +509,7 @@ impl<T: Trait> RegisterShareGroup<u32, u32, T::AccountId, SharesOf<T>> for Modul
     fn register_outer_weighted_share_group(
         organization: u32,
         group: Vec<(T::AccountId, SharesOf<T>)>,
-    ) -> Result<Self::MultiShareIdentifier, DispatchError> {
+    ) -> Result<ShareID, DispatchError> {
         let raw_share_id = Self::issue_weighted_shares_from_accounts(organization, group)?;
         let new_share_id = ShareID::WeightedAtomic(raw_share_id);
         OrganizationOuterShares::insert(organization, new_share_id, true);
@@ -526,10 +517,8 @@ impl<T: Trait> RegisterShareGroup<u32, u32, T::AccountId, SharesOf<T>> for Modul
     }
 }
 
-impl<T: Trait> GetInnerOuterShareGroups<u32, T::AccountId> for Module<T> {
-    fn get_inner_share_group_identifiers(
-        organization: u32,
-    ) -> Option<Vec<Self::MultiShareIdentifier>> {
+impl<T: Trait> GetInnerOuterShareGroups<u32, ShareID, T::AccountId> for Module<T> {
+    fn get_inner_share_group_identifiers(organization: u32) -> Option<Vec<ShareID>> {
         let inner_shares = <OrganizationInnerShares>::iter()
             .filter(|(org, _, exists)| (org == &organization) && *exists)
             .map(|(_, share_id, _)| share_id)
@@ -540,9 +529,7 @@ impl<T: Trait> GetInnerOuterShareGroups<u32, T::AccountId> for Module<T> {
             Some(inner_shares)
         }
     }
-    fn get_outer_share_group_identifiers(
-        organization: u32,
-    ) -> Option<Vec<Self::MultiShareIdentifier>> {
+    fn get_outer_share_group_identifiers(organization: u32) -> Option<Vec<ShareID>> {
         let outer_shares = <OrganizationOuterShares>::iter()
             .filter(|(org, _, exists)| (org == &organization) && *exists)
             .map(|(_, share_id, _)| share_id)

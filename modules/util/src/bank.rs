@@ -34,12 +34,12 @@ impl TypeId for OnChainTreasuryID {
     const TYPE_ID: [u8; 4] = *b"bank";
 }
 
-#[derive(PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
+#[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
 /// All the other counter identifiers in this module that track state associated with bank account governance
 pub enum BankMapID {
-    Deposit(u32),
-    Reservation(u32),
-    InternalTransfer(u32),
+    Deposit,
+    Reservation,
+    InternalTransfer,
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
@@ -82,31 +82,12 @@ pub enum BankTrackerID {
     SpentFromReserved(u32),
 }
 
-impl Into<u32> for BankMapID {
-    fn into(self) -> u32 {
-        match self {
-            BankMapID::Deposit(id) => id,
-            BankMapID::Reservation(id) => id,
-            BankMapID::InternalTransfer(id) => id,
-        }
-    }
-}
-
-impl BankMapID {
-    pub fn iterate(&self) -> Self {
-        match self {
-            BankMapID::Deposit(val) => BankMapID::Deposit(val + 1u32),
-            BankMapID::Reservation(val) => BankMapID::Reservation(val + 1u32),
-            BankMapID::InternalTransfer(val) => BankMapID::InternalTransfer(val + 1u32),
-        }
-    }
-}
-
 #[derive(PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
-/// the simplest `GovernanceConfig`
+/// The simplest `GovernanceConfig`
+/// - has no magnitude context and is limited for that reason
+/// - future version will use revocable representative governance
 pub enum WithdrawalPermissions<AccountId> {
     // two accounts can reserve free capital for spending
-    // TODO: add this up to 5 accounts?
     AnyOfTwoAccounts(AccountId, AccountId),
     // any account in org
     AnyAccountInOrg(u32),
@@ -133,23 +114,32 @@ impl<AccountId> WithdrawalPermissions<AccountId> {
         }
     }
 }
-use crate::bounty::ReviewBoard;
-impl<AccountId> From<ReviewBoard> for WithdrawalPermissions<AccountId> {
-    fn from(other: ReviewBoard) -> WithdrawalPermissions<AccountId> {
+use crate::bounty::{ReviewBoard, TeamID};
+impl<AccountId, Hash, WeightThreshold> From<ReviewBoard<AccountId, Hash, WeightThreshold>>
+    for WithdrawalPermissions<AccountId>
+{
+    fn from(
+        other: ReviewBoard<AccountId, Hash, WeightThreshold>,
+    ) -> WithdrawalPermissions<AccountId> {
         match other {
-            ReviewBoard::SimpleFlatReview(org_id, flat_share_id) => {
-                WithdrawalPermissions::AnyMemberOfOrgShareGroup(
-                    org_id,
-                    ShareID::Flat(flat_share_id),
-                )
+            ReviewBoard::FlatPetitionReview(_, org_id, share_id, _, _, _) => {
+                WithdrawalPermissions::AnyMemberOfOrgShareGroup(org_id, ShareID::Flat(share_id))
             }
-            ReviewBoard::WeightedThresholdReview(org_id, weighted_share_id) => {
+            ReviewBoard::WeightedThresholdReview(_, org_id, share_id, _, _) => {
                 WithdrawalPermissions::AnyMemberOfOrgShareGroup(
                     org_id,
-                    ShareID::WeightedAtomic(weighted_share_id),
+                    ShareID::WeightedAtomic(share_id),
                 )
             }
         }
+    }
+}
+impl<AccountId: Clone + PartialEq> From<TeamID<AccountId>> for WithdrawalPermissions<AccountId> {
+    fn from(other: TeamID<AccountId>) -> WithdrawalPermissions<AccountId> {
+        WithdrawalPermissions::AnyMemberOfOrgShareGroup(
+            other.org(),
+            ShareID::WeightedAtomic(other.weighted_share_id()),
+        )
     }
 }
 

@@ -4,18 +4,43 @@ use sp_std::prelude::*;
 
 #[derive(PartialEq, Eq, Default, Clone, Encode, Decode, RuntimeDebug)]
 /// Static terms of agreement, define how the enforced payout structure for grants
-pub struct TermsOfAgreement<AccountId> {
+pub struct TermsOfAgreement<AccountId, Shares> {
     /// If Some(account), then account is the sudo for the duration of the grant
     supervisor: Option<AccountId>,
     /// The share allocation for metadata
-    share_metadata: Vec<(AccountId, u32)>,
+    share_metadata: Vec<(AccountId, Shares)>,
+}
+
+impl<AccountId: Clone, Shares: Clone> TermsOfAgreement<AccountId, Shares> {
+    pub fn new(
+        supervisor: Option<AccountId>,
+        share_metadata: Vec<(AccountId, Shares)>,
+    ) -> TermsOfAgreement<AccountId, Shares> {
+        TermsOfAgreement {
+            supervisor,
+            share_metadata,
+        }
+    }
+    pub fn supervisor(&self) -> Option<AccountId> {
+        self.supervisor.clone()
+    }
+    pub fn flat(&self) -> Vec<AccountId> {
+        self.share_metadata
+            .clone()
+            .into_iter()
+            .map(|(account, _)| account)
+            .collect::<Vec<AccountId>>()
+    }
+    pub fn weighted(&self) -> Vec<(AccountId, Shares)> {
+        self.share_metadata.clone()
+    }
 }
 
 #[derive(PartialEq, Eq, Default, Clone, Encode, Decode, RuntimeDebug)]
 /// Defined paths for how the terms of agreement can change
-pub struct FullTermsOfAgreement<AccountId, OrgId, ShareId, BlockNumber> {
+pub struct FullTermsOfAgreement<AccountId, Shares, OrgId, ShareId, BlockNumber> {
     /// The starting state for the group
-    basic_terms: TermsOfAgreement<AccountId>,
+    basic_terms: TermsOfAgreement<AccountId, Shares>,
     /// This represents the metagovernance configuration, how the group can coordinate changes
     allowed_changes: Vec<(
         Catalyst<AccountId>,
@@ -140,6 +165,14 @@ pub enum ShareID {
 impl Default for ShareID {
     fn default() -> Self {
         ShareID::Flat(0u32)
+    }
+}
+impl Into<u32> for ShareID {
+    fn into(self) -> u32 {
+        match self {
+            ShareID::Flat(val) => val,
+            ShareID::WeightedAtomic(val) => val,
+        }
     }
 }
 

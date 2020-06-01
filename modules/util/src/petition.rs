@@ -88,9 +88,7 @@ where
     Hash: Clone,
 {
     /// The topic corresponds to some authentication used to identify _what_ is voted on
-    topic: Hash,
-    /// Frozen can only be unfrozen by an update or by vetoers that revoke their veto
-    frozen: bool,
+    topic: Option<Hash>,
     /// Vote qualifier that is OrgId, FlatShareId
     voter_id_reqs: (u32, u32),
     /// Number of signers that signed in favor
@@ -113,7 +111,7 @@ where
 impl<Hash: Clone, BlockNumber: Clone> PetitionState<Hash, BlockNumber> {
     // TODO: break this into the valid object creation paths
     pub fn new(
-        topic: Hash,
+        topic: Option<Hash>,
         voter_id_reqs: (u32, u32),
         required_support: u32,
         required_against: Option<u32>,
@@ -129,7 +127,6 @@ impl<Hash: Clone, BlockNumber: Clone> PetitionState<Hash, BlockNumber> {
         if constraints {
             Some(PetitionState {
                 topic,
-                frozen: false,
                 voter_id_reqs,
                 current_support: 0u32,
                 required_support,
@@ -148,11 +145,8 @@ impl<Hash: Clone, BlockNumber: Clone> PetitionState<Hash, BlockNumber> {
     pub fn voter_id_reqs(&self) -> (u32, u32) {
         self.voter_id_reqs
     }
-    pub fn topic(&self) -> Hash {
+    pub fn topic(&self) -> Option<Hash> {
         self.topic.clone()
-    }
-    pub fn frozen(&self) -> bool {
-        self.frozen
     }
     pub fn current_support(&self) -> u32 {
         self.current_support
@@ -183,7 +177,6 @@ impl<Hash: Clone, BlockNumber: Clone> PetitionState<Hash, BlockNumber> {
         let new_support = self.current_support() + 1u32;
         PetitionState {
             topic: self.topic(),
-            frozen: self.frozen(),
             voter_id_reqs: self.voter_id_reqs(),
             current_support: new_support,
             required_support: self.required_support(),
@@ -199,7 +192,6 @@ impl<Hash: Clone, BlockNumber: Clone> PetitionState<Hash, BlockNumber> {
         let new_support = self.current_support() - 1u32;
         PetitionState {
             topic: self.topic(),
-            frozen: self.frozen(),
             voter_id_reqs: self.voter_id_reqs(),
             current_support: new_support,
             required_support: self.required_support(),
@@ -215,7 +207,6 @@ impl<Hash: Clone, BlockNumber: Clone> PetitionState<Hash, BlockNumber> {
         let new_against = self.current_against() + 1u32;
         PetitionState {
             topic: self.topic(),
-            frozen: self.frozen(),
             voter_id_reqs: self.voter_id_reqs(),
             current_support: self.current_support(),
             required_support: self.required_support(),
@@ -231,7 +222,6 @@ impl<Hash: Clone, BlockNumber: Clone> PetitionState<Hash, BlockNumber> {
         let new_against = self.current_against() - 1u32;
         PetitionState {
             topic: self.topic(),
-            frozen: self.frozen(),
             voter_id_reqs: self.voter_id_reqs(),
             current_support: self.current_support(),
             required_support: self.required_support(),
@@ -247,7 +237,6 @@ impl<Hash: Clone, BlockNumber: Clone> PetitionState<Hash, BlockNumber> {
         let new_veto_count = self.veto_count() + 1u32;
         PetitionState {
             topic: self.topic(),
-            frozen: true, // freeze petition state
             voter_id_reqs: self.voter_id_reqs(),
             current_support: self.current_support(),
             required_support: self.required_support(),
@@ -261,10 +250,8 @@ impl<Hash: Clone, BlockNumber: Clone> PetitionState<Hash, BlockNumber> {
     }
     pub fn revoke_veto(&self) -> Self {
         let new_veto_count = self.veto_count - 1u32;
-        let frozen = new_veto_count != 0;
         PetitionState {
             topic: self.topic(),
-            frozen,
             voter_id_reqs: self.voter_id_reqs(),
             current_support: self.current_support(),
             required_support: self.required_support(),
@@ -278,8 +265,7 @@ impl<Hash: Clone, BlockNumber: Clone> PetitionState<Hash, BlockNumber> {
     }
     pub fn update_without_clearing_petition_state(&self, new_topic: Hash) -> Self {
         PetitionState {
-            topic: new_topic,
-            frozen: self.frozen(),
+            topic: Some(new_topic),
             voter_id_reqs: self.voter_id_reqs(),
             current_support: self.current_support(),
             required_support: self.required_support(),
@@ -293,8 +279,7 @@ impl<Hash: Clone, BlockNumber: Clone> PetitionState<Hash, BlockNumber> {
     }
     pub fn update_and_clear_petition_state(&self, new_topic: Hash) -> Self {
         PetitionState {
-            topic: new_topic,
-            frozen: false,
+            topic: Some(new_topic),
             voter_id_reqs: self.voter_id_reqs(),
             current_support: 0u32,
             required_support: self.required_support(),
@@ -310,7 +295,6 @@ impl<Hash: Clone, BlockNumber: Clone> PetitionState<Hash, BlockNumber> {
     pub fn set_outcome(&self, new_outcome: PetitionOutcome) -> Self {
         PetitionState {
             topic: self.topic(),
-            frozen: self.frozen(),
             voter_id_reqs: self.voter_id_reqs(),
             current_support: self.current_support(),
             required_support: self.required_support(),
@@ -349,15 +333,18 @@ impl<Hash: Clone, BlockNumber: Clone> UpdatePetitionTerms<Hash>
     }
 }
 
+// if vetoed by any member, it cannot be improved and this invariant is enforced
 impl<Hash: Clone, BlockNumber: Clone> Approved for PetitionState<Hash, BlockNumber> {
     fn approved(&self) -> bool {
-        !self.frozen() && (self.current_support() >= self.required_support())
+        (self.veto_count() == 0) && (self.current_support() >= self.required_support())
     }
 }
+// independent of veto, can be rejected
+// - can be approved and also rejected
 impl<Hash: Clone, BlockNumber: Clone> Rejected for PetitionState<Hash, BlockNumber> {
     fn rejected(&self) -> bool {
         if let Some(req_against) = self.required_against() {
-            !self.frozen() && (self.current_against >= req_against)
+            self.current_against >= req_against
         } else {
             false
         }

@@ -26,10 +26,6 @@ pub trait SeededGenerateUniqueID<Id, Seed> {
     fn seeded_generate_unique_id(seed: Seed) -> Id;
 }
 
-pub trait GenerateUniqueKeyID<KeyId> {
-    fn generate_unique_key_id(proposed: KeyId) -> KeyId;
-}
-
 // ====== Permissions ACL ======
 
 pub trait ChainSudoPermissions<AccountId> {
@@ -130,10 +126,18 @@ pub trait OpenPetition<Hash, BlockNumber>: GetVoteOutcome {
     fn open_petition(
         organization: u32,
         share_id: u32,
-        topic: Hash,
+        topic: Option<Hash>,
         required_support: u32,
         require_against: Option<u32>,
-        ends: Option<BlockNumber>,
+        duration: Option<BlockNumber>,
+    ) -> Result<Self::VoteId, DispatchError>;
+    // why do we need this? because we only have context for total_electorate in this method,
+    // not outside of it so we can't just pass total_electorate into `open_petition`
+    fn open_unanimous_approval_petition(
+        organization: u32,
+        share_id: u32,
+        topic: Option<Hash>,
+        duration: Option<BlockNumber>,
     ) -> Result<Self::VoteId, DispatchError>;
 }
 
@@ -294,7 +298,7 @@ pub trait OpenShareGroupVote<AccountId, BlockNumber, FineArithmetic: PerThing>:
         + ConsistentThresholdStructure
         + From<ThresholdConfig<Self::Signal, FineArithmetic>>
         + From<ThresholdConfigBuilder<FineArithmetic>>; // NOTE: this forces FineArithmetic generic parameter for traits and all inherited
-    type VoteType: Default + From<SupportedVoteTypes<Self::Signal>>;
+    type VoteType: Default + From<SupportedVoteTypes>;
 
     fn open_share_group_vote(
         organization: u32,
@@ -502,33 +506,26 @@ pub trait OrgChecks<OrgId, AccountId> {
 }
 
 // helpers, they are just abstractions over inherited functions
-pub trait ShareGroupChecks<OrgId, AccountId> {
-    type MultiShareIdentifier: From<crate::organization::ShareID>; // organization::ShareID
-    fn check_share_group_existence(org: OrgId, share_group: Self::MultiShareIdentifier) -> bool;
+pub trait ShareGroupChecks<OrgId, ShareId, AccountId> {
+    fn check_share_group_existence(org: OrgId, share_group: ShareId) -> bool;
     fn check_membership_in_share_group(
         org: OrgId,
-        share_group: Self::MultiShareIdentifier,
+        share_group: ShareId,
         account: &AccountId,
     ) -> bool;
-    fn get_share_group_size(org: OrgId, share_group: Self::MultiShareIdentifier) -> u32;
+    fn get_share_group_size(org: OrgId, share_group: ShareId) -> u32;
 }
 
-pub trait SupervisorPermissions<OrgId, AccountId>: ShareGroupChecks<OrgId, AccountId> {
+pub trait SupervisorPermissions<OrgId, ShareId, AccountId>:
+    ShareGroupChecks<OrgId, ShareId, AccountId>
+{
     fn is_sudo_account(who: &AccountId) -> bool;
     fn is_organization_supervisor(organization: OrgId, who: &AccountId) -> bool;
-    fn is_share_supervisor(
-        organization: OrgId,
-        share_id: Self::MultiShareIdentifier,
-        who: &AccountId,
-    ) -> bool;
+    fn is_share_supervisor(organization: OrgId, share_id: ShareId, who: &AccountId) -> bool;
     // infallible, not protected in any way
     fn put_sudo_account(who: AccountId);
     fn put_organization_supervisor(organization: OrgId, who: AccountId);
-    fn put_share_group_supervisor(
-        organization: OrgId,
-        share_id: Self::MultiShareIdentifier,
-        who: AccountId,
-    );
+    fn put_share_group_supervisor(organization: OrgId, share_id: ShareId, who: AccountId);
     // CAS by default to enforce existing permissions and isolate logic
     fn set_sudo_account(setter: &AccountId, new: AccountId) -> DispatchResult;
     fn set_organization_supervisor(
@@ -538,13 +535,12 @@ pub trait SupervisorPermissions<OrgId, AccountId>: ShareGroupChecks<OrgId, Accou
     ) -> DispatchResult;
     fn set_share_supervisor(
         organization: OrgId,
-        share_id: Self::MultiShareIdentifier,
+        share_id: ShareId,
         setter: &AccountId,
         new: AccountId,
     ) -> DispatchResult;
 }
 
-// TODO: make `ShareGroupChecks` inherit this && WeightedShareWrapper
 pub trait FlatShareWrapper<OrgId, FlatShareId, AccountId> {
     fn get_flat_share_group(
         organization: OrgId,
@@ -594,35 +590,32 @@ pub trait WeightedShareIssuanceWrapper<OrgId, WeightedShareId, AccountId, FineAr
     ) -> Result<Self::Shares, DispatchError>;
 }
 
-// TODO: FlatShareGroup utilities
-pub trait RegisterShareGroup<OrgId, WeightedShareId, AccountId, Shares>:
-    ShareGroupChecks<OrgId, AccountId> + WeightedShareWrapper<OrgId, WeightedShareId, AccountId>
+pub trait RegisterShareGroup<OrgId, ShareId, AccountId, Shares>:
+    ShareGroupChecks<OrgId, ShareId, AccountId>
 {
     fn register_inner_flat_share_group(
-        organization: u32,
+        organization: OrgId,
         group: Vec<AccountId>,
-    ) -> Result<Self::MultiShareIdentifier, DispatchError>;
+    ) -> Result<ShareId, DispatchError>;
     fn register_inner_weighted_share_group(
-        organization: u32,
+        organization: OrgId,
         group: Vec<(AccountId, Shares)>,
-    ) -> Result<Self::MultiShareIdentifier, DispatchError>;
+    ) -> Result<ShareId, DispatchError>;
     fn register_outer_flat_share_group(
         organization: u32,
         group: Vec<AccountId>,
-    ) -> Result<Self::MultiShareIdentifier, DispatchError>;
+    ) -> Result<ShareId, DispatchError>;
     fn register_outer_weighted_share_group(
         organization: u32,
         group: Vec<(AccountId, Shares)>,
-    ) -> Result<Self::MultiShareIdentifier, DispatchError>;
+    ) -> Result<ShareId, DispatchError>;
 }
 
-pub trait GetInnerOuterShareGroups<OrgId, AccountId>: ShareGroupChecks<OrgId, AccountId> {
-    fn get_inner_share_group_identifiers(
-        organization: OrgId,
-    ) -> Option<Vec<Self::MultiShareIdentifier>>;
-    fn get_outer_share_group_identifiers(
-        organization: OrgId,
-    ) -> Option<Vec<Self::MultiShareIdentifier>>;
+pub trait GetInnerOuterShareGroups<OrgId, ShareId, AccountId>:
+    ShareGroupChecks<OrgId, ShareId, AccountId>
+{
+    fn get_inner_share_group_identifiers(organization: OrgId) -> Option<Vec<ShareId>>;
+    fn get_outer_share_group_identifiers(organization: OrgId) -> Option<Vec<ShareId>>;
 }
 
 pub trait OrganizationDNS<OrgId, AccountId, Hash>: OrgChecks<OrgId, AccountId> {
@@ -671,30 +664,28 @@ pub trait OnChainBank {
     type OrgId: From<u32>;
     type TreasuryId: Clone + From<OnChainTreasuryID>;
 }
-use crate::bounty::ReviewBoard;
-pub trait RegisterBankAccount<AccountId, Currency>: OnChainBank {
-    type GovernanceConfig: From<ReviewBoard>;
+pub trait RegisterBankAccount<AccountId, GovernanceConfig, Currency>: OnChainBank {
     // requires a deposit of some size above the minimum and returns the OnChainTreasuryID
     fn register_on_chain_bank_account(
         registered_org: Self::OrgId,
         from: AccountId,
         amount: Currency,
-        owner_s: Self::GovernanceConfig,
+        owner_s: GovernanceConfig,
     ) -> Result<Self::TreasuryId, DispatchError>;
     fn check_bank_owner(bank_id: Self::TreasuryId, org: Self::OrgId) -> bool;
 } // people should be eventually able to solicit loans from others to SEED a bank account but they cede some or all of the control...
 
-pub trait OwnershipProportionCalculations<AccountId, Currency, FineArithmetic>:
-    RegisterBankAccount<AccountId, Currency>
+pub trait OwnershipProportionCalculations<AccountId, GovernanceConfig, Currency, FineArithmetic>:
+    RegisterBankAccount<AccountId, GovernanceConfig, Currency>
 {
     fn calculate_proportion_ownership_for_account(
         account: AccountId,
-        group: Self::GovernanceConfig,
+        group: GovernanceConfig,
     ) -> Option<FineArithmetic>;
     fn calculate_proportional_amount_for_account(
         amount: Currency,
         account: AccountId,
-        group: Self::GovernanceConfig,
+        group: GovernanceConfig,
     ) -> Option<Currency>;
 }
 
@@ -741,8 +732,8 @@ pub trait CheckBankBalances<Currency>: OnChainBank + BankDepositsAndSpends<Curre
     fn calculate_total_bank_balance_from_balances(bank_id: Self::TreasuryId) -> Option<Currency>;
 }
 
-pub trait DepositIntoBank<AccountId, Hash, Currency>:
-    RegisterBankAccount<AccountId, Currency> + BankDepositsAndSpends<Currency>
+pub trait DepositIntoBank<AccountId, GovernanceConfig, Hash, Currency>:
+    RegisterBankAccount<AccountId, GovernanceConfig, Currency> + BankDepositsAndSpends<Currency>
 {
     // get the bank corresponding to bank_id call infallible deposit
     // - only fails if `from` doesn't have enough Currency
@@ -765,8 +756,8 @@ pub trait DepositIntoBank<AccountId, Hash, Currency>:
 // get the storage item in this method (because we don't pass it in and I
 // struggle to see a clean design in which we pass it in but don't
 // encourage/enable unsafe puts)
-pub trait BankReservations<AccountId, Currency, Hash>:
-    RegisterBankAccount<AccountId, Currency>
+pub trait BankReservations<AccountId, GovernanceConfig, Currency, Hash>:
+    RegisterBankAccount<AccountId, GovernanceConfig, Currency>
 {
     fn reserve_for_spend(
         caller: AccountId, // must be in owner_s: GovernanceConfig for BankState, that's the auth
@@ -774,7 +765,7 @@ pub trait BankReservations<AccountId, Currency, Hash>:
         reason: Hash,
         amount: Currency,
         // acceptance committee for approving set aside spends below the amount
-        controller: Self::GovernanceConfig,
+        controller: GovernanceConfig,
     ) -> Result<u32, DispatchError>;
     // only reserve.controller() can unreserve funds after commitment (with method further down)
     fn commit_reserved_spend_for_transfer(
@@ -783,7 +774,7 @@ pub trait BankReservations<AccountId, Currency, Hash>:
         reservation_id: u32,
         reason: Hash,
         amount: Currency,
-        expected_future_owner: Self::GovernanceConfig,
+        expected_future_owner: GovernanceConfig,
     ) -> DispatchResult;
     // bank controller can unreserve if not committed
     fn unreserve_uncommitted_to_make_free(
@@ -808,12 +799,26 @@ pub trait BankReservations<AccountId, Currency, Hash>:
         reservation_id: u32,
         amount: Currency,
         // move control of funds to new outer group which can reserve or withdraw directly
-        new_controller: Self::GovernanceConfig,
-    ) -> DispatchResult;
+        new_controller: GovernanceConfig,
+    ) -> Result<u32, DispatchError>; // returns transfer_id
 }
 
-pub trait BankSpends<AccountId, Currency>:
-    OnChainBank + RegisterBankAccount<AccountId, Currency>
+pub trait CommitAndTransfer<AccountId, GovernanceConfig, Currency, Hash>:
+    BankReservations<AccountId, GovernanceConfig, Currency, Hash>
+{
+    // in one step
+    fn commit_and_transfer_spending_power(
+        caller: AccountId,
+        bank_id: Self::TreasuryId,
+        reservation_id: u32,
+        reason: Hash,
+        amount: Currency,
+        new_controller: GovernanceConfig,
+    ) -> Result<u32, DispatchError>;
+}
+
+pub trait BankSpends<AccountId, GovernanceConfig, Currency>:
+    OnChainBank + RegisterBankAccount<AccountId, GovernanceConfig, Currency>
 {
     fn spend_from_free(
         from_bank_id: Self::TreasuryId,
@@ -891,7 +896,9 @@ pub trait MoveFundsOutCommittedOnly<Currency>: Sized {
     fn move_funds_out_committed_only(&self, amount: Currency) -> Option<Self>;
 }
 
-pub trait BankStorageInfo<AccountId, Currency>: RegisterBankAccount<AccountId, Currency> {
+pub trait BankStorageInfo<AccountId, GovernanceConfig, Currency>:
+    RegisterBankAccount<AccountId, GovernanceConfig, Currency>
+{
     type DepositInfo;
     type ReservationInfo: MoveFundsOutUnCommittedOnly<Currency>
         + MoveFundsOutCommittedOnly<Currency>;
@@ -912,11 +919,11 @@ pub trait BankStorageInfo<AccountId, Currency>: RegisterBankAccount<AccountId, C
     ) -> Option<Currency>;
     fn get_reservations_for_governance_config(
         bank_id: Self::TreasuryId,
-        invoker: Self::GovernanceConfig,
+        invoker: GovernanceConfig,
     ) -> Option<Vec<Self::ReservationInfo>>;
     fn total_capital_reserved_for_governance_config(
         bank_id: Self::TreasuryId,
-        invoker: Self::GovernanceConfig,
+        invoker: GovernanceConfig,
     ) -> Currency;
     // transfers
     fn get_amount_left_in_approved_transfer(
@@ -925,11 +932,11 @@ pub trait BankStorageInfo<AccountId, Currency>: RegisterBankAccount<AccountId, C
     ) -> Option<Currency>;
     fn get_transfers_for_governance_config(
         bank_id: Self::TreasuryId,
-        invoker: Self::GovernanceConfig,
+        invoker: GovernanceConfig,
     ) -> Option<Vec<Self::TransferInfo>>;
     fn total_capital_transferred_to_governance_config(
         bank_id: Self::TreasuryId,
-        invoker: Self::GovernanceConfig,
+        invoker: GovernanceConfig,
     ) -> Currency;
 }
 
@@ -939,7 +946,9 @@ pub trait FoundationParts {
     type OrgId;
     type BountyId;
     type BankId;
+    type MultiShareId;
     type MultiVoteId;
+    type TeamId;
 }
 
 // TODO: this could be removed if we didn't cache the ownership of on-chain
@@ -947,7 +956,7 @@ pub trait FoundationParts {
 // to bank but I don't think it's the worst thing to have for V1
 pub trait RegisterFoundation<Currency, AccountId>: FoundationParts {
     // should still be some minimum enforced in bank
-    fn register_foundation_from_donation_deposit(
+    fn register_foundation_from_deposit(
         from: AccountId,
         for_org: Self::OrgId,
         amount: Currency,
@@ -986,30 +995,67 @@ pub trait CreateBounty<Currency, AccountId, Hash>: RegisterFoundation<Currency, 
     ) -> Result<Self::BountyId, DispatchError>;
 }
 
-pub trait RequestConsentOnTermsOfAgreement<AccountId>: FoundationParts {
+pub trait UseTermsOfAgreement<AccountId>: FoundationParts {
     type TermsOfAgreement;
     fn request_consent_on_terms_of_agreement(
-        bounty_id: Self::BountyId,
+        bounty_org: u32,
         terms: Self::TermsOfAgreement,
-    ) -> Option<Self::MultiVoteId>;
+    ) -> Result<(Self::MultiShareId, Self::MultiVoteId), DispatchError>;
+    fn approve_grant_to_register_team(
+        bounty_org: u32,
+        flat_share_id: u32,
+        terms: Self::TermsOfAgreement,
+    ) -> Result<Self::TeamId, DispatchError>;
 }
 
+// used for application and milestone review dispatch and diagnostics
 pub trait StartReview<VoteID> {
     fn start_review(&self, vote_id: VoteID) -> Self;
     fn get_review_id(&self) -> Option<VoteID>;
 }
 
+pub trait ApproveWithoutTransfer {
+    fn approve_without_transfer(&self) -> Self;
+}
+
+pub trait SetMakeTransfer<BankId, TransferId>: Sized {
+    fn set_make_transfer(&self, bank_id: BankId, transfer_id: TransferId) -> Self;
+    fn get_bank_id(&self) -> Option<BankId>;
+    fn get_transfer_id(&self) -> Option<TransferId>;
+}
+
+pub trait StartTeamConsentPetition<ShareID, VoteID> {
+    fn start_team_consent_petition(&self, share_id: ShareID, vote_id: VoteID) -> Self;
+    fn get_team_consent_id(&self) -> Option<VoteID>;
+    fn get_team_flat_id(&self) -> Option<ShareID>;
+}
+
+// TODO: clean up the outer_flat_share_id dispatched for team consent if NOT formally approved
+pub trait ApproveGrant<TeamID> {
+    fn approve_grant(&self, team_id: TeamID) -> Self;
+    fn get_full_team_id(&self) -> Option<TeamID>;
+}
+// TODO: RevokeApprovedGrant<VoteID> => vote to take away the team's grant and clean storage
+
+pub trait SpendApprovedGrant<Currency>: Sized {
+    fn spend_approved_grant(&self, amount: Currency) -> Option<Self>;
+}
+
 pub trait SubmitGrantApplication<Currency, AccountId, Hash>:
-    CreateBounty<Currency, AccountId, Hash> + RequestConsentOnTermsOfAgreement<AccountId>
+    CreateBounty<Currency, AccountId, Hash> + UseTermsOfAgreement<AccountId>
 {
-    type GrantApp: StartReview<Self::MultiVoteId>;
+    type GrantApp: StartReview<Self::MultiVoteId>
+        + StartTeamConsentPetition<Self::MultiShareId, Self::MultiVoteId>
+        + ApproveGrant<Self::TeamId>;
     fn form_grant_application(
+        caller: AccountId,
         bounty_id: u32,
         description: Hash,
         total_amount: Currency,
         terms_of_agreement: Self::TermsOfAgreement,
     ) -> Result<Self::GrantApp, DispatchError>;
     fn submit_grant_application(
+        caller: AccountId,
         bounty_id: u32,
         description: Hash,
         total_amount: Currency,
@@ -1017,8 +1063,8 @@ pub trait SubmitGrantApplication<Currency, AccountId, Hash>:
     ) -> Result<u32, DispatchError>; // returns application identifier
 }
 
-pub trait ApproveGrantApplication<Currency, AccountId, Hash>:
-    CreateBounty<Currency, AccountId, Hash> + RequestConsentOnTermsOfAgreement<AccountId>
+pub trait SuperviseGrantApplication<Currency, AccountId, Hash>:
+    CreateBounty<Currency, AccountId, Hash> + UseTermsOfAgreement<AccountId>
 {
     type AppState;
     fn trigger_application_review(
@@ -1026,8 +1072,50 @@ pub trait ApproveGrantApplication<Currency, AccountId, Hash>:
         bounty_id: u32,
         application_id: u32,
     ) -> Result<Self::AppState, DispatchError>;
+    // someone can try to call this and only the sudo can push things through at whim
+    // -> notably no sudo deny for demo functionality
+    fn sudo_approve_application(
+        sudo: AccountId,
+        bounty_id: u32,
+        application_id: u32,
+    ) -> Result<Self::AppState, DispatchError>;
+    // this returns the AppState but also pushes it along if necessary
+    // - it should be called in on_finalize periodically
     fn poll_application(
         bounty_id: u32,
         application_id: u32,
     ) -> Result<Self::AppState, DispatchError>;
+}
+
+pub trait SubmitMilestone<Currency, AccountId, Hash>:
+    SuperviseGrantApplication<Currency, AccountId, Hash>
+{
+    type Milestone: StartReview<Self::MultiVoteId>
+        + ApproveWithoutTransfer
+        + SetMakeTransfer<Self::BankId, u32>;
+    type MilestoneState;
+    fn submit_milestone(
+        caller: AccountId, // must be from the team, maybe check sudo || flat_org_member
+        bounty_id: u32,
+        application_id: u32,
+        team_id: Self::TeamId,
+        submission_reference: Hash,
+        amount_requested: Currency,
+    ) -> Result<u32, DispatchError>; // returns milestone_id
+    fn trigger_milestone_review(
+        caller: AccountId,
+        bounty_id: u32,
+        milestone_id: u32,
+    ) -> Result<Self::MilestoneState, DispatchError>;
+    // someone can try to call this and only the sudo can push things through at whim
+    fn sudo_approves_milestone(
+        caller: AccountId,
+        bounty_id: u32,
+        milestone_id: u32,
+    ) -> Result<Self::MilestoneState, DispatchError>;
+    fn poll_milestone(
+        caller: AccountId,
+        bounty_id: u32,
+        milestone_id: u32,
+    ) -> Result<Self::MilestoneState, DispatchError>;
 }

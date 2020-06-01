@@ -94,6 +94,16 @@ fn bank_registration_works() {
         assert_ok!(OrganizationWrapper::register_inner_weighted_share_group(
             1, group
         ));
+        // registration must be above the module minimum
+        assert_noop!(
+            Bank::register_and_seed_for_bank_account(
+                one.clone(),
+                4,
+                1,
+                weighted_share_group_controller.clone()
+            ),
+            Error::<Test>::RegistrationMustDepositAboveModuleMinimum
+        );
         assert_ok!(Bank::register_and_seed_for_bank_account(
             one,
             10,
