@@ -218,10 +218,10 @@ impl<T: Trait> Module<T> {
                 <<T as Trait>::Organization as OrgChecks<u32, T::AccountId>>::check_membership_in_org(org_id, who)
             },
             FormedOrganization::FlatShares(org_id, share_id) => {
-                <<T as Trait>::Organization as ShareGroupChecks<u32, ShareID, T::AccountId>>::check_membership_in_share_group(org_id, ShareID::Flat(share_id).into(), who)
+                <<T as Trait>::Organization as ShareGroupChecks<u32, ShareID, T::AccountId>>::check_membership_in_share_group(org_id, ShareID::Flat(share_id), who)
             },
             FormedOrganization::WeightedShares(org_id, share_id) => {
-                <<T as Trait>::Organization as ShareGroupChecks<u32, ShareID, T::AccountId>>::check_membership_in_share_group(org_id, ShareID::WeightedAtomic(share_id).into(), who)
+                <<T as Trait>::Organization as ShareGroupChecks<u32, ShareID, T::AccountId>>::check_membership_in_share_group(org_id, ShareID::WeightedAtomic(share_id), who)
             },
         }
     }

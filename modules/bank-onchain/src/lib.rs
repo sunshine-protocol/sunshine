@@ -107,6 +107,7 @@ decl_error! {
         BankAccountNotFoundForInternalTransfer,
         SpendReservationNotFound,
         NotEnoughFundsInReservedToAllowSpend,
+        CannotCommitReservedSpendBecauseAmountExceedsSpendReservation,
         NotEnoughFundsInFreeToAllowSpend,
         NotEnoughFundsInFreeToAllowReservation,
         CallerIsntInControllingMembershipForWithdrawal,
@@ -335,7 +336,7 @@ impl<T: Trait> Module<T> {
             },
             // HAPPY PATH, pls use this for bank controllers for structured liquidity from account.free() as well
             WithdrawalPermissions::AnyMemberOfOrgShareGroup(org_id, wrapped_share_id) => {
-                <<T as Trait>::Organization as ShareGroupChecks<u32, ShareID, T::AccountId>>::check_share_group_existence(org_id, wrapped_share_id.into())
+                <<T as Trait>::Organization as ShareGroupChecks<u32, ShareID, T::AccountId>>::check_share_group_existence(org_id, wrapped_share_id)
             },
         }
         // a more granular check might require inner share membership for example in the org
@@ -352,7 +353,7 @@ impl<T: Trait> Module<T> {
                 <<T as Trait>::Organization as OrgChecks<u32, T::AccountId>>::check_membership_in_org(org_id, who)
             },
             WithdrawalPermissions::AnyMemberOfOrgShareGroup(org_id, wrapped_share_id) => {
-                <<T as Trait>::Organization as ShareGroupChecks<u32, ShareID, T::AccountId>>::check_membership_in_share_group(org_id, wrapped_share_id.into(), who)
+                <<T as Trait>::Organization as ShareGroupChecks<u32, ShareID, T::AccountId>>::check_membership_in_share_group(org_id, wrapped_share_id, who)
             },
         }
     }
@@ -480,7 +481,7 @@ impl<T: Trait>
                             ShareID,
                             T::AccountId,
                         >>::get_share_group_size(
-                            org_id, ShareID::Flat(share_id).into()
+                            org_id, ShareID::Flat(share_id)
                         );
                         Some(Permill::from_rational_approximation(1, share_group_size))
                     }
@@ -671,10 +672,10 @@ impl<T: Trait>
             Self::account_satisfies_withdrawal_permissions(&caller, spend_reservation.controller()),
             Error::<T>::CallerMustSatisfyBankOwnerPermissionsForSpendReservation
         );
-        // ensure enough of the amount is uncommitted
+        // only commit the reserved part
         let reservation_after_commit = spend_reservation
             .commit_spend_reservation(amount)
-            .ok_or(Error::<T>::SpendReservationNotFound)?; // TODO better error message here
+            .ok_or(Error::<T>::CannotCommitReservedSpendBecauseAmountExceedsSpendReservation)?; // TODO better error message here
         let bank_tracker_id =
             BankTrackerIdentifier::new(bank_id, BankTrackerID::CommitSpend(reservation_id));
         // tracks all spend commitments made by specific AccountIds
@@ -901,7 +902,7 @@ impl<T: Trait>
         };
         // form a transfer_info
         let new_transfer =
-            InternalTransferInfo::new(reservation_id, reason, amount, new_controller.clone());
+            InternalTransferInfo::new(reservation_id, reason, amount, new_controller);
         // generate the unique transfer_id
         let new_transfer_id: u32 =
             Self::seeded_generate_unique_id((bank_id, BankMapID::InternalTransfer));

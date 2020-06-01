@@ -1,3 +1,5 @@
+#![allow(clippy::too_many_arguments)]
+#![allow(clippy::clone_double_ref)]
 mod chain_spec;
 #[macro_use]
 mod service;

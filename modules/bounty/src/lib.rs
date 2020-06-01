@@ -323,7 +323,7 @@ decl_module! {
         ) -> DispatchResult {
             let purported_sudo = ensure_signed(origin)?;
             let app_state = Self::sudo_approve_application(purported_sudo.clone(), bounty_id, application_id)?;
-            Self::deposit_event(RawEvent::SudoApprovedApplication(purported_sudo.clone(), bounty_id, application_id, app_state));
+            Self::deposit_event(RawEvent::SudoApprovedApplication(purported_sudo, bounty_id, application_id, app_state));
             Ok(())
         }
         #[weight = 0]
@@ -994,6 +994,9 @@ impl<T: Trait> SubmitMilestone<BalanceOf<T>, T::AccountId, IpfsReference> for Mo
         // get the bounty
         let bounty_info = <FoundationSponsoredBounties<T>>::get(bounty_id)
             .ok_or(Error::<T>::CannotTriggerMilestoneReviewIfBountyDNE)?;
+        // get the milestone submission
+        let milestone_submission = <MilestoneSubmissions<T>>::get(bounty_id, milestone_id)
+            .ok_or(Error::<T>::CannotTriggerMilestoneReviewIfMilestoneSubmissionDNE)?;
         // check that the caller is in the supervision committee if it exists and
         // the acceptance committee otherwise
         let milestone_review_board =
@@ -1006,11 +1009,9 @@ impl<T: Trait> SubmitMilestone<BalanceOf<T>, T::AccountId, IpfsReference> for Mo
             Self::account_can_trigger_review(&caller, milestone_review_board.clone()),
             Error::<T>::CannotTriggerMilestoneReviewUnlessMember
         );
-        // get the milestone submission
-        let milestone_submission = <MilestoneSubmissions<T>>::get(bounty_id, milestone_id)
-            .ok_or(Error::<T>::CannotTriggerMilestoneReviewIfMilestoneSubmissionDNE)?;
         // check that it is in a valid state to trigger a review
         ensure!(
+            // TODO: error should tell user that it is already in review when it is instead of returning this error?
             milestone_submission.ready_for_review(),
             Error::<T>::SubmissionIsNotReadyForReview
         );
