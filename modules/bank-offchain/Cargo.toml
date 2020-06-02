@@ -1,12 +1,12 @@
 [package]
 name = "sunshine-bank-offchain"
-version = "0.0.1"
+version = "0.0.2"
 authors = ["Amar Singh <asinghchrony@protonmail.com>"]
 edition = "2018"
 
 license = "GPL-3.0"
 repository = "https://github.com/web3garden/sunshine-node"
-description = "register organizations and open joint-owned on-chain and off-chain bank accounts"
+description = "log confirmation for off-chain transactions on-chain"
 keywords = ["sunshine", "substrate", "blockchain"]
 
 [dependencies]
