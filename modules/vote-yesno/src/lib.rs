@@ -319,7 +319,7 @@ impl<T: Trait> MintableSignal<T::AccountId, T::BlockNumber, Permill> for Module<
         let vote_id = Self::generate_unique_id();
         <TotalSignalIssuance<T>>::insert(vote_id, total_minted);
         let one_signal: T::Signal = 1u32.into();
-        let _ = new_vote_group.into_iter().for_each(|who| {
+        new_vote_group.into_iter().for_each(|who| {
             // mint signal for individual
             <MintedSignal<T>>::insert(vote_id, who, one_signal);
         });
@@ -338,7 +338,7 @@ impl<T: Trait> MintableSignal<T::AccountId, T::BlockNumber, Permill> for Module<
         // insert total issuance
         let mut total_minted = T::Signal::zero();
         let vote_id = Self::generate_unique_id();
-        let _ = new_vote_group
+        new_vote_group
             .account_ownership()
             .iter() // we don't need amt because we assume full reservation by default
             .map(|(who, _)| -> Result<(), DispatchError> {
