@@ -1,6 +1,6 @@
 # sunshine-subxt
 
-fork of [paritytech/substrate-subxt](https://github.com/paritytech/substrate-subxt) that works with [web3garden/sunshine-node](https://github.com/web3garden/sunshine-node)
+[paritytech/substrate-subxt](https://github.com/paritytech/substrate-subxt) client that works with [sunshine-node](https://github.com/sunshine-protocol/sunshine-node)
 
 ## instructions
 

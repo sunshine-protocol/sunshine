@@ -5,7 +5,7 @@ authors = ["Amar Singh <asinghchrony@protonmail.com>"]
 edition = "2018"
 
 license = "GPL-3.0"
-repository = "https://github.com/web3garden/sunshine-node"
+repository = "https://github.com/sunshine-protocol/sunshine-node"
 description = "on chain bounty platform"
 keywords = ["sunshine", "substrate", "blockchain"]
 
@@ -17,14 +17,14 @@ sp-runtime = { version = "2.0.0-rc2", default-features = false }
 frame-support = { version = "2.0.0-rc2", default-features = false }
 frame-system = { version = "2.0.0-rc2", default-features = false }
 pallet-balances = { version = "2.0.0-rc2", default-features = false }
-util = { package = "sunshine-util", path = "../util", default-features=false}
-membership = { package = "sunshine-membership", path = "../membership", default-features = false }
-shares-membership = { package = "sunshine-shares-membership", path = "../shares-membership", default-features = false }
-shares-atomic = { package = "sunshine-shares-atomic", path = "../shares-atomic", default-features = false }
-org = { package = "sunshine-org", path = "../org", default-features=false}
-bank-onchain = { package = "sunshine-bank-onchain", path = "../bank-onchain", default-features=false}
-vote-petition = { package = "sunshine-vote-petition", path = "../vote-petition", default-features=false}
-vote-yesno = { package = "sunshine-vote-yesno", path = "../vote-yesno", default-features=false}
+util = { package = "sunshine-util", version="0.0.3", default-features=false}
+membership = { package = "sunshine-membership", version="0.0.2", default-features = false }
+shares-membership = { package = "sunshine-shares-membership", version="0.0.2", default-features = false }
+shares-atomic = { package = "sunshine-shares-atomic", version="0.0.3", default-features = false }
+org = { package = "sunshine-org", version="0.0.2", default-features=false}
+bank-onchain = { package = "sunshine-bank-onchain", version="0.0.2", default-features=false}
+vote-petition = { package = "sunshine-vote-petition", version="0.0.2", default-features=false}
+vote-yesno = { package = "sunshine-vote-yesno", version="0.0.2", default-features=false}
 clear_on_drop = { version = "0.2.3", features = ["no_cc"] }	# https://github.com/paritytech/substrate/issues/4179
 
 [dev-dependencies]
