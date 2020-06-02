@@ -9,26 +9,33 @@ readme = "README.md"
 description = "Submit extrinsics (transactions) to the sunshine node via RPC"
 keywords = ["sunshine", "substrate", "blockchain"]
 
-[features]
-light-client = ["sp-database", "substrate-subxt-light-client", "sunshine-node"]
-
 [dependencies]
-codec = { version = "1.3.0", package = "parity-scale-codec", default-features = false, features = ["derive", "full"] }
+async-std = "=1.5.0"
+codec = { version = "1.3.0", package = "parity-scale-codec" }
 frame-support = "2.0.0-rc2"
-ipld-block-builder = "0.1.0"
-ipfs-embed = { git = "https://github.com/ipfs-rust/ipfs-embed" }
-pallet-indices = "2.0.0-rc2"
-sled = { git = "https://github.com/spacejam/sled" }
-sp-core = "2.0.0-rc2"
-sp-database = { version = "2.0.0-alpha.7", optional = true }
-sp-runtime = "2.0.0-rc2"
-substrate-subxt = { git = "https://github.com/dvc94ch/substrate-subxt", branch = "lightclient" }
-substrate-subxt-light-client = { git = "https://github.com/dvc94ch/substrate-subxt", branch = "lightclient", optional = true }
-sunshine-node = { path = "../node", default-features = false, optional = true }
-thiserror = "1.0.16"
+ipld-block-builder = "0.3.0"
+libipld = { version = "0.3.0", features = ["dag-json"] }
+serde = { version = "1.0.111", features = ["derive"] }
+# TODO export error in libipld
+serde_json = "1.0.53"
+substrate-subxt = "0.8.0"
+surf = "1.0.3"
+thiserror = "1.0.19"
+utils-identity = { version = "0.1.0", path = "../utils" }
+# local deps
 util = { package = "sunshine-util", path = "../modules/util", default-features = false }
+membership = { package = "sunshine-membership", path = "../modules/membership", default-features = false }
+shares-membership = { package = "sunshine-shares-membership", path = "../modules/shares-membership", default-features = false }
+shares-atomic = { package = "sunshine-shares-atomic", path = "../modules/shares-atomic", default-features = false }
+sunshine-org = {package = "sunshine-org", path = "../modules/org", default-features=false }
+vote-yesno = { package = "sunshine-vote-yesno", path = "../modules/vote-yesno", default-features = false}
+vote-petition = { package = "sunshine-vote-petition", path = "../modules/vote-petition", default-features=false}
+bank-onchain = { package = "sunshine-bank-onchain", path = "../modules/bank-onchain", default-features=false}
+bank-offchain = { package = "sunshine-bank-offchain", path = "../modules/bank-offchain", default-features=false}
+bounty = { package = "sunshine-bounty", path = "../modules/bounty", default-features=false}
 
 [dev-dependencies]
-async-std = { version = "1.5.0", features = ["attributes"] }
+async-std = { version = "=1.5.0", features = ["attributes"] }
 env_logger = "0.7.1"
 sp-keyring = "2.0.0-rc2"
+

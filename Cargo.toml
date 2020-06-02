@@ -14,7 +14,8 @@ members = [
     "modules/bank-onchain",
     "modules/bounty",
     "runtime",
-    #"client",
+    "utils",
+    "client",
     "node",
 ]
 
