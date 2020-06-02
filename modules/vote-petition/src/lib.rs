@@ -3,9 +3,9 @@
 #![allow(clippy::type_complexity)]
 #![allow(clippy::too_many_arguments)]
 #![cfg_attr(not(feature = "std"), no_std)]
-//! back to [`util`](../util/index.html) for all object and trait definitions
 //! Simple module for collecting signatures from organizational share groups
-//! - this is a simple vote machine, similar to `vote-yesno` but without any share-weighted threshold or counting complexity
+//! - this is a simple vote machine, similar to `vote-yesno` but without any
+//! share-weighted threshold or counting complexity
 
 #[cfg(test)]
 mod mock;

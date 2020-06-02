@@ -3,8 +3,9 @@
 #![allow(clippy::type_complexity)]
 #![allow(clippy::too_many_arguments)]
 #![allow(non_snake_case)]
-// this syntax for the runtime methods makes sense to me bc of existence of direct helper methods in trait impls
 #![cfg_attr(not(feature = "std"), no_std)]
+//! The bounty module allows registered organizations with on-chain bank accounts to
+//! register as a foundation to post bounties and supervise ongoing grant pursuits.
 
 mod tests;
 

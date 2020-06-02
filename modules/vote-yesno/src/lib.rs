@@ -3,7 +3,10 @@
 #![allow(clippy::type_complexity)]
 #![allow(clippy::too_many_arguments)]
 #![cfg_attr(not(feature = "std"), no_std)]
-//! back to [`util`](../util/index.html) for all object and trait definitions
+//! This module allows weighted share groups from `shares-atomic` to create
+//! elections. This module enables us to set the threshold for passage as
+//! a percent of the total turnout, which allow us to encode more nuanced threshold
+//! requirements (similar to Polkadot's negative turnout bias).
 
 #[cfg(test)]
 mod mock;

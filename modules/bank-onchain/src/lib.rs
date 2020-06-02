@@ -2,7 +2,8 @@
 #![allow(clippy::redundant_closure_call)]
 #![allow(clippy::type_complexity)]
 #![cfg_attr(not(feature = "std"), no_std)]
-//! back to [`util`](../util/index.html) for all object and trait definitions
+//! This module defines rules for withdrawal from a joint account; enables
+//! registered organizations to manage these accounts with share permission groups.
 
 #[cfg(test)]
 mod mock;

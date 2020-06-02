@@ -2,6 +2,7 @@
 #![allow(clippy::redundant_closure_call)]
 #![allow(clippy::type_complexity)]
 #![cfg_attr(not(feature = "std"), no_std)]
+//! The org module is a shim for the membership modules for deeper inheritance
 
 #[cfg(test)]
 mod tests;
