@@ -1,13 +1,13 @@
 
 [package]
 name = "sunshine-vote-yesno"
-version = "0.0.1"
+version = "0.0.2"
 authors = ["Amar Singh <asinghchrony@protonmail.com>"]
 edition = "2018"
 
 license = "GPL-3.0"
-repository = "https://github.com/web3garden/sunshine-node"
-description = "vote module with separate threshold configs for participation and passage"
+repository = "https://github.com/sunshine-protocol/sunshine-node"
+description = "expressive vote module with threshold for passage and turnout"
 keywords = ["sunshine", "substrate", "blockchain"]
 
 [dependencies]

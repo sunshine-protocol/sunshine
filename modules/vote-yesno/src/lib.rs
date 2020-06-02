@@ -3,7 +3,10 @@
 #![allow(clippy::type_complexity)]
 #![allow(clippy::too_many_arguments)]
 #![cfg_attr(not(feature = "std"), no_std)]
-//! back to [`util`](../util/index.html) for all object and trait definitions
+//! This module allows weighted share groups from `shares-atomic` to create
+//! elections. This module enables us to set the threshold for passage as
+//! a percent of the total turnout, which allow us to encode more nuanced threshold
+//! requirements (similar to Polkadot's negative turnout bias).
 
 #[cfg(test)]
 mod mock;
@@ -319,7 +322,7 @@ impl<T: Trait> MintableSignal<T::AccountId, T::BlockNumber, Permill> for Module<
         let vote_id = Self::generate_unique_id();
         <TotalSignalIssuance<T>>::insert(vote_id, total_minted);
         let one_signal: T::Signal = 1u32.into();
-        let _ = new_vote_group.into_iter().for_each(|who| {
+        new_vote_group.into_iter().for_each(|who| {
             // mint signal for individual
             <MintedSignal<T>>::insert(vote_id, who, one_signal);
         });
@@ -338,7 +341,7 @@ impl<T: Trait> MintableSignal<T::AccountId, T::BlockNumber, Permill> for Module<
         // insert total issuance
         let mut total_minted = T::Signal::zero();
         let vote_id = Self::generate_unique_id();
-        let _ = new_vote_group
+        new_vote_group
             .account_ownership()
             .iter() // we don't need amt because we assume full reservation by default
             .map(|(who, _)| -> Result<(), DispatchError> {

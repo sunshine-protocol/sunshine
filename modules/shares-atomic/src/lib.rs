@@ -2,7 +2,7 @@
 #![allow(clippy::redundant_closure_call)]
 #![allow(clippy::type_complexity)]
 #![cfg_attr(not(feature = "std"), no_std)]
-//! back to [`util`](../util/index.html) for all object and trait definitions
+//! The shares-atomic module is for expressing weighted membership
 
 #[cfg(test)]
 mod mock;

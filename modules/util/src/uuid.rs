@@ -8,20 +8,14 @@ pub struct UUID(u32);
 #[derive(PartialEq, Eq, Default, Copy, Clone, Encode, Decode, RuntimeDebug)]
 pub struct UUID2(u32, u32);
 
-// impl From<(u32, u32)> for UUID2 {
-//     fn from(other: (u32, u32)) -> UUID2 {
-//         UUID2::new(other.1, other.2)
-//     }
-// }
-
 impl UUID2 {
     pub fn new(one: u32, two: u32) -> UUID2 {
         UUID2(one, two)
     }
-    pub fn one(&self) -> u32 {
+    pub fn one(self) -> u32 {
         self.0
     }
-    pub fn two(&self) -> u32 {
+    pub fn two(self) -> u32 {
         self.1
     }
 }
@@ -39,16 +33,16 @@ impl UUID3 {
     pub fn new(one: u32, two: u32, three: u32) -> UUID3 {
         UUID3(one, two, three)
     }
-    pub fn one_two(&self) -> UUID2 {
+    pub fn one_two(self) -> UUID2 {
         UUID2::new(self.0, self.1)
     }
-    pub fn one(&self) -> u32 {
+    pub fn one(self) -> u32 {
         self.0
     }
-    pub fn two(&self) -> u32 {
+    pub fn two(self) -> u32 {
         self.1
     }
-    pub fn three(&self) -> u32 {
+    pub fn three(self) -> u32 {
         self.2
     }
 }

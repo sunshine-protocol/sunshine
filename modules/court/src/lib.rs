@@ -2,7 +2,7 @@
 #![allow(clippy::redundant_closure_call)]
 #![allow(clippy::type_complexity)]
 #![cfg_attr(not(feature = "std"), no_std)]
-//! back to [`util`](../util/index.html) for all object and trait definitions
+//! The court module is for enforcing hierarchical dispute resolution in governance
 
 use frame_support::{decl_error, decl_event, decl_module, decl_storage};
 use frame_system::{self as system, ensure_signed};

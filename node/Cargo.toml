@@ -7,7 +7,7 @@ edition = '2018'
 license = 'GPL3'
 description = 'Sunshine substrate node.'
 homepage = 'https://joinsunshine.com'
-repository = 'https://github.com/web3garden/sunshine-node'
+repository = 'https://github.com/sunshine-protocol/sunshine-node'
 
 [build-dependencies]
 substrate-build-script-utils = "2.0.0-rc2"

@@ -1,12 +1,12 @@
 [package]
 name = "sunshine-bank-offchain"
-version = "0.0.1"
+version = "0.0.2"
 authors = ["Amar Singh <asinghchrony@protonmail.com>"]
 edition = "2018"
 
 license = "GPL-3.0"
-repository = "https://github.com/web3garden/sunshine-node"
-description = "register organizations and open joint-owned on-chain and off-chain bank accounts"
+repository = "https://github.com/sunshine-protocol/sunshine-node"
+description = "log confirmation for off-chain transactions on-chain"
 keywords = ["sunshine", "substrate", "blockchain"]
 
 [dependencies]
@@ -18,6 +18,9 @@ sp-runtime = { version = "2.0.0-rc2", default-features = false }
 frame-support = { version = "2.0.0-rc2", default-features = false }
 frame-system = { version = "2.0.0-rc2", default-features = false }
 util = { package = "sunshine-util", path = "../util", default-features = false }
+membership = { package = "sunshine-membership", path = "../membership", default-features = false }
+shares-membership = { package = "sunshine-shares-membership", path = "../shares-membership", default-features = false }
+shares-atomic = { package = "sunshine-shares-atomic", path = "../shares-atomic", default-features = false }
 org = { package = "sunshine-org", path = "../org", default-features=false}
 clear_on_drop = { version = "0.2.3", features = ["no_cc"] } # https://github.com/paritytech/substrate/issues/4179
 
@@ -25,9 +28,6 @@ clear_on_drop = { version = "0.2.3", features = ["no_cc"] } # https://github.com
 pallet-balances = { version = "2.0.0-rc2", default-features = false }
 sp-io = { version = "2.0.0-rc2", default-features = false }
 sp-core = { version = "2.0.0-rc2", default-features = false }
-membership = { package = "sunshine-membership", path = "../membership", default-features = false }
-shares-membership = { package = "sunshine-shares-membership", path = "../shares-membership", default-features = false }
-shares-atomic = { package = "sunshine-shares-atomic", path = "../shares-atomic", default-features = false }
 
 [features]
 default = ["std"]
