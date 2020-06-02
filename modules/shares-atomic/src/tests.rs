@@ -122,11 +122,11 @@ fn check_membership() {
     // constant time membership lookups
     new_test_ext().execute_with(|| {
         let mut n = 0u64;
-        let first_group_id = UUID2::new(1, 1);
-        let second_group_id = UUID2::new(1, 2);
-        let third_group_id = UUID2::new(1, 3);
+        let first_group_id = ShareGroup::new(1, 1);
+        let second_group_id = ShareGroup::new(1, 2);
+        let third_group_id = ShareGroup::new(1, 3);
         // different organization
-        let second_first_group_id = UUID2::new(2, 1);
+        let second_first_group_id = ShareGroup::new(2, 1);
         while n < 19 {
             n += 1;
             if n == 1 {
@@ -174,7 +174,7 @@ fn share_reservation() {
     new_test_ext().execute_with(|| {
         let one = Origin::signed(1);
         assert_ok!(AtomicShares::reserve_shares(one.clone(), 1, 1, 1));
-        let prefix_key = UUID2::new(1, 1);
+        let prefix_key = ShareGroup::new(1, 1);
         let profile = AtomicShares::profile(prefix_key, 1).unwrap();
         let first_times_reserved = profile.times_reserved();
         // // check that method calculates correctly
@@ -218,7 +218,7 @@ fn share_unreservation() {
     new_test_ext().execute_with(|| {
         let one = Origin::signed(1);
         assert_ok!(AtomicShares::reserve_shares(one.clone(), 1, 1, 1));
-        let prefix_key = UUID2::new(1, 1);
+        let prefix_key = ShareGroup::new(1, 1);
         let profile = AtomicShares::profile(prefix_key, 1).unwrap();
         let first_times_reserved = profile.times_reserved();
         // // check that method calculates correctly
@@ -235,7 +235,7 @@ fn share_unreservation() {
 fn share_lock() {
     new_test_ext().execute_with(|| {
         let one = Origin::signed(1);
-        let prefix_key = UUID2::new(1, 1);
+        let prefix_key = ShareGroup::new(1, 1);
         let profile = AtomicShares::profile(prefix_key, 1).unwrap();
         let unlocked = profile.is_unlocked();
         assert_eq!(unlocked, true);
@@ -250,7 +250,7 @@ fn share_lock() {
 fn share_unlock() {
     new_test_ext().execute_with(|| {
         let one = Origin::signed(1);
-        let prefix_key = UUID2::new(1, 1);
+        let prefix_key = ShareGroup::new(1, 1);
         let profile = AtomicShares::profile(prefix_key, 1).unwrap();
         let unlocked = profile.is_unlocked();
         assert_eq!(unlocked, true);
@@ -269,7 +269,7 @@ fn share_unlock() {
 fn share_issuance() {
     new_test_ext().execute_with(|| {
         let one = Origin::signed(1);
-        let prefix_key = UUID2::new(1, 1);
+        let prefix_key = ShareGroup::new(1, 1);
         let pre_profile = AtomicShares::profile(prefix_key, 10).unwrap();
         let pre_shares = pre_profile.total();
 
@@ -288,7 +288,7 @@ fn share_issuance() {
 fn share_burn() {
     new_test_ext().execute_with(|| {
         let one = Origin::signed(1);
-        let prefix_key = UUID2::new(1, 1);
+        let prefix_key = ShareGroup::new(1, 1);
         let pre_profile = AtomicShares::profile(prefix_key, 10).unwrap();
         let pre_shares = pre_profile.total();
 

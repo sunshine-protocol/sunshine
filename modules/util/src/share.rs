@@ -53,16 +53,16 @@ impl<
         AtomicShareProfile { total, ..self }
     }
 
-    pub fn iterate_times_reserved(self, amount: u32) -> AtomicShareProfile<Shares> {
-        let times_reserved = self.times_reserved + amount;
+    pub fn increment_times_reserved(self) -> AtomicShareProfile<Shares> {
+        let times_reserved = self.times_reserved + 1u32;
         AtomicShareProfile {
             times_reserved,
             ..self
         }
     }
 
-    pub fn decrement_times_reserved(self, amount: u32) -> AtomicShareProfile<Shares> {
-        let times_reserved = self.times_reserved - amount;
+    pub fn decrement_times_reserved(self) -> AtomicShareProfile<Shares> {
+        let times_reserved = self.times_reserved - 1u32;
         AtomicShareProfile {
             times_reserved,
             ..self

@@ -5,7 +5,6 @@ use sp_runtime::{testing::Header, traits::IdentityLookup, Perbill};
 
 // type aliases
 pub type AccountId = u64;
-pub type Shares = u64;
 pub type BlockNumber = u64;
 
 impl_outer_origin! {
@@ -57,16 +56,18 @@ impl frame_system::Trait for Test {
     type OnKilledAccount = ();
 }
 parameter_types! {
-    // pretty random hard limit
+    // pretty large hard limit
     pub const ReservationLimit: u32 = 100000;
 }
 impl membership::Trait for Test {
     type Event = ();
+    type OrgId = u32;
 }
 impl Trait for Test {
     type Event = Event<Test>;
+    type ShareId = u32;
     type OrgData = membership::Module<Test>;
-    type Shares = Shares;
+    type Shares = u64;
     type ReservationLimit = ReservationLimit;
 }
 pub type AtomicShares = Module<Test>;

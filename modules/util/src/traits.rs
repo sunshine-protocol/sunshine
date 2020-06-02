@@ -192,7 +192,7 @@ pub trait AccessProfile<Shares> {
     fn total(&self) -> Shares;
 }
 
-pub trait WeightedShareGroup<AccountId> {
+pub trait WeightedShareGroup<OrgId, ShareId, AccountId> {
     type Shares: Parameter + Member + AtLeast32Bit + Codec;
     type Profile: AccessProfile<Self::Shares>;
     type Genesis: From<Vec<(AccountId, Self::Shares)>>
@@ -200,70 +200,68 @@ pub trait WeightedShareGroup<AccountId> {
         + VerifyShape
         + AccessGenesis<AccountId, Self::Shares>;
     /// Gets the total number of shares issued for an organization's share identifier
-    fn outstanding_shares(organization: u32, id: u32) -> Option<Self::Shares>;
+    fn outstanding_shares(organization: OrgId, share_id: ShareId) -> Option<Self::Shares>;
     // get who's share profile
     fn get_share_profile(
-        organization: u32,
-        share_id: u32,
+        organization: OrgId,
+        share_id: ShareId,
         who: &AccountId,
     ) -> Option<Self::Profile>;
     /// Returns the entire membership group associated with a share identifier, fallible bc checks existence
-    fn shareholder_membership(organization: u32, id: u32) -> Option<Self::Genesis>;
+    fn shareholder_membership(organization: OrgId, id: ShareId) -> Option<Self::Genesis>;
 }
 
 /// Issuance logic for existing shares (not new shares)
-pub trait ShareBank<AccountId>: WeightedShareGroup<AccountId> {
+pub trait ShareBank<OrgId, ShareId, AccountId>:
+    WeightedShareGroup<OrgId, ShareId, AccountId>
+{
     fn issue(
-        organization: u32,
-        share_id: u32,
+        organization: OrgId,
+        share_id: ShareId,
         new_owner: AccountId,
         amount: Self::Shares,
         batch: bool,
     ) -> DispatchResult;
     fn burn(
-        organization: u32,
-        share_id: u32,
+        organization: OrgId,
+        share_id: ShareId,
         old_owner: AccountId,
         amount: Self::Shares,
         batch: bool,
     ) -> DispatchResult;
-    fn batch_issue(organization: u32, share_id: u32, genesis: Self::Genesis) -> DispatchResult;
-    fn batch_burn(organization: u32, share_id: u32, genesis: Self::Genesis) -> DispatchResult;
-}
-
-pub trait GetMagnitude<Shares> {
-    fn get_magnitude(self) -> Shares;
-}
-// the first element is the number of times its been reserved
-impl<Shares> GetMagnitude<Shares> for (u32, Shares) {
-    fn get_magnitude(self) -> Shares {
-        self.1
-    }
+    fn batch_issue(
+        organization: OrgId,
+        share_id: ShareId,
+        genesis: Self::Genesis,
+    ) -> DispatchResult;
+    fn batch_burn(organization: OrgId, share_id: ShareId, genesis: Self::Genesis)
+        -> DispatchResult;
 }
 
 /// Reserve shares for an individual `AccountId`
-pub trait ReservableProfile<AccountId>: ShareBank<AccountId> {
-    type ReservationContext: GetMagnitude<Self::Shares>;
+pub trait ReservableProfile<OrgId, ShareId, AccountId>:
+    ShareBank<OrgId, ShareId, AccountId>
+{
     /// Reserves amount iff certain conditions are met wrt existing profile and how it will change
     fn reserve(
-        organization: u32,
-        share_id: u32,
+        organization: OrgId,
+        share_id: ShareId,
         who: &AccountId,
-        amount: Option<Self::ReservationContext>,
-    ) -> Result<Self::ReservationContext, DispatchError>;
+        amount: Option<Self::Shares>,
+    ) -> Result<Self::Shares, DispatchError>;
     /// Unreserves amount iff certain conditions are met wrt existing profile and how it will change
     fn unreserve(
-        organization: u32,
-        share_id: u32,
+        organization: OrgId,
+        share_id: ShareId,
         who: &AccountId,
-        amount: Option<Self::ReservationContext>,
-    ) -> Result<Self::ReservationContext, DispatchError>;
+        amount: Option<Self::Shares>,
+    ) -> Result<Self::Shares, DispatchError>;
 }
 
 /// Lock shares for an individual `AccountId`
-pub trait LockableProfile<AccountId> {
-    fn lock_profile(organization: u32, share_id: u32, who: &AccountId) -> DispatchResult;
-    fn unlock_profile(organization: u32, share_id: u32, who: &AccountId) -> DispatchResult;
+pub trait LockableProfile<OrgId, ShareId, AccountId> {
+    fn lock_profile(organization: OrgId, share_id: ShareId, who: &AccountId) -> DispatchResult;
+    fn unlock_profile(organization: OrgId, share_id: ShareId, who: &AccountId) -> DispatchResult;
 }
 
 // ====== Vote Logic ======
