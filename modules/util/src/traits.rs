@@ -87,7 +87,7 @@ pub trait SubSubGroupSupervisorPermissions<OrgId, S1, S2, AccountId> {
 
 // ---------- Membership Logic ----------
 pub trait GetGroupSize {
-    type GroupId: FullCodec + sp_std::fmt::Debug;
+    type GroupId: FullCodec + sp_std::fmt::Debug + PartialEq + Copy;
 
     fn get_size_of_group(group_id: Self::GroupId) -> u32;
 }
@@ -106,7 +106,10 @@ pub trait ChangeGroupMembership<AccountId>: GroupMembership<AccountId> {
     fn batch_remove_group_members(group_id: Self::GroupId, old_members: Vec<AccountId>);
 }
 pub trait GetFlatShareGroup<OrgId, ShareId, AccountId> {
-    fn get_organization_share_group(organization: OrgId, share_id: ShareId) -> Option<Vec<AccountId>>;
+    fn get_organization_share_group(
+        organization: OrgId,
+        share_id: ShareId,
+    ) -> Option<Vec<AccountId>>;
 }
 // --
 // GetTotalShareIssuance is in WeightedShareGroup::outstanding_shares

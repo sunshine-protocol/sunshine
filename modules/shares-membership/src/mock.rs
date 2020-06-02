@@ -57,9 +57,11 @@ impl frame_system::Trait for Test {
 }
 impl membership::Trait for Test {
     type Event = ();
+    type OrgId = u32;
 }
 impl Trait for Test {
     type Event = Event<Test>;
+    type ShareId = u32;
     type OrgData = membership::Module<Test>;
 }
 pub type SharesMembership = Module<Test>;

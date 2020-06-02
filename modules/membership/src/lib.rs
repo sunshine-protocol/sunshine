@@ -1,3 +1,4 @@
+#![recursion_limit = "256"]
 #![allow(clippy::string_lit_as_bytes)]
 #![allow(clippy::redundant_closure_call)]
 #![allow(clippy::type_complexity)]
@@ -35,6 +36,7 @@ pub trait Trait: system::Trait {
         + MaybeSerializeDeserialize
         + Debug
         + PartialOrd
+        + PartialEq
         + Zero;
 }
 

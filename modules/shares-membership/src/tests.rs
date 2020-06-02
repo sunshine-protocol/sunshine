@@ -131,11 +131,11 @@ fn test_flat_share_group_trait() {
 #[test]
 fn test_genesis_with_membership_checks() {
     new_test_ext().execute_with(|| {
-        let first_group = UUID2::new(1, 1);
-        let second_group = UUID2::new(1, 2);
-        let third_group = UUID2::new(1, 3);
-        let fifth_group = UUID2::new(1, 5);
-        let second_org = UUID2::new(2, 1);
+        let first_group = ShareGroup::new(1, 1);
+        let second_group = ShareGroup::new(1, 2);
+        let third_group = ShareGroup::new(1, 3);
+        let fifth_group = ShareGroup::new(1, 5);
+        let second_org = ShareGroup::new(2, 1);
         for i in 1..13 {
             assert!(SharesMembership::is_member_of_group(first_group, &i));
             if i > 9 {

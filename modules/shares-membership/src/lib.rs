@@ -47,6 +47,7 @@ pub trait Trait: system::Trait {
         + MaybeSerializeDeserialize
         + Debug
         + PartialOrd
+        + PartialEq
         + Zero;
 
     /// Inherited organization module
@@ -292,13 +293,12 @@ impl<T: Trait> GetFlatShareGroup<OrgId<T>, T::ShareId, T::AccountId> for Module<
         organization: OrgId<T>,
         share_id: T::ShareId,
     ) -> Option<Vec<T::AccountId>> {
-        let prefix = ShareGroup::new(organization, share_id);
-        // TODO: update once https://github.com/paritytech/substrate/pull/5335 is merged and pulled into local version
-        if !Self::id_is_available(prefix) {
+        let input_share_group = ShareGroup::new(organization, share_id);
+        if !Self::id_is_available(input_share_group) {
             Some(
                 // is this the same performance as a get() with Key=Vec<AccountId>
                 <ShareHolders<T>>::iter()
-                    .filter(|(share_group, _, _)| *share_group == prefix)
+                    .filter(|(share_group, _, _)| share_group == &input_share_group)
                     .map(|(_, account, _)| account)
                     .collect::<Vec<_>>(),
             )
