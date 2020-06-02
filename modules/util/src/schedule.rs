@@ -61,7 +61,7 @@ impl<FineArithmetic: PerThing> ThresholdConfigBuilder<FineArithmetic> {
     }
 }
 
-#[derive(PartialEq, Eq, Default, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
+#[derive(new, PartialEq, Eq, Default, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
 /// A vote that is awaiting dispatch from within a `VoteSchedule
 /// TODO: consider making associated type `Threshold` and define behavior required \forall thresholds
 pub struct ScheduledVote<FineArithmetic>
@@ -77,17 +77,6 @@ where
 }
 
 impl<FineArithmetic: PerThing> ScheduledVote<FineArithmetic> {
-    pub fn new(
-        priority: u32,
-        share_group: u32,
-        threshold: ThresholdConfigBuilder<FineArithmetic>,
-    ) -> Self {
-        Self {
-            priority,
-            share_group,
-            threshold,
-        }
-    }
     // TODO: instead of getters, prefer understanding why the information is gotten and create a method to make
     // the explicit transformation `=>` these getters are equivalent to just making the parameters public
     pub fn get_share_id(&self) -> u32 {

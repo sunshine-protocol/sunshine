@@ -3,7 +3,7 @@ use crate::{
     share::SimpleShareGenesis,
     voteyesno::{SupportedVoteTypes, ThresholdConfig},
 };
-use codec::Codec;
+use codec::{Codec, FullCodec};
 use frame_support::Parameter;
 use sp_runtime::{
     traits::{AtLeast32Bit, Member},
@@ -87,7 +87,7 @@ pub trait SubSubGroupSupervisorPermissions<OrgId, S1, S2, AccountId> {
 
 // ---------- Membership Logic ----------
 pub trait GetGroupSize {
-    type GroupId;
+    type GroupId: FullCodec + sp_std::fmt::Debug;
 
     fn get_size_of_group(group_id: Self::GroupId) -> u32;
 }
@@ -105,8 +105,8 @@ pub trait ChangeGroupMembership<AccountId>: GroupMembership<AccountId> {
     fn batch_add_group_members(group_id: Self::GroupId, new_members: Vec<AccountId>);
     fn batch_remove_group_members(group_id: Self::GroupId, old_members: Vec<AccountId>);
 }
-pub trait GetFlatShareGroup<AccountId> {
-    fn get_organization_share_group(organization: u32, share_id: u32) -> Option<Vec<AccountId>>;
+pub trait GetFlatShareGroup<OrgId, ShareId, AccountId> {
+    fn get_organization_share_group(organization: OrgId, share_id: ShareId) -> Option<Vec<AccountId>>;
 }
 // --
 // GetTotalShareIssuance is in WeightedShareGroup::outstanding_shares

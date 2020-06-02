@@ -2,7 +2,7 @@ use codec::{Decode, Encode};
 use sp_runtime::RuntimeDebug;
 use sp_std::prelude::*;
 
-#[derive(PartialEq, Eq, Default, Clone, Encode, Decode, RuntimeDebug)]
+#[derive(new, PartialEq, Eq, Default, Clone, Encode, Decode, RuntimeDebug)]
 /// Static terms of agreement, define how the enforced payout structure for grants
 pub struct TermsOfAgreement<AccountId, Shares> {
     /// If Some(account), then account is the sudo for the duration of the grant
@@ -12,15 +12,6 @@ pub struct TermsOfAgreement<AccountId, Shares> {
 }
 
 impl<AccountId: Clone, Shares: Clone> TermsOfAgreement<AccountId, Shares> {
-    pub fn new(
-        supervisor: Option<AccountId>,
-        share_metadata: Vec<(AccountId, Shares)>,
-    ) -> TermsOfAgreement<AccountId, Shares> {
-        TermsOfAgreement {
-            supervisor,
-            share_metadata,
-        }
-    }
     pub fn supervisor(&self) -> Option<AccountId> {
         self.supervisor.clone()
     }
@@ -176,7 +167,7 @@ impl Into<u32> for ShareID {
     }
 }
 
-#[derive(PartialEq, Eq, Default, Clone, Encode, Decode, RuntimeDebug)]
+#[derive(new, PartialEq, Eq, Default, Clone, Encode, Decode, RuntimeDebug)]
 /// The struct to track the `ShareId`s and `ProposalIndex` associated with an organization
 /// TODO: in the future, each of these should be separate maps
 pub struct Organization<Hash> {
@@ -187,12 +178,6 @@ pub struct Organization<Hash> {
 }
 
 impl<Hash: Clone> Organization<Hash> {
-    pub fn new(admin_id: ShareID, constitution: Hash) -> Self {
-        Organization {
-            admin_id,
-            constitution,
-        }
-    }
     pub fn admin_id(&self) -> ShareID {
         self.admin_id
     }

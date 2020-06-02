@@ -33,16 +33,13 @@ impl<Hash> Default for PetitionView<Hash> {
     }
 }
 
-#[derive(Default, Clone, Copy, PartialEq, Eq, Encode, Decode, sp_runtime::RuntimeDebug)]
+#[derive(new, Default, Clone, Copy, PartialEq, Eq, Encode, Decode, sp_runtime::RuntimeDebug)]
 pub struct PetitionSignature<AccountId, Hash> {
     signer: AccountId,
     view: PetitionView<Hash>,
 }
 
 impl<AccountId, Hash: Clone> PetitionSignature<AccountId, Hash> {
-    pub fn new(signer: AccountId, view: PetitionView<Hash>) -> Self {
-        PetitionSignature { signer, view }
-    }
     pub fn view(&self) -> PetitionView<Hash> {
         self.view.clone()
     }

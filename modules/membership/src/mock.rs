@@ -57,5 +57,6 @@ impl frame_system::Trait for Test {
 }
 impl Trait for Test {
     type Event = Event<Test>;
+    type OrgId = u32;
 }
 pub type Membership = Module<Test>;

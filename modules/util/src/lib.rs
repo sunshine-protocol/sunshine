@@ -3,6 +3,8 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 //! `util` contains all objects and relationships for all sunshine modules
 //! - see `traits.rs` for behavioral definitions and other files for object impls
+#[macro_use]
+extern crate derive_new;
 
 pub mod bank;
 pub mod bounty;

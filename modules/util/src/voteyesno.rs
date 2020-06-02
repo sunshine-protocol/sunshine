@@ -35,7 +35,7 @@ pub enum VoterYesNoView {
     Abstain,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Encode, Decode, sp_runtime::RuntimeDebug)]
+#[derive(new, Clone, Copy, PartialEq, Eq, Encode, Decode, sp_runtime::RuntimeDebug)]
 /// Binary vote to express for/against with magnitude
 /// ~ vectors have direction and magnitude, not to be confused with `Vec`
 pub struct YesNoVote<Signal, Hash> {
@@ -45,14 +45,6 @@ pub struct YesNoVote<Signal, Hash> {
 }
 
 impl<Signal, Hash: Clone> YesNoVote<Signal, Hash> {
-    pub fn new(magnitude: Signal, direction: VoterYesNoView, justification: Option<Hash>) -> Self {
-        YesNoVote {
-            magnitude,
-            direction,
-            justification,
-        }
-    }
-
     pub fn justification(&self) -> Option<Hash> {
         self.justification.clone()
     }

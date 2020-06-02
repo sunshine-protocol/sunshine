@@ -23,7 +23,7 @@ impl Default for BountyMapID {
     }
 }
 
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+#[derive(new, PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 /// The information most often read after a specific bounty is GOT
 pub struct BountyInformation<AccountId, Hash, WeightedThreshold, Currency> {
     // Storage cid
@@ -51,27 +51,6 @@ pub struct BountyInformation<AccountId, Hash, WeightedThreshold, Currency> {
 impl<AccountId: Clone, Hash: Parameter, WeightedThreshold: Clone, Currency: Parameter>
     BountyInformation<AccountId, Hash, WeightedThreshold, Currency>
 {
-    pub fn new(
-        description: Hash,
-        foundation_id: u32,
-        bank_account: OnChainTreasuryID,
-        spend_reservation_id: u32,
-        funding_reserved: Currency,
-        claimed_funding_available: Currency,
-        acceptance_committee: ReviewBoard<AccountId, Hash, WeightedThreshold>,
-        supervision_committee: Option<ReviewBoard<AccountId, Hash, WeightedThreshold>>,
-    ) -> BountyInformation<AccountId, Hash, WeightedThreshold, Currency> {
-        BountyInformation {
-            description,
-            foundation_id,
-            bank_account,
-            spend_reservation_id,
-            funding_reserved,
-            claimed_funding_available,
-            acceptance_committee,
-            supervision_committee,
-        }
-    }
     // get OrgId for sponsor org basically
     pub fn foundation(&self) -> u32 {
         self.foundation_id
@@ -93,7 +72,7 @@ impl<AccountId: Clone, Hash: Parameter, WeightedThreshold: Clone, Currency: Para
     }
 }
 
-#[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug)]
+#[derive(new, PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug)]
 /// Identifier for each registered team
 /// -> RULE: same org as bounty_info.foundation()
 pub struct TeamID<AccountId> {
@@ -105,19 +84,6 @@ pub struct TeamID<AccountId> {
 }
 
 impl<AccountId: Clone + PartialEq> TeamID<AccountId> {
-    pub fn new(
-        org: u32,
-        sudo: Option<AccountId>,
-        flat_share_id: u32,
-        weighted_share_id: u32,
-    ) -> TeamID<AccountId> {
-        TeamID {
-            org,
-            sudo,
-            flat_share_id,
-            weighted_share_id,
-        }
-    }
     pub fn org(&self) -> u32 {
         self.org
     }

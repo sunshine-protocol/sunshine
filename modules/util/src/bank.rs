@@ -42,19 +42,10 @@ pub enum BankMapID {
     InternalTransfer,
 }
 
-#[derive(PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
+#[derive(new, PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
 pub struct BankTrackerIdentifier {
     treasury_id: OnChainTreasuryID,
     tracker_id: BankTrackerID,
-}
-
-impl BankTrackerIdentifier {
-    pub fn new(treasury_id: OnChainTreasuryID, tracker_id: BankTrackerID) -> BankTrackerIdentifier {
-        BankTrackerIdentifier {
-            treasury_id,
-            tracker_id,
-        }
-    }
 }
 
 impl From<(OnChainTreasuryID, BankTrackerID)> for BankTrackerIdentifier {
@@ -280,16 +271,13 @@ impl<GovernanceConfig: Clone + PartialEq, Currency: Zero + AtLeast32Bit + Clone>
     }
 }
 
-#[derive(PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
+#[derive(new, PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
 pub struct CommitmentInfo<Hash, Currency> {
     reason: Hash,
     amount: Currency,
 }
 
 impl<Hash: Clone, Currency: Clone> CommitmentInfo<Hash, Currency> {
-    pub fn new(reason: Hash, amount: Currency) -> CommitmentInfo<Hash, Currency> {
-        CommitmentInfo { reason, amount }
-    }
     pub fn amount(&self) -> Currency {
         self.amount.clone()
     }
@@ -298,7 +286,7 @@ impl<Hash: Clone, Currency: Clone> CommitmentInfo<Hash, Currency> {
     }
 }
 
-#[derive(PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
+#[derive(new, PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
 pub struct DepositInfo<AccountId, Hash, Currency> {
     // Depositer's identity
     depositer: AccountId,
@@ -309,17 +297,6 @@ pub struct DepositInfo<AccountId, Hash, Currency> {
 } // TODO: attach an enum Tax<AccountId, Currency, FineArithmetic> { Flat(account, currency), PercentofAmount(account, permill, currency), }
 
 impl<AccountId: Clone, Hash: Clone, Currency: Clone> DepositInfo<AccountId, Hash, Currency> {
-    pub fn new(
-        depositer: AccountId,
-        reason: Hash,
-        amount: Currency,
-    ) -> DepositInfo<AccountId, Hash, Currency> {
-        DepositInfo {
-            depositer,
-            reason,
-            amount,
-        }
-    }
     pub fn depositer(&self) -> AccountId {
         self.depositer.clone()
     }
@@ -484,7 +461,7 @@ impl<
     }
 }
 
-#[derive(PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
+#[derive(new, PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
 /// Transfers withdrawal control to the new_controller
 /// - them referencing this item in storage is the authentication necessary for withdrawals from the Bank
 pub struct InternalTransferInfo<Hash, Currency, GovernanceConfig> {
@@ -501,19 +478,6 @@ pub struct InternalTransferInfo<Hash, Currency, GovernanceConfig> {
 impl<Hash: Clone, Currency: Clone, GovernanceConfig: Clone>
     InternalTransferInfo<Hash, Currency, GovernanceConfig>
 {
-    pub fn new(
-        reference_id: u32,
-        reason: Hash,
-        amount: Currency,
-        controller: GovernanceConfig,
-    ) -> InternalTransferInfo<Hash, Currency, GovernanceConfig> {
-        InternalTransferInfo {
-            reference_id,
-            reason,
-            amount,
-            controller,
-        }
-    }
     pub fn id(&self) -> u32 {
         self.reference_id
     }
@@ -626,7 +590,7 @@ impl<
 
 // ~~ Off Chain Bank ~~
 
-#[derive(PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
+#[derive(new, PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
 // TODO: add Currency type that is more compatible with off chain payments (USD)
 pub struct Payment<AccountId, Currency> {
     salt: u32,
@@ -636,19 +600,6 @@ pub struct Payment<AccountId, Currency> {
 }
 
 impl<AccountId: Clone, Currency: Clone> Payment<AccountId, Currency> {
-    pub fn new(
-        salt: u32,
-        sender: AccountId,
-        receiver: AccountId,
-        amount: Currency,
-    ) -> Payment<AccountId, Currency> {
-        Payment {
-            salt,
-            sender,
-            receiver,
-            amount,
-        }
-    }
     pub fn salt(&self) -> u32 {
         self.salt
     }
