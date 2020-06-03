@@ -1,12 +1,36 @@
 use crate::traits::{AccessGenesis, AccessProfile, VerifyShape};
-use codec::{Decode, Encode};
+use codec::{Codec, Decode, Encode};
 use frame_support::Parameter;
 use sp_runtime::{traits::Zero, RuntimeDebug};
 use sp_std::prelude::*;
 
+#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug)]
+pub enum ShareIdTypes {
+    Flat,
+    Weighted,
+}
+
+impl Default for ShareIdTypes {
+    fn default() -> Self {
+        ShareIdTypes::Flat
+    }
+}
+
+#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug)]
+pub enum ShareID<Id: Codec + PartialEq + Zero + From<u32> + Copy> {
+    Flat(Id),
+    Weighted(Id),
+}
+
+impl<Id: Codec + PartialEq + Zero + From<u32> + Copy> Default for ShareID<Id> {
+    fn default() -> Self {
+        ShareID::Flat(Id::zero())
+    }
+}
+
 #[derive(PartialEq, Eq, Default, Copy, Clone, Encode, Decode, RuntimeDebug)]
-/// Atomic share profile reserves the total share amount every time but (might) have a limit on total reservations
-pub struct AtomicShareProfile<Shares> {
+/// share profile reserves the total share amount every time but (might) have a limit on total reservations
+pub struct ShareProfile<Shares> {
     /// The total number of shares owned by this participant
     total: Shares,
     /// The reference count for the number of votes that this is used, initialized at 0
@@ -22,7 +46,7 @@ impl<
             + sp_std::ops::Add<Output = Shares>
             + sp_std::ops::Sub<Output = Shares>
             + Zero,
-    > AtomicShareProfile<Shares>
+    > ShareProfile<Shares>
 {
     pub fn total(&self) -> Shares {
         self.total
@@ -36,48 +60,48 @@ impl<
         self.total == Shares::zero()
     }
 
-    pub fn new_shares(total: Shares) -> AtomicShareProfile<Shares> {
-        AtomicShareProfile {
+    pub fn new_shares(total: Shares) -> ShareProfile<Shares> {
+        ShareProfile {
             total,
             ..Default::default()
         }
     }
 
-    pub fn add_shares(self, amount: Shares) -> AtomicShareProfile<Shares> {
+    pub fn add_shares(self, amount: Shares) -> ShareProfile<Shares> {
         let total = self.total + amount;
-        AtomicShareProfile { total, ..self }
+        ShareProfile { total, ..self }
     }
 
-    pub fn subtract_shares(self, amount: Shares) -> AtomicShareProfile<Shares> {
+    pub fn subtract_shares(self, amount: Shares) -> ShareProfile<Shares> {
         let total = self.total - amount;
-        AtomicShareProfile { total, ..self }
+        ShareProfile { total, ..self }
     }
 
-    pub fn increment_times_reserved(self) -> AtomicShareProfile<Shares> {
+    pub fn increment_times_reserved(self) -> ShareProfile<Shares> {
         let times_reserved = self.times_reserved + 1u32;
-        AtomicShareProfile {
+        ShareProfile {
             times_reserved,
             ..self
         }
     }
 
-    pub fn decrement_times_reserved(self) -> AtomicShareProfile<Shares> {
+    pub fn decrement_times_reserved(self) -> ShareProfile<Shares> {
         let times_reserved = self.times_reserved - 1u32;
-        AtomicShareProfile {
+        ShareProfile {
             times_reserved,
             ..self
         }
     }
 
-    pub fn lock(self) -> AtomicShareProfile<Shares> {
-        AtomicShareProfile {
+    pub fn lock(self) -> ShareProfile<Shares> {
+        ShareProfile {
             locked: true,
             ..self
         }
     }
 
-    pub fn unlock(self) -> AtomicShareProfile<Shares> {
-        AtomicShareProfile {
+    pub fn unlock(self) -> ShareProfile<Shares> {
+        ShareProfile {
             locked: false,
             ..self
         }
@@ -88,7 +112,7 @@ impl<
     }
 }
 
-impl<Shares: Copy + Parameter> AccessProfile<Shares> for AtomicShareProfile<Shares> {
+impl<Shares: Copy + Parameter> AccessProfile<Shares> for ShareProfile<Shares> {
     fn total(&self) -> Shares {
         self.total
     }

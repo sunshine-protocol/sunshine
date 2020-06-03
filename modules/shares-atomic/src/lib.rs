@@ -12,12 +12,12 @@ mod mock;
 mod tests;
 
 use util::{
-    share::{AtomicShareProfile, SimpleShareGenesis},
+    share::{ShareProfile, SimpleShareGenesis},
     traits::{
         AccessGenesis, ChainSudoPermissions, ChangeGroupMembership, GenerateUniqueID, GetGroupSize,
         GroupMembership, IDIsAvailable, LockableProfile, OrganizationSupervisorPermissions,
-        ReservableProfile, SeededGenerateUniqueID, ShareBank, SubGroupSupervisorPermissions,
-        VerifyShape, WeightedShareGroup,
+        PassShareIdDown, ReservableProfile, SeededGenerateUniqueID, ShareBank,
+        SubGroupSupervisorPermissions, VerifyShape, WeightedShareGroup,
     },
     uuid::ShareGroup,
 };
@@ -175,7 +175,7 @@ decl_storage! {
         /// The ShareProfile (set as an associated type for the module's Trait aka `DoubleStoredMap` #4820)
         Profile get(fn profile): double_map
             hasher(blake2_128_concat) ShareGroup<OrgId<T>, T::ShareId>,
-            hasher(blake2_128_concat) T::AccountId => Option<AtomicShareProfile<T::Shares>>;
+            hasher(blake2_128_concat) T::AccountId => Option<ShareProfile<T::Shares>>;
 
         /// The number of accounts in the share group
         ShareGroupSize get(fn share_group_size): double_map
@@ -362,7 +362,7 @@ impl<T: Trait> Module<T> {
     fn set_profile(
         prefix_key: ShareGroup<OrgId<T>, T::ShareId>,
         who: &T::AccountId,
-        new: &AtomicShareProfile<T::Shares>,
+        new: &ShareProfile<T::Shares>,
     ) -> DispatchResult {
         Profile::<T>::insert(prefix_key, who, new);
         Ok(())
@@ -402,6 +402,10 @@ impl<T: Trait> Module<T> {
             <T as frame_system::Trait>::AccountId,
         >>::remove_group_member(organization, old_member, false);
     }
+}
+
+impl<T: Trait> PassShareIdDown for Module<T> {
+    type ShareId = T::ShareId;
 }
 
 impl<T: Trait> IDIsAvailable<ShareGroup<OrgId<T>, T::ShareId>> for Module<T> {
@@ -573,7 +577,7 @@ impl<T: Trait> LockableProfile<OrgId<T>, T::ShareId, T::AccountId> for Module<T>
 
 impl<T: Trait> WeightedShareGroup<OrgId<T>, T::ShareId, T::AccountId> for Module<T> {
     type Shares = T::Shares;
-    type Profile = AtomicShareProfile<T::Shares>;
+    type Profile = ShareProfile<T::Shares>;
     type Genesis = SimpleShareGenesis<T::AccountId, T::Shares>;
     fn outstanding_shares(organization: OrgId<T>, share_id: T::ShareId) -> Option<T::Shares> {
         <TotalIssuance<T>>::get(organization, share_id)
@@ -638,7 +642,7 @@ impl<T: Trait> ShareBank<OrgId<T>, T::ShareId, T::AccountId> for Module<T> {
                 &new_owner,
                 new_share_group_count_for_account,
             );
-            AtomicShareProfile::new_shares(amount)
+            ShareProfile::new_shares(amount)
         };
         // update total issuance if not batch
         if !batch {

@@ -1,5 +1,6 @@
-use codec::{Decode, Encode};
-use sp_runtime::RuntimeDebug;
+use crate::share::ShareID;
+use codec::{Codec, Decode, Encode};
+use sp_runtime::{traits::Zero, RuntimeDebug};
 use sp_std::prelude::*;
 
 #[derive(new, PartialEq, Eq, Default, Clone, Encode, Decode, RuntimeDebug)]
@@ -146,39 +147,17 @@ pub enum EnforcedOutcome<AccountId> {
     SwapRoleOnGrantTeam(u32, u32, AccountId, AccountId),
 }
 
-#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug)]
-// make it easy to verify existence in the context of Bank
-pub enum ShareID {
-    Flat(u32),
-    WeightedAtomic(u32),
-} // TODO: add `DivisibleShares` => Ranked Choice Voting
-
-impl Default for ShareID {
-    fn default() -> Self {
-        ShareID::Flat(0u32)
-    }
-}
-impl Into<u32> for ShareID {
-    fn into(self) -> u32 {
-        match self {
-            ShareID::Flat(val) => val,
-            ShareID::WeightedAtomic(val) => val,
-        }
-    }
-}
-
 #[derive(new, PartialEq, Eq, Default, Clone, Encode, Decode, RuntimeDebug)]
-/// The struct to track the `ShareId`s and `ProposalIndex` associated with an organization
-/// TODO: in the future, each of these should be separate maps
-pub struct Organization<Hash> {
+/// The struct to track the `ShareId`s and `Index` associated with an organization
+pub struct Organization<Id: Codec + PartialEq + Zero + From<u32> + Copy, Hash> {
     /// The supervising ShareId for the organization, like a Board of Directors
-    admin_id: ShareID,
+    admin_id: ShareID<Id>,
     /// The constitution
     constitution: Hash,
 }
 
-impl<Hash: Clone> Organization<Hash> {
-    pub fn admin_id(&self) -> ShareID {
+impl<Id: Codec + PartialEq + Zero + From<u32> + Copy, Hash: Clone> Organization<Id, Hash> {
+    pub fn admin_id(&self) -> ShareID<Id> {
         self.admin_id
     }
     pub fn constitution(&self) -> Hash {
@@ -188,49 +167,73 @@ impl<Hash: Clone> Organization<Hash> {
 
 #[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug)]
 /// These are the types of formed and registered organizations in the `bank` module
-pub enum FormedOrganization {
-    FlatOrg(u32),
-    FlatShares(u32, u32),
-    WeightedShares(u32, u32),
+pub enum FormedOrganization<
+    OrgId: Codec + PartialEq + Zero + From<u32> + Copy,
+    ShareId: Codec + PartialEq + Zero + From<u32> + Copy,
+> {
+    FlatOrg(OrgId),
+    FlatShares(OrgId, ShareId),
+    WeightedShares(OrgId, ShareId),
 }
 
-impl Default for FormedOrganization {
-    fn default() -> FormedOrganization {
-        // The organization that controls the chain
-        FormedOrganization::FlatOrg(1u32)
+impl<
+        OrgId: Codec + PartialEq + Zero + From<u32> + Copy,
+        ShareId: Codec + PartialEq + Zero + From<u32> + Copy,
+    > Default for FormedOrganization<OrgId, ShareId>
+{
+    fn default() -> FormedOrganization<OrgId, ShareId> {
+        // default org, might be endowed with _special_ power
+        FormedOrganization::FlatOrg(OrgId::zero())
     }
 }
 
-impl From<u32> for FormedOrganization {
-    fn from(other: u32) -> FormedOrganization {
+impl<
+        OrgId: Codec + PartialEq + Zero + From<u32> + Copy,
+        ShareId: Codec + PartialEq + Zero + From<u32> + Copy,
+    > From<OrgId> for FormedOrganization<OrgId, ShareId>
+{
+    fn from(other: OrgId) -> FormedOrganization<OrgId, ShareId> {
         FormedOrganization::FlatOrg(other)
     }
 }
 
-impl From<(u32, ShareID)> for FormedOrganization {
-    fn from(other: (u32, ShareID)) -> FormedOrganization {
+impl<
+        OrgId: Codec + PartialEq + Zero + From<u32> + Copy,
+        ShareId: Codec + PartialEq + Zero + From<u32> + Copy,
+    > From<(OrgId, ShareID<ShareId>)> for FormedOrganization<OrgId, ShareId>
+{
+    fn from(other: (OrgId, ShareID<ShareId>)) -> FormedOrganization<OrgId, ShareId> {
         match other.1 {
             ShareID::Flat(share_id) => FormedOrganization::FlatShares(other.0, share_id),
-            ShareID::WeightedAtomic(share_id) => {
-                FormedOrganization::WeightedShares(other.0, share_id)
-            }
+            ShareID::Weighted(share_id) => FormedOrganization::WeightedShares(other.0, share_id),
         }
     }
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 /// The pieces of information used to register an organization in `bank`
-pub enum OrganizationSource<AccountId, Shares> {
+pub enum OrganizationSource<
+    OrgId: Codec + PartialEq + Zero + From<u32> + Copy,
+    ShareId: Codec + PartialEq + Zero + From<u32> + Copy,
+    AccountId,
+    Shares,
+> {
     /// Will be initialized as an organization with a single ShareId and equal governance strength from all members
     Accounts(Vec<AccountId>),
     /// "" weighted governance strength by Shares
     AccountsWeighted(Vec<(AccountId, Shares)>),
     /// References a share group registering to become an organization (OrgId, ShareId)
-    SpinOffShareGroup(u32, ShareID),
+    SpinOffShareGroup(OrgId, ShareID<ShareId>),
 }
 
-impl<AccountId, Shares> Default for OrganizationSource<AccountId, Shares> {
-    fn default() -> OrganizationSource<AccountId, Shares> {
+impl<
+        OrgId: Codec + PartialEq + Zero + From<u32> + Copy,
+        ShareId: Codec + PartialEq + Zero + From<u32> + Copy,
+        AccountId: PartialEq,
+        Shares,
+    > Default for OrganizationSource<OrgId, ShareId, AccountId, Shares>
+{
+    fn default() -> OrganizationSource<OrgId, ShareId, AccountId, Shares> {
         OrganizationSource::Accounts(Vec::new())
     }
 }

@@ -223,7 +223,7 @@ fn register_foundation() {
         let expected_treasury_id = OnChainTreasuryID([0, 0, 0, 0, 0, 0, 0, 1]);
         // bank-onchain registration boilerplate
         let weighted_share_group_controller =
-            WithdrawalPermissions::AnyMemberOfOrgShareGroup(1u32, ShareID::WeightedAtomic(1u32));
+            WithdrawalPermissions::AnyMemberOfOrgShareGroup(1u32, ShareID::Weighted(1u32));
         let group = vec![(1, 5), (2, 5), (3, 5), (4, 5)];
         assert_ok!(OrganizationInterface::register_inner_weighted_share_group(
             1, group
@@ -264,7 +264,7 @@ fn post_bounty() {
         let expected_treasury_id = OnChainTreasuryID([0, 0, 0, 0, 0, 0, 0, 1]);
         // bank-onchain registration boilerplate
         let weighted_share_group_controller =
-            WithdrawalPermissions::AnyMemberOfOrgShareGroup(1u32, ShareID::WeightedAtomic(1u32));
+            WithdrawalPermissions::AnyMemberOfOrgShareGroup(1u32, ShareID::Weighted(1u32));
         let group = vec![(1, 5), (2, 5), (3, 5), (4, 5)];
         assert_ok!(OrganizationInterface::register_inner_weighted_share_group(
             1, group
@@ -344,7 +344,7 @@ fn submit_grant_app() {
         let expected_treasury_id = OnChainTreasuryID([0, 0, 0, 0, 0, 0, 0, 1]);
         // bank-onchain registration boilerplate
         let weighted_share_group_controller =
-            WithdrawalPermissions::AnyMemberOfOrgShareGroup(1u32, ShareID::WeightedAtomic(1u32));
+            WithdrawalPermissions::AnyMemberOfOrgShareGroup(1u32, ShareID::Weighted(1u32));
         let group = vec![(1, 5), (2, 5), (3, 5), (4, 5)];
         assert_ok!(OrganizationInterface::register_inner_weighted_share_group(
             1, group
@@ -464,7 +464,7 @@ fn trigger_app_review() {
         let expected_treasury_id = OnChainTreasuryID([0, 0, 0, 0, 0, 0, 0, 1]);
         // bank-onchain registration boilerplate
         let weighted_share_group_controller =
-            WithdrawalPermissions::AnyMemberOfOrgShareGroup(1u32, ShareID::WeightedAtomic(1u32));
+            WithdrawalPermissions::AnyMemberOfOrgShareGroup(1u32, ShareID::Weighted(1u32));
         let group = vec![(1, 5), (2, 5), (3, 5), (4, 5)];
         assert_ok!(OrganizationInterface::register_inner_weighted_share_group(
             1, group
@@ -604,7 +604,7 @@ fn sudo_approve_grant_app() {
         let expected_treasury_id = OnChainTreasuryID([0, 0, 0, 0, 0, 0, 0, 1]);
         // bank-onchain registration boilerplate
         let weighted_share_group_controller =
-            WithdrawalPermissions::AnyMemberOfOrgShareGroup(1u32, ShareID::WeightedAtomic(1u32));
+            WithdrawalPermissions::AnyMemberOfOrgShareGroup(1u32, ShareID::Weighted(1u32));
         let group = vec![(1, 5), (2, 5), (3, 5), (4, 5)];
         assert_ok!(OrganizationInterface::register_inner_weighted_share_group(
             1, group
@@ -742,7 +742,7 @@ fn poll_application_status_from_review_board_path_to_team_consent() {
         let expected_treasury_id = OnChainTreasuryID([0, 0, 0, 0, 0, 0, 0, 1]);
         // bank-onchain registration boilerplate
         let weighted_share_group_controller =
-            WithdrawalPermissions::AnyMemberOfOrgShareGroup(1u32, ShareID::WeightedAtomic(1u32));
+            WithdrawalPermissions::AnyMemberOfOrgShareGroup(1u32, ShareID::Weighted(1u32));
         let group = vec![(1, 5), (2, 5), (3, 5), (4, 5)];
         assert_ok!(OrganizationInterface::register_inner_weighted_share_group(
             1, group
@@ -906,7 +906,7 @@ fn poll_application_status_from_sudo_approve_to_team_consent_to_approval() {
         let expected_treasury_id = OnChainTreasuryID([0, 0, 0, 0, 0, 0, 0, 1]);
         // bank-onchain registration boilerplate
         let weighted_share_group_controller =
-            WithdrawalPermissions::AnyMemberOfOrgShareGroup(1u32, ShareID::WeightedAtomic(1u32));
+            WithdrawalPermissions::AnyMemberOfOrgShareGroup(1u32, ShareID::Weighted(1u32));
         let group = vec![(1, 5), (2, 5), (3, 5), (4, 5)];
         assert_ok!(OrganizationInterface::register_inner_weighted_share_group(
             1, group
@@ -1068,7 +1068,7 @@ fn submit_milestone() {
         let expected_treasury_id = OnChainTreasuryID([0, 0, 0, 0, 0, 0, 0, 1]);
         // bank-onchain registration boilerplate
         let weighted_share_group_controller =
-            WithdrawalPermissions::AnyMemberOfOrgShareGroup(1u32, ShareID::WeightedAtomic(1u32));
+            WithdrawalPermissions::AnyMemberOfOrgShareGroup(1u32, ShareID::Weighted(1u32));
         let group = vec![(1, 5), (2, 5), (3, 5), (4, 5)];
         assert_ok!(OrganizationInterface::register_inner_weighted_share_group(
             1, group
@@ -1305,7 +1305,7 @@ fn trigger_milestone_review_to_review_board_approval_and_transfer() {
         let expected_treasury_id = OnChainTreasuryID([0, 0, 0, 0, 0, 0, 0, 1]);
         // bank-onchain registration boilerplate
         let weighted_share_group_controller =
-            WithdrawalPermissions::AnyMemberOfOrgShareGroup(1u32, ShareID::WeightedAtomic(1u32));
+            WithdrawalPermissions::AnyMemberOfOrgShareGroup(1u32, ShareID::Weighted(1u32));
         let group = vec![(1, 5), (2, 5), (3, 5), (4, 5)];
         assert_ok!(OrganizationInterface::register_inner_weighted_share_group(
             1, group
@@ -1590,7 +1590,7 @@ fn sudo_approve_milestone_and_transfer() {
         let expected_treasury_id = OnChainTreasuryID([0, 0, 0, 0, 0, 0, 0, 1]);
         // bank-onchain registration boilerplate
         let weighted_share_group_controller =
-            WithdrawalPermissions::AnyMemberOfOrgShareGroup(1u32, ShareID::WeightedAtomic(1u32));
+            WithdrawalPermissions::AnyMemberOfOrgShareGroup(1u32, ShareID::Weighted(1u32));
         let group = vec![(1, 5), (2, 5), (3, 5), (4, 5)];
         assert_ok!(OrganizationInterface::register_inner_weighted_share_group(
             1, group

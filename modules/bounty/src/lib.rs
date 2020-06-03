@@ -417,7 +417,7 @@ impl<T: Trait> Module<T> {
                     u32,
                     ShareID,
                     T::AccountId,
-                >>::check_membership_in_share_group(org_id, ShareID::WeightedAtomic(share_id), account)
+                >>::check_membership_in_share_group(org_id, ShareID::Weighted(share_id), account)
             },
         }
     }

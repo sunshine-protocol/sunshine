@@ -153,7 +153,7 @@ decl_module! {
         ) -> DispatchResult {
             let _ = ensure_signed(origin)?;
             // TODO: could check that this is sudo or organization's supervisor
-            let share_id = ShareID::WeightedAtomic(weighted_share_group_id);
+            let share_id = ShareID::Weighted(weighted_share_group_id);
             let formed_org: FormedOrganization = (organization, share_id).into();
             // TODO: could check flat share group's existence here
             let off_chain_treasury_id = Self::register_off_chain_bank_account(formed_org)?;
@@ -222,7 +222,7 @@ impl<T: Trait> Module<T> {
                 <<T as Trait>::Organization as ShareGroupChecks<u32, ShareID, T::AccountId>>::check_membership_in_share_group(org_id, ShareID::Flat(share_id), who)
             },
             FormedOrganization::WeightedShares(org_id, share_id) => {
-                <<T as Trait>::Organization as ShareGroupChecks<u32, ShareID, T::AccountId>>::check_membership_in_share_group(org_id, ShareID::WeightedAtomic(share_id), who)
+                <<T as Trait>::Organization as ShareGroupChecks<u32, ShareID, T::AccountId>>::check_membership_in_share_group(org_id, ShareID::Weighted(share_id), who)
             },
         }
     }

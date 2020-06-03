@@ -1,3 +1,4 @@
+#![recursion_limit = "256"]
 #![allow(clippy::string_lit_as_bytes)]
 #![allow(clippy::redundant_closure_call)]
 #![allow(clippy::type_complexity)]
@@ -14,7 +15,7 @@ use util::{
     traits::{
         ChainSudoPermissions, ChangeGroupMembership, GenerateUniqueID, GetFlatShareGroup,
         GetGroupSize, GroupMembership, IDIsAvailable, OrganizationSupervisorPermissions,
-        SeededGenerateUniqueID, SubGroupSupervisorPermissions,
+        PassShareIdDown, SeededGenerateUniqueID, SubGroupSupervisorPermissions,
     },
     uuid::ShareGroup,
 };

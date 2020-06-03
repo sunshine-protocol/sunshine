@@ -1,14 +1,14 @@
 use crate::{
     bank::OnChainTreasuryID,
-    organization::{ShareID, TermsOfAgreement},
+    organization::TermsOfAgreement, //ShareID
     traits::{
         ApproveGrant, ApproveWithoutTransfer, SetMakeTransfer, SpendApprovedGrant, StartReview,
         StartTeamConsentPetition,
     },
 };
-use codec::{Decode, Encode};
+use codec::{Codec, Decode, Encode};
 use frame_support::Parameter;
-use sp_runtime::RuntimeDebug;
+use sp_runtime::{traits::Zero, RuntimeDebug};
 use sp_std::prelude::*;
 
 #[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug)]
@@ -25,12 +25,17 @@ impl Default for BountyMapID {
 
 #[derive(new, PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 /// The information most often read after a specific bounty is GOT
-pub struct BountyInformation<AccountId, Hash, WeightedThreshold, Currency> {
+pub struct BountyInformation<
+    OrgId: Codec + PartialEq + Zero + From<u32> + Copy,
+    Hash,
+    Currency,
+    ReviewBoard,
+> {
     // Storage cid
     // - title, description, team requirements (all subjective metadata uses one reference)
     description: Hash,
     // registered organization associated with bounty
-    foundation_id: u32,
+    foundation_id: OrgId,
     // On chain bank account associated with this bounty
     bank_account: OnChainTreasuryID,
     // Spend reservation identifier for funds set aside for bounty
@@ -42,17 +47,21 @@ pub struct BountyInformation<AccountId, Hash, WeightedThreshold, Currency> {
     // - used to derive the collateral ratio for this bounty, which must be above the module lower bound
     claimed_funding_available: Currency,
     // Committee metadata for approving an application
-    acceptance_committee: ReviewBoard<AccountId, Hash, WeightedThreshold>,
+    acceptance_committee: ReviewBoard,
     // Committee metadata for approving milestones
     // -- if None, same as acceptance_committee by default
-    supervision_committee: Option<ReviewBoard<AccountId, Hash, WeightedThreshold>>,
+    supervision_committee: Option<ReviewBoard>,
 }
 
-impl<AccountId: Clone, Hash: Parameter, WeightedThreshold: Clone, Currency: Parameter>
-    BountyInformation<AccountId, Hash, WeightedThreshold, Currency>
+impl<
+        OrgId: Codec + PartialEq + Zero + From<u32> + Copy,
+        Hash: Parameter,
+        Currency: Parameter,
+        ReviewBoard: Clone,
+    > BountyInformation<OrgId, Hash, Currency, ReviewBoard>
 {
     // get OrgId for sponsor org basically
-    pub fn foundation(&self) -> u32 {
+    pub fn foundation(&self) -> OrgId {
         self.foundation_id
     }
     pub fn bank_account(&self) -> OnChainTreasuryID {
@@ -64,10 +73,10 @@ impl<AccountId: Clone, Hash: Parameter, WeightedThreshold: Clone, Currency: Para
     pub fn claimed_funding_available(&self) -> Currency {
         self.claimed_funding_available.clone()
     }
-    pub fn acceptance_committee(&self) -> ReviewBoard<AccountId, Hash, WeightedThreshold> {
+    pub fn acceptance_committee(&self) -> ReviewBoard {
         self.acceptance_committee.clone()
     }
-    pub fn supervision_committee(&self) -> Option<ReviewBoard<AccountId, Hash, WeightedThreshold>> {
+    pub fn supervision_committee(&self) -> Option<ReviewBoard> {
         self.supervision_committee.clone()
     }
 }
@@ -75,23 +84,35 @@ impl<AccountId: Clone, Hash: Parameter, WeightedThreshold: Clone, Currency: Para
 #[derive(new, PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug)]
 /// Identifier for each registered team
 /// -> RULE: same org as bounty_info.foundation()
-pub struct TeamID<AccountId> {
-    org: u32,
-    // this should be optional and in the future, I want to orient it towards revocable representative democracy
+pub struct TeamID<
+    OrgId: Codec + PartialEq + Zero + From<u32> + Copy,
+    ShareId: Codec + PartialEq + Zero + From<u32> + Copy,
+    AccountId,
+> {
+    // organization identifier
+    org: OrgId,
+    // optional sudo (direction => revocable representative democracy)
     sudo: Option<AccountId>,
-    flat_share_id: u32,
-    weighted_share_id: u32,
+    // Vec<AccountId>, necessary for getting flat membership consent
+    flat_membership: ShareId,
+    // equity, necessary for constraining structured grant payouts
+    weighted_membership: ShareId,
 }
 
-impl<AccountId: Clone + PartialEq> TeamID<AccountId> {
-    pub fn org(&self) -> u32 {
+impl<
+        OrgId: Codec + PartialEq + Zero + From<u32> + Copy,
+        ShareId: Codec + PartialEq + Zero + From<u32> + Copy,
+        AccountId: Clone + PartialEq,
+    > TeamID<OrgId, ShareId, AccountId>
+{
+    pub fn org(&self) -> OrgId {
         self.org
     }
-    pub fn flat_share_id(&self) -> u32 {
-        self.flat_share_id
+    pub fn flat_share_id(&self) -> ShareId {
+        self.flat_membership
     }
-    pub fn weighted_share_id(&self) -> u32 {
-        self.weighted_share_id
+    pub fn weighted_share_id(&self) -> ShareId {
+        self.weighted_membership
     }
     pub fn is_sudo(&self, who: &AccountId) -> bool {
         if let Some(the_sudo) = &self.sudo {
@@ -102,34 +123,52 @@ impl<AccountId: Clone + PartialEq> TeamID<AccountId> {
     }
 }
 
-#[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 /// Metadata that represents pre-dispatch, grant milestone reviews
-pub enum ReviewBoard<AccountId, Hash, WeightedThreshold> {
+pub enum ReviewBoard<
+    OrgId: Codec + PartialEq + Zero + From<u32> + Copy,
+    ShareId: Codec + PartialEq + Zero + From<u32> + Copy,
+    AccountId,
+    Hash,
+    WeightedThreshold,
+> {
     /// Petition pre-call-metadata
     /// optional sudo, org_id, flat_share_id, signature_approval_threshold, signature_rejection_threshold, topic
-    FlatPetitionReview(Option<AccountId>, u32, u32, u32, Option<u32>, Option<Hash>),
+    FlatPetitionReview(
+        Option<AccountId>,
+        OrgId,
+        ShareId, // flat share id
+        u32,
+        Option<u32>,
+        Option<Hash>,
+    ),
     /// Vote-YesNo pre-call-metadata
     /// optional sudo, org_id, weighted_share_id, threshold expressed generically
     WeightedThresholdReview(
         Option<AccountId>,
-        u32,
-        u32,
+        OrgId,
+        ShareId,
         crate::voteyesno::SupportedVoteTypes,
         WeightedThreshold,
     ),
 }
 
-impl<AccountId: PartialEq, Hash, WeightedThreshold>
-    ReviewBoard<AccountId, Hash, WeightedThreshold>
+impl<
+        OrgId: Codec + PartialEq + Zero + From<u32> + Copy,
+        ShareId: Codec + PartialEq + Zero + From<u32> + Copy,
+        AccountId: PartialEq,
+        Hash,
+        WeightedThreshold,
+    > ReviewBoard<OrgId, ShareId, AccountId, Hash, WeightedThreshold>
 {
     pub fn new_flat_petition_review(
         sudo: Option<AccountId>,
-        org_id: u32,
-        flat_share_id: u32,
+        org_id: OrgId,
+        flat_share_id: ShareId,
         approval_threshold: u32,
         reject_threshold: Option<u32>,
         topic: Option<Hash>,
-    ) -> ReviewBoard<AccountId, Hash, WeightedThreshold> {
+    ) -> ReviewBoard<OrgId, ShareId, AccountId, Hash, WeightedThreshold> {
         ReviewBoard::FlatPetitionReview(
             sudo,
             org_id,
@@ -141,11 +180,11 @@ impl<AccountId: PartialEq, Hash, WeightedThreshold>
     }
     pub fn new_weighted_threshold_review(
         sudo: Option<AccountId>,
-        org_id: u32,
-        weighted_share_id: u32,
+        org_id: OrgId,
+        weighted_share_id: ShareId,
         vote_type: crate::voteyesno::SupportedVoteTypes,
         threshold: WeightedThreshold,
-    ) -> ReviewBoard<AccountId, Hash, WeightedThreshold> {
+    ) -> ReviewBoard<OrgId, ShareId, AccountId, Hash, WeightedThreshold> {
         ReviewBoard::WeightedThresholdReview(sudo, org_id, weighted_share_id, vote_type, threshold)
     }
     pub fn is_sudo(&self, acc: &AccountId) -> bool {
@@ -181,7 +220,7 @@ pub struct MilestoneSubmission<Hash, Currency, AccountId> {
     submitter: AccountId,
     // the approved application from which the milestone derives its legitimacy
     referenced_application: u32,
-    team: TeamID<AccountId>, // to save a storage lookup at application_id
+    team_id: u32, // TODO: map from team_id => TeamID<OrgId, ShareId, AccountId>, adds a lookup but worth it long term IMO
     submission: Hash,
     amount: Currency,
     // the review status, none upon immediate submission
@@ -194,14 +233,14 @@ impl<Hash: Clone, Currency: Clone, AccountId: Clone>
     pub fn new(
         submitter: AccountId,
         referenced_application: u32,
-        team: TeamID<AccountId>,
+        team_id: u32,
         submission: Hash,
         amount: Currency,
     ) -> MilestoneSubmission<Hash, Currency, AccountId> {
         MilestoneSubmission {
             submitter,
             referenced_application,
-            team,
+            team_id,
             submission,
             amount,
             state: MilestoneStatus::SubmittedAwaitingResponse,
@@ -210,8 +249,8 @@ impl<Hash: Clone, Currency: Clone, AccountId: Clone>
     pub fn application_id(&self) -> u32 {
         self.referenced_application
     }
-    pub fn team(&self) -> TeamID<AccountId> {
-        self.team.clone()
+    pub fn team_id(&self) -> u32 {
+        self.team_id
     }
     pub fn submission(&self) -> Hash {
         self.submission.clone()
@@ -237,7 +276,7 @@ impl<Hash: Clone, Currency: Clone, AccountId: Clone> StartReview<VoteID>
         MilestoneSubmission {
             submitter: self.submitter.clone(),
             referenced_application: self.referenced_application,
-            team: self.team.clone(),
+            team_id: self.team_id,
             submission: self.submission.clone(),
             amount: self.amount.clone(),
             state: MilestoneStatus::SubmittedReviewStarted(vote_id),
@@ -258,7 +297,7 @@ impl<Hash: Clone, Currency: Clone, AccountId: Clone> ApproveWithoutTransfer
         MilestoneSubmission {
             submitter: self.submitter.clone(),
             referenced_application: self.referenced_application,
-            team: self.team.clone(),
+            team_id: self.team_id,
             submission: self.submission.clone(),
             amount: self.amount.clone(),
             state: MilestoneStatus::ApprovedButNotTransferred,
@@ -273,7 +312,7 @@ impl<Hash: Clone, Currency: Clone, AccountId: Clone> SetMakeTransfer<OnChainTrea
         MilestoneSubmission {
             submitter: self.submitter.clone(),
             referenced_application: self.referenced_application,
-            team: self.team.clone(),
+            team_id: self.team_id,
             submission: self.submission.clone(),
             amount: self.amount.clone(),
             state: MilestoneStatus::ApprovedAndTransferEnabled(bank_id, transfer_id),
@@ -293,20 +332,21 @@ impl<Hash: Clone, Currency: Clone, AccountId: Clone> SetMakeTransfer<OnChainTrea
     }
 }
 
-#[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug)]
-pub enum ApplicationState<AccountId> {
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+/// All variants hold identifiers which point to larger objects in runtime storage maps
+pub enum ApplicationState<ShareId: Codec + PartialEq + Zero + From<u32> + Copy> {
     SubmittedAwaitingResponse,
     // wraps a VoteId for the acceptance committee
     UnderReviewByAcceptanceCommittee(VoteID),
     // includes the flat_share_id, and the
-    ApprovedByFoundationAwaitingTeamConsent(ShareID, VoteID),
-    // wraps outer_weighted_share_id associated with the team
-    ApprovedAndLive(TeamID<AccountId>),
+    ApprovedByFoundationAwaitingTeamConsent(ShareId, VoteID),
+    // counter is associated with a map in storage -> Some(TeamID<_, _, _>)
+    ApprovedAndLive(u32),
     // closed for some reason
     Closed,
 }
 
-impl<AccountId: PartialEq> ApplicationState<AccountId> {
+impl<ShareId: Codec + PartialEq + Zero + From<u32> + Copy> ApplicationState<ShareId> {
     // basically, can be approved (notably not when already approved)
     pub fn live(&self) -> bool {
         match self {
@@ -315,7 +355,7 @@ impl<AccountId: PartialEq> ApplicationState<AccountId> {
             _ => false,
         }
     }
-    pub fn matches_registered_team(&self, team_id: TeamID<AccountId>) -> bool {
+    pub fn matches_registered_team(&self, team_id: u32) -> bool {
         match self {
             ApplicationState::ApprovedAndLive(tid) => tid == &team_id,
             _ => false,
@@ -324,7 +364,13 @@ impl<AccountId: PartialEq> ApplicationState<AccountId> {
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-pub struct GrantApplication<AccountId, Shares, Currency, Hash> {
+pub struct GrantApplication<
+    ShareId: Codec + PartialEq + Zero + From<u32> + Copy,
+    AccountId,
+    Shares,
+    Currency,
+    Hash,
+> {
     /// Useful and necessary metadata
     submitter: AccountId,
     /// The ipfs reference to the application information
@@ -334,18 +380,23 @@ pub struct GrantApplication<AccountId, Shares, Currency, Hash> {
     /// The terms of agreement that must agreed to by all members before the bounty execution starts
     terms_of_agreement: TermsOfAgreement<AccountId, Shares>,
     /// state of the application
-    state: ApplicationState<AccountId>,
+    state: ApplicationState<ShareId>,
 }
 
-impl<AccountId: Clone, Shares: Clone, Currency: Clone, Hash: Clone>
-    GrantApplication<AccountId, Shares, Currency, Hash>
+impl<
+        ShareId: Codec + PartialEq + Zero + From<u32> + Copy,
+        AccountId: Clone,
+        Shares: Clone,
+        Currency: Clone,
+        Hash: Clone,
+    > GrantApplication<ShareId, AccountId, Shares, Currency, Hash>
 {
     pub fn new(
         submitter: AccountId,
         description: Hash,
         total_amount: Currency,
         terms_of_agreement: TermsOfAgreement<AccountId, Shares>,
-    ) -> GrantApplication<AccountId, Shares, Currency, Hash> {
+    ) -> GrantApplication<ShareId, AccountId, Shares, Currency, Hash> {
         GrantApplication {
             submitter,
             description,
@@ -354,7 +405,7 @@ impl<AccountId: Clone, Shares: Clone, Currency: Clone, Hash: Clone>
             state: ApplicationState::SubmittedAwaitingResponse,
         }
     }
-    pub fn state(&self) -> ApplicationState<AccountId> {
+    pub fn state(&self) -> ApplicationState<ShareId> {
         self.state.clone()
     }
     pub fn total_amount(&self) -> Currency {
@@ -365,8 +416,13 @@ impl<AccountId: Clone, Shares: Clone, Currency: Clone, Hash: Clone>
     }
 }
 
-impl<AccountId: Clone, Shares: Clone, Currency: Clone, Hash: Clone> StartReview<VoteID>
-    for GrantApplication<AccountId, Shares, Currency, Hash>
+impl<
+        ShareId: Codec + PartialEq + Zero + From<u32> + Copy,
+        AccountId: Clone,
+        Shares: Clone,
+        Currency: Clone,
+        Hash: Clone,
+    > StartReview<VoteID> for GrantApplication<ShareId, AccountId, Shares, Currency, Hash>
 {
     fn start_review(&self, vote_id: VoteID) -> Self {
         GrantApplication {
@@ -385,11 +441,16 @@ impl<AccountId: Clone, Shares: Clone, Currency: Clone, Hash: Clone> StartReview<
     }
 }
 
-impl<AccountId: Clone, Shares: Clone, Currency: Clone, Hash: Clone>
-    StartTeamConsentPetition<ShareID, VoteID>
-    for GrantApplication<AccountId, Shares, Currency, Hash>
+impl<
+        FlatShareId: Codec + PartialEq + Zero + From<u32> + Copy,
+        AccountId: Clone,
+        Shares: Clone,
+        Currency: Clone,
+        Hash: Clone,
+    > StartTeamConsentPetition<FlatShareId, VoteID>
+    for GrantApplication<FlatShareId, AccountId, Shares, Currency, Hash>
 {
-    fn start_team_consent_petition(&self, share_id: ShareID, vote_id: VoteID) -> Self {
+    fn start_team_consent_petition(&self, share_id: FlatShareId, vote_id: VoteID) -> Self {
         // could type check the flat_share_id and vote_petition_id
         GrantApplication {
             submitter: self.submitter.clone(),
@@ -399,7 +460,7 @@ impl<AccountId: Clone, Shares: Clone, Currency: Clone, Hash: Clone>
             state: ApplicationState::ApprovedByFoundationAwaitingTeamConsent(share_id, vote_id),
         }
     }
-    fn get_team_flat_id(&self) -> Option<ShareID> {
+    fn get_team_flat_id(&self) -> Option<FlatShareId> {
         match self.state() {
             ApplicationState::ApprovedByFoundationAwaitingTeamConsent(share_id, _) => {
                 Some(share_id)
@@ -415,10 +476,15 @@ impl<AccountId: Clone, Shares: Clone, Currency: Clone, Hash: Clone>
     }
 }
 
-impl<AccountId: Clone, Shares: Clone, Currency: Clone, Hash: Clone> ApproveGrant<TeamID<AccountId>>
-    for GrantApplication<AccountId, Shares, Currency, Hash>
+impl<
+        ShareId: Codec + PartialEq + Zero + From<u32> + Copy,
+        AccountId: Clone,
+        Shares: Clone,
+        Currency: Clone,
+        Hash: Clone,
+    > ApproveGrant<u32> for GrantApplication<ShareId, AccountId, Shares, Currency, Hash>
 {
-    fn approve_grant(&self, team_id: TeamID<AccountId>) -> Self {
+    fn approve_grant(&self, team_id: u32) -> Self {
         GrantApplication {
             submitter: self.submitter.clone(),
             description: self.description.clone(),
@@ -427,7 +493,7 @@ impl<AccountId: Clone, Shares: Clone, Currency: Clone, Hash: Clone> ApproveGrant
             state: ApplicationState::ApprovedAndLive(team_id),
         }
     }
-    fn get_full_team_id(&self) -> Option<TeamID<AccountId>> {
+    fn get_full_team_id(&self) -> Option<u32> {
         match self.state() {
             ApplicationState::ApprovedAndLive(team_id) => Some(team_id),
             _ => None,
@@ -436,11 +502,13 @@ impl<AccountId: Clone, Shares: Clone, Currency: Clone, Hash: Clone> ApproveGrant
 }
 
 impl<
+        ShareId: Codec + PartialEq + Zero + From<u32> + Copy,
         AccountId: Clone,
         Shares: Clone,
         Currency: Clone + sp_std::ops::Sub<Currency, Output = Currency> + PartialOrd,
         Hash: Clone,
-    > SpendApprovedGrant<Currency> for GrantApplication<AccountId, Shares, Currency, Hash>
+    > SpendApprovedGrant<Currency>
+    for GrantApplication<ShareId, AccountId, Shares, Currency, Hash>
 {
     fn spend_approved_grant(&self, amount: Currency) -> Option<Self> {
         match self.state {

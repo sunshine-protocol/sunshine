@@ -10,7 +10,6 @@ description = "sunshine organization registration and governance"
 keywords = ["sunshine", "substrate", "blockchain"]
 
 [dependencies]
-# local deps
 serde = { version = "1.0.104", optional = true }
 codec = { package = "parity-scale-codec", version = "1.2.0", default-features = false, features = ["derive"] }
 sp-std = { version = "2.0.0-rc2", default-features = false }
@@ -18,10 +17,11 @@ sp-runtime = { version = "2.0.0-rc2", default-features = false }
 frame-support = { version = "2.0.0-rc2", default-features = false }
 frame-system = { version = "2.0.0-rc2", default-features = false }
 pallet-balances = { version = "2.0.0-rc2", default-features = false }
+utils-identity = { version = "0.1.0", path = "../../utils" }
 util = { package = "sunshine-util", path = "../util", default-features=false}
-membership = { package = "sunshine-membership", path = "../membership", default-features = false }
-shares-membership = { package = "sunshine-shares-membership", path = "../shares-membership", default-features = false }
-shares-atomic = { package = "sunshine-shares-atomic", path = "../shares-atomic", default-features = false }
+# membership = { package = "sunshine-membership", path = "../membership", default-features = false }
+# shares-membership = { package = "sunshine-shares-membership", path = "../shares-membership", default-features = false }
+# shares-atomic = { package = "sunshine-shares-atomic", path = "../shares-atomic", default-features = false }
 clear_on_drop = { version = "0.2.3", features = ["no_cc"] }	# https://github.com/paritytech/substrate/issues/4179
 
 [dev-dependencies]
@@ -38,7 +38,7 @@ std = [
 	"frame-support/std",
 	"frame-system/std",
 	"pallet-balances/std",
-    "membership/std",
-    "shares-membership/std",
-    "shares-atomic/std",
+    # "membership/std",
+    # "shares-membership/std",
+    # "shares-atomic/std",
 ]

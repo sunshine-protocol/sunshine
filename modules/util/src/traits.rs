@@ -3,7 +3,7 @@ use crate::{
     share::SimpleShareGenesis,
     voteyesno::{SupportedVoteTypes, ThresholdConfig},
 };
-use codec::{Codec, FullCodec};
+use codec::Codec;
 use frame_support::Parameter;
 use sp_runtime::{
     traits::{AtLeast32Bit, Member},
@@ -86,24 +86,39 @@ pub trait SubSubGroupSupervisorPermissions<OrgId, S1, S2, AccountId> {
 }
 
 // ---------- Membership Logic ----------
-pub trait GetGroupSize {
-    type GroupId: FullCodec + sp_std::fmt::Debug + PartialEq + Copy;
-
-    fn get_size_of_group(group_id: Self::GroupId) -> u32;
+pub trait GetGroupSize<OrgId, ShareId> {
+    fn get_size_of_group(org_id: OrgId) -> u32;
+    fn get_size_of_subgroup(org_id: OrgId, share_id: ShareId) -> u32;
 }
 
 /// Checks that the `AccountId` is a member of a share group in an organization
-pub trait GroupMembership<AccountId>: GetGroupSize {
-    fn is_member_of_group(group_id: Self::GroupId, who: &AccountId) -> bool;
+pub trait GroupMembership<OrgId, ShareId, AccountId>: GetGroupSize<OrgId, ShareId> {
+    fn is_member_of_group(org_id: OrgId, who: &AccountId) -> bool;
+    fn is_member_of_subgroup(org_id: OrgId, share_id: ShareId, who: &AccountId) -> bool;
 }
 
 /// All changes to the organizational membership are infallible
-pub trait ChangeGroupMembership<AccountId>: GroupMembership<AccountId> {
-    fn add_group_member(group_id: Self::GroupId, new_member: AccountId, batch: bool);
-    fn remove_group_member(group_id: Self::GroupId, old_member: AccountId, batch: bool);
+pub trait ChangeGroupMembership<OrgId, ShareId, AccountId>:
+    GroupMembership<OrgId, ShareId, AccountId>
+{
+    fn add_member_to_org(org_id: OrgId, new_member: AccountId, batch: bool);
+    fn remove_member_from_org(org_id: OrgId, old_member: AccountId, batch: bool);
+    fn add_member_to_sub_org(org_id: OrgId, share_id: ShareId, new_member: AccountId, batch: bool);
+    fn remove_member_from_sub_org(
+        org_id: OrgId,
+        share_id: ShareId,
+        old_member: AccountId,
+        batch: bool,
+    );
     /// WARNING: the vector fed as inputs to the following methods must have NO duplicates
-    fn batch_add_group_members(group_id: Self::GroupId, new_members: Vec<AccountId>);
-    fn batch_remove_group_members(group_id: Self::GroupId, old_members: Vec<AccountId>);
+    fn batch_add_members_to_org(org_id: OrgId, new_members: Vec<AccountId>);
+    fn batch_remove_members_from_org(org_id: OrgId, old_members: Vec<AccountId>);
+    fn batch_add_members_to_sub_org(org_id: OrgId, share_id: ShareId, new_members: Vec<AccountId>);
+    fn batch_remove_members_from_sub_org(
+        org_id: OrgId,
+        share_id: ShareId,
+        old_members: Vec<AccountId>,
+    );
 }
 pub trait GetFlatShareGroup<OrgId, ShareId, AccountId> {
     fn get_organization_share_group(
@@ -191,7 +206,9 @@ pub trait AccessGenesis<AccountId, Shares> {
 pub trait AccessProfile<Shares> {
     fn total(&self) -> Shares;
 }
-
+pub trait PassShareIdDown {
+    type ShareId: Parameter + Member + AtLeast32Bit + Codec;
+}
 pub trait WeightedShareGroup<OrgId, ShareId, AccountId> {
     type Shares: Parameter + Member + AtLeast32Bit + Codec;
     type Profile: AccessProfile<Self::Shares>;

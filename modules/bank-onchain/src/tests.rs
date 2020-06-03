@@ -79,7 +79,7 @@ fn bank_registration_works() {
     new_test_ext().execute_with(|| {
         let one = Origin::signed(1);
         let weighted_share_group_controller =
-            WithdrawalPermissions::AnyMemberOfOrgShareGroup(1u32, ShareID::WeightedAtomic(1u32));
+            WithdrawalPermissions::AnyMemberOfOrgShareGroup(1u32, ShareID::Weighted(1u32));
         // no share group registered yet so this should give the passed error
         assert_noop!(
             Bank::register_and_seed_for_bank_account(
@@ -142,7 +142,7 @@ fn deposit_works() {
             Error::<Test>::BankAccountNotFoundForDeposit
         );
         let weighted_share_group_controller =
-            WithdrawalPermissions::AnyMemberOfOrgShareGroup(1u32, ShareID::WeightedAtomic(1u32));
+            WithdrawalPermissions::AnyMemberOfOrgShareGroup(1u32, ShareID::Weighted(1u32));
         let group = vec![(1, 5), (2, 5), (3, 5), (4, 5)];
         assert_ok!(OrganizationWrapper::register_inner_weighted_share_group(
             1, group
@@ -179,7 +179,7 @@ fn reserve_spend_works() {
         let expected_treasury_id = OnChainTreasuryID([0, 0, 0, 0, 0, 0, 0, 1]);
         let null_reason = Vec::<u8>::new(); // NULL ipfs-reference
         let weighted_share_group_controller =
-            WithdrawalPermissions::AnyMemberOfOrgShareGroup(1u32, ShareID::WeightedAtomic(1u32));
+            WithdrawalPermissions::AnyMemberOfOrgShareGroup(1u32, ShareID::Weighted(1u32));
         let group = vec![(1, 5), (2, 5), (3, 5), (4, 5)];
         assert_ok!(OrganizationWrapper::register_inner_weighted_share_group(
             1, group
@@ -271,7 +271,7 @@ fn commit_spend_works() {
         let expected_treasury_id = OnChainTreasuryID([0, 0, 0, 0, 0, 0, 0, 1]);
         let null_reason = Vec::<u8>::new(); // NULL ipfs-reference
         let weighted_share_group_controller =
-            WithdrawalPermissions::AnyMemberOfOrgShareGroup(1u32, ShareID::WeightedAtomic(1u32));
+            WithdrawalPermissions::AnyMemberOfOrgShareGroup(1u32, ShareID::Weighted(1u32));
         let group = vec![(1, 5), (2, 5), (3, 5), (4, 5)];
         assert_ok!(OrganizationWrapper::register_inner_weighted_share_group(
             1, group
@@ -348,7 +348,7 @@ fn unreserve_uncommitted_works() {
         let expected_treasury_id = OnChainTreasuryID([0, 0, 0, 0, 0, 0, 0, 1]);
         let null_reason = Vec::<u8>::new(); // NULL ipfs-reference
         let weighted_share_group_controller =
-            WithdrawalPermissions::AnyMemberOfOrgShareGroup(1u32, ShareID::WeightedAtomic(1u32));
+            WithdrawalPermissions::AnyMemberOfOrgShareGroup(1u32, ShareID::Weighted(1u32));
         let group = vec![(1, 5), (2, 5), (3, 5), (4, 5)];
         assert_ok!(OrganizationWrapper::register_inner_weighted_share_group(
             1, group

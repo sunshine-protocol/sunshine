@@ -3,7 +3,7 @@ use frame_support::Parameter;
 use sp_runtime::traits::{AtLeast32Bit, MaybeSerializeDeserialize, Member, Zero};
 use sp_std::fmt::Debug;
 use substrate_subxt::system::{System, SystemEventsDecoder};
-//use util::share::AtomicShareProfile;
+//use util::share::ShareProfile;
 //use util::uuid::UUID2;
 
 /// The subset of the org trait and its inherited traits that the client must inherit
@@ -91,7 +91,7 @@ pub struct TotalIssuanceStore<T: SharesAtomic> {
 
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
 pub struct ProfileStore<'a, T: SharesAtomic> {
-    #[store(returns = AtomicShareProfile<T::Shares>)]
+    #[store(returns = ShareProfile<T::Shares>)]
     pub prefix: UUID2,
     pub account_id: &'a <T as System>::AccountId,
 }

@@ -260,7 +260,7 @@ fn weighted_inner_share_registration_for_organization() {
         // check if the share group was registered
         assert_eq!(
             get_last_event(),
-            RawEvent::WeightedInnerShareGroupAddedToOrg(1, 1, ShareID::WeightedAtomic(1)),
+            RawEvent::WeightedInnerShareGroupAddedToOrg(1, 1, ShareID::Weighted(1)),
         );
         let second_weighted_accounts = vec![(16, 10), (23, 10), (42, 20), (99, 20), (101, 40)];
         assert_ok!(Org::register_inner_weighted_share_group_for_organization(
@@ -271,7 +271,7 @@ fn weighted_inner_share_registration_for_organization() {
         // check if the share group was registered
         assert_eq!(
             get_last_event(),
-            RawEvent::WeightedInnerShareGroupAddedToOrg(1, 1, ShareID::WeightedAtomic(2)),
+            RawEvent::WeightedInnerShareGroupAddedToOrg(1, 1, ShareID::Weighted(2)),
         );
         let third_weighted_accounts =
             vec![(12, 10), (19, 10), (73, 20), (77, 20), (79, 40), (81, 100)];
@@ -283,7 +283,7 @@ fn weighted_inner_share_registration_for_organization() {
         // check if the share group was registered
         assert_eq!(
             get_last_event(),
-            RawEvent::WeightedInnerShareGroupAddedToOrg(1, 1, ShareID::WeightedAtomic(3)),
+            RawEvent::WeightedInnerShareGroupAddedToOrg(1, 1, ShareID::Weighted(3)),
         );
         let fourth_weighted_accounts = vec![(1, 10), (2, 10), (3, 20), (4, 20), (5, 40), (6, 100)];
         assert_ok!(Org::register_inner_weighted_share_group_for_organization(
@@ -294,7 +294,7 @@ fn weighted_inner_share_registration_for_organization() {
         // check if the share group was registered
         assert_eq!(
             get_last_event(),
-            RawEvent::WeightedInnerShareGroupAddedToOrg(1, 1, ShareID::WeightedAtomic(4)),
+            RawEvent::WeightedInnerShareGroupAddedToOrg(1, 1, ShareID::Weighted(4)),
         );
         // check that some members are in each group as expected
         assert_eq!(

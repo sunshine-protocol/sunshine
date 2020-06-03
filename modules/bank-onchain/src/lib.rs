@@ -486,7 +486,7 @@ impl<T: Trait>
                         );
                         Some(Permill::from_rational_approximation(1, share_group_size))
                     }
-                    ShareID::WeightedAtomic(share_id) => {
+                    ShareID::Weighted(share_id) => {
                         // get total stares
                         let some_total_shares =
                             <<T as Trait>::Organization as WeightedShareWrapper<
