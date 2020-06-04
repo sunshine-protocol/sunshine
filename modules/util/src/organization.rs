@@ -56,6 +56,32 @@ impl<
     }
 }
 
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+/// The pieces of information used to register an organization in `bank`
+pub enum OrganizationSource<
+    OrgId: Codec + PartialEq + Zero + From<u32> + Copy,
+    AccountId,
+    Shares,
+> {
+    /// Will be initialized as an organization with a single ShareId and equal governance strength from all members
+    Accounts(Vec<AccountId>),
+    /// "" weighted governance strength by Shares
+    AccountsWeighted(Vec<(AccountId, Shares)>),
+    /// References a share group registering to become an organization (OrgId, ShareId)
+    SpinOffShareGroup(OrgId),
+}
+
+impl<
+        OrgId: Codec + PartialEq + Zero + From<u32> + Copy,
+        AccountId: PartialEq,
+        Shares,
+    > Default for OrganizationSource<OrgId, AccountId, Shares>
+{
+    fn default() -> OrganizationSource<OrgId, AccountId, Shares> {
+        OrganizationSource::Accounts(Vec::new())
+    }
+}
+
 #[derive(new, PartialEq, Eq, Default, Clone, Encode, Decode, RuntimeDebug)]
 /// Static terms of agreement, define how the enforced payout structure for grants
 pub struct TermsOfAgreement<AccountId, Shares> {
@@ -242,33 +268,5 @@ impl<
             ShareID::Flat(share_id) => FormedOrganization::FlatShares(other.0, share_id),
             ShareID::Weighted(share_id) => FormedOrganization::WeightedShares(other.0, share_id),
         }
-    }
-}
-
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-/// The pieces of information used to register an organization in `bank`
-pub enum OrganizationSource<
-    OrgId: Codec + PartialEq + Zero + From<u32> + Copy,
-    ShareId: Codec + PartialEq + Zero + From<u32> + Copy,
-    AccountId,
-    Shares,
-> {
-    /// Will be initialized as an organization with a single ShareId and equal governance strength from all members
-    Accounts(Vec<AccountId>),
-    /// "" weighted governance strength by Shares
-    AccountsWeighted(Vec<(AccountId, Shares)>),
-    /// References a share group registering to become an organization (OrgId, ShareId)
-    SpinOffShareGroup(OrgId, ShareID<ShareId>),
-}
-
-impl<
-        OrgId: Codec + PartialEq + Zero + From<u32> + Copy,
-        ShareId: Codec + PartialEq + Zero + From<u32> + Copy,
-        AccountId: PartialEq,
-        Shares,
-    > Default for OrganizationSource<OrgId, ShareId, AccountId, Shares>
-{
-    fn default() -> OrganizationSource<OrgId, ShareId, AccountId, Shares> {
-        OrganizationSource::Accounts(Vec::new())
     }
 }

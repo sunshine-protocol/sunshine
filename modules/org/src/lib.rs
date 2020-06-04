@@ -14,11 +14,10 @@ use util::{
     traits::{
         AccessGenesis, AccessProfile, ChainSudoPermissions, ChangeGroupMembership,
         FlatShareWrapper, GenerateUniqueID, GetGroup, GetGroupSize, GetInnerOuterShareGroups,
-        GroupMembership, IDIsAvailable, LockProfile, OrgChecks, OrganizationDNS,
-        OrganizationSupervisorPermissions, RegisterShareGroup, ReserveProfile,
-        SeededGenerateUniqueID, ShareBank, ShareGroupChecks, ShareInformation, ShareIssuance,
-        SupervisorPermissions, VerifyShape, WeightedShareGroup, WeightedShareIssuanceWrapper,
-        WeightedShareWrapper,
+        GroupMembership, IDIsAvailable, LockProfile, OrgChecks, OrganizationSupervisorPermissions,
+        RegisterOrganization, RegisterShareGroup, ReserveProfile, SeededGenerateUniqueID,
+        ShareBank, ShareGroupChecks, ShareInformation, ShareIssuance, SupervisorPermissions,
+        VerifyShape, WeightedShareGroup, WeightedShareIssuanceWrapper, WeightedShareWrapper,
     },
     uuid::ShareGroup,
 };
@@ -90,6 +89,24 @@ decl_event!(
         BatchMemberAdditionForOrg(AccountId, OrgId, Shares),
         /// Batch Removal by the Account ID, _, total shares burned
         BatchMemberRemovalForOrg(AccountId, OrgId, Shares),
+        /// Organization ID, Account ID of reservee, times_reserved of their profile
+        SharesReserved(OrgId, AccountId, Shares),
+        /// Organization ID, Account ID of unreservee, times_reserved of their profile
+        SharesUnReserved(OrgId, AccountId, Shares),
+        /// Organization ID, Account Id
+        SharesLocked(OrgId, AccountId),
+        /// Organization ID, Account Id
+        SharesUnlocked(OrgId, AccountId),
+        /// Organization ID, Recipient AccountId, Issued Amount
+        SharesIssued(OrgId, AccountId, Shares),
+        /// Organization ID, Burned AccountId, Burned Amount
+        SharesBurned(OrgId, AccountId, Shares),
+        /// Organization ID, Total Shares Minted
+        SharesBatchIssued(OrgId, Shares),
+        /// Organization ID, Total Shares Burned
+        SharesBatchBurned(OrgId, Shares),
+        /// Organization ID, All Shares in Circulation
+        TotalSharesIssued(OrgId, Shares),
         /// Registrar Account ID, _, Constitution reference and the total shares issued for this OrgId
         NewOrganizationRegistered(AccountId, OrgId, IpfsReference, Shares),
     }
@@ -140,12 +157,34 @@ decl_error! {
         CannotLockProfileThatDNE,
         CannotReserveIfMemberProfileDNE,
         CannotUnReserveIfMemberProfileDNE,
+        // --
+        CannotUnreserveWithZeroReservations,
+        ShareHolderMembershipUninitialized,
+        ProfileNotInstantiated,
+        CanOnlyBurnReservedShares,
+        CannotIssueToLockedProfile,
+        InitialIssuanceShapeIsInvalid,
+        CantReserveMoreThanShareTotal,
+        CannotBurnIfIssuanceDNE,
+        OrganizationMustBeRegisteredToIssueShares,
+        OrganizationMustBeRegisteredToBurnShares,
+        OrganizationMustBeRegisteredToLockShares,
+        OrganizationMustBeRegisteredToUnLockShares,
+        OrganizationMustBeRegisteredToReserveShares,
+        OrganizationMustBeRegisteredToUnReserveShares,
+        NotAuthorizedToRegisterShares,
+        NotAuthorizedToLockShares,
+        NotAuthorizedToUnLockShares,
+        NotAuthorizedToReserveShares,
+        NotAuthorizedToUnReserveShares,
+        NotAuthorizedToIssueShares,
+        NotAuthorizedToBurnShares,
     }
 }
 
 decl_storage! {
     trait Store for Module<T: Trait> as Org {
-        /// The account that can set all the organization supervisors, should be replaced by committee-based governance
+        /// The account that can set all the organization supervisors, should be replaced by committee-based governance from Org0
         SudoKey get(fn sudo_key): Option<T::AccountId>;
 
         /// Identity nonce for registering organizations
@@ -248,6 +287,126 @@ decl_module! {
             Self::deposit_event(RawEvent::BatchMemberRemovalForOrg(caller, organization, T::Shares::zero()));
             Ok(())
         }
+        /// Share Issuance Runtime Methods
+        #[weight = 0]
+        fn issue_shares(origin, organization: T::OrgId, who: T::AccountId, shares: T::Shares) -> DispatchResult {
+            let issuer = ensure_signed(origin)?;
+            // first check is that the organization exists
+            ensure!(!Self::id_is_available(organization), Error::<T>::OrganizationMustBeRegisteredToIssueShares);
+            // second check is that this is an authorized party for issuance (the supervisor or the module's sudo account)
+            let authentication: bool = Self::is_sudo_key(&issuer)
+                                    || Self::is_organization_supervisor(organization, &issuer);
+            ensure!(authentication, Error::<T>::NotAuthorizedToIssueShares);
+
+            Self::issue(organization, who.clone(), shares, false)?;
+            Self::deposit_event(RawEvent::SharesIssued(organization, who, shares));
+            Ok(())
+        }
+        #[weight = 0]
+        fn burn_shares(origin, organization: T::OrgId, who: T::AccountId, shares: T::Shares) -> DispatchResult {
+            let burner = ensure_signed(origin)?;
+            // first check is that the organization exists
+            ensure!(!Self::id_is_available(organization), Error::<T>::OrganizationMustBeRegisteredToBurnShares);
+            // second check is that this is an authorized party for burning
+            let authentication: bool = Self::is_sudo_key(&burner)
+                                    || Self::is_organization_supervisor(organization, &burner);
+            ensure!(authentication, Error::<T>::NotAuthorizedToBurnShares);
+
+            Self::burn(organization, who.clone(), shares, false)?;
+            Self::deposit_event(RawEvent::SharesBurned(organization, who, shares));
+            Ok(())
+        }
+        #[weight = 0]
+        fn batch_issue_shares(origin, organization: T::OrgId, new_accounts: Vec<(T::AccountId, T::Shares)>) -> DispatchResult {
+            let issuer = ensure_signed(origin)?;
+            // first check is that the organization exists
+            ensure!(!Self::id_is_available(organization), Error::<T>::OrganizationMustBeRegisteredToIssueShares);
+            // second check is that this is an authorized party for issuance
+            let authentication: bool = Self::is_sudo_key(&issuer)
+                                    || Self::is_organization_supervisor(organization, &issuer);
+            ensure!(authentication, Error::<T>::NotAuthorizedToIssueShares);
+            let genesis: SimpleShareGenesis<T::AccountId, T::Shares> = new_accounts.into();
+            let total_new_shares_minted = genesis.total();
+            Self::batch_issue(organization, genesis)?;
+            Self::deposit_event(RawEvent::SharesBatchIssued(organization, total_new_shares_minted));
+            Ok(())
+        }
+        #[weight = 0]
+        fn batch_burn_shares(origin, organization: T::OrgId, old_accounts: Vec<(T::AccountId, T::Shares)>) -> DispatchResult {
+            let issuer = ensure_signed(origin)?;
+            // first check is that the organization exists
+            ensure!(!Self::id_is_available(organization), Error::<T>::OrganizationMustBeRegisteredToIssueShares);
+            // second check is that this is an authorized party for burning
+            let authentication: bool = Self::is_sudo_key(&issuer)
+                                    || Self::is_organization_supervisor(organization, &issuer);
+            ensure!(authentication, Error::<T>::NotAuthorizedToBurnShares);
+            let genesis: SimpleShareGenesis<T::AccountId, T::Shares> = old_accounts.into();
+            let total_new_shares_burned = genesis.total();
+            Self::batch_burn(organization, genesis)?;
+            Self::deposit_event(RawEvent::SharesBatchBurned(organization, total_new_shares_burned));
+            Ok(())
+        }
+        #[weight = 0]
+        fn lock_shares(origin, organization: T::OrgId, who: T::AccountId) -> DispatchResult {
+            let locker = ensure_signed(origin)?;
+            // first check is that the organization exists
+            ensure!(!Self::id_is_available(organization), Error::<T>::OrganizationMustBeRegisteredToLockShares);
+            // second check is that this is an authorized party for locking shares
+            let authentication: bool = Self::is_sudo_key(&locker)
+                                    || Self::is_organization_supervisor(organization, &locker)
+                                    || locker == who;
+            ensure!(authentication, Error::<T>::NotAuthorizedToLockShares);
+
+            Self::lock_profile(organization, &who)?;
+            Self::deposit_event(RawEvent::SharesLocked(organization, who));
+            Ok(())
+        }
+        #[weight = 0]
+        fn unlock_shares(origin, organization: T::OrgId, who: T::AccountId) -> DispatchResult {
+            let unlocker = ensure_signed(origin)?;
+            // first check is that the organization exists
+            ensure!(!Self::id_is_available(organization), Error::<T>::OrganizationMustBeRegisteredToUnLockShares);
+            // second check is that this is an authorized party for unlocking shares
+            let authentication: bool = Self::is_sudo_key(&unlocker)
+                                    || Self::is_organization_supervisor(organization, &unlocker)
+                                    || unlocker == who;
+            ensure!(authentication, Error::<T>::NotAuthorizedToUnLockShares);
+
+            Self::unlock_profile(organization, &who)?;
+            Self::deposit_event(RawEvent::SharesUnlocked(organization, who));
+            Ok(())
+        }
+        #[weight = 0]
+        fn reserve_shares(origin, organization: T::OrgId, who: T::AccountId) -> DispatchResult {
+            let reserver = ensure_signed(origin)?;
+            // first check is that the organization exists
+            ensure!(!Self::id_is_available(organization), Error::<T>::OrganizationMustBeRegisteredToReserveShares);
+            // second check is that this is an authorized party for unlocking shares
+            let authentication: bool = Self::is_sudo_key(&reserver)
+                                    || Self::is_organization_supervisor(organization, &reserver)
+                                    || reserver == who;
+            ensure!(authentication, Error::<T>::NotAuthorizedToReserveShares);
+
+
+            let amount_reserved = Self::reserve(organization, &who, None)?;
+            Self::deposit_event(RawEvent::SharesReserved(organization, who, amount_reserved));
+            Ok(())
+        }
+        #[weight = 0]
+        fn unreserve_shares(origin, organization: T::OrgId, who: T::AccountId) -> DispatchResult {
+            let unreserver = ensure_signed(origin)?;
+            // first check is that the organization exists
+            ensure!(!Self::id_is_available(organization), Error::<T>::OrganizationMustBeRegisteredToUnReserveShares);
+            // second check is that this is an authorized party for unlocking shares
+            let authentication: bool = Self::is_sudo_key(&unreserver)
+                                    || Self::is_organization_supervisor(organization, &unreserver)
+                                    || unreserver == who;
+            ensure!(authentication, Error::<T>::NotAuthorizedToUnReserveShares);
+
+            let amount_reserved = Self::unreserve(organization, &who, None)?;
+            Self::deposit_event(RawEvent::SharesUnReserved(organization, who, amount_reserved));
+            Ok(())
+        }
     }
 }
 
@@ -326,6 +485,35 @@ impl<T: Trait> OrganizationSupervisorPermissions<T::OrgId, T::AccountId> for Mod
         let new_org = old_org.put_sudo(who);
         <OrganizationStates<T>>::insert(org, new_org);
         Ok(())
+    }
+}
+
+// TODO: Register Organization
+impl<T: Trait> RegisterOrganization<T::OrgId, T::AccountId, T::IpfsReference> for Module<T> {
+    type OrgSrc = OrganizationSource<T::OrgId, T::AccountId, T::Shares>;
+    type OrganizationState = Organization<T::AccountId, T::OrgId, T::IpfsReference>;
+    fn organization_from_src(
+        src: Self::OrgSrc,
+        org_id: T::OrgId,
+        value_constitution: T::IpfsReference,
+    ) -> Result<Self::OrganizationState, DispatchError> {
+        todo!()
+    }
+    fn register_organization(
+        source: Self::OrgSrc,
+        value_constitution: T::IpfsReference,
+        supervisor: Option<T::AccountId>,
+    ) -> Result<T::OrgId, DispatchError> {
+        // TODO: add AccountId as input to track and permission the caller form within the method
+        // -> consider doing that for all methods? This is how permissions must be enforced
+        todo!()
+    }
+    fn register_sub_organization(
+        source: Self::OrgSrc,
+        value_constitution: T::IpfsReference,
+        supervisor: Option<T::AccountId>,
+    ) -> Result<T::OrgId, DispatchError> {
+        todo!()
     }
 }
 

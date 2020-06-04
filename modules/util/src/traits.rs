@@ -114,6 +114,26 @@ pub trait LockProfile<OrgId, AccountId> {
     fn lock_profile(organization: OrgId, who: &AccountId) -> DispatchResult;
     fn unlock_profile(organization: OrgId, who: &AccountId) -> DispatchResult;
 }
+pub trait RegisterOrganization<OrgId, AccountId, Hash> {
+    type OrgSrc;
+    type OrganizationState;
+    // called to form the organization in the method below
+    fn organization_from_src(
+        src: Self::OrgSrc,
+        org_id: OrgId,
+        value_constitution: Hash,
+    ) -> Result<Self::OrganizationState, DispatchError>;
+    fn register_organization(
+        source: Self::OrgSrc,
+        value_constitution: Hash,
+        supervisor: Option<AccountId>,
+    ) -> Result<OrgId, DispatchError>; // returns OrgId in this module's context
+    fn register_sub_organization(
+        source: Self::OrgSrc,
+        value_constitution: Hash,
+        supervisor: Option<AccountId>,
+    ) -> Result<OrgId, DispatchError>;
+}
 // --
 // GetTotalShareIssuance is in WeightedShareGroup::outstanding_shares
 // --
@@ -619,22 +639,6 @@ pub trait GetInnerOuterShareGroups<OrgId, ShareId, AccountId>:
 {
     fn get_inner_share_group_identifiers(organization: OrgId) -> Option<Vec<ShareId>>;
     fn get_outer_share_group_identifiers(organization: OrgId) -> Option<Vec<ShareId>>;
-}
-
-pub trait OrganizationDNS<OrgId, AccountId, Hash>: OrgChecks<OrgId, AccountId> {
-    type OrgSrc;
-    type OrganizationState;
-    // called to form the organization in the method below
-    fn organization_from_src(
-        src: Self::OrgSrc,
-        org_id: OrgId,
-        value_constitution: Hash,
-    ) -> Result<Self::OrganizationState, DispatchError>;
-    fn register_organization(
-        source: Self::OrgSrc,
-        value_constitution: Hash,
-        supervisor: Option<AccountId>,
-    ) -> Result<(OrgId, Self::OrganizationState), DispatchError>; // returns OrgId in this module's context
 }
 
 // ~~~~~~~~ BankOffChain Module ~~~~~~~~
