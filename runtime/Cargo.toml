@@ -35,9 +35,6 @@ std = [
     'sp-std/std',
     'sp-transaction-pool/std',
     'sp-version/std',
-    'membership/std',
-    'shares-membership/std',
-    'shares-atomic/std',
     'sunshine-org/std',
 ]
 
@@ -72,9 +69,6 @@ sp-version = { version = "2.0.0-rc2", default-features = false }
 serde = { version = "1.0.106", features = ["derive"], optional = true }
 # local deps
 util = { package = "sunshine-util", path = "../modules/util", default-features = false }
-membership = { package = "sunshine-membership", path = "../modules/membership", default-features = false }
-shares-membership = { package = "sunshine-shares-membership", path = "../modules/shares-membership", default-features = false }
-shares-atomic = { package = "sunshine-shares-atomic", path = "../modules/shares-atomic", default-features = false }
 sunshine-org = {package = "sunshine-org", path = "../modules/org", default-features=false }
 vote-yesno = { package = "sunshine-vote-yesno", path = "../modules/vote-yesno", default-features = false}
 vote-petition = { package = "sunshine-vote-petition", path = "../modules/vote-petition", default-features=false}

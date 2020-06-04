@@ -1,5 +1,5 @@
 use crate::{
-    share::{ShareID, SimpleShareGenesis},
+    share::SimpleShareGenesis,
     traits::{
         AccessGenesis, CommitSpendReservation, DepositSpendOps, FreeToReserved, GetBalance,
         MoveFundsOutCommittedOnly, MoveFundsOutUnCommittedOnly,
@@ -76,81 +76,56 @@ pub enum BankTrackerID {
 /// The simplest `GovernanceConfig`
 /// - has no magnitude context and is limited for that reason
 /// - future version will use revocable representative governance
-pub enum WithdrawalPermissions<
-    OrgId: Codec + PartialEq + Zero + From<u32> + Copy,
-    ShareId: Codec + PartialEq + Zero + From<u32> + Copy,
-    AccountId,
-> {
+pub enum WithdrawalPermissions<Id: Codec + PartialEq + Zero + From<u32> + Copy, AccountId> {
     // two accounts can reserve free capital for spending
     AnyOfTwoAccounts(AccountId, AccountId),
-    // any account in org
-    AnyAccountInOrg(OrgId),
-    // all accounts in this organization can reserve free capital for spending
-    AnyMemberOfOrgShareGroup(OrgId, ShareID<ShareId>),
+    // withdrawal permissions restricted by weighted membership in organization
+    // -> sudo might have additional power, depends on impl
+    JointOrgAccount(Id),
 }
 
-impl<
-        OrgId: Codec + PartialEq + Zero + From<u32> + Copy,
-        ShareId: Codec + PartialEq + Zero + From<u32> + Copy,
-        AccountId,
-    > Default for WithdrawalPermissions<OrgId, ShareId, AccountId>
+impl<OrgId: Codec + PartialEq + Zero + From<u32> + Copy, AccountId> Default
+    for WithdrawalPermissions<OrgId, AccountId>
 {
-    fn default() -> WithdrawalPermissions<OrgId, ShareId, AccountId> {
-        WithdrawalPermissions::AnyAccountInOrg(OrgId::zero())
+    fn default() -> WithdrawalPermissions<OrgId, AccountId> {
+        // the chain's dev account?
+        WithdrawalPermissions::JointOrgAccount(OrgId::zero())
     }
 }
 
-impl<
-        OrgId: Codec + PartialEq + Zero + From<u32> + Copy,
-        ShareId: Codec + PartialEq + Zero + From<u32> + Copy,
-        AccountId,
-    > WithdrawalPermissions<OrgId, ShareId, AccountId>
+impl<OrgId: Codec + PartialEq + Zero + From<u32> + Copy, AccountId>
+    WithdrawalPermissions<OrgId, AccountId>
 {
-    pub fn extract_org_weighted_share_id(&self) -> Option<(OrgId, ShareID<ShareId>)> {
+    pub fn extract_org_id(&self) -> Option<OrgId> {
         match self {
-            WithdrawalPermissions::AnyMemberOfOrgShareGroup(org_id, share_id) => {
-                Some((*org_id, *share_id))
-            }
+            WithdrawalPermissions::JointOrgAccount(org_id) => Some(*org_id),
             _ => None,
         }
     }
 }
 use crate::bounty::{ReviewBoard, TeamID};
-impl<
-        OrgId: Codec + PartialEq + Zero + From<u32> + Copy,
-        ShareId: Codec + PartialEq + Zero + From<u32> + Copy,
-        AccountId,
-        Hash,
-        WeightedThreshold,
-    > From<ReviewBoard<OrgId, ShareId, AccountId, Hash, WeightedThreshold>>
-    for WithdrawalPermissions<OrgId, ShareId, AccountId>
+impl<OrgId: Codec + PartialEq + Zero + From<u32> + Copy, AccountId, Hash, WeightedThreshold>
+    From<ReviewBoard<OrgId, AccountId, Hash, WeightedThreshold>>
+    for WithdrawalPermissions<OrgId, AccountId>
 {
     fn from(
-        other: ReviewBoard<OrgId, ShareId, AccountId, Hash, WeightedThreshold>,
-    ) -> WithdrawalPermissions<OrgId, ShareId, AccountId> {
+        other: ReviewBoard<OrgId, AccountId, Hash, WeightedThreshold>,
+    ) -> WithdrawalPermissions<OrgId, AccountId> {
         match other {
-            ReviewBoard::FlatPetitionReview(_, org_id, share_id, _, _, _) => {
-                WithdrawalPermissions::AnyMemberOfOrgShareGroup(org_id, ShareID::Flat(share_id))
+            ReviewBoard::FlatPetitionReview(_, org_id, _, _, _) => {
+                WithdrawalPermissions::JointOrgAccount(org_id)
             }
-            ReviewBoard::WeightedThresholdReview(_, org_id, share_id, _, _) => {
-                WithdrawalPermissions::AnyMemberOfOrgShareGroup(org_id, ShareID::Weighted(share_id))
+            ReviewBoard::WeightedThresholdReview(_, org_id, _, _) => {
+                WithdrawalPermissions::JointOrgAccount(org_id)
             }
         }
     }
 }
-impl<
-        OrgId: Codec + PartialEq + Zero + From<u32> + Copy,
-        ShareId: Codec + PartialEq + Zero + From<u32> + Copy,
-        AccountId: Clone + PartialEq,
-    > From<TeamID<OrgId, ShareId, AccountId>> for WithdrawalPermissions<OrgId, ShareId, AccountId>
+impl<OrgId: Codec + PartialEq + Zero + From<u32> + Copy, AccountId: Clone + PartialEq>
+    From<TeamID<OrgId, AccountId>> for WithdrawalPermissions<OrgId, AccountId>
 {
-    fn from(
-        other: TeamID<OrgId, ShareId, AccountId>,
-    ) -> WithdrawalPermissions<OrgId, ShareId, AccountId> {
-        WithdrawalPermissions::AnyMemberOfOrgShareGroup(
-            other.org(),
-            ShareID::Weighted(other.weighted_share_id()),
-        )
+    fn from(other: TeamID<OrgId, AccountId>) -> WithdrawalPermissions<OrgId, AccountId> {
+        WithdrawalPermissions::JointOrgAccount(other.org())
     }
 }
 
@@ -546,8 +521,6 @@ impl<
         }
     }
 }
-
-// 000experiment with type states000
 
 // Withdrawal States as Zero Sized Types To Enforce State Guarantees
 #[derive(PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]

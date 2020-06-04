@@ -15,17 +15,20 @@ use util::{
         AccessGenesis, AccessProfile, ChainSudoPermissions, ChangeGroupMembership,
         FlatShareWrapper, GenerateUniqueID, GetGroup, GetGroupSize, GetInnerOuterShareGroups,
         GroupMembership, IDIsAvailable, LockProfile, OrgChecks, OrganizationSupervisorPermissions,
-        RegisterOrganization, RegisterShareGroup, ReserveProfile, SeededGenerateUniqueID,
-        ShareBank, ShareGroupChecks, ShareInformation, ShareIssuance, SupervisorPermissions,
-        VerifyShape, WeightedShareGroup, WeightedShareIssuanceWrapper, WeightedShareWrapper,
+        RegisterOrganization, RegisterShareGroup, RemoveOrganization, ReserveProfile,
+        SeededGenerateUniqueID, ShareBank, ShareGroupChecks, ShareInformation, ShareIssuance,
+        SupervisorPermissions, VerifyShape, WeightedShareGroup, WeightedShareIssuanceWrapper,
+        WeightedShareWrapper,
     },
     uuid::ShareGroup,
 };
 
 use codec::Codec;
 use frame_support::{
-    decl_error, decl_event, decl_module, decl_storage, ensure, storage::IterableStorageDoubleMap,
-    traits::Get, Parameter,
+    decl_error, decl_event, decl_module, decl_storage, ensure,
+    storage::{IterableStorageDoubleMap, IterableStorageMap},
+    traits::Get,
+    Parameter,
 };
 use frame_system::{self as system, ensure_signed};
 use sp_runtime::{
@@ -80,7 +83,6 @@ decl_event!(
         <T as Trait>::Shares,
         <T as Trait>::IpfsReference,
     {
-        // ~~ FLAT, BASE ORG EVENTS ~~
         /// Organization ID, New Member Account ID, Amount Issued
         NewMemberAddedToOrg(OrgId, AccountId, Shares),
         /// Organization ID, Old Member Account Id, Amount Burned
@@ -179,6 +181,7 @@ decl_error! {
         NotAuthorizedToUnReserveShares,
         NotAuthorizedToIssueShares,
         NotAuthorizedToBurnShares,
+        OrganizationCannotBeRemovedIfInputIdIsAvailable,
     }
 }
 
@@ -192,7 +195,7 @@ decl_storage! {
 
         /// The main storage item for Organization registration
         OrganizationStates get(fn organization_states): map
-            hasher(opaque_blake2_256) T::OrgId => Option<Organization<T::AccountId, T::OrgId, T::IpfsReference>>;
+            hasher(blake2_128_concat) T::OrgId => Option<Organization<T::AccountId, T::OrgId, T::IpfsReference>>;
 
         /// The map to track organizational membership
         Members get(fn members): double_map
@@ -488,31 +491,76 @@ impl<T: Trait> OrganizationSupervisorPermissions<T::OrgId, T::AccountId> for Mod
     }
 }
 
-// TODO: Register Organization
 impl<T: Trait> RegisterOrganization<T::OrgId, T::AccountId, T::IpfsReference> for Module<T> {
-    type OrgSrc = OrganizationSource<T::OrgId, T::AccountId, T::Shares>;
+    type OrgSrc = OrganizationSource<T::AccountId, T::Shares>;
     type OrganizationState = Organization<T::AccountId, T::OrgId, T::IpfsReference>;
     fn organization_from_src(
         src: Self::OrgSrc,
         org_id: T::OrgId,
+        parent_id: Option<T::OrgId>,
+        supervisor: Option<T::AccountId>,
         value_constitution: T::IpfsReference,
     ) -> Result<Self::OrganizationState, DispatchError> {
-        todo!()
+        match src {
+            OrganizationSource::Accounts(accounts) => {
+                // batch_add (flat membership group)
+                Self::batch_add_members_to_org(org_id, accounts)?;
+                Ok(Organization::new(supervisor, parent_id, value_constitution))
+            }
+            OrganizationSource::AccountsWeighted(weighted_accounts) => {
+                // batch_issue (share weighted membership group)
+                Self::batch_issue(org_id, weighted_accounts.into())?;
+                Ok(Organization::new(supervisor, parent_id, value_constitution))
+            }
+        }
     }
     fn register_organization(
         source: Self::OrgSrc,
-        value_constitution: T::IpfsReference,
         supervisor: Option<T::AccountId>,
+        value_constitution: T::IpfsReference,
     ) -> Result<T::OrgId, DispatchError> {
-        // TODO: add AccountId as input to track and permission the caller form within the method
-        // -> consider doing that for all methods? This is how permissions must be enforced
-        todo!()
+        let new_org_id = Self::generate_unique_id();
+        let new_organization =
+            Self::organization_from_src(source, new_org_id, None, supervisor, value_constitution)?;
+        <OrganizationStates<T>>::insert(new_org_id, new_organization);
+        Ok(new_org_id)
     }
     fn register_sub_organization(
+        parent_id: T::OrgId,
         source: Self::OrgSrc,
-        value_constitution: T::IpfsReference,
         supervisor: Option<T::AccountId>,
+        value_constitution: T::IpfsReference,
     ) -> Result<T::OrgId, DispatchError> {
+        let new_org_id = Self::generate_unique_id();
+        // TODO: could check if parent has a child_id and limit depth with a module constant; seems like a good idea, unbounded size not good in runtime context
+        let new_organization = Self::organization_from_src(
+            source,
+            new_org_id,
+            Some(parent_id),
+            supervisor,
+            value_constitution,
+        )?;
+        <OrganizationStates<T>>::insert(new_org_id, new_organization);
+        Ok(new_org_id)
+    }
+}
+impl<T: Trait> RemoveOrganization<T::OrgId> for Module<T> {
+    fn remove_organization(id: T::OrgId) -> Result<Option<Vec<T::OrgId>>, DispatchError> {
+        ensure!(
+            !Self::id_is_available(id),
+            Error::<T>::OrganizationCannotBeRemovedIfInputIdIsAvailable
+        );
+        let ret: Vec<T::OrgId> = <OrganizationStates<T>>::iter()
+            .filter(|(_, org_state)| (*org_state).parent() == Some(id))
+            .map(|(child_id, _)| child_id)
+            .collect::<Vec<_>>();
+        if ret.len() > 0 {
+            Ok(Some(ret))
+        } else {
+            Ok(None)
+        }
+    }
+    fn recursive_remove_organization(id: T::OrgId) -> DispatchResult {
         todo!()
     }
 }

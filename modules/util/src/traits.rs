@@ -65,6 +65,18 @@ pub trait ChangeGroupMembership<OrgId, AccountId>: GroupMembership<OrgId, Accoun
 pub trait GetGroup<OrgId, AccountId> {
     fn get_group(organization: OrgId) -> Option<Vec<AccountId>>;
 }
+/// Checks that the `total` field is correct by summing all assigned share quantities
+pub trait VerifyShape {
+    // required bound on GenesisAllocation
+    fn verify_shape(&self) -> bool;
+}
+pub trait AccessGenesis<AccountId, Shares> {
+    fn total(&self) -> Shares;
+    fn account_ownership(&self) -> Vec<(AccountId, Shares)>;
+}
+pub trait AccessProfile<Shares> {
+    fn total(&self) -> Shares;
+}
 pub trait ShareInformation<OrgId, AccountId, Shares> {
     type Profile: AccessProfile<Shares>;
     type Genesis: From<Vec<(AccountId, Shares)>>
@@ -121,28 +133,27 @@ pub trait RegisterOrganization<OrgId, AccountId, Hash> {
     fn organization_from_src(
         src: Self::OrgSrc,
         org_id: OrgId,
+        parent_id: Option<OrgId>,
+        supervisor: Option<AccountId>,
         value_constitution: Hash,
     ) -> Result<Self::OrganizationState, DispatchError>;
     fn register_organization(
         source: Self::OrgSrc,
-        value_constitution: Hash,
         supervisor: Option<AccountId>,
+        value_constitution: Hash,
     ) -> Result<OrgId, DispatchError>; // returns OrgId in this module's context
     fn register_sub_organization(
+        parent_id: OrgId,
         source: Self::OrgSrc,
-        value_constitution: Hash,
         supervisor: Option<AccountId>,
+        value_constitution: Hash,
     ) -> Result<OrgId, DispatchError>;
 }
-// --
-// GetTotalShareIssuance is in WeightedShareGroup::outstanding_shares
-// --
-// pub trait GetWeightedShareGroupShape<AccountId, Shares>: GetTotalShareIssuance<Shares> {
-//     fn get_weighted_share_group_shape(
-//         organization: u32,
-//         share_id: u32,
-//     ) -> Result<Vec<(AccountId, Shares)>, DispatchError>;
-// }
+pub trait RemoveOrganization<OrgId> {
+    // returns Ok(Some(child_id)) or Ok(None) if leaf org
+    fn remove_organization(id: OrgId) -> Result<Option<Vec<OrgId>>, DispatchError>;
+    fn recursive_remove_organization(id: OrgId) -> DispatchResult;
+}
 
 // ---------- Petition Logic ----------
 
@@ -199,92 +210,6 @@ pub trait RequestChanges<AccountId, Hash>: SignPetition<AccountId, Hash> {
 pub trait UpdatePetition<AccountId, Hash>: SignPetition<AccountId, Hash> {
     fn update_petition(petition_id: u32, new_topic: Hash) -> DispatchResult;
 } // do we need a delete petition when we want to close it
-
-// ---------- Shares Atomic Logic ----------
-
-/// Checks that the `total` field is correct by summing all assigned share quantities
-pub trait VerifyShape {
-    // required bound on GenesisAllocation
-    fn verify_shape(&self) -> bool;
-}
-pub trait AccessGenesis<AccountId, Shares> {
-    fn total(&self) -> Shares;
-    fn account_ownership(&self) -> Vec<(AccountId, Shares)>;
-}
-pub trait AccessProfile<Shares> {
-    fn total(&self) -> Shares;
-}
-pub trait WeightedShareGroup<OrgId, ShareId, AccountId> {
-    type Shares: Parameter + Member + AtLeast32Bit + Codec;
-    type Profile: AccessProfile<Self::Shares>;
-    type Genesis: From<Vec<(AccountId, Self::Shares)>>
-        + Into<SimpleShareGenesis<AccountId, Self::Shares>>
-        + VerifyShape
-        + AccessGenesis<AccountId, Self::Shares>;
-    /// Gets the total number of shares issued for an organization's share identifier
-    fn outstanding_shares(organization: OrgId, share_id: ShareId) -> Option<Self::Shares>;
-    // get who's share profile
-    fn get_share_profile(
-        organization: OrgId,
-        share_id: ShareId,
-        who: &AccountId,
-    ) -> Option<Self::Profile>;
-    /// Returns the entire membership group associated with a share identifier, fallible bc checks existence
-    fn shareholder_membership(organization: OrgId, id: ShareId) -> Option<Self::Genesis>;
-}
-
-/// Issuance logic for existing shares (not new shares)
-pub trait ShareBank<OrgId, ShareId, AccountId>:
-    WeightedShareGroup<OrgId, ShareId, AccountId>
-{
-    fn issue(
-        organization: OrgId,
-        share_id: ShareId,
-        new_owner: AccountId,
-        amount: Self::Shares,
-        batch: bool,
-    ) -> DispatchResult;
-    fn burn(
-        organization: OrgId,
-        share_id: ShareId,
-        old_owner: AccountId,
-        amount: Self::Shares,
-        batch: bool,
-    ) -> DispatchResult;
-    fn batch_issue(
-        organization: OrgId,
-        share_id: ShareId,
-        genesis: Self::Genesis,
-    ) -> DispatchResult;
-    fn batch_burn(organization: OrgId, share_id: ShareId, genesis: Self::Genesis)
-        -> DispatchResult;
-}
-
-/// Reserve shares for an individual `AccountId`
-pub trait ReservableProfile<OrgId, ShareId, AccountId>:
-    ShareBank<OrgId, ShareId, AccountId>
-{
-    /// Reserves amount iff certain conditions are met wrt existing profile and how it will change
-    fn reserve(
-        organization: OrgId,
-        share_id: ShareId,
-        who: &AccountId,
-        amount: Option<Self::Shares>,
-    ) -> Result<Self::Shares, DispatchError>;
-    /// Unreserves amount iff certain conditions are met wrt existing profile and how it will change
-    fn unreserve(
-        organization: OrgId,
-        share_id: ShareId,
-        who: &AccountId,
-        amount: Option<Self::Shares>,
-    ) -> Result<Self::Shares, DispatchError>;
-}
-
-/// Lock shares for an individual `AccountId`
-pub trait LockableProfile<OrgId, ShareId, AccountId> {
-    fn lock_profile(organization: OrgId, share_id: ShareId, who: &AccountId) -> DispatchResult;
-    fn unlock_profile(organization: OrgId, share_id: ShareId, who: &AccountId) -> DispatchResult;
-}
 
 // ====== Vote Logic ======
 
@@ -517,128 +442,6 @@ pub trait PollActiveProposal: ScheduleVoteSequence {
         organization: u32,
         proposal_index: u32,
     ) -> Result<Self::PollingOutcome, DispatchError>;
-}
-
-// ~~~~~~~~ Org Module ~~~~~~~~
-
-// helpers, they are just abstractions over inherited functions
-pub trait OrgChecks<OrgId, AccountId> {
-    fn check_org_existence(org: OrgId) -> bool;
-    fn check_membership_in_org(org: OrgId, account: &AccountId) -> bool;
-    fn get_org_size(org: OrgId) -> u32;
-}
-
-// helpers, they are just abstractions over inherited functions
-pub trait ShareGroupChecks<OrgId, ShareId, AccountId> {
-    fn check_share_group_existence(org: OrgId, share_group: ShareId) -> bool;
-    fn check_membership_in_share_group(
-        org: OrgId,
-        share_group: ShareId,
-        account: &AccountId,
-    ) -> bool;
-    fn get_share_group_size(org: OrgId, share_group: ShareId) -> u32;
-}
-
-pub trait SupervisorPermissions<OrgId, ShareId, AccountId>:
-    ShareGroupChecks<OrgId, ShareId, AccountId>
-{
-    fn is_sudo_account(who: &AccountId) -> bool;
-    fn is_organization_supervisor(organization: OrgId, who: &AccountId) -> bool;
-    fn is_share_supervisor(organization: OrgId, share_id: ShareId, who: &AccountId) -> bool;
-    // infallible, not protected in any way
-    fn put_sudo_account(who: AccountId);
-    fn put_organization_supervisor(organization: OrgId, who: AccountId);
-    fn put_share_group_supervisor(organization: OrgId, share_id: ShareId, who: AccountId);
-    // CAS by default to enforce existing permissions and isolate logic
-    fn set_sudo_account(setter: &AccountId, new: AccountId) -> DispatchResult;
-    fn set_organization_supervisor(
-        organization: OrgId,
-        setter: &AccountId,
-        new: AccountId,
-    ) -> DispatchResult;
-    fn set_share_supervisor(
-        organization: OrgId,
-        share_id: ShareId,
-        setter: &AccountId,
-        new: AccountId,
-    ) -> DispatchResult;
-}
-
-pub trait FlatShareWrapper<OrgId, FlatShareId, AccountId> {
-    fn get_flat_share_group(
-        organization: OrgId,
-        share_id: FlatShareId,
-    ) -> Result<Vec<AccountId>, DispatchError>;
-    fn generate_unique_flat_share_id(organization: OrgId) -> FlatShareId;
-    fn add_members_to_flat_share_group(
-        organization: OrgId,
-        share_id: FlatShareId,
-        members: Vec<AccountId>,
-    );
-}
-
-pub trait WeightedShareWrapper<OrgId, WeightedShareId, AccountId> {
-    type Shares: Parameter + Member + AtLeast32Bit + Codec; // exists only to pass inheritance to modules that inherit org
-    type Profile: AccessProfile<Self::Shares>;
-    type Genesis;
-    fn get_member_share_profile(
-        organization: OrgId,
-        share_id: WeightedShareId,
-        member: &AccountId,
-    ) -> Option<Self::Profile>;
-    fn get_weighted_share_group(
-        organization: OrgId,
-        share_id: WeightedShareId,
-    ) -> Result<Self::Genesis, DispatchError>;
-    fn get_outstanding_weighted_shares(
-        organization: OrgId,
-        share_id: WeightedShareId,
-    ) -> Option<Self::Shares>;
-    fn generate_unique_weighted_share_id(organization: OrgId) -> WeightedShareId;
-}
-
-pub trait WeightedShareIssuanceWrapper<OrgId, WeightedShareId, AccountId, FineArithmetic>:
-    WeightedShareWrapper<OrgId, WeightedShareId, AccountId>
-{
-    fn issue_weighted_shares_from_accounts(
-        organization: OrgId,
-        members: Vec<(AccountId, Self::Shares)>,
-    ) -> Result<WeightedShareId, DispatchError>;
-    // TODO: add issue for_member like this
-    fn burn_weighted_shares_for_member(
-        organization: OrgId,
-        share_id: WeightedShareId,
-        account: AccountId,
-        amount_to_burn: Option<FineArithmetic>, // at some point, replace with portion
-    ) -> Result<Self::Shares, DispatchError>;
-}
-
-pub trait RegisterShareGroup<OrgId, ShareId, AccountId, Shares>:
-    ShareGroupChecks<OrgId, ShareId, AccountId>
-{
-    fn register_inner_flat_share_group(
-        organization: OrgId,
-        group: Vec<AccountId>,
-    ) -> Result<ShareId, DispatchError>;
-    fn register_inner_weighted_share_group(
-        organization: OrgId,
-        group: Vec<(AccountId, Shares)>,
-    ) -> Result<ShareId, DispatchError>;
-    fn register_outer_flat_share_group(
-        organization: u32,
-        group: Vec<AccountId>,
-    ) -> Result<ShareId, DispatchError>;
-    fn register_outer_weighted_share_group(
-        organization: u32,
-        group: Vec<(AccountId, Shares)>,
-    ) -> Result<ShareId, DispatchError>;
-}
-
-pub trait GetInnerOuterShareGroups<OrgId, ShareId, AccountId>:
-    ShareGroupChecks<OrgId, ShareId, AccountId>
-{
-    fn get_inner_share_group_identifiers(organization: OrgId) -> Option<Vec<ShareId>>;
-    fn get_outer_share_group_identifiers(organization: OrgId) -> Option<Vec<ShareId>>;
 }
 
 // ~~~~~~~~ BankOffChain Module ~~~~~~~~
@@ -1031,10 +834,10 @@ pub trait SetMakeTransfer<BankId, TransferId>: Sized {
     fn get_transfer_id(&self) -> Option<TransferId>;
 }
 
-pub trait StartTeamConsentPetition<ShareID, VoteID> {
-    fn start_team_consent_petition(&self, share_id: ShareID, vote_id: VoteID) -> Self;
+pub trait StartTeamConsentPetition<Id, VoteID> {
+    fn start_team_consent_petition(&self, org_id: Id, vote_id: VoteID) -> Self;
     fn get_team_consent_id(&self) -> Option<VoteID>;
-    fn get_team_flat_id(&self) -> Option<ShareID>;
+    fn get_team_id(&self) -> Option<Id>;
 }
 
 // TODO: clean up the outer_flat_share_id dispatched for team consent if NOT formally approved

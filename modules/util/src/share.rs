@@ -1,5 +1,5 @@
 use crate::traits::{AccessGenesis, AccessProfile, VerifyShape};
-use codec::{Codec, Decode, Encode};
+use codec::{Decode, Encode};
 use frame_support::Parameter;
 use sp_runtime::{traits::Zero, RuntimeDebug};
 use sp_std::prelude::*;
@@ -141,30 +141,5 @@ impl<
             sum = sum + ac.1
         }
         sum == self.total
-    }
-}
-
-// TODO: Delete, not using this anymore but keep for a hot sec
-#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug)]
-pub enum ShareIdTypes {
-    Flat,
-    Weighted,
-}
-
-impl Default for ShareIdTypes {
-    fn default() -> Self {
-        ShareIdTypes::Flat
-    }
-}
-
-#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug)]
-pub enum ShareID<Id: Codec + PartialEq + Zero + From<u32> + Copy> {
-    Flat(Id),
-    Weighted(Id),
-}
-
-impl<Id: Codec + PartialEq + Zero + From<u32> + Copy> Default for ShareID<Id> {
-    fn default() -> Self {
-        ShareID::Flat(Id::zero())
     }
 }

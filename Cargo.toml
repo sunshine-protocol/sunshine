@@ -4,9 +4,6 @@ panic = "unwind"
 [workspace]
 members = [
     "modules/util",
-    "modules/membership",
-    "modules/shares-membership",
-    "modules/shares-atomic",
     "modules/org",
     "modules/vote-petition",
     "modules/vote-yesno",

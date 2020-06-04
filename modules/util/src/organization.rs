@@ -1,4 +1,3 @@
-use crate::share::ShareID;
 use codec::{Codec, Decode, Encode};
 use sp_runtime::{traits::Zero, RuntimeDebug};
 use sp_std::prelude::*;
@@ -57,27 +56,16 @@ impl<
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-/// The pieces of information used to register an organization in `bank`
-pub enum OrganizationSource<
-    OrgId: Codec + PartialEq + Zero + From<u32> + Copy,
-    AccountId,
-    Shares,
-> {
+/// The pieces of information used to register an organization in `org`
+pub enum OrganizationSource<AccountId, Shares> {
     /// Will be initialized as an organization with a single ShareId and equal governance strength from all members
     Accounts(Vec<AccountId>),
     /// "" weighted governance strength by Shares
     AccountsWeighted(Vec<(AccountId, Shares)>),
-    /// References a share group registering to become an organization (OrgId, ShareId)
-    SpinOffShareGroup(OrgId),
 }
 
-impl<
-        OrgId: Codec + PartialEq + Zero + From<u32> + Copy,
-        AccountId: PartialEq,
-        Shares,
-    > Default for OrganizationSource<OrgId, AccountId, Shares>
-{
-    fn default() -> OrganizationSource<OrgId, AccountId, Shares> {
+impl<AccountId: PartialEq, Shares> Default for OrganizationSource<AccountId, Shares> {
+    fn default() -> OrganizationSource<AccountId, Shares> {
         OrganizationSource::Accounts(Vec::new())
     }
 }
@@ -109,13 +97,13 @@ impl<AccountId: Clone, Shares: Clone> TermsOfAgreement<AccountId, Shares> {
 
 #[derive(PartialEq, Eq, Default, Clone, Encode, Decode, RuntimeDebug)]
 /// Defined paths for how the terms of agreement can change
-pub struct FullTermsOfAgreement<AccountId, Shares, OrgId, ShareId, BlockNumber> {
+pub struct FullTermsOfAgreement<AccountId, Shares, OrgId, BlockNumber> {
     /// The starting state for the group
     basic_terms: TermsOfAgreement<AccountId, Shares>,
     /// This represents the metagovernance configuration, how the group can coordinate changes
     allowed_changes: Vec<(
         Catalyst<AccountId>,
-        Option<VoteConfig<AccountId, OrgId, ShareId, BlockNumber>>,
+        Option<VoteConfig<AccountId, OrgId, BlockNumber>>,
         Option<EnforcedOutcome<AccountId>>,
     )>,
 }
@@ -133,84 +121,56 @@ pub enum Catalyst<AccountId> {
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 /// These are all the vote configs planned to be supported
 /// TODO: we have n = 1, 2 so do it with AccountId, up to `12`, one day somehow
-pub enum VoteConfig<AccountId, OrgId, ShareId, BlockNumber> {
+pub enum VoteConfig<AccountId, OrgId, BlockNumber> {
     /// Only one supervisor approval is required but everyone has veto rights, for BlockNumber after approval
-    OneSupervisorApprovalWithFullOrgShareVetoRights(AccountId, OrgId, ShareId, BlockNumber),
+    OneSupervisorApprovalWithFullOrgShareVetoRights(AccountId, OrgId, BlockNumber),
     /// Two supervisor approvals is required but everyone has veto rights, for BlockNumber after approval
-    TwoSupervisorsApprovalWithFullOrgShareVetoRights(
-        AccountId,
-        AccountId,
-        OrgId,
-        ShareId,
-        BlockNumber,
-    ),
+    TwoSupervisorsApprovalWithFullOrgShareVetoRights(AccountId, AccountId, OrgId, BlockNumber),
     /// Only one supervisor approval is required but everyone can vote to veto must reach threshold, for BlockNumber after approval
-    OneSupervisorApprovalWith1P1VCountThresholdVetoRights(
-        AccountId,
-        OrgId,
-        ShareId,
-        u32,
-        BlockNumber,
-    ),
+    OneSupervisorApprovalWith1P1VCountThresholdVetoRights(AccountId, OrgId, u32, BlockNumber),
     /// Two supervisor approvals is required but everyone can vote to veto must reach threshold, for BlockNumber after approval
     TwoSupervisorsApprovalWith1P1VCountThresholdVetoRights(
         AccountId,
         AccountId,
         OrgId,
-        ShareId,
         u32,
         BlockNumber,
     ),
     /// Only one supervisor approval is required but everyone can vote to veto must reach share weighted threshold, for BlockNumber after approval
-    OneSupervisorApprovalWithShareWeightedVetoRights(AccountId, OrgId, ShareId, u32, BlockNumber),
+    OneSupervisorApprovalWithShareWeightedVetoRights(AccountId, OrgId, u32, BlockNumber),
     /// Two supervisor approvals is required but everyone can vote to veto must reach share weighted threshold, for BlockNumber after approval
     TwoSupervisorsApprovalWithShareWeightedVetoRights(
         AccountId,
         AccountId,
         OrgId,
-        ShareId,
         u32,
         BlockNumber,
     ),
     /// Warning: Dictatorial and Centralized Governance, some say _practical_
-    OnePersonOneVoteThresholdWithOneSupervisorVetoRights(
-        OrgId,
-        ShareId,
-        u32,
-        AccountId,
-        BlockNumber,
-    ),
+    OnePersonOneVoteThresholdWithOneSupervisorVetoRights(OrgId, u32, AccountId, BlockNumber),
     OnePersonOneVoteThresholdWithTwoSupervisorsVetoRights(
         OrgId,
-        ShareId,
         u32,
         AccountId,
         AccountId,
         BlockNumber,
     ),
-    ShareWeightedVoteThresholdWithOneSupervisorVetoRights(
-        OrgId,
-        ShareId,
-        u32,
-        AccountId,
-        BlockNumber,
-    ),
+    ShareWeightedVoteThresholdWithOneSupervisorVetoRights(OrgId, u32, AccountId, BlockNumber),
     ShareWeightedVoteThresholdWithTwoSupervisorsVetoRights(
         OrgId,
-        ShareId,
         u32,
         AccountId,
         AccountId,
         BlockNumber,
     ),
     /// 1 person 1 vote, u32 threshold for approval, but everyone has veto rights, for BlockNumber after approval
-    OnePersonOneVoteThresholdWithFullOrgShareVetoRights(OrgId, ShareId, u32, BlockNumber),
+    OnePersonOneVoteThresholdWithFullOrgShareVetoRights(OrgId, u32, BlockNumber),
     /// 1 person 1 vote, u32 threshold; only the second share group has veto rights (also must be flat!), for BlockNumber after approval
-    OnePersonOneVoteThresholdANDVetoEnabledGroup(OrgId, ShareId, u32, ShareId, BlockNumber),
+    OnePersonOneVoteThresholdANDVetoEnabledGroup(OrgId, u32, OrgId, BlockNumber),
     /// ShareWeighted vote, u32 threshold for approval, but everyone has veto rights, for BlockNumber after approval
-    ShareWeightedVoteThresholdWithFullOrgShareVetoRights(OrgId, ShareId, u32, BlockNumber),
-    /// ShareWeighted vote, u32 threshold for approval, but everyone has veto rights, for BlockNumber after approval
-    ShareWeightedVoteThresholdANDVetoEnabledGroup(OrgId, ShareId, u32, ShareId, BlockNumber),
+    ShareWeightedVoteThresholdWithFullOrgShareVetoRights(OrgId, u32, BlockNumber),
+    /// ShareWeighted vote, u32 threshold for approval, but everyone in second org has veto rights, for BlockNumber after approval
+    ShareWeightedVoteThresholdANDVetoEnabledGroup(OrgId, u32, OrgId, BlockNumber),
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
@@ -224,49 +184,4 @@ pub enum EnforcedOutcome<AccountId> {
     /// Swap the first account for the second account in the same role for a grant team
     /// (OrgId, ShareId)
     SwapRoleOnGrantTeam(u32, u32, AccountId, AccountId),
-}
-
-#[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug)]
-/// These are the types of formed and registered organizations in the `bank` module
-pub enum FormedOrganization<
-    OrgId: Codec + PartialEq + Zero + From<u32> + Copy,
-    ShareId: Codec + PartialEq + Zero + From<u32> + Copy,
-> {
-    FlatOrg(OrgId),
-    FlatShares(OrgId, ShareId),
-    WeightedShares(OrgId, ShareId),
-}
-
-impl<
-        OrgId: Codec + PartialEq + Zero + From<u32> + Copy,
-        ShareId: Codec + PartialEq + Zero + From<u32> + Copy,
-    > Default for FormedOrganization<OrgId, ShareId>
-{
-    fn default() -> FormedOrganization<OrgId, ShareId> {
-        // default org, might be endowed with _special_ power
-        FormedOrganization::FlatOrg(OrgId::zero())
-    }
-}
-
-impl<
-        OrgId: Codec + PartialEq + Zero + From<u32> + Copy,
-        ShareId: Codec + PartialEq + Zero + From<u32> + Copy,
-    > From<OrgId> for FormedOrganization<OrgId, ShareId>
-{
-    fn from(other: OrgId) -> FormedOrganization<OrgId, ShareId> {
-        FormedOrganization::FlatOrg(other)
-    }
-}
-
-impl<
-        OrgId: Codec + PartialEq + Zero + From<u32> + Copy,
-        ShareId: Codec + PartialEq + Zero + From<u32> + Copy,
-    > From<(OrgId, ShareID<ShareId>)> for FormedOrganization<OrgId, ShareId>
-{
-    fn from(other: (OrgId, ShareID<ShareId>)) -> FormedOrganization<OrgId, ShareId> {
-        match other.1 {
-            ShareID::Flat(share_id) => FormedOrganization::FlatShares(other.0, share_id),
-            ShareID::Weighted(share_id) => FormedOrganization::WeightedShares(other.0, share_id),
-        }
-    }
 }

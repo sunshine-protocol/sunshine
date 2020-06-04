@@ -18,9 +18,6 @@ sp-runtime = { version = "2.0.0-rc2", default-features = false }
 frame-support = { version = "2.0.0-rc2", default-features = false }
 frame-system = { version = "2.0.0-rc2", default-features = false }
 util = { package = "sunshine-util", path = "../util", default-features = false }
-membership = { package = "sunshine-membership", path = "../membership", default-features = false }
-shares-membership = { package = "sunshine-shares-membership", path = "../shares-membership", default-features = false }
-shares-atomic = { package = "sunshine-shares-atomic", path = "../shares-atomic", default-features = false }
 org = { package = "sunshine-org", path = "../org", default-features=false}
 clear_on_drop = { version = "0.2.3", features = ["no_cc"] } # https://github.com/paritytech/substrate/issues/4179
 
@@ -39,8 +36,4 @@ std = [
     "frame-support/std",
     "frame-system/std",
     "pallet-balances/std",
-    "membership/std",
-    "shares-membership/std",
-    "shares-atomic/std",
-    "org/std",
 ]
