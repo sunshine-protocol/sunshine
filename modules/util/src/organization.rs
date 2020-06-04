@@ -4,6 +4,59 @@ use sp_runtime::{traits::Zero, RuntimeDebug};
 use sp_std::prelude::*;
 
 #[derive(new, PartialEq, Eq, Default, Clone, Encode, Decode, RuntimeDebug)]
+/// The struct to track the organization's state
+pub struct Organization<AccountId, Id: Codec + PartialEq + Zero + From<u32> + Copy, Hash> {
+    /// The default sudo for this organization, optional because not _encouraged_
+    sudo: Option<AccountId>,
+    /// The parent organization for this organization
+    parent_id: Option<Id>,
+    /// The constitution
+    constitution: Hash,
+}
+
+impl<
+        AccountId: Clone + PartialEq,
+        Id: Codec + PartialEq + Zero + From<u32> + Copy,
+        Hash: Clone,
+    > Organization<AccountId, Id, Hash>
+{
+    pub fn parent(&self) -> Option<Id> {
+        self.parent_id
+    }
+    pub fn constitution(&self) -> Hash {
+        self.constitution.clone()
+    }
+    pub fn is_parent(&self, cmp: Id) -> bool {
+        if let Some(unwrapped_parent) = self.parent_id {
+            unwrapped_parent == cmp
+        } else {
+            false
+        }
+    }
+    pub fn is_sudo(&self, cmp: &AccountId) -> bool {
+        if let Some(unwrapped_sudo) = &self.sudo {
+            unwrapped_sudo == cmp
+        } else {
+            false
+        }
+    }
+    pub fn clear_sudo(&self) -> Self {
+        Organization {
+            sudo: None,
+            parent_id: self.parent_id,
+            constitution: self.constitution.clone(),
+        }
+    }
+    pub fn put_sudo(&self, new_sudo: AccountId) -> Self {
+        Organization {
+            sudo: Some(new_sudo),
+            parent_id: self.parent_id,
+            constitution: self.constitution.clone(),
+        }
+    }
+}
+
+#[derive(new, PartialEq, Eq, Default, Clone, Encode, Decode, RuntimeDebug)]
 /// Static terms of agreement, define how the enforced payout structure for grants
 pub struct TermsOfAgreement<AccountId, Shares> {
     /// If Some(account), then account is the sudo for the duration of the grant
@@ -145,24 +198,6 @@ pub enum EnforcedOutcome<AccountId> {
     /// Swap the first account for the second account in the same role for a grant team
     /// (OrgId, ShareId)
     SwapRoleOnGrantTeam(u32, u32, AccountId, AccountId),
-}
-
-#[derive(new, PartialEq, Eq, Default, Clone, Encode, Decode, RuntimeDebug)]
-/// The struct to track the `ShareId`s and `Index` associated with an organization
-pub struct Organization<Id: Codec + PartialEq + Zero + From<u32> + Copy, Hash> {
-    /// The supervising ShareId for the organization, like a Board of Directors
-    admin_id: ShareID<Id>,
-    /// The constitution
-    constitution: Hash,
-}
-
-impl<Id: Codec + PartialEq + Zero + From<u32> + Copy, Hash: Clone> Organization<Id, Hash> {
-    pub fn admin_id(&self) -> ShareID<Id> {
-        self.admin_id
-    }
-    pub fn constitution(&self) -> Hash {
-        self.constitution.clone()
-    }
 }
 
 #[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug)]

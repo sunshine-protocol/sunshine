@@ -38,93 +38,81 @@ pub trait ChainSudoPermissions<AccountId> {
 
 pub trait OrganizationSupervisorPermissions<OrgId, AccountId> {
     fn is_organization_supervisor(org: OrgId, who: &AccountId) -> bool;
-    // infallible
-    fn put_organization_supervisor(org: OrgId, who: AccountId);
-    // fallible, cas by default
-    fn set_organization_supervisor(
-        org: OrgId,
-        old_supervisor: &AccountId,
-        new_supervisor: AccountId,
-    ) -> DispatchResult;
-}
-
-pub trait SubGroupSupervisorPermissions<OrgId, S1, AccountId> {
-    fn is_sub_group_supervisor(org: OrgId, sub_group: S1, who: &AccountId) -> bool;
-    // infallible
-    fn put_sub_group_supervisor(org: OrgId, sub_group: S1, who: AccountId);
-    // fallible, case by default
-    fn set_sub_group_supervisor(
-        org: OrgId,
-        sub_group: S1,
-        old_supervisor: &AccountId,
-        new_supervisor: AccountId,
-    ) -> DispatchResult;
-}
-
-pub trait SubSubGroupSupervisorPermissions<OrgId, S1, S2, AccountId> {
-    fn is_sub_sub_group_organization_supervisor(
-        org: OrgId,
-        sub_group: S1,
-        sub_sub_group: S2,
-        who: &AccountId,
-    ) -> bool;
-    // infallible
-    fn put_sub_sub_group_organization_supervisor(
-        org: OrgId,
-        sub_group: S1,
-        sub_sub_group: S2,
-        who: AccountId,
-    );
-    // fallible, cas by default
-    fn set_sub_sub_group_supervisor(
-        org: OrgId,
-        sub_group: S1,
-        sub_sub_group: S2,
-        old_supervisor: &AccountId,
-        new_supervisor: AccountId,
-    ) -> DispatchResult;
+    // removes any existing sudo and places None
+    fn clear_organization_supervisor(org: OrgId) -> DispatchResult;
+    // removes any existing sudo and places `who`
+    fn put_organization_supervisor(org: OrgId, who: AccountId) -> DispatchResult;
 }
 
 // ---------- Membership Logic ----------
-pub trait GetGroupSize<OrgId, ShareId> {
+pub trait GetGroupSize<OrgId> {
     fn get_size_of_group(org_id: OrgId) -> u32;
-    fn get_size_of_subgroup(org_id: OrgId, share_id: ShareId) -> u32;
 }
 
 /// Checks that the `AccountId` is a member of a share group in an organization
-pub trait GroupMembership<OrgId, ShareId, AccountId>: GetGroupSize<OrgId, ShareId> {
+pub trait GroupMembership<OrgId, AccountId>: GetGroupSize<OrgId> {
     fn is_member_of_group(org_id: OrgId, who: &AccountId) -> bool;
-    fn is_member_of_subgroup(org_id: OrgId, share_id: ShareId, who: &AccountId) -> bool;
 }
 
 /// All changes to the organizational membership are infallible
-pub trait ChangeGroupMembership<OrgId, ShareId, AccountId>:
-    GroupMembership<OrgId, ShareId, AccountId>
-{
-    fn add_member_to_org(org_id: OrgId, new_member: AccountId, batch: bool);
-    fn remove_member_from_org(org_id: OrgId, old_member: AccountId, batch: bool);
-    fn add_member_to_sub_org(org_id: OrgId, share_id: ShareId, new_member: AccountId, batch: bool);
-    fn remove_member_from_sub_org(
-        org_id: OrgId,
-        share_id: ShareId,
-        old_member: AccountId,
-        batch: bool,
-    );
+pub trait ChangeGroupMembership<OrgId, AccountId>: GroupMembership<OrgId, AccountId> {
+    fn add_member_to_org(org_id: OrgId, new_member: AccountId, batch: bool) -> DispatchResult;
+    fn remove_member_from_org(org_id: OrgId, old_member: AccountId, batch: bool) -> DispatchResult;
     /// WARNING: the vector fed as inputs to the following methods must have NO duplicates
-    fn batch_add_members_to_org(org_id: OrgId, new_members: Vec<AccountId>);
-    fn batch_remove_members_from_org(org_id: OrgId, old_members: Vec<AccountId>);
-    fn batch_add_members_to_sub_org(org_id: OrgId, share_id: ShareId, new_members: Vec<AccountId>);
-    fn batch_remove_members_from_sub_org(
-        org_id: OrgId,
-        share_id: ShareId,
-        old_members: Vec<AccountId>,
-    );
+    fn batch_add_members_to_org(org_id: OrgId, new_members: Vec<AccountId>) -> DispatchResult;
+    fn batch_remove_members_from_org(org_id: OrgId, old_members: Vec<AccountId>) -> DispatchResult;
 }
-pub trait GetFlatShareGroup<OrgId, ShareId, AccountId> {
-    fn get_organization_share_group(
+pub trait GetGroup<OrgId, AccountId> {
+    fn get_group(organization: OrgId) -> Option<Vec<AccountId>>;
+}
+pub trait ShareInformation<OrgId, AccountId, Shares> {
+    type Profile: AccessProfile<Shares>;
+    type Genesis: From<Vec<(AccountId, Shares)>>
+        + Into<SimpleShareGenesis<AccountId, Shares>>
+        + VerifyShape
+        + AccessGenesis<AccountId, Shares>;
+    /// Gets the total number of shares issued for an organization's share identifier
+    fn outstanding_shares(organization: OrgId) -> Shares;
+    // get who's share profile
+    fn get_share_profile(organization: OrgId, who: &AccountId) -> Option<Self::Profile>;
+    /// Returns the entire membership group associated with a share identifier, fallible bc checks existence
+    fn get_membership_with_shape(organization: OrgId) -> Option<Self::Genesis>;
+}
+pub trait ShareIssuance<OrgId, AccountId, Shares>:
+    ShareInformation<OrgId, AccountId, Shares>
+{
+    fn issue(
         organization: OrgId,
-        share_id: ShareId,
-    ) -> Option<Vec<AccountId>>;
+        new_owner: AccountId,
+        amount: Shares,
+        batch: bool,
+    ) -> DispatchResult;
+    fn burn(
+        organization: OrgId,
+        old_owner: AccountId,
+        amount: Shares,
+        batch: bool,
+    ) -> DispatchResult;
+    fn batch_issue(organization: OrgId, genesis: Self::Genesis) -> DispatchResult;
+    fn batch_burn(organization: OrgId, genesis: Self::Genesis) -> DispatchResult;
+}
+pub trait ReserveProfile<OrgId, AccountId, Shares>:
+    ShareIssuance<OrgId, AccountId, Shares>
+{
+    fn reserve(
+        organization: OrgId,
+        who: &AccountId,
+        amount: Option<Shares>,
+    ) -> Result<Shares, DispatchError>;
+    fn unreserve(
+        organization: OrgId,
+        who: &AccountId,
+        amount: Option<Shares>,
+    ) -> Result<Shares, DispatchError>;
+}
+pub trait LockProfile<OrgId, AccountId> {
+    fn lock_profile(organization: OrgId, who: &AccountId) -> DispatchResult;
+    fn unlock_profile(organization: OrgId, who: &AccountId) -> DispatchResult;
 }
 // --
 // GetTotalShareIssuance is in WeightedShareGroup::outstanding_shares
@@ -205,9 +193,6 @@ pub trait AccessGenesis<AccountId, Shares> {
 }
 pub trait AccessProfile<Shares> {
     fn total(&self) -> Shares;
-}
-pub trait PassShareIdDown {
-    type ShareId: Parameter + Member + AtLeast32Bit + Codec;
 }
 pub trait WeightedShareGroup<OrgId, ShareId, AccountId> {
     type Shares: Parameter + Member + AtLeast32Bit + Codec;

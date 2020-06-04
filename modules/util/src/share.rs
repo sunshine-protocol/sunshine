@@ -4,30 +4,6 @@ use frame_support::Parameter;
 use sp_runtime::{traits::Zero, RuntimeDebug};
 use sp_std::prelude::*;
 
-#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug)]
-pub enum ShareIdTypes {
-    Flat,
-    Weighted,
-}
-
-impl Default for ShareIdTypes {
-    fn default() -> Self {
-        ShareIdTypes::Flat
-    }
-}
-
-#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug)]
-pub enum ShareID<Id: Codec + PartialEq + Zero + From<u32> + Copy> {
-    Flat(Id),
-    Weighted(Id),
-}
-
-impl<Id: Codec + PartialEq + Zero + From<u32> + Copy> Default for ShareID<Id> {
-    fn default() -> Self {
-        ShareID::Flat(Id::zero())
-    }
-}
-
 #[derive(PartialEq, Eq, Default, Copy, Clone, Encode, Decode, RuntimeDebug)]
 /// share profile reserves the total share amount every time but (might) have a limit on total reservations
 pub struct ShareProfile<Shares> {
@@ -165,5 +141,30 @@ impl<
             sum = sum + ac.1
         }
         sum == self.total
+    }
+}
+
+// TODO: Delete, not using this anymore but keep for a hot sec
+#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug)]
+pub enum ShareIdTypes {
+    Flat,
+    Weighted,
+}
+
+impl Default for ShareIdTypes {
+    fn default() -> Self {
+        ShareIdTypes::Flat
+    }
+}
+
+#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug)]
+pub enum ShareID<Id: Codec + PartialEq + Zero + From<u32> + Copy> {
+    Flat(Id),
+    Weighted(Id),
+}
+
+impl<Id: Codec + PartialEq + Zero + From<u32> + Copy> Default for ShareID<Id> {
+    fn default() -> Self {
+        ShareID::Flat(Id::zero())
     }
 }
