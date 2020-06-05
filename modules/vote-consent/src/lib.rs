@@ -8,9 +8,6 @@
 //! share-weighted threshold or counting complexity
 
 #[cfg(test)]
-mod mock;
-
-#[cfg(test)]
 mod tests;
 
 use codec::Codec;
@@ -29,9 +26,6 @@ use util::{
         SignPetition, UpdatePetition, UpdatePetitionTerms,
     },
 };
-
-/// The petition identifier
-pub type PetitionId = u32;
 
 pub trait Trait: frame_system::Trait + org::Trait {
     type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
