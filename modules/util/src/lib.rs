@@ -16,5 +16,4 @@ pub mod proposal;
 pub mod schedule;
 pub mod share;
 pub mod traits;
-pub mod uuid;
 pub mod voteyesno;

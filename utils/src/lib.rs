@@ -32,7 +32,7 @@ impl Default for CidBytes {
 
 impl PartialEq for CidBytes {
     fn eq(&self, other: &Self) -> bool {
-        &self.0[..] == &other.0[..]
+        self.0[..] == other.0[..]
     }
 }
 

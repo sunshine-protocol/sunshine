@@ -33,27 +33,18 @@ pub type IpfsReference = Vec<u8>;
 
 /// The organization identifier
 pub type OrgId = u32;
-
-/// The share group identifier
-pub type ShareId = u32;
-
 /// The petition identifier
 pub type PetitionId = u32;
 
 pub trait Trait: frame_system::Trait {
     type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 
+    type IpfsReference; // Codec + Parameter at least
+
     /// Just used for permissions in this module
     type OrgData: GroupMembership<Self::AccountId>
         + ChainSudoPermissions<Self::AccountId>
         + OrganizationSupervisorPermissions<u32, Self::AccountId>;
-
-    /// An instance of `SharesMembership`
-    type ShareData: GetGroupSize<GroupId = UUID2>
-        + GroupMembership<Self::AccountId, GroupId = UUID2>
-        + SubGroupSupervisorPermissions<u32, u32, Self::AccountId>
-        + ChangeGroupMembership<Self::AccountId>
-        + GetFlatShareGroup<Self::AccountId>;
 }
 
 decl_event!(

@@ -6,9 +6,7 @@ use frame_support::{impl_outer_event, impl_outer_origin, parameter_types, weight
 use sp_core::H256;
 use sp_runtime::{testing::Header, traits::IdentityLookup, Perbill};
 
-// type aliases
 pub type AccountId = u64;
-pub type Shares = u64;
 pub type BlockNumber = u64;
 
 impl_outer_origin! {
@@ -22,9 +20,6 @@ mod org {
 impl_outer_event! {
     pub enum TestEvent for TestRuntime {
         system<T>,
-        membership<T>,
-        shares_membership<T>,
-        shares_atomic<T>,
         org<T>,
     }
 }
@@ -63,32 +58,17 @@ impl frame_system::Trait for TestRuntime {
     type OnNewAccount = ();
     type OnKilledAccount = ();
 }
-impl membership::Trait for TestRuntime {
-    type Event = TestEvent;
-}
-impl shares_membership::Trait for TestRuntime {
-    type Event = TestEvent;
-    type OrgData = membership::Module<TestRuntime>;
-}
-impl shares_atomic::Trait for TestRuntime {
-    type Event = TestEvent;
-    type OrgData = membership::Module<TestRuntime>;
-    type Shares = Shares;
-    type ReservationLimit = ReservationLimit;
-}
 impl Trait for TestRuntime {
     type Event = TestEvent;
-    type OrgData = OrgMembership;
-    type FlatShareData = FlatShareData;
-    type WeightedShareData = WeightedShareData;
+    type IpfsReference = u32; // TODO: replace with utils_identity::Cid
+    type OrgId = u64;
+    type Shares = u64;
+    type ReservationLimit = ReservationLimit;
 }
 pub type System = system::Module<TestRuntime>;
-pub type OrgMembership = membership::Module<TestRuntime>;
-pub type FlatShareData = shares_membership::Module<TestRuntime>;
-pub type WeightedShareData = shares_atomic::Module<TestRuntime>;
 pub type Org = Module<TestRuntime>;
 
-fn get_last_event() -> RawEvent<u64> {
+fn get_last_event() -> RawEvent<u64, u64, u64, u32> {
     System::events()
         .into_iter()
         .map(|r| r.event)
@@ -107,27 +87,9 @@ fn new_test_ext() -> sp_io::TestExternalities {
     let mut t = frame_system::GenesisConfig::default()
         .build_storage::<TestRuntime>()
         .unwrap();
-    membership::GenesisConfig::<TestRuntime> {
-        omnipotent_key: 1,
-        membership: None,
-    }
-    .assimilate_storage(&mut t)
-    .unwrap();
-    shares_membership::GenesisConfig::<TestRuntime> {
-        share_supervisors: None,
-        shareholder_membership: None,
-    }
-    .assimilate_storage(&mut t)
-    .unwrap();
-    shares_atomic::GenesisConfig::<TestRuntime> {
-        share_supervisors: None,
-        shareholder_membership: None,
-    }
-    .assimilate_storage(&mut t)
-    .unwrap();
     GenesisConfig::<TestRuntime> {
         first_organization_supervisor: 1,
-        first_organization_value_constitution: b"build cool shit".to_vec(),
+        first_organization_value_constitution: 1738,
         first_organization_flat_membership: vec![1, 2, 3, 4, 5, 6],
     }
     .assimilate_storage(&mut t)
@@ -141,15 +103,13 @@ fn new_test_ext() -> sp_io::TestExternalities {
 fn genesis_config_works() {
     new_test_ext().execute_with(|| {
         assert_eq!(Org::organization_counter(), 1);
-        let constitution = b"build cool shit".to_vec();
-        let expected_organization = Organization::new(ShareID::Flat(1u32), constitution.clone());
-        let org_in_storage = Org::organization_states(1u32).unwrap();
+        let constitution = 1738;
+        let expected_organization = Organization::new(Some(1), None, constitution);
+        let org_in_storage = Org::organization_states(1u64).unwrap();
         assert_eq!(expected_organization, org_in_storage);
-        // check membership from membership module
         for i in 1u64..7u64 {
-            assert!(OrgMembership::is_member_of_group(1u32, &i));
+            assert!(Org::is_member_of_group(1u64, &i));
         }
-        // I guess the events are empty at genesis despite our use of the module's runtime methods for build() in extra genesis
         assert!(System::events().is_empty());
     });
 }
@@ -159,167 +119,171 @@ fn organization_registration() {
     new_test_ext().execute_with(|| {
         let one = Origin::signed(1);
         let accounts = vec![1, 2, 3, 9, 10];
-        let constitution: &[u8] = b"no talking about fight club";
-        // next line is registration call
-        assert_ok!(Org::register_organization_from_accounts(
+        let constitution = 1110011;
+        assert_ok!(Org::register_flat_org(
             one.clone(),
-            constitution.clone().to_vec(),
+            Some(1),
+            None,
+            constitution,
             accounts,
-            Some(1),
         ));
-        // check organization count changed as expected
         assert_eq!(Org::organization_counter(), 2);
-        // Event Emittance in Tests Consistently Fails -- this mystery needs to be solved in order to test...
         assert_eq!(
             get_last_event(),
-            RawEvent::NewOrganizationRegistered(1, 2, ShareID::Flat(1), constitution.to_vec()),
+            RawEvent::NewFlatOrganizationRegistered(1, 2, constitution, 5),
         );
-        let third_org_accounts = vec![1, 2, 3, 9, 10];
-        let third_org_constitution: &[u8] = b"no talking about fight club";
-        // next line is registration call
-        assert_ok!(Org::register_organization_from_accounts(
+        let third_org_accounts = vec![(1, 10), (2, 10), (3, 10), (9, 10), (10, 10)];
+        let third_org_constitution = 9669;
+        assert_ok!(Org::register_weighted_org(
             one.clone(),
-            third_org_constitution.clone().to_vec(),
-            third_org_accounts,
             Some(1),
+            None,
+            third_org_constitution,
+            third_org_accounts,
         ));
-        // check organization count changed as expected
         assert_eq!(Org::organization_counter(), 3);
-        // Event Emittance in Tests Consistently Fails -- this mystery needs to be solved in order to test...
         assert_eq!(
             get_last_event(),
-            RawEvent::NewOrganizationRegistered(
-                1,
-                3,
-                ShareID::Flat(1),
-                third_org_constitution.to_vec()
-            ),
+            RawEvent::NewWeightedOrganizationRegistered(1, 3, third_org_constitution, 50,),
         );
     });
 }
 
-#[test]
-fn flat_inner_share_registration_in_organization() {
-    new_test_ext().execute_with(|| {
-        let one = Origin::signed(1);
-        let accounts = vec![1, 2, 3, 9, 10];
-        assert_ok!(Org::register_inner_flat_share_group_for_organization(
-            one.clone(),
-            1u32,
-            accounts
-        ));
-        // check if the share group was registered
-        assert_eq!(
-            get_last_event(),
-            RawEvent::FlatInnerShareGroupAddedToOrg(1, 1, ShareID::Flat(2)),
-        );
-        let second_share_group = vec![1, 2, 3, 9, 10, 11, 12, 13, 14];
-        assert_ok!(Org::register_inner_flat_share_group_for_organization(
-            one.clone(),
-            1u32,
-            second_share_group
-        ));
-        assert_eq!(
-            get_last_event(),
-            RawEvent::FlatInnerShareGroupAddedToOrg(1, 1, ShareID::Flat(3)),
-        );
-        let third_share_group = vec![1, 2, 3, 9, 10, 11, 12, 13, 14, 17, 18, 19, 30];
-        assert_ok!(Org::register_inner_flat_share_group_for_organization(
-            one,
-            1u32,
-            third_share_group
-        ));
-        assert_eq!(
-            get_last_event(),
-            RawEvent::FlatInnerShareGroupAddedToOrg(1, 1, ShareID::Flat(4)),
-        );
-        // check these share groups existence
-        for i in 1u32..5u32 {
-            assert!(Org::organization_inner_shares(1, ShareID::Flat(i)));
-        }
-        // check that some members are in each group as expected
-        let two_prefix = UUID2::new(1u32, 2u32);
-        let three_prefix = UUID2::new(1u32, 3u32);
-        let four_prefix = UUID2::new(1u32, 4u32);
-        assert!(FlatShareData::is_member_of_group(two_prefix, &10u64));
-        assert!(FlatShareData::is_member_of_group(three_prefix, &14u64));
-        assert!(FlatShareData::is_member_of_group(four_prefix, &30u64));
-    });
-}
+// #[test]
+// fn share_reservation() {
+//     new_test_ext().execute_with(|| {
+//         let one = Origin::signed(1);
+//         assert_ok!(Org::reserve_shares(one.clone(), 1, 1, 1));
+//         let profile = Org::members(1, 1).unwrap();
+//         let first_times_reserved = profile.times_reserved();
+//         // // check that method calculates correctly
+//         assert_eq!(first_times_reserved, 1);
+//         assert_ok!(AtomicShares::reserve_shares(one.clone(), 1, 1, 1));
+//         let second_profile = AtomicShares::profile(prefix_key, 1).unwrap();
+//         let second_times_reserved = second_profile.times_reserved();
+//         assert_eq!(second_times_reserved, 2);
+//         let mut n = 0u32;
+//         while n < 20 {
+//             assert_ok!(AtomicShares::reserve_shares(one.clone(), 1, 1, 1));
+//             n += 1;
+//         }
+//         let n_profile = AtomicShares::profile(prefix_key, 1).unwrap();
+//         let n_times_reserved = n_profile.times_reserved();
+//         assert_eq!(n_times_reserved, 22);
 
-#[test]
-fn weighted_inner_share_registration_for_organization() {
-    new_test_ext().execute_with(|| {
-        let one = Origin::signed(1);
-        let weighted_accounts = vec![(1, 10), (2, 10), (3, 20), (9, 20), (10, 40)];
-        assert_ok!(Org::register_inner_weighted_share_group_for_organization(
-            one.clone(),
-            1u32,
-            weighted_accounts
-        ));
-        // check if the share group was registered
-        assert_eq!(
-            get_last_event(),
-            RawEvent::WeightedInnerShareGroupAddedToOrg(1, 1, ShareID::Weighted(1)),
-        );
-        let second_weighted_accounts = vec![(16, 10), (23, 10), (42, 20), (99, 20), (101, 40)];
-        assert_ok!(Org::register_inner_weighted_share_group_for_organization(
-            one.clone(),
-            1u32,
-            second_weighted_accounts
-        ));
-        // check if the share group was registered
-        assert_eq!(
-            get_last_event(),
-            RawEvent::WeightedInnerShareGroupAddedToOrg(1, 1, ShareID::Weighted(2)),
-        );
-        let third_weighted_accounts =
-            vec![(12, 10), (19, 10), (73, 20), (77, 20), (79, 40), (81, 100)];
-        assert_ok!(Org::register_inner_weighted_share_group_for_organization(
-            one.clone(),
-            1u32,
-            third_weighted_accounts
-        ));
-        // check if the share group was registered
-        assert_eq!(
-            get_last_event(),
-            RawEvent::WeightedInnerShareGroupAddedToOrg(1, 1, ShareID::Weighted(3)),
-        );
-        let fourth_weighted_accounts = vec![(1, 10), (2, 10), (3, 20), (4, 20), (5, 40), (6, 100)];
-        assert_ok!(Org::register_inner_weighted_share_group_for_organization(
-            one.clone(),
-            1u32,
-            fourth_weighted_accounts
-        ));
-        // check if the share group was registered
-        assert_eq!(
-            get_last_event(),
-            RawEvent::WeightedInnerShareGroupAddedToOrg(1, 1, ShareID::Weighted(4)),
-        );
-        // check that some members are in each group as expected
-        assert_eq!(
-            WeightedShareData::get_share_profile(1u32, 1u32, &9u64)
-                .unwrap()
-                .total(),
-            20u64
-        );
-        assert_eq!(
-            WeightedShareData::get_share_profile(1u32, 2u32, &101u64)
-                .unwrap()
-                .total(),
-            40u64
-        );
-        assert_eq!(
-            WeightedShareData::get_share_profile(1u32, 3u32, &73u64)
-                .unwrap()
-                .total(),
-            20u64
-        );
-        assert_eq!(
-            WeightedShareData::get_share_profile(1u32, 4u32, &6u64)
-                .unwrap()
-                .total(),
-            100u64
-        );
-    });
-} // TODO: weighted_outer_share_registration (I assume it works because the other two do and it's the same logic)
+//         // check same logic with another member of the first group
+//         assert_ok!(AtomicShares::reserve_shares(one.clone(), 1, 1, 2));
+//         let a_profile = AtomicShares::profile(prefix_key, 2).unwrap();
+//         let a_first_times_reserved = a_profile.times_reserved();
+//         // // check that method calculates correctly
+//         assert_eq!(a_first_times_reserved, 1);
+//         assert_ok!(AtomicShares::reserve_shares(one.clone(), 1, 1, 2));
+//         let a_second_profile = AtomicShares::profile(prefix_key, 2).unwrap();
+//         let a_second_times_reserved = a_second_profile.times_reserved();
+//         assert_eq!(a_second_times_reserved, 2);
+//         let mut a_n = 0u32;
+//         while a_n < 20 {
+//             assert_ok!(AtomicShares::reserve_shares(one.clone(), 1, 1, 2));
+//             a_n += 1;
+//         }
+//         let a_n_profile = AtomicShares::profile(prefix_key, 2).unwrap();
+//         let a_n_times_reserved = a_n_profile.times_reserved();
+//         assert_eq!(a_n_times_reserved, 22);
+//     });
+// }
+
+// #[test]
+// fn share_unreservation() {
+//     new_test_ext().execute_with(|| {
+//         let one = Origin::signed(1);
+//         assert_ok!(AtomicShares::reserve_shares(one.clone(), 1, 1, 1));
+//         let prefix_key = UUID2::new(1, 1);
+//         let profile = AtomicShares::profile(prefix_key, 1).unwrap();
+//         let first_times_reserved = profile.times_reserved();
+//         // // check that method calculates correctly
+//         assert_eq!(first_times_reserved, 1);
+//         assert_ok!(AtomicShares::unreserve_shares(one.clone(), 1, 1, 1));
+//         let un_profile = AtomicShares::profile(prefix_key, 1).unwrap();
+//         let first_times_un_reserved = un_profile.times_reserved();
+//         // // check that method calculates correctly
+//         assert_eq!(first_times_un_reserved, 0);
+//     });
+// }
+
+// #[test]
+// fn share_lock() {
+//     new_test_ext().execute_with(|| {
+//         let one = Origin::signed(1);
+//         let prefix_key = UUID2::new(1, 1);
+//         let profile = AtomicShares::profile(prefix_key, 1).unwrap();
+//         let unlocked = profile.is_unlocked();
+//         assert_eq!(unlocked, true);
+//         assert_ok!(AtomicShares::lock_shares(one.clone(), 1, 1, 1));
+//         let locked_profile = AtomicShares::profile(prefix_key, 1).unwrap();
+//         let locked = !locked_profile.is_unlocked();
+//         assert_eq!(locked, true);
+//     });
+// }
+
+// #[test]
+// fn share_unlock() {
+//     new_test_ext().execute_with(|| {
+//         let one = Origin::signed(1);
+//         let prefix_key = UUID2::new(1, 1);
+//         let profile = AtomicShares::profile(prefix_key, 1).unwrap();
+//         let unlocked = profile.is_unlocked();
+//         assert_eq!(unlocked, true);
+//         assert_ok!(AtomicShares::lock_shares(one.clone(), 1, 1, 1));
+//         let locked_profile = AtomicShares::profile(prefix_key, 1).unwrap();
+//         let locked = !locked_profile.is_unlocked();
+//         assert_eq!(locked, true);
+//         assert_ok!(AtomicShares::unlock_shares(one.clone(), 1, 1, 1));
+//         let unlocked_profile = AtomicShares::profile(prefix_key, 1).unwrap();
+//         let is_unlocked = unlocked_profile.is_unlocked();
+//         assert_eq!(is_unlocked, true);
+//     });
+// }
+
+// #[test]
+// fn share_issuance() {
+//     new_test_ext().execute_with(|| {
+//         let one = Origin::signed(1);
+//         let prefix_key = UUID2::new(1, 1);
+//         let pre_profile = AtomicShares::profile(prefix_key, 10).unwrap();
+//         let pre_shares = pre_profile.total();
+
+//         assert_eq!(pre_shares, 10);
+//         // issue 10 new shares to 7
+//         assert_ok!(AtomicShares::issue_shares(one.clone(), 1, 1, 10, 10));
+
+//         let post_profile = AtomicShares::profile(prefix_key, 10).unwrap();
+//         let post_shares = post_profile.total();
+
+//         assert_eq!(post_shares, 20);
+//     });
+// }
+
+// #[test]
+// fn share_burn() {
+//     new_test_ext().execute_with(|| {
+//         let one = Origin::signed(1);
+//         let prefix_key = UUID2::new(1, 1);
+//         let pre_profile = AtomicShares::profile(prefix_key, 10).unwrap();
+//         let pre_shares = pre_profile.total();
+
+//         assert_eq!(pre_shares, 10);
+//         // issue 10 new shares to 10
+//         assert_ok!(AtomicShares::issue_shares(one.clone(), 1, 1, 10, 10));
+
+//         let pre_pre_profile = AtomicShares::profile(prefix_key, 10).unwrap();
+//         let pre_pre_shares = pre_pre_profile.total();
+
+//         assert_eq!(pre_pre_shares, 20);
+//         // burn 10 new shares for 10
+//         assert_ok!(AtomicShares::burn_shares(one.clone(), 1, 1, 10, 10));
+//         let post_profile = AtomicShares::profile(prefix_key, 10).unwrap();
+//         let post_shares = post_profile.total();
+
+//         assert_eq!(post_shares, 10);
+//     });
+// }

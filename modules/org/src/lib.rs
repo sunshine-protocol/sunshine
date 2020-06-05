@@ -3,7 +3,7 @@
 #![allow(clippy::redundant_closure_call)]
 #![allow(clippy::type_complexity)]
 #![cfg_attr(not(feature = "std"), no_std)]
-//! The org module is a shim for the membership modules for deeper inheritance
+//! This module expresses a framework for configurable group governance
 
 #[cfg(test)]
 mod tests;
@@ -12,15 +12,11 @@ use util::{
     organization::{Organization, OrganizationSource},
     share::{ShareProfile, SimpleShareGenesis},
     traits::{
-        AccessGenesis, AccessProfile, ChainSudoPermissions, ChangeGroupMembership,
-        FlatShareWrapper, GenerateUniqueID, GetGroup, GetGroupSize, GetInnerOuterShareGroups,
-        GroupMembership, IDIsAvailable, LockProfile, OrgChecks, OrganizationSupervisorPermissions,
-        RegisterOrganization, RegisterShareGroup, RemoveOrganization, ReserveProfile,
-        SeededGenerateUniqueID, ShareBank, ShareGroupChecks, ShareInformation, ShareIssuance,
-        SupervisorPermissions, VerifyShape, WeightedShareGroup, WeightedShareIssuanceWrapper,
-        WeightedShareWrapper,
-    },
-    uuid::ShareGroup,
+        AccessGenesis, ChainSudoPermissions, ChangeGroupMembership, GenerateUniqueID, GetGroup,
+        GetGroupSize, GroupMembership, IDIsAvailable, LockProfile,
+        OrganizationSupervisorPermissions, RegisterOrganization, RemoveOrganization,
+        ReserveProfile, ShareInformation, ShareIssuance, VerifyShape,
+    }, // AccessProfile, SeededGenerateUniqueID
 };
 
 use codec::Codec;
@@ -33,7 +29,7 @@ use frame_support::{
 use frame_system::{self as system, ensure_signed};
 use sp_runtime::{
     traits::{AtLeast32Bit, CheckedAdd, CheckedSub, MaybeSerializeDeserialize, Member, Zero},
-    DispatchError, DispatchResult, Permill,
+    DispatchError, DispatchResult,
 };
 use sp_std::{fmt::Debug, prelude::*};
 
@@ -41,8 +37,8 @@ pub trait Trait: system::Trait {
     /// Overarching event type
     type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 
-    /// Cid
-    type IpfsReference: Parameter + Member;
+    /// Cid type
+    type IpfsReference: Parameter + Member + Default;
 
     /// Organizational identifier
     type OrgId: Parameter
@@ -83,6 +79,10 @@ decl_event!(
         <T as Trait>::Shares,
         <T as Trait>::IpfsReference,
     {
+        /// No shares issued but an organization was registered with flat membership with the last `u32` as the number of members
+        NewFlatOrganizationRegistered(AccountId, OrgId, IpfsReference, u32),
+        /// Shares issued for a weighted ownership org s.t. the last element `Shares` is total issuance
+        NewWeightedOrganizationRegistered(AccountId, OrgId, IpfsReference, Shares),
         /// Organization ID, New Member Account ID, Amount Issued
         NewMemberAddedToOrg(OrgId, AccountId, Shares),
         /// Organization ID, Old Member Account Id, Amount Burned
@@ -107,10 +107,6 @@ decl_event!(
         SharesBatchIssued(OrgId, Shares),
         /// Organization ID, Total Shares Burned
         SharesBatchBurned(OrgId, Shares),
-        /// Organization ID, All Shares in Circulation
-        TotalSharesIssued(OrgId, Shares),
-        /// Registrar Account ID, _, Constitution reference and the total shares issued for this OrgId
-        NewOrganizationRegistered(AccountId, OrgId, IpfsReference, Shares),
     }
 );
 
@@ -119,36 +115,15 @@ decl_error! {
         UnAuthorizedSwapSudoRequest,
         NoExistingSudoKey,
         NotAuthorizedToChangeMembership,
-        OrganizationHasNoMembershipInStorage,
-        // ~~ SHARE GROUP ERRORS START ~~
-        ShareHolderGroupHasNoMembershipInStorage,
-        CantBurnSharesIfReferenceCountIsNone,
-        // ~~
-        ShareIdTypeNotShareMembershipVariantSoCantAddMembers,
-        ShareIdTypeNotAtomicSharesVariantSoCantAddMembers,
-        SpinOffCannotOccurFromNonExistentShareGroup,
-        /// This is an auth restriction to provide some anti-sybil mechanism for certain actions within the system
-        /// - the 0th organization is registered at genesis and its members are essentially sudo
-        /// - in the future, I'd like to be able to invite people to open an organization in a controlled way so that their
-        /// invitation takes a unique form
-        MustBeAMemberOf0thOrgToRegisterNewOrg,
-        MustHaveCertainAuthorityToRegisterInnerShares,
-        MustHaveCertainAuthorityToRegisterOuterShares,
-        FlatShareGroupNotFound,
-        WeightedShareGroupNotFound,
-        NoProfileFoundForAccountToBurn,
-        // --
         OrganizationMustExistToClearSupervisor,
         OrganizationMustExistToPutSupervisor,
         CannotAddAnExistingMemberToOrg,
         CannotRemoveNonMemberFromOrg,
-        // --
         CannotBurnMoreThanTotalIssuance,
         NotEnoughSharesToSatisfyBurnRequest,
         IssuanceCannotGoNegative,
         GenesisTotalMustEqualSumToUseBatchOps,
         IssuanceWouldOverflowShares,
-        /// If this is thrown, an invariant is broken and the alarm comes from `remove_member_from_org`
         IssuanceGoesNegativeWhileRemovingMember,
         CannotReserveMoreThanShareTotal,
         ReservationWouldExceedHardLimit,
@@ -159,22 +134,12 @@ decl_error! {
         CannotLockProfileThatDNE,
         CannotReserveIfMemberProfileDNE,
         CannotUnReserveIfMemberProfileDNE,
-        // --
-        CannotUnreserveWithZeroReservations,
-        ShareHolderMembershipUninitialized,
-        ProfileNotInstantiated,
-        CanOnlyBurnReservedShares,
-        CannotIssueToLockedProfile,
-        InitialIssuanceShapeIsInvalid,
-        CantReserveMoreThanShareTotal,
-        CannotBurnIfIssuanceDNE,
         OrganizationMustBeRegisteredToIssueShares,
         OrganizationMustBeRegisteredToBurnShares,
         OrganizationMustBeRegisteredToLockShares,
         OrganizationMustBeRegisteredToUnLockShares,
         OrganizationMustBeRegisteredToReserveShares,
         OrganizationMustBeRegisteredToUnReserveShares,
-        NotAuthorizedToRegisterShares,
         NotAuthorizedToLockShares,
         NotAuthorizedToUnLockShares,
         NotAuthorizedToReserveShares,
@@ -193,6 +158,9 @@ decl_storage! {
         /// Identity nonce for registering organizations
         OrgIdNonce get(fn org_id_counter): T::OrgId;
 
+        /// The total number of organizations registered at any given time
+        OrganizationCounter get(fn organization_counter): u32;
+
         /// The main storage item for Organization registration
         OrganizationStates get(fn organization_states): map
             hasher(blake2_128_concat) T::OrgId => Option<Organization<T::AccountId, T::OrgId, T::IpfsReference>>;
@@ -209,6 +177,21 @@ decl_storage! {
         /// The size for each organization
         OrganizationSize get(fn organization_size): map hasher(opaque_blake2_256) T::OrgId => u32;
     }
+    add_extra_genesis {
+        config(first_organization_supervisor): T::AccountId;
+        config(first_organization_value_constitution): T::IpfsReference;
+        config(first_organization_flat_membership): Vec<T::AccountId>;
+
+        build(|config: &GenesisConfig<T>| {
+            <Module<T>>::register_flat_org(
+                T::Origin::from(Some(config.first_organization_supervisor.clone()).into()),
+                Some(config.first_organization_supervisor.clone()),
+                None,
+                config.first_organization_value_constitution.clone(),
+                config.first_organization_flat_membership.clone(),
+            ).expect("first organization config set up failed");
+        })
+    }
 }
 
 decl_module! {
@@ -217,20 +200,40 @@ decl_module! {
         fn deposit_event() = default;
 
         #[weight = 0]
-        fn register_org(
+        fn register_flat_org(
             origin,
             sudo: Option<T::AccountId>,
             parent_org: Option<T::OrgId>,
             constitution: T::IpfsReference,
-            genesis: SimpleShareGenesis<T::AccountId, T::Shares>,
+            members: Vec<T::AccountId>,
         ) -> DispatchResult {
             let caller = ensure_signed(origin)?;
-            // TODO: auth based on parent_org and/or membership in 0 org
-            // TODO: move this into a trait? yes
-            let new_org = Organization::new(sudo, parent_org, constitution.clone());
-            let new_id = Self::generate_unique_id();
-            <OrganizationStates<T>>::insert(new_id, new_org);
-            Self::deposit_event(RawEvent::NewOrganizationRegistered(caller, new_id, constitution, T::Shares::zero()));
+            let total: u32 = members.len() as u32;
+            let new_id = if let Some(parent_id) = parent_org {
+                Self::register_sub_organization(parent_id, OrganizationSource::Accounts(members), sudo, constitution.clone())?
+            } else {
+                Self::register_organization(OrganizationSource::Accounts(members), sudo, constitution.clone())?
+            };
+            Self::deposit_event(RawEvent::NewFlatOrganizationRegistered(caller, new_id, constitution, total));
+            Ok(())
+        }
+        #[weight = 0]
+        fn register_weighted_org(
+            origin,
+            sudo: Option<T::AccountId>,
+            parent_org: Option<T::OrgId>,
+            constitution: T::IpfsReference,
+            weighted_members: Vec<(T::AccountId, T::Shares)>,
+        ) -> DispatchResult {
+            let caller = ensure_signed(origin)?;
+            // auth will usually be specific to the module context in which this is used
+            let wm_cpy: SimpleShareGenesis<T::AccountId, T::Shares> = weighted_members.clone().into();
+            let new_id = if let Some(parent_id) = parent_org {
+                Self::register_sub_organization(parent_id, OrganizationSource::AccountsWeighted(weighted_members), sudo, constitution.clone())?
+            } else {
+                Self::register_organization(OrganizationSource::AccountsWeighted(weighted_members), sudo, constitution.clone())?
+            };
+            Self::deposit_event(RawEvent::NewWeightedOrganizationRegistered(caller, new_id, constitution, wm_cpy.total()));
             Ok(())
         }
         #[weight = 0]
@@ -522,7 +525,9 @@ impl<T: Trait> RegisterOrganization<T::OrgId, T::AccountId, T::IpfsReference> fo
         let new_org_id = Self::generate_unique_id();
         let new_organization =
             Self::organization_from_src(source, new_org_id, None, supervisor, value_constitution)?;
+        let new_org_count = <OrganizationCounter>::get() + 1u32;
         <OrganizationStates<T>>::insert(new_org_id, new_organization);
+        <OrganizationCounter>::put(new_org_count);
         Ok(new_org_id)
     }
     fn register_sub_organization(
@@ -540,7 +545,9 @@ impl<T: Trait> RegisterOrganization<T::OrgId, T::AccountId, T::IpfsReference> fo
             supervisor,
             value_constitution,
         )?;
+        let new_org_count = <OrganizationCounter>::get() + 1u32;
         <OrganizationStates<T>>::insert(new_org_id, new_organization);
+        <OrganizationCounter>::put(new_org_count);
         Ok(new_org_id)
     }
 }
@@ -550,17 +557,19 @@ impl<T: Trait> RemoveOrganization<T::OrgId> for Module<T> {
             !Self::id_is_available(id),
             Error::<T>::OrganizationCannotBeRemovedIfInputIdIsAvailable
         );
+        let new_org_count = <OrganizationCounter>::get().saturating_sub(1u32);
+        <OrganizationCounter>::put(new_org_count);
         let ret: Vec<T::OrgId> = <OrganizationStates<T>>::iter()
             .filter(|(_, org_state)| (*org_state).parent() == Some(id))
             .map(|(child_id, _)| child_id)
             .collect::<Vec<_>>();
-        if ret.len() > 0 {
+        if !ret.is_empty() {
             Ok(Some(ret))
         } else {
             Ok(None)
         }
     }
-    fn recursive_remove_organization(id: T::OrgId) -> DispatchResult {
+    fn recursive_remove_organization(_id: T::OrgId) -> DispatchResult {
         todo!()
     }
 }
