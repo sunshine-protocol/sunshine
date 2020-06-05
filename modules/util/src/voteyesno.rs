@@ -44,19 +44,17 @@ pub struct YesNoVote<Signal, Hash> {
     justification: Option<Hash>,
 }
 
-impl<Signal, Hash: Clone> YesNoVote<Signal, Hash> {
-    pub fn justification(&self) -> Option<Hash> {
-        self.justification.clone()
-    }
-}
-
-impl<Signal: Copy, Hash: Clone> VoteVector<Signal, VoterYesNoView> for YesNoVote<Signal, Hash> {
+impl<Signal: Copy, Hash: Clone> VoteVector<Signal, VoterYesNoView, Hash>
+    for YesNoVote<Signal, Hash>
+{
     fn magnitude(&self) -> Signal {
         self.magnitude
     }
-
     fn direction(&self) -> VoterYesNoView {
         self.direction
+    }
+    fn justification(&self) -> Option<Hash> {
+        self.justification.clone()
     }
 }
 
@@ -98,34 +96,6 @@ impl<Signal: From<u32>, FineArithmetic: PerThing> From<(u32, u32)>
         ThresholdConfig {
             support_required: ThresholdType::Count(other.0.into()),
             turnout_required: ThresholdType::Count(other.1.into()),
-        }
-    }
-}
-
-use crate::schedule::{ThresholdConfigBuilder, ThresholdTypeBuilder};
-// local extension
-impl<Signal: From<u32>, FineArithmetic: PerThing> From<ThresholdTypeBuilder<FineArithmetic>>
-    for ThresholdType<Signal, FineArithmetic>
-{
-    fn from(
-        threshold_type_builder: ThresholdTypeBuilder<FineArithmetic>,
-    ) -> ThresholdType<Signal, FineArithmetic> {
-        match threshold_type_builder {
-            ThresholdTypeBuilder::Count(count) => ThresholdType::Count(count.into()), // From<u32>
-            ThresholdTypeBuilder::Percentage(percent) => ThresholdType::Percentage(percent),
-        }
-    }
-}
-// local extension
-impl<Signal: From<u32>, FineArithmetic: PerThing> From<ThresholdConfigBuilder<FineArithmetic>>
-    for ThresholdConfig<Signal, FineArithmetic>
-{
-    fn from(
-        threshold_config_builder: ThresholdConfigBuilder<FineArithmetic>,
-    ) -> ThresholdConfig<Signal, FineArithmetic> {
-        ThresholdConfig {
-            support_required: threshold_config_builder.support_required.into(),
-            turnout_required: threshold_config_builder.turnout_required.into(),
         }
     }
 }

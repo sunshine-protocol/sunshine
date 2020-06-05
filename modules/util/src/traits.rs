@@ -1,14 +1,4 @@
-use crate::{
-    schedule::ThresholdConfigBuilder,
-    share::SimpleShareGenesis,
-    voteyesno::{SupportedVoteTypes, ThresholdConfig},
-};
-use codec::Codec;
-use frame_support::Parameter;
-use sp_runtime::{
-    traits::{AtLeast32Bit, Member},
-    DispatchError, DispatchResult, PerThing,
-};
+use sp_runtime::{DispatchError, DispatchResult};
 use sp_std::prelude::*;
 
 // === Unique ID Logic, Useful for All Modules ===
@@ -77,6 +67,7 @@ pub trait AccessGenesis<AccountId, Shares> {
 pub trait AccessProfile<Shares> {
     fn total(&self) -> Shares;
 }
+use crate::share::SimpleShareGenesis;
 pub trait ShareInformation<OrgId, AccountId, Shares> {
     type Profile: AccessProfile<Shares>;
     type Genesis: From<Vec<(AccountId, Shares)>>
@@ -157,73 +148,54 @@ pub trait RemoveOrganization<OrgId> {
 
 // ---------- Petition Logic ----------
 
-// impl GetVoteOutcome
+/// Retrieves the outcome of a vote associated with the vote identifier `vote_id`
+pub trait GetVoteOutcome<VoteId> {
+    type Outcome;
 
-pub trait OpenPetition<Hash, BlockNumber>: GetVoteOutcome {
+    fn get_vote_outcome(vote_id: VoteId) -> Result<Self::Outcome, DispatchError>;
+}
+
+pub trait OpenPetition<VoteId, OrgId, Hash, BlockNumber>: GetVoteOutcome<VoteId> {
     fn open_petition(
-        organization: u32,
-        share_id: u32,
+        organization: OrgId,
         topic: Option<Hash>,
         required_support: u32,
-        require_against: Option<u32>,
+        vetos_to_reject: u32,
         duration: Option<BlockNumber>,
-    ) -> Result<Self::VoteId, DispatchError>;
-    // why do we need this? because we only have context for total_electorate in this method,
-    // not outside of it so we can't just pass total_electorate into `open_petition`
+    ) -> Result<VoteId, DispatchError>;
     fn open_unanimous_approval_petition(
-        organization: u32,
-        share_id: u32,
+        organization: OrgId,
         topic: Option<Hash>,
+        vetos_to_reject: u32,
         duration: Option<BlockNumber>,
-    ) -> Result<Self::VoteId, DispatchError>;
+    ) -> Result<VoteId, DispatchError>;
 }
 
 pub trait UpdatePetitionTerms<Hash>: Sized {
-    fn update_petition_terms(&self, new_terms: Hash) -> Self;
+    fn update_petition_terms(&self, new_terms: Hash, clear_votes_on_update: bool) -> Self;
 }
 
-pub trait SignPetition<AccountId, Hash>: GetVoteOutcome {
-    type Petition: Approved + Rejected + UpdatePetitionTerms<Hash> + Apply<Self::SignerView>;
-    type SignerView;
-    fn check_petition_outcome(petition: Self::Petition) -> Result<Self::Outcome, DispatchError>;
+pub trait SignPetition<VoteId, AccountId, Hash, SignerView>: GetVoteOutcome<VoteId> {
+    type Petition: Approved + Rejected + UpdatePetitionTerms<Hash> + Apply<SignerView>;
+    fn check_petition_outcome(petition_state: Self::Petition) -> Option<Self::Outcome>;
     fn sign_petition(
-        petition_id: Self::VoteId,
+        petition_id: VoteId,
         signer: AccountId,
-        view: Self::SignerView,
+        view: SignerView,
     ) -> Result<Self::Outcome, DispatchError>;
 }
 
-// get full veto context by filtering on the `SignatureLogger` map O(n)
-
-pub trait RequestChanges<AccountId, Hash>: SignPetition<AccountId, Hash> {
-    fn request_changes(
-        petition_id: Self::VoteId,
-        signer: AccountId,
-        justification: Hash,
-    ) -> Result<Option<Self::Outcome>, DispatchError>;
-    fn accept_changes(
-        petition_id: Self::VoteId,
-        signer: AccountId,
-    ) -> Result<Option<Self::Outcome>, DispatchError>;
+pub trait UpdatePetition<VoteId, AccountId, Hash, SignerView>:
+    SignPetition<VoteId, AccountId, Hash, SignerView>
+{
+    fn update_petition(
+        petition_id: VoteId,
+        new_topic: Hash,
+        clear_previous_vote_state: bool,
+    ) -> DispatchResult;
 }
-
-pub trait UpdatePetition<AccountId, Hash>: SignPetition<AccountId, Hash> {
-    fn update_petition(petition_id: u32, new_topic: Hash) -> DispatchResult;
-} // do we need a delete petition when we want to close it
 
 // ====== Vote Logic ======
-
-/// Retrieves the outcome of a vote associated with the vote identifier `vote_id`
-pub trait GetVoteOutcome {
-    type VoteId: Into<u32> + From<u32>; // Into<u32> is necessary to make it work
-    type Outcome: Approved;
-
-    fn get_vote_outcome(vote_id: Self::VoteId) -> Result<Self::Outcome, DispatchError>;
-}
-
-pub trait ThresholdVote {
-    type Signal: Parameter + Member + AtLeast32Bit + Codec;
-}
 
 /// Derives the threshold requirement from turnout (for `ThresholdConfig`)
 pub trait DeriveThresholdRequirement<Signal> {
@@ -239,106 +211,86 @@ pub trait ConsistentThresholdStructure {
 }
 
 /// Open a new vote for the organization, share_id and a custom threshold requirement
-pub trait OpenShareGroupVote<AccountId, BlockNumber, FineArithmetic: PerThing>:
-    GetVoteOutcome + ThresholdVote
+pub trait OpenVote<OrgId, VoteType, Threshold, BlockNumber, VoteId>:
+    GetVoteOutcome<VoteId>
 {
-    type ThresholdConfig: DeriveThresholdRequirement<Self::Signal>
-        + ConsistentThresholdStructure
-        + From<ThresholdConfig<Self::Signal, FineArithmetic>>
-        + From<ThresholdConfigBuilder<FineArithmetic>>; // NOTE: this forces FineArithmetic generic parameter for traits and all inherited
-    type VoteType: Default + From<SupportedVoteTypes>;
-
-    fn open_share_group_vote(
-        organization: u32,
-        share_id: u32,
-        vote_type: Self::VoteType,
-        threshold_config: Self::ThresholdConfig,
+    fn open_vote(
+        organization: OrgId,
+        vote_type: VoteType,
+        threshold: Threshold,
         duration: Option<BlockNumber>,
-    ) -> Result<Self::VoteId, DispatchError>;
+    ) -> Result<VoteId, DispatchError>;
 }
 
-/// Define the rate at which signal is minted for shares in an organization
-pub trait MintableSignal<AccountId, BlockNumber, FineArithmetic: PerThing>:
-    OpenShareGroupVote<AccountId, BlockNumber, FineArithmetic>
-{
-    fn mint_custom_signal_for_account(vote_id: u32, who: &AccountId, signal: Self::Signal);
-
-    fn batch_mint_signal_for_1p1v_share_group(
-        organization: u32,
-        share_id: u32,
-    ) -> Result<(Self::VoteId, Self::Signal), DispatchError>;
-
-    /// Mints signal for all accounts participating in the vote based on group share allocation from the ShareData module
-    fn batch_mint_signal_for_weighted_share_group(
-        organization: u32,
-        share_id: u32,
-    ) -> Result<(Self::VoteId, Self::Signal), DispatchError>;
-}
-
-/// Define the rate at which signal is burned to unreserve shares in an organization
-pub trait BurnableSignal<AccountId, BlockNumber, FineArithmetic: PerThing>:
-    MintableSignal<AccountId, BlockNumber, FineArithmetic>
-{
-    fn burn_signal(
-        organization: u32,
-        share_id: u32,
-        vote_id: u32,
-        who: &AccountId,
-        amount: Option<Self::Signal>,
-    ) -> DispatchResult;
-}
-
-/// Defines conditions for vote passage (for `VoteState`)
 pub trait Approved {
     fn approved(&self) -> bool;
 }
 pub trait Rejected {
     fn rejected(&self) -> bool;
 }
-/// Defines how `Vote`s are applied to the `VoteState`
 pub trait Apply<Vote>: Sized {
     fn apply(&self, vote: Vote) -> Self;
 }
-/// Defines how previous `Vote` to the `VoteState` applications are reverted
 pub trait Revert<Vote>: Sized {
     fn revert(&self, vote: Vote) -> Self;
 }
 
 pub trait UpdateOutcome: Sized {
-    // only returns if outcome changes
     fn update_outcome(&self) -> Option<Self>;
 }
 
-pub trait VoteVector<Signal, Direction> {
+pub trait VoteVector<Signal, Direction, Hash> {
     fn magnitude(&self) -> Signal;
     fn direction(&self) -> Direction;
+    fn justification(&self) -> Option<Hash>;
 }
 
-/// Applies vote in the context of the existing module instance
-pub trait ApplyVote: GetVoteOutcome + ThresholdVote {
+pub trait ApplyVote<Hash> {
+    type Signal;
     type Direction;
-    type Vote: VoteVector<Self::Signal, Self::Direction>;
+    type Vote: VoteVector<Self::Signal, Self::Direction, Hash>;
     type State: Approved + Apply<Self::Vote> + Revert<Self::Vote> + UpdateOutcome;
-    // apply vote to vote state
+    type Outcome;
+    // revokes old vote and applies new vote
     fn apply_vote(
         state: Self::State,
         new_vote: Self::Vote,
         old_vote: Option<Self::Vote>,
-    ) -> Result<(Self::State, Option<(bool, Self::Signal)>), DispatchError>;
+    ) -> Result<Self::Outcome, DispatchError>;
 }
 
-/// For the module to check the status of the vote in the context of the existing module instance
-pub trait CheckVoteStatus: ApplyVote {
+pub trait CheckVoteStatus<Hash>: ApplyVote<Hash> {
     fn check_vote_outcome(state: Self::State) -> Result<Self::Outcome, DispatchError>;
     fn check_vote_expired(state: Self::State) -> bool;
 }
 
-/// For module to update vote state
-pub trait VoteOnProposal<AccountId, Hash, BlockNumber, FineArithmetic: PerThing>:
-    OpenShareGroupVote<AccountId, BlockNumber, FineArithmetic> + CheckVoteStatus
+pub trait MintableSignal<AccountId, OrgId, VoteType, Threshold, BlockNumber, VoteId, Hash>:
+    OpenVote<OrgId, VoteType, Threshold, BlockNumber, VoteId> + ApplyVote<Hash>
+{
+    fn mint_custom_signal_for_account(vote_id: VoteId, who: &AccountId, signal: Self::Signal);
+
+    fn batch_mint_signal(
+        vote_id: VoteId,
+        organization: OrgId,
+    ) -> Result<Self::Signal, DispatchError>;
+}
+
+/// Define the rate at which signal is burned to unreserve shares in an organization
+pub trait BurnableSignal<AccountId, OrgId, VoteType, Threshold, BlockNumber, VoteId, Hash>:
+    MintableSignal<AccountId, OrgId, VoteType, Threshold, BlockNumber, VoteId, Hash>
+{
+    fn burn_signal(
+        vote_id: VoteId,
+        who: &AccountId,
+        amount: Option<Self::Signal>, // if None, then all
+    ) -> DispatchResult;
+}
+
+pub trait VoteOnProposal<AccountId, OrgId, VoteType, Threshold, BlockNumber, VoteId, Hash>:
+    OpenVote<OrgId, VoteType, Threshold, BlockNumber, VoteId> + CheckVoteStatus<Hash>
 {
     fn vote_on_proposal(
-        vote_id: u32,
+        vote_id: VoteId,
         voter: AccountId,
         direction: Self::Direction,
         magnitude: Option<Self::Signal>,
@@ -346,129 +298,7 @@ pub trait VoteOnProposal<AccountId, Hash, BlockNumber, FineArithmetic: PerThing>
     ) -> DispatchResult;
 }
 
-// ====== Vote Dispatch Logic (in Bank) ======
-
-pub trait GetCurrentVoteIdentifiers {
-    fn get_current_share_id(&self) -> u32;
-    fn get_current_vote_id(&self) -> u32;
-}
-
-/// Set the default order of share groups for which approval will be required
-/// - the first step to set up a default vote schedule for a proposal type
-pub trait SetDefaultShareApprovalOrder {
-    type ProposalType;
-
-    fn set_default_share_approval_order_for_proposal_type(
-        organization: u32,
-        proposal_type: Self::ProposalType,
-        share_approval_order: Vec<u32>,
-    ) -> DispatchResult;
-}
-
-/// Set the default passage, turnout thresholds for each share group
-/// - the _second_ first step to set up a default vote schedule for a proposal type
-pub trait SetDefaultShareIdThreshold: SetDefaultShareApprovalOrder {
-    type ThresholdConfig;
-
-    fn set_share_id_proposal_type_to_threshold(
-        organization: u32,
-        share_id: u32,
-        proposal_type: Self::ProposalType,
-        threshold: Self::ThresholdConfig,
-    ) -> DispatchResult;
-}
-
-/// Helper methods to define a default VoteSchedule using the default threshold setter and default share approval order setter
-pub trait VoteScheduleBuilder: SetDefaultShareIdThreshold {
-    type ScheduledVote;
-
-    /// Uses the default threshold set above to automatically set threshold for share_id
-    fn scheduled_vote_from_share_id_proposal_type(
-        organization: u32,
-        share_id: u32,
-        proposal_type: Self::ProposalType,
-        // if None, use default set further above
-        custom_threshold: Option<Self::ThresholdConfig>,
-    ) -> Result<Self::ScheduledVote, DispatchError>;
-
-    /// Default uses the default share approval order and default threshold setter to set a default vote schedule
-    /// - if `raw_vote_schedule.is_some()` then it uses this custom sequence of scheduled votes instead of the defaults
-    fn set_default_vote_schedule_for_proposal_type(
-        organization: u32,
-        proposal_type: Self::ProposalType,
-        // if None, use the default share approval order
-        raw_vote_schedule: Option<Vec<Self::ScheduledVote>>,
-    ) -> DispatchResult;
-}
-
-/// Manages live vote schedules
-pub trait ManageVoteSchedule: SetDefaultShareApprovalOrder {
-    type VoteSchedule: GetCurrentVoteIdentifiers;
-
-    fn dispatch_vote_schedule_from_vec_of_share_id(
-        organization: u32,
-        proposal_type: Self::ProposalType,
-        share_ids: Vec<u32>,
-    ) -> Result<Self::VoteSchedule, DispatchError>;
-
-    /// Moves the vote schedule to the next scheduled vote in the sequence
-    fn move_to_next_scheduled_vote(
-        organization: u32,
-        schedule: Self::VoteSchedule,
-    ) -> Result<Option<Self::VoteSchedule>, DispatchError>;
-}
-
-/// Default uses the default vote schedule configured in `VoteBuilder` to dispatch a `VoteSchedule`
-/// - if `custom_share_ids.is_some()` then this is used as the share approval order instead of the default
-/// share approval order
-pub trait ScheduleVoteSequence: VoteScheduleBuilder {
-    // this returns the first `VoteId` and stores the rest in a vote schedule in storage
-    fn schedule_default_vote_schedule_for_proposal_type(
-        organization: u32,
-        proposal_index: u32,
-        proposal_type: Self::ProposalType,
-        // if None, just use the default vote schedule
-        custom_share_ids: Option<Vec<u32>>,
-    ) -> Result<u32, DispatchError>; // returns VoteId
-}
-
-/// Checks the progress of a scheduled vote sequence and pushes the schedule along
-/// - this should be called every `T::PollingFrequency::get()` number of blocks in `on_finalize`
-pub trait PollActiveProposal: ScheduleVoteSequence {
-    type PollingOutcome;
-    // This method checks the outcome of the current vote and moves the schedule to the next one when the threshold is met
-    // - returns the newest `VoteId` when the voting schedule is pushed to the next vote
-    fn poll_active_proposal(
-        organization: u32,
-        proposal_index: u32,
-    ) -> Result<Self::PollingOutcome, DispatchError>;
-}
-
-// ~~~~~~~~ BankOffChain Module ~~~~~~~~
-
-pub trait SupportedOrganizationShapes {
-    type FormedOrgId; // see crate::organization::FormedOrganization
-}
-
-pub trait RegisterOffChainBankAccount: SupportedOrganizationShapes {
-    type TreasuryId;
-    fn register_off_chain_bank_account(
-        org: Self::FormedOrgId,
-    ) -> Result<Self::TreasuryId, DispatchError>;
-}
-
-pub trait OffChainBank: RegisterOffChainBankAccount {
-    type Payment;
-
-    fn sender_claims_payment_sent(id: Self::TreasuryId, payment: Self::Payment) -> Self::Payment;
-    fn recipient_confirms_payment_received(
-        id: Self::TreasuryId,
-        payment: Self::Payment,
-    ) -> DispatchResult;
-    fn check_payment_confirmation(id: Self::TreasuryId, payment: Self::Payment) -> bool;
-}
-
-// ~~~~~~~~ BankOnChain Module ~~~~~~~~
+// ~~~~~~~~ Bank Module ~~~~~~~~
 use crate::bank::OnChainTreasuryID;
 pub trait OnChainBank {
     type OrgId: From<u32>;

@@ -8,8 +8,6 @@ use sp_std::prelude::*;
 pub enum PetitionView<Hash> {
     /// Assent acknowledges the petition as legitimate and expresses support
     Assent(Hash),
-    /// Dissent expresses against
-    Dissent(Hash),
     /// Veto the given thing with a reason
     Veto(Hash),
     /// Default no comment on the petition but shows up in turnout?
@@ -20,7 +18,6 @@ impl<Hash> PetitionView<Hash> {
     pub fn ipfs_reference(self) -> Option<Hash> {
         match self {
             PetitionView::Assent(cid) => Some(cid),
-            PetitionView::Dissent(cid) => Some(cid),
             PetitionView::Veto(cid) => Some(cid),
             _ => None,
         }
@@ -55,8 +52,6 @@ pub enum PetitionOutcome {
     ApprovedButWaitingForTimeToExpire,
     /// Could pass, waiting for time to expire but rejected
     RejectedButWaitingForTimeToExpire,
-    /// Frozen by vetoers, waiting for an update
-    FrozenByVetoButWaitingForRequestChanges,
     /// Approved
     Approved,
     /// Rejected
@@ -80,24 +75,22 @@ impl Default for PetitionOutcome {
 
 #[derive(Clone, PartialEq, Eq, Encode, Decode, sp_runtime::RuntimeDebug)]
 /// The state of a petition at any given time
-pub struct PetitionState<Hash, BlockNumber>
+pub struct PetitionState<OrgId, Hash, BlockNumber>
 where
     Hash: Clone,
 {
     /// The topic corresponds to some authentication used to identify _what_ is voted on
     topic: Option<Hash>,
-    /// Vote qualifier that is OrgId, FlatShareId
-    voter_id_reqs: (u32, u32),
+    /// Vote group identifier
+    voter_group: OrgId,
     /// Number of signers that signed in favor
     current_support: u32,
     /// Number of signers that need to sign for it to pass
     required_support: u32,
-    /// Number of signers that signed against
-    current_against: u32,
-    /// Number of signers that need to sign for it to be formally rejected
-    required_against: Option<u32>,
     /// Number of open vetos
     veto_count: u32,
+    /// Number of vetos required to freeze the vote
+    vetos_to_reject: u32,
     /// Number of all members that can participate
     total_electorate: u32,
     /// The petition's outcome
@@ -105,31 +98,25 @@ where
     /// Optional ending time
     ends: Option<BlockNumber>,
 }
-impl<Hash: Clone, BlockNumber: Clone> PetitionState<Hash, BlockNumber> {
-    // TODO: break this into the valid object creation paths
+impl<OrgId: Copy, Hash: Clone, BlockNumber: Clone> PetitionState<OrgId, Hash, BlockNumber> {
     pub fn new(
         topic: Option<Hash>,
-        voter_id_reqs: (u32, u32),
+        voter_group: OrgId,
         required_support: u32,
-        required_against: Option<u32>,
+        vetos_to_reject: u32,
         total_electorate: u32,
         ends: Option<BlockNumber>,
-    ) -> Option<PetitionState<Hash, BlockNumber>> {
-        let constraints: bool = total_electorate >= required_support
-            && if let Some(req_against) = required_against {
-                total_electorate >= req_against
-            } else {
-                true
-            };
+    ) -> Option<PetitionState<OrgId, Hash, BlockNumber>> {
+        let constraints: bool =
+            total_electorate >= required_support && total_electorate >= vetos_to_reject;
         if constraints {
             Some(PetitionState {
                 topic,
-                voter_id_reqs,
+                voter_group,
                 current_support: 0u32,
                 required_support,
-                current_against: 0u32,
-                required_against,
                 veto_count: 0u32,
+                vetos_to_reject,
                 total_electorate,
                 outcome: PetitionOutcome::VotingWithNoOutcomeYet,
                 ends,
@@ -139,8 +126,8 @@ impl<Hash: Clone, BlockNumber: Clone> PetitionState<Hash, BlockNumber> {
             None
         }
     }
-    pub fn voter_id_reqs(&self) -> (u32, u32) {
-        self.voter_id_reqs
+    pub fn voter_group(&self) -> OrgId {
+        self.voter_group
     }
     pub fn topic(&self) -> Option<Hash> {
         self.topic.clone()
@@ -151,14 +138,11 @@ impl<Hash: Clone, BlockNumber: Clone> PetitionState<Hash, BlockNumber> {
     pub fn required_support(&self) -> u32 {
         self.required_support
     }
-    pub fn current_against(&self) -> u32 {
-        self.current_against
-    }
-    pub fn required_against(&self) -> Option<u32> {
-        self.required_against
-    }
     pub fn veto_count(&self) -> u32 {
         self.veto_count
+    }
+    pub fn vetos_to_reject(&self) -> u32 {
+        self.vetos_to_reject
     }
     pub fn total_electorate(&self) -> u32 {
         self.total_electorate
@@ -174,12 +158,11 @@ impl<Hash: Clone, BlockNumber: Clone> PetitionState<Hash, BlockNumber> {
         let new_support = self.current_support() + 1u32;
         PetitionState {
             topic: self.topic(),
-            voter_id_reqs: self.voter_id_reqs(),
+            voter_group: self.voter_group,
             current_support: new_support,
             required_support: self.required_support(),
-            current_against: self.current_against(),
-            required_against: self.required_against(),
             veto_count: self.veto_count(),
+            vetos_to_reject: self.vetos_to_reject(),
             total_electorate: self.total_electorate(),
             outcome: self.outcome(),
             ends: self.ends(),
@@ -189,42 +172,11 @@ impl<Hash: Clone, BlockNumber: Clone> PetitionState<Hash, BlockNumber> {
         let new_support = self.current_support() - 1u32;
         PetitionState {
             topic: self.topic(),
-            voter_id_reqs: self.voter_id_reqs(),
+            voter_group: self.voter_group,
             current_support: new_support,
             required_support: self.required_support(),
-            current_against: self.current_against(),
-            required_against: self.required_against(),
             veto_count: self.veto_count(),
-            total_electorate: self.total_electorate(),
-            outcome: self.outcome(),
-            ends: self.ends(),
-        }
-    }
-    pub fn add_dissent(&self) -> Self {
-        let new_against = self.current_against() + 1u32;
-        PetitionState {
-            topic: self.topic(),
-            voter_id_reqs: self.voter_id_reqs(),
-            current_support: self.current_support(),
-            required_support: self.required_support(),
-            current_against: new_against,
-            required_against: self.required_against(),
-            veto_count: self.veto_count(),
-            total_electorate: self.total_electorate(),
-            outcome: self.outcome(),
-            ends: self.ends(),
-        }
-    }
-    pub fn revoke_dissent(&self) -> Self {
-        let new_against = self.current_against() - 1u32;
-        PetitionState {
-            topic: self.topic(),
-            voter_id_reqs: self.voter_id_reqs(),
-            current_support: self.current_support(),
-            required_support: self.required_support(),
-            current_against: new_against,
-            required_against: self.required_against(),
-            veto_count: self.veto_count(),
+            vetos_to_reject: self.vetos_to_reject(),
             total_electorate: self.total_electorate(),
             outcome: self.outcome(),
             ends: self.ends(),
@@ -234,12 +186,11 @@ impl<Hash: Clone, BlockNumber: Clone> PetitionState<Hash, BlockNumber> {
         let new_veto_count = self.veto_count() + 1u32;
         PetitionState {
             topic: self.topic(),
-            voter_id_reqs: self.voter_id_reqs(),
+            voter_group: self.voter_group,
             current_support: self.current_support(),
             required_support: self.required_support(),
-            current_against: self.current_against(),
-            required_against: self.required_against(),
             veto_count: new_veto_count,
+            vetos_to_reject: self.vetos_to_reject(),
             total_electorate: self.total_electorate(),
             outcome: self.outcome(),
             ends: self.ends(),
@@ -249,12 +200,11 @@ impl<Hash: Clone, BlockNumber: Clone> PetitionState<Hash, BlockNumber> {
         let new_veto_count = self.veto_count - 1u32;
         PetitionState {
             topic: self.topic(),
-            voter_id_reqs: self.voter_id_reqs(),
+            voter_group: self.voter_group,
             current_support: self.current_support(),
             required_support: self.required_support(),
-            current_against: self.current_against(),
-            required_against: self.required_against(),
             veto_count: new_veto_count,
+            vetos_to_reject: self.vetos_to_reject(),
             total_electorate: self.total_electorate(),
             outcome: self.outcome(),
             ends: self.ends(),
@@ -263,12 +213,11 @@ impl<Hash: Clone, BlockNumber: Clone> PetitionState<Hash, BlockNumber> {
     pub fn update_without_clearing_petition_state(&self, new_topic: Hash) -> Self {
         PetitionState {
             topic: Some(new_topic),
-            voter_id_reqs: self.voter_id_reqs(),
+            voter_group: self.voter_group,
             current_support: self.current_support(),
             required_support: self.required_support(),
-            current_against: self.current_against(),
-            required_against: self.required_against(),
             veto_count: self.veto_count(),
+            vetos_to_reject: self.vetos_to_reject(),
             total_electorate: self.total_electorate(),
             outcome: self.outcome(),
             ends: self.ends(),
@@ -277,12 +226,11 @@ impl<Hash: Clone, BlockNumber: Clone> PetitionState<Hash, BlockNumber> {
     pub fn update_and_clear_petition_state(&self, new_topic: Hash) -> Self {
         PetitionState {
             topic: Some(new_topic),
-            voter_id_reqs: self.voter_id_reqs(),
+            voter_group: self.voter_group,
             current_support: 0u32,
             required_support: self.required_support(),
-            current_against: 0u32,
-            required_against: self.required_against(),
             veto_count: 0u32,
+            vetos_to_reject: self.vetos_to_reject(),
             total_electorate: self.total_electorate(),
             outcome: self.outcome(),
             ends: self.ends(),
@@ -292,58 +240,53 @@ impl<Hash: Clone, BlockNumber: Clone> PetitionState<Hash, BlockNumber> {
     pub fn set_outcome(&self, new_outcome: PetitionOutcome) -> Self {
         PetitionState {
             topic: self.topic(),
-            voter_id_reqs: self.voter_id_reqs(),
+            voter_group: self.voter_group,
             current_support: self.current_support(),
             required_support: self.required_support(),
-            current_against: self.current_against(),
-            required_against: self.required_against(),
             veto_count: self.veto_count(),
+            vetos_to_reject: self.vetos_to_reject(),
             total_electorate: self.total_electorate(),
             outcome: new_outcome,
             ends: self.ends(),
         }
     }
 }
-impl<Hash: Clone, BlockNumber: Clone> Apply<PetitionView<Hash>>
-    for PetitionState<Hash, BlockNumber>
+impl<OrgId: Copy, Hash: Clone, BlockNumber: Clone> Apply<PetitionView<Hash>>
+    for PetitionState<OrgId, Hash, BlockNumber>
 {
-    // must check to see if the voter has already voted before applying new votes
-    fn apply(&self, vote: PetitionView<Hash>) -> PetitionState<Hash, BlockNumber> {
+    // NOTE: must check to see if the voter has already voted before applying new votes
+    fn apply(&self, vote: PetitionView<Hash>) -> PetitionState<OrgId, Hash, BlockNumber> {
         match vote {
             PetitionView::Assent(_) => self.add_assent(),
-            PetitionView::Dissent(_) => self.add_dissent(),
             PetitionView::Veto(_) => self.add_veto(),
             // No comment, nothing applied
             _ => self.clone(),
         }
     }
 }
-impl<Hash: Clone, BlockNumber: Clone> UpdatePetitionTerms<Hash>
-    for PetitionState<Hash, BlockNumber>
+impl<OrgId: Copy, Hash: Clone, BlockNumber: Clone> UpdatePetitionTerms<Hash>
+    for PetitionState<OrgId, Hash, BlockNumber>
 {
-    /// Resets thresholds by default every time the petition's topic changes
-    fn update_petition_terms(&self, new_terms: Hash) -> Self {
-        // we choose here to enable updates without clearing the petition state but this assumption
-        // isn't always correct
-        // TODO: think about how to add more explicit configurability, rn it is just this line
-        self.update_without_clearing_petition_state(new_terms)
-    }
-}
-
-// if vetoed by any member, it cannot be improved and this invariant is enforced
-impl<Hash: Clone, BlockNumber: Clone> Approved for PetitionState<Hash, BlockNumber> {
-    fn approved(&self) -> bool {
-        (self.veto_count() == 0) && (self.current_support() >= self.required_support())
-    }
-}
-// independent of veto, can be rejected
-// - can be approved and also rejected
-impl<Hash: Clone, BlockNumber: Clone> Rejected for PetitionState<Hash, BlockNumber> {
-    fn rejected(&self) -> bool {
-        if let Some(req_against) = self.required_against() {
-            self.current_against >= req_against
+    fn update_petition_terms(&self, new_terms: Hash, clear_votes_on_update: bool) -> Self {
+        if clear_votes_on_update {
+            self.update_and_clear_petition_state(new_terms)
         } else {
-            false
+            self.update_without_clearing_petition_state(new_terms)
         }
+    }
+}
+impl<OrgId: Copy, Hash: Clone, BlockNumber: Clone> Approved
+    for PetitionState<OrgId, Hash, BlockNumber>
+{
+    fn approved(&self) -> bool {
+        (self.veto_count() < self.vetos_to_reject())
+            && (self.current_support() >= self.required_support())
+    }
+}
+impl<OrgId: Copy, Hash: Clone, BlockNumber: Clone> Rejected
+    for PetitionState<OrgId, Hash, BlockNumber>
+{
+    fn rejected(&self) -> bool {
+        self.veto_count() >= self.vetos_to_reject()
     }
 }

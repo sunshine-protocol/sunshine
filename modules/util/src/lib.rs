@@ -13,7 +13,6 @@ pub mod court;
 pub mod organization;
 pub mod petition;
 pub mod proposal;
-pub mod schedule;
 pub mod share;
 pub mod traits;
 pub mod voteyesno;
