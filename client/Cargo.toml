@@ -32,10 +32,9 @@ pallet-indices = "2.0.0-rc2"
 # local deps
 util = { package = "sunshine-util", path = "../modules/util", default-features = false }
 sunshine-org = {package = "sunshine-org", path = "../modules/org", default-features=false }
-vote-yesno = { package = "sunshine-vote-yesno", path = "../modules/vote-yesno", default-features = false}
-vote-petition = { package = "sunshine-vote-petition", path = "../modules/vote-petition", default-features=false}
-bank-onchain = { package = "sunshine-bank-onchain", path = "../modules/bank-onchain", default-features=false}
-bank-offchain = { package = "sunshine-bank-offchain", path = "../modules/bank-offchain", default-features=false}
+vote-threshold = { package = "sunshine-vote-threshold", path = "../modules/vote-threshold", default-features = false}
+vote-consent = { package = "sunshine-vote-consent", path = "../modules/vote-consent", default-features=false}
+bank = { package = "sunshine-bank", path = "../modules/bank", default-features=false}
 bounty = { package = "sunshine-bounty", path = "../modules/bounty", default-features=false}
 
 [dev-dependencies]

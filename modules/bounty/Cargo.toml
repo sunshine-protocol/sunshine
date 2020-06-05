@@ -19,9 +19,9 @@ frame-system = { version = "2.0.0-rc2", default-features = false }
 pallet-balances = { version = "2.0.0-rc2", default-features = false }
 util = { package = "sunshine-util", path = "../util", default-features=false}
 org = { package = "sunshine-org", path = "../org", default-features=false}
-bank-onchain = { package = "sunshine-bank-onchain", path = "../bank-onchain", default-features=false}
-vote-petition = { package = "sunshine-vote-petition", path = "../vote-petition", default-features=false}
-vote-yesno = { package = "sunshine-vote-yesno", path = "../vote-yesno", default-features=false}
+bank = { package = "sunshine-bank", path = "../bank", default-features=false}
+vote-consent = { package = "sunshine-vote-consent", path = "../vote-consent", default-features=false}
+vote-threshold = { package = "sunshine-vote-threshold", path = "../vote-threshold", default-features=false}
 clear_on_drop = { version = "0.2.3", features = ["no_cc"] }	# https://github.com/paritytech/substrate/issues/4179
 
 [dev-dependencies]
