@@ -77,8 +77,8 @@ pub enum BankTrackerID {
 /// - has no magnitude context and is limited for that reason
 /// - future version will use revocable representative governance
 pub enum WithdrawalPermissions<Id: Codec + PartialEq + Zero + From<u32> + Copy, AccountId> {
-    // two accounts can reserve free capital for spending
-    AnyOfTwoAccounts(AccountId, AccountId),
+    // any of two accounts can reserve free capital for spending
+    TwoAccounts(AccountId, AccountId),
     // withdrawal permissions restricted by weighted membership in organization
     // -> sudo might have additional power, depends on impl
     JointOrgAccount(Id),
@@ -133,14 +133,15 @@ impl<OrgId: Codec + PartialEq + Zero + From<u32> + Copy, AccountId: Clone + Part
 /// This is the state for an OnChainBankId, associated with each bank registered in the runtime
 pub struct BankState<OrgId: Codec + PartialEq + Zero + From<u32> + Copy, GovernanceConfig, Currency>
 {
-    /// Registered organization identifier
-    registered_org: OrgId,
-    // free capital, available for spends
+    // Registered organization identifier
+    owners: OrgId,
+    // Free capital, available for spends
     free: Currency,
-    // set aside for future spends, already allocated but can only be _liquidated_ after free == 0?
+    // Set aside for future spends, already allocated but can only be _liquidated_ after free == 0?
     reserved: Currency,
-    // owner of vault, likely WithdrawalPermissions<AccountId>
-    owner_s: GovernanceConfig,
+    // Operator of the organization, might be required to be a suborg or `owners` or not
+    // -> power should be restricted by actions made by the `self.owners`
+    operators: GovernanceConfig,
 }
 
 impl<
@@ -149,20 +150,16 @@ impl<
         Currency: Zero + AtLeast32Bit + Clone,
     > BankState<OrgId, GovernanceConfig, Currency>
 {
-    pub fn new_from_deposit(
-        registered_org: OrgId,
-        amount: Currency,
-        owner_s: GovernanceConfig,
-    ) -> Self {
+    pub fn new_from_deposit(owners: OrgId, amount: Currency, operators: GovernanceConfig) -> Self {
         BankState {
-            registered_org,
+            owners,
             free: amount,
             reserved: Currency::zero(),
-            owner_s,
+            operators,
         }
     }
-    pub fn registered_org(&self) -> OrgId {
-        self.registered_org
+    pub fn owners(&self) -> OrgId {
+        self.owners
     }
     pub fn free(&self) -> Currency {
         self.free.clone()
@@ -170,11 +167,14 @@ impl<
     pub fn reserved(&self) -> Currency {
         self.reserved.clone()
     }
-    pub fn owner_s(&self) -> GovernanceConfig {
-        self.owner_s.clone()
+    pub fn operators(&self) -> GovernanceConfig {
+        self.operators.clone()
     }
-    pub fn is_owner_s(&self, cmp_owner: GovernanceConfig) -> bool {
-        cmp_owner == self.owner_s
+    pub fn is_owners(&self, org: OrgId) -> bool {
+        org == self.owners
+    }
+    pub fn is_operator(&self, cmp_owner: GovernanceConfig) -> bool {
+        cmp_owner == self.operators.clone()
     }
 }
 
@@ -190,10 +190,10 @@ impl<
             let new_free = self.free() - amount.clone();
             let new_reserved = self.reserved() + amount;
             Some(BankState {
-                registered_org: self.registered_org(),
+                owners: self.owners(),
                 free: new_free,
                 reserved: new_reserved,
-                owner_s: self.owner_s(),
+                operators: self.operators(),
             })
         } else {
             // failed, not enough in free to make reservation of amount
@@ -229,19 +229,19 @@ impl<
     fn deposit_into_free(&self, amount: Currency) -> Self {
         let new_free = self.free() + amount;
         BankState {
-            registered_org: self.registered_org(),
+            owners: self.owners(),
             free: new_free,
             reserved: self.reserved(),
-            owner_s: self.owner_s(),
+            operators: self.operators(),
         }
     }
     fn deposit_into_reserved(&self, amount: Currency) -> Self {
         let new_reserved = self.reserved() + amount;
         BankState {
-            registered_org: self.registered_org(),
+            owners: self.owners(),
             free: self.free(),
             reserved: new_reserved,
-            owner_s: self.owner_s(),
+            operators: self.operators(),
         }
     }
     // fallible, not enough capital in relative account
@@ -249,10 +249,10 @@ impl<
         if self.free() >= amount {
             let new_free = self.free() - amount;
             Some(BankState {
-                registered_org: self.registered_org(),
+                owners: self.owners(),
                 free: new_free,
                 reserved: self.reserved(),
-                owner_s: self.owner_s(),
+                operators: self.operators(),
             })
         } else {
             // not enough capital in account, spend failed
@@ -263,10 +263,10 @@ impl<
         if self.reserved() >= amount {
             let new_reserved = self.reserved() - amount;
             Some(BankState {
-                registered_org: self.registered_org(),
+                owners: self.owners(),
                 free: self.free(),
                 reserved: new_reserved,
-                owner_s: self.owner_s(),
+                operators: self.operators(),
             })
         } else {
             // not enough capital in account, spend failed

@@ -211,12 +211,9 @@ pub trait ConsistentThresholdStructure {
 }
 
 /// Open a new vote for the organization, share_id and a custom threshold requirement
-pub trait OpenVote<OrgId, VoteType, Threshold, BlockNumber, VoteId>:
-    GetVoteOutcome<VoteId>
-{
+pub trait OpenVote<OrgId, Threshold, BlockNumber, VoteId>: GetVoteOutcome<VoteId> {
     fn open_vote(
         organization: OrgId,
-        vote_type: VoteType,
         threshold: Threshold,
         duration: Option<BlockNumber>,
     ) -> Result<VoteId, DispatchError>;
@@ -235,10 +232,6 @@ pub trait Revert<Vote>: Sized {
     fn revert(&self, vote: Vote) -> Self;
 }
 
-pub trait UpdateOutcome: Sized {
-    fn update_outcome(&self) -> Option<Self>;
-}
-
 pub trait VoteVector<Signal, Direction, Hash> {
     fn magnitude(&self) -> Signal;
     fn direction(&self) -> Direction;
@@ -249,23 +242,22 @@ pub trait ApplyVote<Hash> {
     type Signal;
     type Direction;
     type Vote: VoteVector<Self::Signal, Self::Direction, Hash>;
-    type State: Approved + Apply<Self::Vote> + Revert<Self::Vote> + UpdateOutcome;
-    type Outcome;
-    // revokes old vote and applies new vote
+    type State: Approved + Apply<Self::Vote> + Revert<Self::Vote>;
     fn apply_vote(
         state: Self::State,
-        new_vote: Self::Vote,
-        old_vote: Option<Self::Vote>,
-    ) -> Result<Self::Outcome, DispatchError>;
+        vote_magnitude: Self::Signal,
+        new_vote_view: Self::Direction,
+        old_vote_view: Self::Direction,
+    ) -> Self::State;
 }
 
-pub trait CheckVoteStatus<Hash>: ApplyVote<Hash> {
-    fn check_vote_outcome(state: Self::State) -> Result<Self::Outcome, DispatchError>;
-    fn check_vote_expired(state: Self::State) -> bool;
+pub trait CheckVoteStatus<Hash, VoteId>: ApplyVote<Hash> + GetVoteOutcome<VoteId> {
+    fn check_vote_outcome(state: Self::State) -> Option<Self::Outcome>;
+    fn check_vote_expired(state: &Self::State) -> bool;
 }
 
-pub trait MintableSignal<AccountId, OrgId, VoteType, Threshold, BlockNumber, VoteId, Hash>:
-    OpenVote<OrgId, VoteType, Threshold, BlockNumber, VoteId> + ApplyVote<Hash>
+pub trait MintableSignal<AccountId, OrgId, Threshold, BlockNumber, VoteId, Hash>:
+    OpenVote<OrgId, Threshold, BlockNumber, VoteId> + ApplyVote<Hash>
 {
     fn mint_custom_signal_for_account(vote_id: VoteId, who: &AccountId, signal: Self::Signal);
 
@@ -276,8 +268,8 @@ pub trait MintableSignal<AccountId, OrgId, VoteType, Threshold, BlockNumber, Vot
 }
 
 /// Define the rate at which signal is burned to unreserve shares in an organization
-pub trait BurnableSignal<AccountId, OrgId, VoteType, Threshold, BlockNumber, VoteId, Hash>:
-    MintableSignal<AccountId, OrgId, VoteType, Threshold, BlockNumber, VoteId, Hash>
+pub trait BurnableSignal<AccountId, OrgId, Threshold, BlockNumber, VoteId, Hash>:
+    MintableSignal<AccountId, OrgId, Threshold, BlockNumber, VoteId, Hash>
 {
     fn burn_signal(
         vote_id: VoteId,
@@ -286,14 +278,13 @@ pub trait BurnableSignal<AccountId, OrgId, VoteType, Threshold, BlockNumber, Vot
     ) -> DispatchResult;
 }
 
-pub trait VoteOnProposal<AccountId, OrgId, VoteType, Threshold, BlockNumber, VoteId, Hash>:
-    OpenVote<OrgId, VoteType, Threshold, BlockNumber, VoteId> + CheckVoteStatus<Hash>
+pub trait VoteOnProposal<AccountId, OrgId, Threshold, BlockNumber, VoteId, Hash>:
+    OpenVote<OrgId, Threshold, BlockNumber, VoteId> + CheckVoteStatus<Hash, VoteId>
 {
     fn vote_on_proposal(
         vote_id: VoteId,
         voter: AccountId,
         direction: Self::Direction,
-        magnitude: Option<Self::Signal>,
         justification: Option<Hash>,
     ) -> DispatchResult;
 }

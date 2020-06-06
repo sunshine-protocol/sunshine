@@ -1,6 +1,5 @@
 use crate::traits::{
-    Apply, Approved, ConsistentThresholdStructure, DeriveThresholdRequirement, Revert,
-    UpdateOutcome, VoteVector,
+    Apply, Approved, ConsistentThresholdStructure, DeriveThresholdRequirement, Revert, VoteVector,
 };
 use codec::{Decode, Encode};
 use frame_support::Parameter;
@@ -27,6 +26,8 @@ impl Default for SupportedVoteTypes {
 #[derive(Clone, Copy, PartialEq, Eq, Encode, Decode, sp_runtime::RuntimeDebug)]
 /// The vote-yesno voter options (direction)
 pub enum VoterYesNoView {
+    /// Not yet voted
+    NoVote,
     /// Voted in favor
     InFavor,
     /// Voted against
@@ -42,6 +43,25 @@ pub struct YesNoVote<Signal, Hash> {
     magnitude: Signal,
     direction: VoterYesNoView,
     justification: Option<Hash>,
+}
+
+impl<Signal: Copy, Hash: Clone> YesNoVote<Signal, Hash> {
+    pub fn set_new_view(
+        &self,
+        new_direction: VoterYesNoView,
+        new_justification: Option<Hash>,
+    ) -> Option<Self> {
+        if self.direction == new_direction {
+            // new view not set because same object
+            None
+        } else {
+            Some(YesNoVote {
+                magnitude: self.magnitude,
+                direction: new_direction,
+                justification: new_justification,
+            })
+        }
+    }
 }
 
 impl<Signal: Copy, Hash: Clone> VoteVector<Signal, VoterYesNoView, Hash>
@@ -279,6 +299,12 @@ impl<
             ..self.clone()
         }
     }
+    pub fn set_outcome(&self, new_outcome: VoteOutcome) -> Self {
+        VoteState {
+            outcome: new_outcome,
+            ..self.clone()
+        }
+    }
 }
 
 impl<
@@ -325,6 +351,7 @@ impl<
             VoterYesNoView::InFavor => self.add_in_favor_vote(vote.magnitude()),
             VoterYesNoView::Against => self.add_against_vote(vote.magnitude()),
             VoterYesNoView::Abstain => self.add_abstention(vote.magnitude()),
+            _ => self.clone(),
         }
     }
 }
@@ -349,36 +376,7 @@ impl<
             VoterYesNoView::InFavor => self.remove_in_favor_vote(vote.magnitude()),
             VoterYesNoView::Against => self.remove_against_vote(vote.magnitude()),
             VoterYesNoView::Abstain => self.remove_abstention(vote.magnitude()),
-        }
-    }
-}
-
-impl<
-        Signal: Parameter
-            + Copy
-            + From<u32>
-            + Default
-            + PartialOrd
-            + sp_std::ops::Add<Output = Signal>
-            + sp_std::ops::Sub<Output = Signal>,
-        FineArithmetic: PerThing + Default + sp_std::ops::Mul<Signal, Output = Signal>,
-        BlockNumber: Parameter + Copy + Default,
-    > UpdateOutcome for VoteState<Signal, FineArithmetic, BlockNumber>
-{
-    fn update_outcome(&self) -> Option<VoteState<Signal, FineArithmetic, BlockNumber>> {
-        let current_outcome = self.outcome();
-        match current_outcome {
-            VoteOutcome::Voting => {
-                if self.approved() {
-                    Some(VoteState {
-                        outcome: VoteOutcome::Approved,
-                        ..self.clone()
-                    })
-                } else {
-                    None
-                }
-            }
-            _ => None,
+            _ => self.clone(),
         }
     }
 }
@@ -392,7 +390,9 @@ pub enum VoteOutcome {
     /// The VoteState associated with the VoteId is open to voting by the given `ShareId`
     Voting,
     /// The VoteState is approved, thereby unlocking the next `VoteId` if it wraps Some(VoteId)
-    Approved,
+    ApprovedAndNotExpired,
+    /// Past the expiry time and approved
+    ApprovedAndExpired,
     /// The VoteState is rejected and all dependent `VoteId`s are not opened
     Rejected,
 }
@@ -400,14 +400,5 @@ pub enum VoteOutcome {
 impl Default for VoteOutcome {
     fn default() -> Self {
         VoteOutcome::NotStarted
-    }
-}
-
-impl Approved for VoteOutcome {
-    fn approved(&self) -> bool {
-        match self {
-            VoteOutcome::Approved => true,
-            _ => false,
-        }
     }
 }
