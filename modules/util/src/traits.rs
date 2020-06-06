@@ -93,7 +93,7 @@ pub trait ShareIssuance<OrgId, AccountId, Shares>:
     fn burn(
         organization: OrgId,
         old_owner: AccountId,
-        amount: Shares,
+        amount: Option<Shares>, // default None => burn all shares
         batch: bool,
     ) -> DispatchResult;
     fn batch_issue(organization: OrgId, genesis: Self::Genesis) -> DispatchResult;
@@ -292,32 +292,33 @@ pub trait VoteOnProposal<AccountId, OrgId, Threshold, BlockNumber, VoteId, Hash>
 // ~~~~~~~~ Bank Module ~~~~~~~~
 use crate::bank::OnChainTreasuryID;
 pub trait OnChainBank {
-    type OrgId: From<u32>;
     type TreasuryId: Clone + From<OnChainTreasuryID>;
+    type AssociatedId;
 }
-pub trait RegisterBankAccount<AccountId, GovernanceConfig, Currency>: OnChainBank {
+pub trait RegisterAccount<OrgId, AccountId, GovernanceConfig, Currency>: OnChainBank {
     // requires a deposit of some size above the minimum and returns the OnChainTreasuryID
-    fn register_on_chain_bank_account(
-        registered_org: Self::OrgId,
+    fn register_account(
+        caller: Option<AccountId>,
+        owners: OrgId,
         from: AccountId,
         amount: Currency,
         owner_s: GovernanceConfig,
     ) -> Result<Self::TreasuryId, DispatchError>;
-    fn check_bank_owner(bank_id: Self::TreasuryId, org: Self::OrgId) -> bool;
+    fn verify_owner(bank_id: Self::TreasuryId, org: OrgId) -> bool;
 } // people should be eventually able to solicit loans from others to SEED a bank account but they cede some or all of the control...
 
-pub trait OwnershipProportionCalculations<AccountId, GovernanceConfig, Currency, FineArithmetic>:
-    RegisterBankAccount<AccountId, GovernanceConfig, Currency>
+pub trait CalculateOwnership<OrgId, AccountId, GovernanceConfig, Currency, FineArithmetic>:
+    RegisterAccount<OrgId, AccountId, GovernanceConfig, Currency>
 {
     fn calculate_proportion_ownership_for_account(
         account: AccountId,
         group: GovernanceConfig,
-    ) -> Option<FineArithmetic>;
+    ) -> Result<FineArithmetic, DispatchError>;
     fn calculate_proportional_amount_for_account(
         amount: Currency,
         account: AccountId,
         group: GovernanceConfig,
-    ) -> Option<Currency>;
+    ) -> Result<Currency, DispatchError>;
 }
 
 pub trait FreeToReserved<Currency>: Sized {
@@ -341,7 +342,7 @@ pub trait DepositSpendOps<Currency>: Sized {
 }
 
 // notably, !\exists deposit_into_reservation || spend_from_free because those aren't supported _here_
-pub trait BankDepositsAndSpends<Currency> {
+pub trait DepositsAndSpends<Currency> {
     type Bank: DepositSpendOps<Currency> + GetBalance<Currency> + FreeToReserved<Currency>;
     fn make_infallible_deposit_into_free(bank: Self::Bank, amount: Currency) -> Self::Bank;
     // returns option if the `DepositSpendOps` does, propagate that NotEnoughFundsError
@@ -356,15 +357,15 @@ pub trait BankDepositsAndSpends<Currency> {
 }
 
 // useful for testing, the invariant is that the storage item returned from the first method should have self.free + self.reserved == the balance returned from the second method (for the same bank_id)
-pub trait CheckBankBalances<Currency>: OnChainBank + BankDepositsAndSpends<Currency> {
+pub trait CheckBankBalances<Currency>: OnChainBank + DepositsAndSpends<Currency> {
     // prefer this method in most cases because
     fn get_bank_store(bank_id: Self::TreasuryId) -> Option<Self::Bank>;
     // -> invariant for module is that this returns the same as if you calculate total balance from the above storage item
     fn calculate_total_bank_balance_from_balances(bank_id: Self::TreasuryId) -> Option<Currency>;
 }
 
-pub trait DepositIntoBank<AccountId, GovernanceConfig, Hash, Currency>:
-    RegisterBankAccount<AccountId, GovernanceConfig, Currency> + BankDepositsAndSpends<Currency>
+pub trait DepositIntoBank<OrgId, AccountId, GovernanceConfig, Currency, Hash>:
+    RegisterAccount<OrgId, AccountId, GovernanceConfig, Currency> + DepositsAndSpends<Currency>
 {
     // get the bank corresponding to bank_id call infallible deposit
     // - only fails if `from` doesn't have enough Currency
@@ -373,7 +374,23 @@ pub trait DepositIntoBank<AccountId, GovernanceConfig, Hash, Currency>:
         to_bank_id: Self::TreasuryId,
         amount: Currency,
         reason: Hash,
-    ) -> Result<u32, DispatchError>; // returns DepositId
+    ) -> Result<Self::AssociatedId, DispatchError>; // returns DepositId
+}
+
+pub trait DefaultBankPermissions<OrgId, AccountId, Currency, WithdrawalPermissions>:
+    DepositsAndSpends<Currency>
+{
+    fn can_register_account(account: &AccountId, on_behalf_of: OrgId) -> bool;
+    fn withdrawal_permissions_satisfy_org_standards(
+        org: OrgId,
+        withdrawal_permissions: WithdrawalPermissions,
+    ) -> bool;
+    fn can_reserve_for_spend(account: &AccountId, bank: Self::Bank) -> bool;
+    fn can_commit_reserved_spend_for_transfer(account: &AccountId, bank: Self::Bank) -> bool;
+    fn can_unreserve_uncommitted_to_make_free(account: &AccountId, bank: Self::Bank) -> bool;
+    fn can_unreserve_committed_to_make_free(account: &AccountId, bank: Self::Bank) -> bool;
+    fn can_transfer_spending_power(account: &AccountId, bank: Self::Bank) -> bool;
+    fn can_commit_and_transfer_spending_power(account: &AccountId, bank: Self::Bank) -> bool;
 }
 
 // One good question here might be, why are we passing the caller into this
@@ -387,69 +404,69 @@ pub trait DepositIntoBank<AccountId, GovernanceConfig, Hash, Currency>:
 // get the storage item in this method (because we don't pass it in and I
 // struggle to see a clean design in which we pass it in but don't
 // encourage/enable unsafe puts)
-pub trait BankReservations<AccountId, GovernanceConfig, Currency, Hash>:
-    RegisterBankAccount<AccountId, GovernanceConfig, Currency>
+pub trait ReservationMachine<OrgId, AccountId, GovernanceConfig, Currency, Hash>:
+    RegisterAccount<OrgId, AccountId, GovernanceConfig, Currency>
 {
     fn reserve_for_spend(
-        caller: AccountId, // must be in owner_s: GovernanceConfig for BankState, that's the auth
+        caller: Option<AccountId>, // must be in owner_s: GovernanceConfig for BankState, that's the auth
         bank_id: Self::TreasuryId,
         reason: Hash,
         amount: Currency,
         // acceptance committee for approving set aside spends below the amount
         controller: GovernanceConfig,
-    ) -> Result<u32, DispatchError>;
+    ) -> Result<Self::AssociatedId, DispatchError>;
     // only reserve.controller() can unreserve funds after commitment (with method further down)
     fn commit_reserved_spend_for_transfer(
-        caller: AccountId,
+        caller: Option<AccountId>,
         bank_id: Self::TreasuryId,
-        reservation_id: u32,
+        reservation_id: Self::AssociatedId,
         reason: Hash,
         amount: Currency,
         expected_future_owner: GovernanceConfig,
     ) -> DispatchResult;
     // bank controller can unreserve if not committed
     fn unreserve_uncommitted_to_make_free(
-        caller: AccountId,
+        caller: Option<AccountId>,
         bank_id: Self::TreasuryId,
-        reservation_id: u32,
+        reservation_id: Self::AssociatedId,
         amount: Currency,
     ) -> DispatchResult;
     // reservation.controller() can unreserve committed funds
     fn unreserve_committed_to_make_free(
-        caller: AccountId,
+        caller: Option<AccountId>,
         bank_id: Self::TreasuryId,
-        reservation_id: u32,
+        reservation_id: Self::AssociatedId,
         amount: Currency,
     ) -> DispatchResult;
     // reservation.controller() transfers control power to new_controller and enables liquidity by this controller
     fn transfer_spending_power(
-        caller: AccountId,
+        caller: Option<AccountId>,
         bank_id: Self::TreasuryId,
         reason: Hash,
         // reference to specific reservation
-        reservation_id: u32,
+        reservation_id: Self::AssociatedId,
         amount: Currency,
         // move control of funds to new outer group which can reserve or withdraw directly
         new_controller: GovernanceConfig,
-    ) -> Result<u32, DispatchError>; // returns transfer_id
+    ) -> Result<Self::AssociatedId, DispatchError>; // returns transfer_id
 }
 
-pub trait CommitAndTransfer<AccountId, GovernanceConfig, Currency, Hash>:
-    BankReservations<AccountId, GovernanceConfig, Currency, Hash>
+pub trait CommitAndTransfer<OrgId, AccountId, GovernanceConfig, Currency, Hash>:
+    ReservationMachine<OrgId, AccountId, GovernanceConfig, Currency, Hash>
 {
     // in one step
     fn commit_and_transfer_spending_power(
         caller: AccountId,
         bank_id: Self::TreasuryId,
-        reservation_id: u32,
+        reservation_id: Self::AssociatedId,
         reason: Hash,
         amount: Currency,
         new_controller: GovernanceConfig,
-    ) -> Result<u32, DispatchError>;
+    ) -> Result<Self::AssociatedId, DispatchError>;
 }
 
-pub trait BankSpends<AccountId, GovernanceConfig, Currency>:
-    OnChainBank + RegisterBankAccount<AccountId, GovernanceConfig, Currency>
+pub trait ExecuteSpends<OrgId, AccountId, GovernanceConfig, Currency, Hash>:
+    OnChainBank + ReservationMachine<OrgId, AccountId, GovernanceConfig, Currency, Hash>
 {
     fn spend_from_free(
         from_bank_id: Self::TreasuryId,
@@ -459,13 +476,11 @@ pub trait BankSpends<AccountId, GovernanceConfig, Currency>:
     fn spend_from_transfers(
         from_bank_id: Self::TreasuryId,
         // transfer_id
-        id: u32,
+        id: Self::AssociatedId,
         to: AccountId,
         amount: Currency,
     ) -> Result<Currency, DispatchError>;
 }
-
-// soon-to-be new module: Term Sheet
 
 // Note to Self: the game theoretic move will be to unreserve all the capital and trade it
 // so that has to be controlled in the context of this request. There are a few options to solve
@@ -525,50 +540,6 @@ pub trait MoveFundsOutUnCommittedOnly<Currency>: Sized {
 //            (2) moving out of transfer during withdrawal
 pub trait MoveFundsOutCommittedOnly<Currency>: Sized {
     fn move_funds_out_committed_only(&self, amount: Currency) -> Option<Self>;
-}
-
-pub trait BankStorageInfo<AccountId, GovernanceConfig, Currency>:
-    RegisterBankAccount<AccountId, GovernanceConfig, Currency>
-{
-    type DepositInfo;
-    type ReservationInfo: MoveFundsOutUnCommittedOnly<Currency>
-        + MoveFundsOutCommittedOnly<Currency>;
-    type TransferInfo: MoveFundsOutCommittedOnly<Currency>;
-    // deposit
-    fn get_deposits_by_account(
-        bank_id: Self::TreasuryId,
-        depositer: AccountId,
-    ) -> Option<Vec<Self::DepositInfo>>;
-    fn total_capital_deposited_by_account(
-        bank_id: Self::TreasuryId,
-        depositer: AccountId,
-    ) -> Currency;
-    // reservations
-    fn get_amount_left_in_spend_reservation(
-        bank_id: Self::TreasuryId,
-        reservation_id: u32,
-    ) -> Option<Currency>;
-    fn get_reservations_for_governance_config(
-        bank_id: Self::TreasuryId,
-        invoker: GovernanceConfig,
-    ) -> Option<Vec<Self::ReservationInfo>>;
-    fn total_capital_reserved_for_governance_config(
-        bank_id: Self::TreasuryId,
-        invoker: GovernanceConfig,
-    ) -> Currency;
-    // transfers
-    fn get_amount_left_in_approved_transfer(
-        bank_id: Self::TreasuryId,
-        transfer_id: u32,
-    ) -> Option<Currency>;
-    fn get_transfers_for_governance_config(
-        bank_id: Self::TreasuryId,
-        invoker: GovernanceConfig,
-    ) -> Option<Vec<Self::TransferInfo>>;
-    fn total_capital_transferred_to_governance_config(
-        bank_id: Self::TreasuryId,
-        invoker: GovernanceConfig,
-    ) -> Currency;
 }
 
 // ~~~~~~~~ Bounty Module ~~~~~~~~

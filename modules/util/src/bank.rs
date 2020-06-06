@@ -41,42 +41,30 @@ pub enum BankMapID {
     InternalTransfer,
 }
 
-#[derive(new, PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
-pub struct BankTrackerIdentifier {
-    treasury_id: OnChainTreasuryID,
-    tracker_id: BankTrackerID,
-}
-
-impl From<(OnChainTreasuryID, BankTrackerID)> for BankTrackerIdentifier {
-    fn from(other: (OnChainTreasuryID, BankTrackerID)) -> BankTrackerIdentifier {
-        BankTrackerIdentifier::new(other.0, other.1)
-    }
-}
-
 #[derive(PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
 /// Identifiers for tracking actions by specific individual AccountId to _eventually_ enforce limits on this behavior
-pub enum BankTrackerID {
+pub enum BankTrackerID<T: From<u32>> {
     // acceptable only if the withdrawer burns their ownership
     SpentFromFree,
     // allowed from any member of the bank's controller
     ReservedSpend,
     // wraos reservation_id, allowed from any member of bank's controller
-    UnReservedSpendFromUnCommitted(u32),
+    UnReservedSpendFromUnCommitted(T),
     // wraps reservation_id, allowed from any member of reservation's controller
-    UnReservedSpendFromCommitted(u32),
+    UnReservedSpendFromCommitted(T),
     // wraps reservation_id, allowed from any member of spend reservation's controller
-    CommitSpend(u32),
+    CommitSpend(T),
     // wraps reservation_id, allowed from any member of the controller in the reference
-    InternalTransferMade(u32),
+    InternalTransferMade(T),
     // wraps transfer_id, only acceptable withdrawal from reserved, must follow configured decision process
-    SpentFromReserved(u32),
+    SpentFromReserved(T),
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
 /// The simplest `GovernanceConfig`
 /// - has no magnitude context and is limited for that reason
 /// - future version will use revocable representative governance
-pub enum WithdrawalPermissions<Id: Codec + PartialEq + Zero + From<u32> + Copy, AccountId> {
+pub enum WithdrawalPermissions<Id, AccountId> {
     // any of two accounts can reserve free capital for spending
     TwoAccounts(AccountId, AccountId),
     // withdrawal permissions restricted by weighted membership in organization
@@ -468,9 +456,9 @@ impl<
 #[derive(new, PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
 /// Transfers withdrawal control to the new_controller
 /// - them referencing this item in storage is the authentication necessary for withdrawals from the Bank
-pub struct InternalTransferInfo<Hash, Currency, GovernanceConfig> {
+pub struct InternalTransferInfo<Id, Hash, Currency, GovernanceConfig> {
     // the referenced Reservation from which this originated
-    reference_id: u32,
+    reference_id: Id,
     // the reason for this transfer
     reason: Hash,
     // the amount transferred
@@ -479,10 +467,10 @@ pub struct InternalTransferInfo<Hash, Currency, GovernanceConfig> {
     controller: GovernanceConfig,
 }
 
-impl<Hash: Clone, Currency: Clone, GovernanceConfig: Clone>
-    InternalTransferInfo<Hash, Currency, GovernanceConfig>
+impl<Id: Copy, Hash: Clone, Currency: Clone, GovernanceConfig: Clone>
+    InternalTransferInfo<Id, Hash, Currency, GovernanceConfig>
 {
-    pub fn id(&self) -> u32 {
+    pub fn id(&self) -> Id {
         self.reference_id
     }
     pub fn reason(&self) -> Hash {
@@ -497,16 +485,17 @@ impl<Hash: Clone, Currency: Clone, GovernanceConfig: Clone>
 }
 
 impl<
+        Id: Copy,
         Hash: Clone,
         Currency: Clone + sp_std::ops::Sub<Output = Currency> + PartialOrd,
         GovernanceConfig: Clone,
     > MoveFundsOutCommittedOnly<Currency>
-    for InternalTransferInfo<Hash, Currency, GovernanceConfig>
+    for InternalTransferInfo<Id, Hash, Currency, GovernanceConfig>
 {
     fn move_funds_out_committed_only(
         &self,
         amount: Currency,
-    ) -> Option<InternalTransferInfo<Hash, Currency, GovernanceConfig>> {
+    ) -> Option<InternalTransferInfo<Id, Hash, Currency, GovernanceConfig>> {
         if self.amount() >= amount {
             let new_amount = self.amount() - amount;
             Some(InternalTransferInfo {

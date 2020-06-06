@@ -318,7 +318,7 @@ decl_module! {
                                     || Self::is_organization_supervisor(organization, &burner);
             ensure!(authentication, Error::<T>::NotAuthorizedToBurnShares);
 
-            Self::burn(organization, who.clone(), shares, false)?;
+            Self::burn(organization, who.clone(), Some(shares), false)?;
             Self::deposit_event(RawEvent::SharesBurned(organization, who, shares));
             Ok(())
         }
@@ -708,29 +708,33 @@ impl<T: Trait> ShareIssuance<T::OrgId, T::AccountId, T::Shares> for Module<T> {
         <Members<T>>::insert(organization, new_owner, new_profile);
         Ok(())
     }
-    // does not necessarily leave ownership, unless the new amount is 0
     fn burn(
         organization: T::OrgId,
         old_owner: T::AccountId,
-        amount: T::Shares,
+        amount: Option<T::Shares>,
         batch: bool,
     ) -> DispatchResult {
         let old_profile = <Members<T>>::get(organization, &old_owner)
             .ok_or(Error::<T>::NotEnoughSharesToSatisfyBurnRequest)?;
         let old_issuance = <TotalIssuance<T>>::get(organization);
+        let amt_to_burn = if let Some(specific_amt) = amount {
+            ensure!(
+                old_profile.total() >= specific_amt,
+                Error::<T>::NotEnoughSharesToSatisfyBurnRequest
+            );
+            specific_amt
+        } else {
+            old_profile.total()
+        };
         ensure!(
-            old_issuance >= amount,
+            old_issuance >= amt_to_burn,
             Error::<T>::CannotBurnMoreThanTotalIssuance
         );
-        ensure!(
-            old_profile.total() >= amount,
-            Error::<T>::NotEnoughSharesToSatisfyBurnRequest
-        );
         if !batch {
-            let new_issuance = old_issuance - amount;
+            let new_issuance = old_issuance - amt_to_burn;
             <TotalIssuance<T>>::insert(organization, new_issuance);
         }
-        let new_profile = old_profile.subtract_shares(amount);
+        let new_profile = old_profile.subtract_shares(amt_to_burn);
         if new_profile.is_zero() {
             // leave the group
             <Members<T>>::remove(organization, old_owner);
@@ -771,7 +775,7 @@ impl<T: Trait> ShareIssuance<T::OrgId, T::AccountId, T::Shares> for Module<T> {
             .account_ownership()
             .into_iter()
             .map(|(member, shares)| -> DispatchResult {
-                Self::issue(organization, member, shares, true)
+                Self::burn(organization, member, Some(shares), true)
             })
             .collect::<DispatchResult>()?;
         <TotalIssuance<T>>::insert(organization, new_issuance);
