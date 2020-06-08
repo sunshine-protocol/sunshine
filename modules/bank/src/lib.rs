@@ -17,7 +17,7 @@ use util::{
     traits::{
         CalculateOwnership, CheckBankBalances, CommitAndTransfer, CommitSpendReservation,
         DefaultBankPermissions, DepositIntoBank, DepositSpendOps, DepositsAndSpends, ExecuteSpends,
-        FreeToReserved, GenerateUniqueID, GetGroupSize, GroupMembership, IDIsAvailable,
+        FreeToReserved, GenerateUniqueID, GetGroupSize, GroupMembership, IDIsAvailable, Increment,
         MoveFundsOutCommittedOnly, MoveFundsOutUnCommittedOnly, OnChainBank,
         OrganizationSupervisorPermissions, RegisterAccount, ReservationMachine,
         SeededGenerateUniqueID, ShareInformation, ShareIssuance, TermSheetExit,
@@ -453,9 +453,9 @@ impl<T: Trait> SeededGenerateUniqueID<T::BankAssociatedId, (OnChainTreasuryID, B
 
 impl<T: Trait> GenerateUniqueID<OnChainTreasuryID> for Module<T> {
     fn generate_unique_id() -> OnChainTreasuryID {
-        let mut treasury_nonce_id = BankIDNonce::get().iterate();
+        let mut treasury_nonce_id = BankIDNonce::get().increment();
         while !Self::id_is_available(treasury_nonce_id) {
-            treasury_nonce_id = treasury_nonce_id.iterate();
+            treasury_nonce_id = treasury_nonce_id.increment();
         }
         BankIDNonce::put(treasury_nonce_id);
         treasury_nonce_id

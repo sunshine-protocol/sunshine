@@ -27,6 +27,7 @@ impl Default for BountyMapID {
 /// The information most often read after a specific bounty is GOT
 pub struct BountyInformation<
     OrgId: Codec + PartialEq + Zero + From<u32> + Copy,
+    ReservationId,
     Hash,
     Currency,
     ReviewBoard,
@@ -40,7 +41,7 @@ pub struct BountyInformation<
     bank_account: OnChainTreasuryID,
     // Spend reservation identifier for funds set aside for bounty
     // TODO: update when funds are spent and a new spend reservation is required (gc)
-    spend_reservation_id: u32,
+    spend_reservation_id: ReservationId,
     // Collateral amount in the bank account (TODO: refresh method for syncing balance)
     funding_reserved: Currency,
     // Amount claimed to have on hand to fund projects related to the bounty
@@ -55,10 +56,11 @@ pub struct BountyInformation<
 
 impl<
         OrgId: Codec + PartialEq + Zero + From<u32> + Copy,
+        ReservationId: Codec + PartialEq + Zero + From<u32> + Copy,
         Hash: Parameter,
         Currency: Parameter,
         ReviewBoard: Clone,
-    > BountyInformation<OrgId, Hash, Currency, ReviewBoard>
+    > BountyInformation<OrgId, ReservationId, Hash, Currency, ReviewBoard>
 {
     // get OrgId for sponsor org basically
     pub fn foundation(&self) -> OrgId {
@@ -67,7 +69,7 @@ impl<
     pub fn bank_account(&self) -> OnChainTreasuryID {
         self.bank_account
     }
-    pub fn spend_reservation(&self) -> u32 {
+    pub fn spend_reservation(&self) -> ReservationId {
         self.spend_reservation_id
     }
     pub fn claimed_funding_available(&self) -> Currency {
@@ -83,10 +85,9 @@ impl<
 
 #[derive(new, PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug)]
 /// Identifier for each registered team
-/// -> RULE: same org as bounty_info.foundation()
 pub struct TeamID<OrgId: Codec + PartialEq + Zero + From<u32> + Copy, AccountId> {
     /// Optional sudo (direction => revocable representative democracy)
-    /// -> may not be same as org_sudo!
+    /// -> may not be same as self.org.sudo() but will be by default if not otherwise set
     sudo: Option<AccountId>,
     /// Organization identifier
     org: OrgId,
@@ -117,15 +118,10 @@ pub enum ReviewBoard<
 > {
     /// Petition pre-call-metadata
     /// optional sudo, org_id, flat_share_id, signature_approval_threshold, signature_rejection_threshold, topic
-    FlatPetitionReview(Option<AccountId>, OrgId, u32, Option<u32>, Option<Hash>),
+    Consent(Option<AccountId>, OrgId, u32, Option<u32>, Option<Hash>),
     /// Vote-YesNo pre-call-metadata
     /// optional sudo, org_id, weighted_share_id, threshold expressed generically
-    WeightedThresholdReview(
-        Option<AccountId>,
-        OrgId,
-        crate::voteyesno::SupportedVoteTypes,
-        WeightedThreshold,
-    ),
+    Threshold(Option<AccountId>, OrgId, WeightedThreshold),
 }
 
 impl<
@@ -135,27 +131,26 @@ impl<
         WeightedThreshold,
     > ReviewBoard<OrgId, AccountId, Hash, WeightedThreshold>
 {
-    pub fn new_flat_petition_review(
+    pub fn new_consent_review(
         sudo: Option<AccountId>,
         org_id: OrgId,
         approval_threshold: u32,
         reject_threshold: Option<u32>,
         topic: Option<Hash>,
     ) -> ReviewBoard<OrgId, AccountId, Hash, WeightedThreshold> {
-        ReviewBoard::FlatPetitionReview(sudo, org_id, approval_threshold, reject_threshold, topic)
+        ReviewBoard::Consent(sudo, org_id, approval_threshold, reject_threshold, topic)
     }
-    pub fn new_weighted_threshold_review(
+    pub fn new_threshold_review(
         sudo: Option<AccountId>,
         org_id: OrgId,
-        vote_type: crate::voteyesno::SupportedVoteTypes,
         threshold: WeightedThreshold,
     ) -> ReviewBoard<OrgId, AccountId, Hash, WeightedThreshold> {
-        ReviewBoard::WeightedThresholdReview(sudo, org_id, vote_type, threshold)
+        ReviewBoard::Threshold(sudo, org_id, vote_type, threshold)
     }
     pub fn is_sudo(&self, acc: &AccountId) -> bool {
         match self {
-            ReviewBoard::FlatPetitionReview(Some(the_sudo), _, _, _, _) => the_sudo == acc,
-            ReviewBoard::WeightedThresholdReview(Some(the_sudo), _, _, _) => the_sudo == acc,
+            ReviewBoard::Consent(Some(the_sudo), _, _, _, _) => the_sudo == acc,
+            ReviewBoard::Threshold(Some(the_sudo), _, _, _) => the_sudo == acc,
             _ => false,
         }
     }
@@ -163,45 +158,66 @@ impl<
 
 #[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug)]
 /// Strongly typed vote identifier
-pub enum VoteID {
-    Petition(u32),
-    Threshold(u32),
+pub enum VoteID<VId> {
+    Consent(VId),
+    Threshold(VId),
 }
 
 #[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug)]
-pub enum MilestoneStatus {
+pub enum MilestoneStatus<VId, TransferId> {
     SubmittedAwaitingResponse,
-    SubmittedReviewStarted(VoteID),
+    SubmittedReviewStarted(VoteID<VId>),
     // if the milestone is approved but the approved application does not
     // have enough funds to satisfy milestone requirement, then this is set and we try again later...
     ApprovedButNotTransferred,
     // wraps Some(transfer_id) (bank_id is provided for convenient lookup, must equal bounty.bank)
     // None if the transfer wasn't able to be afforded at the time so it hasn't happened yet
-    ApprovedAndTransferEnabled(OnChainTreasuryID, u32),
+    ApprovedAndTransferEnabled(OnChainTreasuryID, TransferId),
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-pub struct MilestoneSubmission<Hash, Currency, AccountId> {
+pub struct MilestoneSubmission<Hash, Currency, AccountId, ApplicationId, TeamId, MilestoneStatus> {
     submitter: AccountId,
     // the approved application from which the milestone derives its legitimacy
-    referenced_application: u32,
-    team_id: u32, // TODO: map from team_id => TeamID<OrgId, ShareId, AccountId>, adds a lookup but worth it long term IMO
+    referenced_application: ApplicationId,
+    team_id: TeamId, // TODO: map from team_id => TeamID<OrgId, ShareId, AccountId>, adds a lookup but worth it long term IMO
     submission: Hash,
     amount: Currency,
     // the review status, none upon immediate submission
     state: MilestoneStatus,
 }
 
-impl<Hash: Clone, Currency: Clone, AccountId: Clone>
-    MilestoneSubmission<Hash, Currency, AccountId>
+impl<
+        Hash: Clone,
+        Currency: Clone,
+        AccountId: Clone,
+        ApplicationId: Copy,
+        OrgId: Codec + PartialEq + Zero + From<u32> + Copy,
+        VId: Codec + PartialEq + Zero + From<u32> + Copy,
+    >
+    MilestoneSubmission<
+        Hash,
+        Currency,
+        AccountId,
+        ApplicationId,
+        TeamID<OrgId, AccountId>,
+        MilestoneStatus<VId, ApplicationId>,
+    >
 {
     pub fn new(
         submitter: AccountId,
-        referenced_application: u32,
-        team_id: u32,
+        referenced_application: ApplicationId,
+        team_id: TeamID<OrgId, AccountId>,
         submission: Hash,
         amount: Currency,
-    ) -> MilestoneSubmission<Hash, Currency, AccountId> {
+    ) -> MilestoneSubmission<
+        Hash,
+        Currency,
+        AccountId,
+        ApplicationId,
+        TeamID<OrgId, AccountId>,
+        MilestoneStatus<VId, ApplicationId>,
+    > {
         MilestoneSubmission {
             submitter,
             referenced_application,
@@ -211,11 +227,11 @@ impl<Hash: Clone, Currency: Clone, AccountId: Clone>
             state: MilestoneStatus::SubmittedAwaitingResponse,
         }
     }
-    pub fn application_id(&self) -> u32 {
+    pub fn application_id(&self) -> ApplicationId {
         self.referenced_application
     }
-    pub fn team_id(&self) -> u32 {
-        self.team_id
+    pub fn team_id(&self) -> TeamID<OrgId, AccountId> {
+        self.team_id.clone()
     }
     pub fn submission(&self) -> Hash {
         self.submission.clone()
@@ -223,7 +239,7 @@ impl<Hash: Clone, Currency: Clone, AccountId: Clone>
     pub fn amount(&self) -> Currency {
         self.amount.clone()
     }
-    pub fn state(&self) -> MilestoneStatus {
+    pub fn state(&self) -> MilestoneStatus<VId, ApplicationId> {
         self.state
     }
     pub fn ready_for_review(&self) -> bool {
@@ -234,35 +250,63 @@ impl<Hash: Clone, Currency: Clone, AccountId: Clone>
     }
 }
 
-impl<Hash: Clone, Currency: Clone, AccountId: Clone> StartReview<VoteID>
-    for MilestoneSubmission<Hash, Currency, AccountId>
+impl<
+        Hash: Clone,
+        Currency: Clone,
+        AccountId: Clone,
+        ApplicationId: Copy,
+        OrgId: Codec + PartialEq + Zero + From<u32> + Copy,
+        VId: Codec + PartialEq + Zero + From<u32> + Copy,
+    > StartReview<VoteID<VId>>
+    for MilestoneSubmission<
+        Hash,
+        Currency,
+        AccountId,
+        ApplicationId,
+        TeamID<OrgId, AccountId>,
+        MilestoneStatus<VId, ApplicationId>,
+    >
 {
-    fn start_review(&self, vote_id: VoteID) -> Self {
+    fn start_review(&self, vote_id: VoteID<VId>) -> Self {
         MilestoneSubmission {
             submitter: self.submitter.clone(),
             referenced_application: self.referenced_application,
-            team_id: self.team_id,
+            team_id: self.team_id.clone(),
             submission: self.submission.clone(),
             amount: self.amount.clone(),
             state: MilestoneStatus::SubmittedReviewStarted(vote_id),
         }
     }
-    fn get_review_id(&self) -> Option<VoteID> {
-        match self.state {
+    fn get_review_id(&self) -> Option<VoteID<VId>> {
+        match self.state.clone() {
             MilestoneStatus::SubmittedReviewStarted(vote_id) => Some(vote_id),
             _ => None,
         }
     }
 }
 
-impl<Hash: Clone, Currency: Clone, AccountId: Clone> ApproveWithoutTransfer
-    for MilestoneSubmission<Hash, Currency, AccountId>
+impl<
+        Hash: Clone,
+        Currency: Clone,
+        AccountId: Clone,
+        ApplicationId: Copy,
+        OrgId: Codec + PartialEq + Zero + From<u32> + Copy,
+        VId: Codec + PartialEq + Zero + From<u32> + Copy,
+    > ApproveWithoutTransfer
+    for MilestoneSubmission<
+        Hash,
+        Currency,
+        AccountId,
+        ApplicationId,
+        TeamID<OrgId, AccountId>,
+        MilestoneStatus<VId, ApplicationId>,
+    >
 {
     fn approve_without_transfer(&self) -> Self {
         MilestoneSubmission {
             submitter: self.submitter.clone(),
             referenced_application: self.referenced_application,
-            team_id: self.team_id,
+            team_id: self.team_id.clone(),
             submission: self.submission.clone(),
             amount: self.amount.clone(),
             state: MilestoneStatus::ApprovedButNotTransferred,
@@ -270,14 +314,28 @@ impl<Hash: Clone, Currency: Clone, AccountId: Clone> ApproveWithoutTransfer
     }
 }
 
-impl<Hash: Clone, Currency: Clone, AccountId: Clone> SetMakeTransfer<OnChainTreasuryID, u32>
-    for MilestoneSubmission<Hash, Currency, AccountId>
+impl<
+        Hash: Clone,
+        Currency: Clone,
+        AccountId: Clone,
+        ApplicationId: Copy,
+        OrgId: Codec + PartialEq + Zero + From<u32> + Copy,
+        VId: Codec + PartialEq + Zero + From<u32> + Copy,
+    > SetMakeTransfer<OnChainTreasuryID, ApplicationId>
+    for MilestoneSubmission<
+        Hash,
+        Currency,
+        AccountId,
+        ApplicationId,
+        TeamID<OrgId, AccountId>,
+        MilestoneStatus<VId, ApplicationId>,
+    >
 {
-    fn set_make_transfer(&self, bank_id: OnChainTreasuryID, transfer_id: u32) -> Self {
+    fn set_make_transfer(&self, bank_id: OnChainTreasuryID, transfer_id: ApplicationId) -> Self {
         MilestoneSubmission {
             submitter: self.submitter.clone(),
             referenced_application: self.referenced_application,
-            team_id: self.team_id,
+            team_id: self.team_id.clone(),
             submission: self.submission.clone(),
             amount: self.amount.clone(),
             state: MilestoneStatus::ApprovedAndTransferEnabled(bank_id, transfer_id),
@@ -289,7 +347,7 @@ impl<Hash: Clone, Currency: Clone, AccountId: Clone> SetMakeTransfer<OnChainTrea
             _ => None,
         }
     }
-    fn get_transfer_id(&self) -> Option<u32> {
+    fn get_transfer_id(&self) -> Option<ApplicationId> {
         match self.state {
             MilestoneStatus::ApprovedAndTransferEnabled(_, transfer_id) => Some(transfer_id),
             _ => None,
@@ -299,44 +357,60 @@ impl<Hash: Clone, Currency: Clone, AccountId: Clone> SetMakeTransfer<OnChainTrea
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 /// All variants hold identifiers which point to larger objects in runtime storage maps
-pub enum ApplicationState<Id: Codec + PartialEq + Zero + From<u32> + Copy> {
+pub enum ApplicationState<TeamId, VId> {
     SubmittedAwaitingResponse,
-    // wraps a VoteId for the acceptance committee
-    UnderReviewByAcceptanceCommittee(VoteID),
-    // includes the flat_share_id, and the
-    ApprovedByFoundationAwaitingTeamConsent(Id, VoteID),
+    // wraps a vote_id for the acceptance committee
+    UnderReviewByAcceptanceCommittee(VId),
+    // wraps team_id, vote_id
+    ApprovedByFoundationAwaitingTeamConsent(TeamId, VId),
     // team is working on this grant now under this organizational identifier
-    ApprovedAndLive(Id),
+    ApprovedAndLive(TeamId),
     // closed for some reason
     Closed,
 }
 
-impl<Id: Codec + PartialEq + Zero + From<u32> + Copy> ApplicationState<Id> {
-    // basically, can be approved (notably not when already approved)
-    pub fn live(&self) -> bool {
+impl<TeamId: Clone, VId: Codec + PartialEq + Zero + From<u32> + Copy>
+    ApplicationState<TeamId, VoteID<VId>>
+{
+    pub fn awaiting_review(&self) -> bool {
         match self {
             ApplicationState::SubmittedAwaitingResponse => true,
-            ApplicationState::UnderReviewByAcceptanceCommittee(_) => true,
             _ => false,
         }
     }
-    pub fn matches_registered_team(&self, team_id: Id) -> bool {
+    // basically, can be approved (notably not when already approved)
+    pub fn under_review_by_acceptance_committee(self) -> Option<VoteID<VId>> {
         match self {
-            ApplicationState::ApprovedAndLive(tid) => tid == &team_id,
-            _ => false,
+            ApplicationState::SubmittedAwaitingResponse => None,
+            ApplicationState::UnderReviewByAcceptanceCommittee(vote_id) => Some(vote_id),
+            _ => None,
+        }
+    }
+    pub fn awaiting_team_consent(self) -> Option<(TeamId, VoteID<VId>)> {
+        match self {
+            ApplicationState::ApprovedByFoundationAwaitingTeamConsent(team_id, vote_id) => {
+                Some((team_id, vote_id))
+            }
+            _ => None,
+        }
+    }
+    pub fn approved_and_live(self) -> Option<TeamId> {
+        match self {
+            ApplicationState::ApprovedAndLive(tid) => Some(tid),
+            _ => None,
         }
     }
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub struct GrantApplication<
-    Id: Codec + PartialEq + Zero + From<u32> + Copy,
     AccountId,
     Shares,
     Currency,
     Hash,
+    State, // generic to not add 2 more type params
 > {
-    /// Useful and necessary metadata
+    /// The submitter is logged with submission
     submitter: AccountId,
     /// The ipfs reference to the application information
     description: Hash,
@@ -345,23 +419,25 @@ pub struct GrantApplication<
     /// The terms of agreement that must agreed to by all members before the bounty execution starts
     terms_of_agreement: TermsOfAgreement<AccountId, Shares>,
     /// state of the application
-    state: ApplicationState<Id>,
+    state: State,
 }
 
 impl<
-        Id: Codec + PartialEq + Zero + From<u32> + Copy,
         AccountId: Clone,
         Shares: Clone,
         Currency: Clone,
         Hash: Clone,
-    > GrantApplication<Id, AccountId, Shares, Currency, Hash>
+        TeamId: Clone,
+        VId: Codec + PartialEq + Zero + From<u32> + Copy,
+    > GrantApplication<AccountId, Shares, Currency, Hash, ApplicationState<TeamId, VoteID<VId>>>
 {
     pub fn new(
         submitter: AccountId,
         description: Hash,
         total_amount: Currency,
         terms_of_agreement: TermsOfAgreement<AccountId, Shares>,
-    ) -> GrantApplication<Id, AccountId, Shares, Currency, Hash> {
+    ) -> GrantApplication<AccountId, Shares, Currency, Hash, ApplicationState<TeamId, VoteID<VId>>>
+    {
         GrantApplication {
             submitter,
             description,
@@ -370,7 +446,7 @@ impl<
             state: ApplicationState::SubmittedAwaitingResponse,
         }
     }
-    pub fn state(&self) -> ApplicationState<Id> {
+    pub fn state(&self) -> ApplicationState<TeamId, VoteID<VId>> {
         self.state.clone()
     }
     pub fn total_amount(&self) -> Currency {
@@ -382,14 +458,16 @@ impl<
 }
 
 impl<
-        Id: Codec + PartialEq + Zero + From<u32> + Copy,
         AccountId: Clone,
         Shares: Clone,
         Currency: Clone,
         Hash: Clone,
-    > StartReview<VoteID> for GrantApplication<Id, AccountId, Shares, Currency, Hash>
+        TeamId: Clone,
+        VId: Codec + PartialEq + Zero + From<u32> + Copy,
+    > StartReview<VoteID<VId>>
+    for GrantApplication<AccountId, Shares, Currency, Hash, ApplicationState<TeamId, VoteID<VId>>>
 {
-    fn start_review(&self, vote_id: VoteID) -> Self {
+    fn start_review(&self, vote_id: VoteID<VId>) -> Self {
         GrantApplication {
             submitter: self.submitter.clone(),
             description: self.description.clone(),
@@ -398,7 +476,7 @@ impl<
             state: ApplicationState::UnderReviewByAcceptanceCommittee(vote_id),
         }
     }
-    fn get_review_id(&self) -> Option<VoteID> {
+    fn get_review_id(&self) -> Option<VoteID<VId>> {
         match self.state() {
             ApplicationState::UnderReviewByAcceptanceCommittee(vote_id) => Some(vote_id),
             _ => None,
@@ -407,31 +485,32 @@ impl<
 }
 
 impl<
-        Id: Codec + PartialEq + Zero + From<u32> + Copy,
         AccountId: Clone,
         Shares: Clone,
         Currency: Clone,
         Hash: Clone,
-    > StartTeamConsentPetition<Id, VoteID>
-    for GrantApplication<Id, AccountId, Shares, Currency, Hash>
+        TeamId: Clone,
+        VId: Codec + PartialEq + Zero + From<u32> + Copy,
+    > StartTeamConsentPetition<TeamId, VoteID<VId>>
+    for GrantApplication<AccountId, Shares, Currency, Hash, ApplicationState<TeamId, VoteID<VId>>>
 {
-    fn start_team_consent_petition(&self, org_id: Id, vote_id: VoteID) -> Self {
+    fn start_team_consent_petition(&self, team_id: TeamId, vote_id: VoteID<VId>) -> Self {
         // could type check the flat_share_id and vote_petition_id
         GrantApplication {
             submitter: self.submitter.clone(),
             description: self.description.clone(),
             total_amount: self.total_amount.clone(),
             terms_of_agreement: self.terms_of_agreement.clone(),
-            state: ApplicationState::ApprovedByFoundationAwaitingTeamConsent(org_id, vote_id),
+            state: ApplicationState::ApprovedByFoundationAwaitingTeamConsent(team_id, vote_id),
         }
     }
-    fn get_team_id(&self) -> Option<Id> {
+    fn get_team_id(&self) -> Option<TeamId> {
         match self.state() {
-            ApplicationState::ApprovedByFoundationAwaitingTeamConsent(org_id, _) => Some(org_id),
+            ApplicationState::ApprovedByFoundationAwaitingTeamConsent(team_id, _) => Some(team_id),
             _ => None,
         }
     }
-    fn get_team_consent_id(&self) -> Option<VoteID> {
+    fn get_team_consent_id(&self) -> Option<VoteID<VId>> {
         match self.state() {
             ApplicationState::ApprovedByFoundationAwaitingTeamConsent(_, vote_id) => Some(vote_id),
             _ => None,
@@ -440,14 +519,16 @@ impl<
 }
 
 impl<
-        Id: Codec + PartialEq + Zero + From<u32> + Copy,
         AccountId: Clone,
         Shares: Clone,
         Currency: Clone,
         Hash: Clone,
-    > ApproveGrant<Id> for GrantApplication<Id, AccountId, Shares, Currency, Hash>
+        TeamId: Clone,
+        VId: Codec + PartialEq + Zero + From<u32> + Copy,
+    > ApproveGrant<TeamId>
+    for GrantApplication<AccountId, Shares, Currency, Hash, ApplicationState<TeamId, VoteID<VId>>>
 {
-    fn approve_grant(&self, team_id: Id) -> Self {
+    fn approve_grant(&self, team_id: TeamId) -> Self {
         GrantApplication {
             submitter: self.submitter.clone(),
             description: self.description.clone(),
@@ -456,7 +537,7 @@ impl<
             state: ApplicationState::ApprovedAndLive(team_id),
         }
     }
-    fn get_full_team_id(&self) -> Option<Id> {
+    fn get_full_team_id(&self) -> Option<TeamId> {
         match self.state() {
             ApplicationState::ApprovedAndLive(team_id) => Some(team_id),
             _ => None,
@@ -465,12 +546,14 @@ impl<
 }
 
 impl<
-        Id: Codec + PartialEq + Zero + From<u32> + Copy,
         AccountId: Clone,
         Shares: Clone,
         Currency: Clone + sp_std::ops::Sub<Currency, Output = Currency> + PartialOrd,
         Hash: Clone,
-    > SpendApprovedGrant<Currency> for GrantApplication<Id, AccountId, Shares, Currency, Hash>
+        TeamId: Clone,
+        VId: Codec + PartialEq + Zero + From<u32> + Copy,
+    > SpendApprovedGrant<Currency>
+    for GrantApplication<AccountId, Shares, Currency, Hash, ApplicationState<TeamId, VoteID<VId>>>
 {
     fn spend_approved_grant(&self, amount: Currency) -> Option<Self> {
         match self.state {

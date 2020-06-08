@@ -16,6 +16,10 @@ pub trait SeededGenerateUniqueID<Id, Seed> {
     fn seeded_generate_unique_id(seed: Seed) -> Id;
 }
 
+pub trait Increment: Sized {
+    fn increment(self) -> Self;
+}
+
 // ====== Permissions ACL ======
 
 pub trait ChainSudoPermissions<AccountId> {
@@ -551,76 +555,64 @@ pub trait MoveFundsOutCommittedOnly<Currency>: Sized {
 
 // ~~~~~~~~ Bounty Module ~~~~~~~~
 
-pub trait FoundationParts {
-    type OrgId;
-    type BountyId;
+pub trait RegisterFoundation<OrgId, Currency, AccountId> {
     type BankId;
-    type MultiShareId;
-    type MultiVoteId;
-    type TeamId;
-}
-
-// TODO: this could be removed if we didn't cache the ownership of on-chain
-// banks in bounty and instead checked ownership in the `screen_bounty_creation` `reserve_spend` call
-// to bank but I don't think it's the worst thing to have for V1
-pub trait RegisterFoundation<Currency, AccountId>: FoundationParts {
     // should still be some minimum enforced in bank
     fn register_foundation_from_deposit(
         from: AccountId,
-        for_org: Self::OrgId,
+        for_org: OrgId,
         amount: Currency,
     ) -> Result<Self::BankId, DispatchError>;
-    fn register_foundation_from_existing_bank(
-        org: Self::OrgId,
-        bank: Self::BankId,
-    ) -> DispatchResult;
+    fn register_foundation_from_existing_bank(org: OrgId, bank: Self::BankId) -> DispatchResult;
 }
 
-pub trait CreateBounty<Currency, AccountId, Hash>: RegisterFoundation<Currency, AccountId> {
+pub trait CreateBounty<OrgId, Currency, AccountId, Hash, ReviewCommittee>:
+    RegisterFoundation<OrgId, Currency, AccountId>
+{
     type BountyInfo;
-    type ReviewCommittee;
+    type BountyId;
     // helper to screen, prepare and form bounty information object
     fn screen_bounty_creation(
-        foundation: Self::OrgId, // registered OrgId
+        foundation: OrgId,
         caller: AccountId,
         bank_account: Self::BankId,
         description: Hash,
         amount_reserved_for_bounty: Currency, // collateral requirement
         amount_claimed_available: Currency,   // claimed available amount, not necessarily liquid
-        acceptance_committee: Self::ReviewCommittee,
-        supervision_committee: Option<Self::ReviewCommittee>,
+        acceptance_committee: ReviewCommittee,
+        supervision_committee: Option<ReviewCommittee>,
     ) -> Result<Self::BountyInfo, DispatchError>;
     // call should be an authenticated member of the OrgId
     // - requirement might be the inner shares of an organization for example
     fn create_bounty(
-        foundation: Self::OrgId, // registered OrgId
+        foundation: OrgId, // registered OrgId
         caller: AccountId,
         bank_account: Self::BankId,
         description: Hash,
         amount_reserved_for_bounty: Currency, // collateral requirement
         amount_claimed_available: Currency,   // claimed available amount, not necessarily liquid
-        acceptance_committee: Self::ReviewCommittee,
-        supervision_committee: Option<Self::ReviewCommittee>,
+        acceptance_committee: ReviewCommittee,
+        supervision_committee: Option<ReviewCommittee>,
     ) -> Result<Self::BountyId, DispatchError>;
 }
 
-pub trait UseTermsOfAgreement<AccountId>: FoundationParts {
-    type TermsOfAgreement;
+pub trait UseTermsOfAgreement<OrgId, TermsOfAgreement> {
+    type VoteIdentifier;
+    type TeamIdentifier;
     fn request_consent_on_terms_of_agreement(
-        bounty_org: u32,
-        terms: Self::TermsOfAgreement,
-    ) -> Result<(Self::MultiShareId, Self::MultiVoteId), DispatchError>;
+        bounty_org: OrgId,
+        terms: TermsOfAgreement,
+    ) -> Result<(Self::TeamIdentifier, Self::VoteIdentifier), DispatchError>;
     fn approve_grant_to_register_team(
-        bounty_org: u32,
-        flat_share_id: u32,
-        terms: Self::TermsOfAgreement,
-    ) -> Result<Self::TeamId, DispatchError>;
+        bounty_org: OrgId,
+        terms: TermsOfAgreement,
+    ) -> Result<Self::TeamIdentifier, DispatchError>;
 }
 
 // used for application and milestone review dispatch and diagnostics
-pub trait StartReview<VoteID> {
-    fn start_review(&self, vote_id: VoteID) -> Self;
-    fn get_review_id(&self) -> Option<VoteID>;
+pub trait StartReview<VoteIdentifier> {
+    fn start_review(&self, vote_id: VoteIdentifier) -> Self;
+    fn get_review_id(&self) -> Option<VoteIdentifier>;
 }
 
 pub trait ApproveWithoutTransfer {
@@ -633,16 +625,16 @@ pub trait SetMakeTransfer<BankId, TransferId>: Sized {
     fn get_transfer_id(&self) -> Option<TransferId>;
 }
 
-pub trait StartTeamConsentPetition<Id, VoteID> {
-    fn start_team_consent_petition(&self, org_id: Id, vote_id: VoteID) -> Self;
-    fn get_team_consent_id(&self) -> Option<VoteID>;
+pub trait StartTeamConsentPetition<Id, VoteIdentifier> {
+    fn start_team_consent_petition(&self, org_id: Id, vote_id: VoteIdentifier) -> Self;
+    fn get_team_consent_id(&self) -> Option<VoteIdentifier>;
     fn get_team_id(&self) -> Option<Id>;
 }
 
 // TODO: clean up the outer_flat_share_id dispatched for team consent if NOT formally approved
-pub trait ApproveGrant<TeamID> {
-    fn approve_grant(&self, team_id: TeamID) -> Self;
-    fn get_full_team_id(&self) -> Option<TeamID>;
+pub trait ApproveGrant<TeamIdentifier> {
+    fn approve_grant(&self, team_id: TeamIdentifier) -> Self;
+    fn get_full_team_id(&self) -> Option<TeamIdentifier>;
 }
 // TODO: RevokeApprovedGrant<VoteID> => vote to take away the team's grant and clean storage
 
@@ -650,81 +642,105 @@ pub trait SpendApprovedGrant<Currency>: Sized {
     fn spend_approved_grant(&self, amount: Currency) -> Option<Self>;
 }
 
-pub trait SubmitGrantApplication<Currency, AccountId, Hash>:
-    CreateBounty<Currency, AccountId, Hash> + UseTermsOfAgreement<AccountId>
+pub trait SubmitGrantApplication<
+    OrgId,
+    Currency,
+    AccountId,
+    Hash,
+    ReviewCommittee,
+    TermsOfAgreement,
+>:
+    CreateBounty<OrgId, Currency, AccountId, Hash, ReviewCommittee>
+    + UseTermsOfAgreement<OrgId, TermsOfAgreement>
 {
-    type GrantApp: StartReview<Self::MultiVoteId>
-        + StartTeamConsentPetition<Self::MultiShareId, Self::MultiVoteId>
-        + ApproveGrant<Self::TeamId>;
+    type GrantApp: StartReview<Self::VoteIdentifier>
+        + StartTeamConsentPetition<Self::TeamIdentifier, Self::VoteIdentifier>
+        + ApproveGrant<Self::TeamIdentifier>;
     fn form_grant_application(
         caller: AccountId,
-        bounty_id: u32,
+        bounty_id: OrgId,
         description: Hash,
         total_amount: Currency,
-        terms_of_agreement: Self::TermsOfAgreement,
+        terms_of_agreement: TermsOfAgreement,
     ) -> Result<Self::GrantApp, DispatchError>;
     fn submit_grant_application(
         caller: AccountId,
-        bounty_id: u32,
+        bounty_id: OrgId,
         description: Hash,
         total_amount: Currency,
-        terms_of_agreement: Self::TermsOfAgreement,
+        terms_of_agreement: TermsOfAgreement,
     ) -> Result<u32, DispatchError>; // returns application identifier
 }
 
-pub trait SuperviseGrantApplication<Currency, AccountId, Hash>:
-    CreateBounty<Currency, AccountId, Hash> + UseTermsOfAgreement<AccountId>
+pub trait SuperviseGrantApplication<
+    OrgId,
+    Currency,
+    AccountId,
+    Hash,
+    ReviewCommittee,
+    ApplicationId,
+>: CreateBounty<OrgId, Currency, AccountId, Hash, ReviewCommittee>
 {
     type AppState;
     fn trigger_application_review(
         trigger: AccountId, // must be authorized to trigger in context of objects
-        bounty_id: u32,
-        application_id: u32,
+        bounty_id: OrgId,
+        application_id: ApplicationId,
     ) -> Result<Self::AppState, DispatchError>;
     // someone can try to call this and only the sudo can push things through at whim
     // -> notably no sudo deny for demo functionality
     fn sudo_approve_application(
         sudo: AccountId,
-        bounty_id: u32,
-        application_id: u32,
+        bounty_id: OrgId,
+        application_id: ApplicationId,
     ) -> Result<Self::AppState, DispatchError>;
     // this returns the AppState but also pushes it along if necessary
     // - it should be called in on_finalize periodically
     fn poll_application(
-        bounty_id: u32,
-        application_id: u32,
+        bounty_id: OrgId,
+        application_id: ApplicationId,
     ) -> Result<Self::AppState, DispatchError>;
 }
 
-pub trait SubmitMilestone<Currency, AccountId, Hash>:
-    SuperviseGrantApplication<Currency, AccountId, Hash>
+pub trait SubmitMilestone<
+    OrgId,
+    Currency,
+    AccountId,
+    Hash,
+    ReviewCommittee,
+    TermsOfAgreement,
+    BountyId,
+    TransferId,
+>:
+    CreateBounty<OrgId, Currency, AccountId, Hash, ReviewCommittee>
+    + UseTermsOfAgreement<OrgId, TermsOfAgreement>
 {
-    type Milestone: StartReview<Self::MultiVoteId>
+    type Milestone: StartReview<Self::VoteIdentifier>
         + ApproveWithoutTransfer
-        + SetMakeTransfer<Self::BankId, u32>;
+        + SetMakeTransfer<Self::BankId, TransferId>;
     type MilestoneState;
     fn submit_milestone(
         caller: AccountId, // must be from the team, maybe check sudo || flat_org_member
-        bounty_id: u32,
-        application_id: u32,
-        team_id: Self::TeamId,
+        bounty_id: OrgId,
+        application_id: BountyId,
+        team_id: Self::TeamIdentifier,
         submission_reference: Hash,
         amount_requested: Currency,
-    ) -> Result<u32, DispatchError>; // returns milestone_id
+    ) -> Result<BountyId, DispatchError>; // returns milestone_id
     fn trigger_milestone_review(
         caller: AccountId,
-        bounty_id: u32,
-        milestone_id: u32,
+        bounty_id: OrgId,
+        milestone_id: BountyId,
     ) -> Result<Self::MilestoneState, DispatchError>;
     // someone can try to call this and only the sudo can push things through at whim
     fn sudo_approves_milestone(
         caller: AccountId,
-        bounty_id: u32,
-        milestone_id: u32,
+        bounty_id: BountyId,
+        milestone_id: BountyId,
     ) -> Result<Self::MilestoneState, DispatchError>;
     fn poll_milestone(
         caller: AccountId,
-        bounty_id: u32,
-        milestone_id: u32,
+        bounty_id: BountyId,
+        milestone_id: BountyId,
     ) -> Result<Self::MilestoneState, DispatchError>;
 }

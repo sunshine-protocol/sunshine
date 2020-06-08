@@ -2,7 +2,7 @@ use crate::{
     share::SimpleShareGenesis,
     traits::{
         AccessGenesis, CommitSpendReservation, DepositSpendOps, FreeToReserved, GetBalance,
-        MoveFundsOutCommittedOnly, MoveFundsOutUnCommittedOnly,
+        Increment, MoveFundsOutCommittedOnly, MoveFundsOutUnCommittedOnly,
     },
 };
 use codec::{Codec, Decode, Encode};
@@ -21,8 +21,8 @@ pub type OffChainTreasuryID = u32;
 #[derive(Clone, Copy, Eq, PartialEq, Default, Encode, Decode, sp_runtime::RuntimeDebug)]
 pub struct OnChainTreasuryID(pub [u8; 8]);
 
-impl OnChainTreasuryID {
-    pub fn iterate(self) -> OnChainTreasuryID {
+impl Increment for OnChainTreasuryID {
+    fn increment(self) -> OnChainTreasuryID {
         let old_inner = u64::from_be_bytes(self.0);
         let new_inner = old_inner.saturating_add(1u64);
         OnChainTreasuryID(new_inner.to_be_bytes())
@@ -81,10 +81,10 @@ impl<OrgId: Codec + PartialEq + Zero + From<u32> + Copy, AccountId, Hash, Weight
         other: ReviewBoard<OrgId, AccountId, Hash, WeightedThreshold>,
     ) -> WithdrawalPermissions<OrgId, AccountId> {
         match other {
-            ReviewBoard::FlatPetitionReview(_, org_id, _, _, _) => {
+            ReviewBoard::Consent(_, org_id, _, _, _) => {
                 WithdrawalPermissions::JointOrgAccount(org_id)
             }
-            ReviewBoard::WeightedThresholdReview(_, org_id, _, _) => {
+            ReviewBoard::Threshold(_, org_id, _, _) => {
                 WithdrawalPermissions::JointOrgAccount(org_id)
             }
         }

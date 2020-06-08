@@ -1,3 +1,4 @@
+#![recursion_limit = "256"]
 #![allow(clippy::string_lit_as_bytes)]
 #![allow(clippy::redundant_closure_call)]
 #![allow(clippy::type_complexity)]
@@ -23,119 +24,97 @@ use util::{
         ApplicationState, BountyInformation, BountyMapID, GrantApplication, MilestoneStatus,
         MilestoneSubmission, ReviewBoard, TeamID, VoteID,
     }, //BountyPaymentTracker
-    organization::{ShareID, TermsOfAgreement},
+    organization::TermsOfAgreement,
     traits::{
-        ApplyVote, ApproveGrant, ApproveWithoutTransfer, Approved, BankDepositsAndSpends,
-        BankReservations, BankSpends, BankStorageInfo, CheckBankBalances, CheckVoteStatus,
-        CommitAndTransfer, CreateBounty, DepositIntoBank, FoundationParts, GenerateUniqueID,
-        GetInnerOuterShareGroups, GetVoteOutcome, IDIsAvailable, MintableSignal, OnChainBank,
-        OpenPetition, OpenShareGroupVote, OrgChecks, OrganizationDNS,
-        OwnershipProportionCalculations, RegisterBankAccount, RegisterFoundation,
-        RegisterShareGroup, SeededGenerateUniqueID, SetMakeTransfer, ShareGroupChecks,
-        SignPetition, SpendApprovedGrant, StartReview, StartTeamConsentPetition,
-        SubmitGrantApplication, SubmitMilestone, SuperviseGrantApplication, SupervisorPermissions,
-        TermSheetExit, ThresholdVote, UpdatePetition, UseTermsOfAgreement, VoteOnProposal,
-        WeightedShareIssuanceWrapper, WeightedShareWrapper,
-    }, //RequestChanges
+        ApplyVote, ApproveGrant, ApproveWithoutTransfer, Approved, CalculateOwnership,
+        CheckBankBalances, CheckVoteStatus, CommitAndTransfer, CreateBounty, DepositIntoBank,
+        DepositsAndSpends, ExecuteSpends, GenerateUniqueID, GetVoteOutcome, IDIsAvailable,
+        MintableSignal, OnChainBank, OpenPetition, OpenVote, RegisterAccount, RegisterFoundation,
+        ReservationMachine, SeededGenerateUniqueID, SetMakeTransfer, SignPetition,
+        SpendApprovedGrant, StartReview, StartTeamConsentPetition, SubmitGrantApplication,
+        SubmitMilestone, SuperviseGrantApplication, SupervisorPermissions, TermSheetExit,
+        ThresholdVote, UpdatePetition, UseTermsOfAgreement, VoteOnProposal,
+    },
     voteyesno::{SupportedVoteTypes, ThresholdConfig},
 };
 
-/// Common ipfs type alias for our modules
-pub type IpfsReference = Vec<u8>;
-/// The organization identfier
-pub type OrgId = u32;
-/// The bounty identifier
-pub type BountyId = u32;
-/// The weighted shares
-pub type SharesOf<T> = <<T as Trait>::Organization as WeightedShareWrapper<
-    u32,
-    u32,
-    <T as frame_system::Trait>::AccountId,
->>::Shares;
 /// The balances type for this module
 pub type BalanceOf<T> =
     <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
-/// The signal type for this module
-pub type SignalOf<T> = <<T as Trait>::VoteYesNo as ThresholdVote>::Signal;
+/// The associate identifier for the bank module
+pub type BankAssociatedId<T> = <<T as Trait>::Bank as OnChainBank>::AssociatedId;
 
-pub trait Trait: frame_system::Trait {
+pub trait Trait: frame_system::Trait + org::Trait {
+    /// The overarching event type
     type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 
     /// The currency type for on-chain transactions
     type Currency: Currency<Self::AccountId>;
 
-    /// This type wraps `membership`, `shares-membership`, and `shares-atomic`
-    /// - it MUST be the same instance inherited by the bank module associated type
-    type Organization: OrgChecks<u32, Self::AccountId>
-        + ShareGroupChecks<u32, ShareID, Self::AccountId>
-        + GetInnerOuterShareGroups<u32, ShareID, Self::AccountId>
-        + SupervisorPermissions<u32, ShareID, Self::AccountId>
-        + WeightedShareWrapper<u32, u32, Self::AccountId>
-        + WeightedShareIssuanceWrapper<u32, u32, Self::AccountId, Permill>
-        + RegisterShareGroup<u32, ShareID, Self::AccountId, SharesOf<Self>>
-        + OrganizationDNS<u32, Self::AccountId, IpfsReference>;
+    /// The bounty identifier in this module
+    type BountyId: Parameter
+        + Member
+        + AtLeast32Bit
+        + Codec
+        + Default
+        + Copy
+        + MaybeSerializeDeserialize
+        + Debug
+        + PartialOrd
+        + PartialEq
+        + Zero;
 
-    // TODO: start with spending functionality with balances for milestones
-    // - then extend to offchain bank interaction (try to mirror logic/calls)
+    /// The bank module
     type Bank: IDIsAvailable<OnChainTreasuryID>
-        + IDIsAvailable<(OnChainTreasuryID, BankMapID, u32)>
+        + IDIsAvailable<(OnChainTreasuryID, BankMapID, BankAssociatedId<Self>)>
         + GenerateUniqueID<OnChainTreasuryID>
+        + SeededGenerateUniqueID<BankAssociatedId<Self>, (OnChainTreasuryID, BankMapID)>
         + OnChainBank
         + RegisterBankAccount<
+            Self::OrgId,
             Self::AccountId,
-            WithdrawalPermissions<Self::AccountId>,
+            WithdrawalPermissions<Self::OrgId, Self::AccountId>,
             BalanceOf<Self>,
-        > + OwnershipProportionCalculations<
+        > + CalculateOwnership<
+            Self::OrgId,
             Self::AccountId,
-            WithdrawalPermissions<Self::AccountId>,
+            WithdrawalPermissions<Self::OrgId, Self::AccountId>,
             BalanceOf<Self>,
             Permill,
-        > + BankDepositsAndSpends<BalanceOf<Self>>
+        > + DepositsAndSpends<BalanceOf<Self>>
         + CheckBankBalances<BalanceOf<Self>>
         + DepositIntoBank<
+            Self::OrgId,
             Self::AccountId,
-            WithdrawalPermissions<Self::AccountId>,
-            IpfsReference,
+            WithdrawalPermissions<Self::OrgId, Self::AccountId>,
             BalanceOf<Self>,
-        > + BankReservations<
+            Self::IpfsReference,
+        > + ReservationMachine<
+            Self::OrgId,
             Self::AccountId,
-            WithdrawalPermissions<Self::AccountId>,
+            WithdrawalPermissions<Self::OrgId, Self::AccountId>,
             BalanceOf<Self>,
-            IpfsReference,
-        > + BankSpends<Self::AccountId, WithdrawalPermissions<Self::AccountId>, BalanceOf<Self>>
-        + CommitAndTransfer<
+            Self::IpfsReference,
+        > + ExecuteSpends<
+            Self::OrgId,
             Self::AccountId,
-            WithdrawalPermissions<Self::AccountId>,
+            WithdrawalPermissions<Self::OrgId, Self::AccountId>,
             BalanceOf<Self>,
-            IpfsReference,
-        > + BankStorageInfo<Self::AccountId, WithdrawalPermissions<Self::AccountId>, BalanceOf<Self>>
-        + TermSheetExit<Self::AccountId, BalanceOf<Self>>;
+            Self::IpfsReference,
+        > + CommitAndTransfer<
+            Self::OrgId,
+            Self::AccountId,
+            WithdrawalPermissions<Self::OrgId, Self::AccountId>,
+            BalanceOf<Self>,
+            Self::IpfsReference,
+        > + TermSheetExit<Self::AccountId, BalanceOf<Self>>;
+    // TODO: add vote module
 
-    // TODO: use this when adding TRIGGER => VOTE => OUTCOME framework for util::bank::Spends
-    type VotePetition: IDIsAvailable<u32>
-        + GenerateUniqueID<u32>
-        + GetVoteOutcome
-        + OpenPetition<IpfsReference, Self::BlockNumber>
-        + SignPetition<Self::AccountId, IpfsReference>
-        + UpdatePetition<Self::AccountId, IpfsReference>; // + RequestChanges<Self::AccountId, IpfsReference>
-
-    // TODO: use this when adding TRIGGER => VOTE => OUTCOME framework for util::bank::Spends
-    type VoteYesNo: IDIsAvailable<u32>
-        + GenerateUniqueID<u32>
-        + MintableSignal<Self::AccountId, Self::BlockNumber, Permill>
-        + GetVoteOutcome
-        + ThresholdVote
-        + OpenShareGroupVote<Self::AccountId, Self::BlockNumber, Permill>
-        + ApplyVote
-        + CheckVoteStatus
-        + VoteOnProposal<Self::AccountId, IpfsReference, Self::BlockNumber, Permill>;
-
-    // every bounty must have a bank account set up with this minimum amount of collateral
-    // _idea_: allow use of offchain bank s.t. both sides agree on how much one side demonstrated ownership of to the other
-    // --> eventually, we might use proofs of ownership on other chains (like however lockdrop worked)
+    /// This is the minimum percent of the total bounty that must be reserved as collateral
     type MinimumBountyCollateralRatio: Get<Permill>;
 
-    // combined with the above constant, this defines constraints on bounties posted
+    /// This is the lower bound for the purported `Balance Available`
+    /// => this * MinimumBountyCollateralRatio = MinimumBountyAmount
     type BountyLowerBound: Get<BalanceOf<Self>>;
 }
 
@@ -400,7 +379,7 @@ impl<T: Trait> Module<T> {
         account: &T::AccountId,
         acceptance_committee: ReviewBoard<
             T::AccountId,
-            IpfsReference,
+            T::IpfsReference,
             ThresholdConfig<SignalOf<T>, Permill>,
         >,
     ) -> bool {
@@ -475,7 +454,7 @@ impl<T: Trait> Module<T> {
         duration: Option<T::BlockNumber>,
     ) -> Result<VoteID, DispatchError> {
         let id: u32 = <<T as Trait>::VotePetition as OpenPetition<
-            IpfsReference,
+            T::IpfsReference,
             T::BlockNumber,
         >>::open_unanimous_approval_petition(
             organization, flat_share_id, topic, duration
@@ -492,7 +471,7 @@ impl<T: Trait> Module<T> {
         duration: Option<T::BlockNumber>,
     ) -> Result<VoteID, DispatchError> {
         let id: u32 = <<T as Trait>::VotePetition as OpenPetition<
-            IpfsReference,
+            T::IpfsReference,
             T::BlockNumber,
         >>::open_petition(
             organization,
@@ -571,7 +550,7 @@ impl<T: Trait> RegisterFoundation<BalanceOf<T>, T::AccountId> for Module<T> {
         ensure!(
             <<T as Trait>::Bank as RegisterBankAccount<
                 T::AccountId,
-                WithdrawalPermissions<T::AccountId>,
+                WithdrawalPermissions<T::OrgId, T::AccountId>,
                 BalanceOf<T>,
             >>::check_bank_owner(bank.into(), org.into()),
             Error::<T>::CannotRegisterFoundationFromOrgBankRelationshipThatDNE
@@ -584,7 +563,7 @@ impl<T: Trait> RegisterFoundation<BalanceOf<T>, T::AccountId> for Module<T> {
 impl<T: Trait> CreateBounty<BalanceOf<T>, T::AccountId, IpfsReference> for Module<T> {
     type BountyInfo = BountyInformation<
         T::AccountId,
-        IpfsReference,
+        T::IpfsReference,
         ThresholdConfig<SignalOf<T>, Permill>,
         BalanceOf<T>,
     >;
@@ -622,10 +601,11 @@ impl<T: Trait> CreateBounty<BalanceOf<T>, T::AccountId, IpfsReference> for Modul
 
         // reserve `amount_reserved_for_bounty` here by calling into `bank-onchain`
         let spend_reservation_id = <<T as Trait>::Bank as BankReservations<
+            T::OrgId,
             T::AccountId,
-            WithdrawalPermissions<T::AccountId>,
+            WithdrawalPermissions<T::OrgId, T::AccountId>,
             BalanceOf<T>,
-            IpfsReference,
+            T::IpfsReference,
         >>::reserve_for_spend(
             caller,
             bank_account.into(),
@@ -1021,9 +1001,9 @@ impl<T: Trait> SubmitMilestone<BalanceOf<T>, T::AccountId, IpfsReference> for Mo
         // it is not _optimistic_, it is fair to add this commitment
         <<T as Trait>::Bank as BankReservations<
             T::AccountId,
-            WithdrawalPermissions<T::AccountId>,
+            WithdrawalPermissions<T::OrgId, T::AccountId>,
             BalanceOf<T>,
-            IpfsReference,
+            T::IpfsReference,
         >>::commit_reserved_spend_for_transfer(
             caller,
             bounty_info.bank_account().into(),
@@ -1109,9 +1089,9 @@ impl<T: Trait> SubmitMilestone<BalanceOf<T>, T::AccountId, IpfsReference> for Mo
         // commit and transfer control over capital in the same step
         let new_transfer_id = <<T as Trait>::Bank as CommitAndTransfer<
             T::AccountId,
-            WithdrawalPermissions<T::AccountId>,
+            WithdrawalPermissions<T::OrgId, T::AccountId>,
             BalanceOf<T>,
-            IpfsReference,
+            T::IpfsReference,
         >>::commit_and_transfer_spending_power(
             caller,
             bounty_info.bank_account().into(),
@@ -1167,9 +1147,9 @@ impl<T: Trait> SubmitMilestone<BalanceOf<T>, T::AccountId, IpfsReference> for Mo
                         // make the transfer
                         let transfer_id = <<T as Trait>::Bank as BankReservations<
                             T::AccountId,
-                            WithdrawalPermissions<T::AccountId>,
+                            WithdrawalPermissions<T::OrgId, T::AccountId>,
                             BalanceOf<T>,
-                            IpfsReference,
+                            T::IpfsReference,
                         >>::transfer_spending_power(
                             caller,
                             bounty_info.bank_account().into(),
@@ -1212,9 +1192,9 @@ impl<T: Trait> SubmitMilestone<BalanceOf<T>, T::AccountId, IpfsReference> for Mo
                     // make the transfer
                     let transfer_id = <<T as Trait>::Bank as BankReservations<
                         T::AccountId,
-                        WithdrawalPermissions<T::AccountId>,
+                        WithdrawalPermissions<T::OrgId, T::AccountId>,
                         BalanceOf<T>,
-                        IpfsReference,
+                        T::IpfsReference,
                     >>::transfer_spending_power(
                         caller,
                         bounty_info.bank_account().into(),
