@@ -1,3 +1,4 @@
+#![recursion_limit = "256"]
 #![allow(clippy::string_lit_as_bytes)]
 #![allow(clippy::redundant_closure_call)]
 #![allow(clippy::type_complexity)]
@@ -6,24 +7,21 @@
 //! registered organizations to manage these accounts with share permission groups.
 
 #[cfg(test)]
-mod mock;
-
-#[cfg(test)]
 mod tests;
 
 use util::{
     bank::{
-        BankMapID, BankState, CommitmentInfo, DepositInfo, InternalTransferInfo, OnChainTreasuryID,
+        BankMapID, BankState, DepositInfo, InternalTransferInfo, OnChainTreasuryID,
         ReservationInfo, WithdrawalPermissions,
     },
     traits::{
-        AccessProfile, CalculateOwnership, ChainSudoPermissions, CheckBankBalances,
-        CommitAndTransfer, CommitSpendReservation, DefaultBankPermissions, DepositIntoBank,
-        DepositSpendOps, DepositsAndSpends, ExecuteSpends, FreeToReserved, GenerateUniqueID,
-        GetGroupSize, IDIsAvailable, MoveFundsOutCommittedOnly, MoveFundsOutUnCommittedOnly,
-        OnChainBank, OrganizationSupervisorPermissions, RegisterAccount, ReservationMachine,
+        CalculateOwnership, CheckBankBalances, CommitAndTransfer, CommitSpendReservation,
+        DefaultBankPermissions, DepositIntoBank, DepositSpendOps, DepositsAndSpends, ExecuteSpends,
+        FreeToReserved, GenerateUniqueID, GetGroupSize, GroupMembership, IDIsAvailable,
+        MoveFundsOutCommittedOnly, MoveFundsOutUnCommittedOnly, OnChainBank,
+        OrganizationSupervisorPermissions, RegisterAccount, ReservationMachine,
         SeededGenerateUniqueID, ShareInformation, ShareIssuance, TermSheetExit,
-    },
+    }, // if sudo, import ChainSudoPermissions
 };
 
 use codec::Codec;
@@ -35,11 +33,10 @@ use frame_support::{
 };
 use frame_system::{self as system, ensure_signed};
 use sp_runtime::{
-    traits::{
-        AccountIdConversion, AtLeast32Bit, CheckedAdd, CheckedSub, MaybeSerializeDeserialize,
-        Member, Zero,
-    },
-    DispatchError, DispatchResult, Permill,
+    traits::{AccountIdConversion, AtLeast32Bit, MaybeSerializeDeserialize, Member, Zero}, // CheckedAdd, CheckedSub
+    DispatchError,
+    DispatchResult,
+    Permill,
 };
 use sp_std::{fmt::Debug, prelude::*};
 
@@ -78,12 +75,10 @@ decl_event!(
         <T as Trait>::BankAssociatedId,
         Balance = BalanceOf<T>,
     {
-        // u32 is the hosting organization identifier
         RegisteredNewOnChainBank(AccountId, OnChainTreasuryID, Balance, OrgId, WithdrawalPermissions<OrgId, AccountId>),
         CapitalDepositedIntoOnChainBankAccount(AccountId, OnChainTreasuryID, Balance, IpfsReference),
-        // u32 is reservation_id
         SpendReservedForBankAccount(AccountId, OnChainTreasuryID, BankAssociatedId, IpfsReference, Balance, WithdrawalPermissions<OrgId, AccountId>),
-        CommitSpendBeforeInternalTransfer(AccountId, OnChainTreasuryID, BankAssociatedId, IpfsReference, Balance, WithdrawalPermissions<OrgId, AccountId>),
+        CommitSpendBeforeInternalTransfer(AccountId, OnChainTreasuryID, BankAssociatedId, Balance),
         UnReserveUncommittedReservationToMakeFree(AccountId, OnChainTreasuryID, BankAssociatedId, Balance),
         UnReserveCommittedReservationToMakeFree(AccountId, OnChainTreasuryID, BankAssociatedId, Balance),
         InternalTransferExecutedAndSpendingPowerDoledOutToController(AccountId, OnChainTreasuryID, IpfsReference, BankAssociatedId, Balance, WithdrawalPermissions<OrgId, AccountId>),
@@ -95,9 +90,6 @@ decl_event!(
 decl_error! {
     pub enum Error for Module<T: Trait> {
         BankAccountNotFoundForTermSheetExit,
-        MustHaveCertainAuthorityToRegisterAccount,
-        MustBeWeightedShareGroupToCalculatePortionOfOnChainDeposit,
-        MustHaveOwnershipToRageQuit,
         BankAccountNotFoundForDeposit,
         BankAccountNotFoundForWithdrawal,
         BankAccountNotFoundForSpendReservation,
@@ -107,28 +99,24 @@ decl_error! {
         CannotCommitReservedSpendBecauseAmountExceedsSpendReservation,
         NotEnoughFundsInFreeToAllowSpend,
         NotEnoughFundsInFreeToAllowReservation,
-        CallerIsntInControllingMembershipForWithdrawal,
         AllSpendsFromReserveMustReferenceInternalTransferNotFound,
-        CallerMustSatisfyBankOwnerPermissionsForSpendReservation,
         NotEnoughFundsCommittedToSatisfyUnreserveAndFreeRequest,
         NotEnoughFundsCommittedToEnableInternalTransfer,
         NotEnoughFundsInSpendReservationUnCommittedToSatisfyUnreserveUnCommittedRequest,
         NotEnoughFundsInBankReservedToSatisfyUnReserveUnComittedRequest,
-        InternalTransferRequestExceedsReferencedSpendCommitment,
-        SpendCommitmentNotFoundForInternalTransfer,
-        GovernanceConfigDoesNotSatisfyOrgRequirementsForBankRegistration,
         RegistrationMustDepositAboveModuleMinimum,
-        // default bank permissions set in `DefaultBankPermissions` impl
-        CallerMustSatisfyBankOwnerPermissionsToCommitReservedSpendForTransfer,
-        CallerMustSatisfyBankOwnerPermissionsToUnReserveUnCommittedToMakeFree,
-        CallerMustSatisfyBankOwnerPermissionsToUnReserveCommittedToMakeFree,
-        CallerMustSatisfyBankOwnerPermissionsToTransferSpendingPower,
-        CallerMustSatisfyBankOwnerPermissionsToCommitAndTransferSpendingPower,
         AccountMatchesNoneOfTwoControllers,
         AccountHasNoWeightedOwnershipInOrg,
-        CallerNotAuthorizedToRegisterBankAccountInContextOfOrg,
-        CannotRegisterBankAccountIfWithdrawalPermissionsDontSatisfyOrgRequirements,
-
+        BankAccountNotFoundForCommittingAndTransferringInOneStep,
+        BankAccountNotFoundForUnReservingCommitted,
+        BankAccountNotFoundForUnReservingUnCommitted,
+        BankAccountNotFoundForSpendCommitment,
+        CannotRegisterBankAccountBCPermissionsCheckFails,
+        CannotReserveSpendBCPermissionsCheckFails,
+        CannotCommitSpendBCPermissionsCheckFails,
+        CannotUnReserveUncommittedBCPermissionsCheckFails,
+        CannotUnReserveCommittedBCPermissionsCheckFails,
+        CannotTransferSpendingPowerBCPermissionsCheckFails,
     }
 }
 
@@ -139,33 +127,27 @@ decl_storage! {
 
         /// Map for managing counters associated with associated maps
         BankAssociatedNonces get(fn bank_associated_nonces): double_map
-            hasher(opaque_blake2_256) OnChainTreasuryID,
-            hasher(opaque_blake2_256) BankMapID => T::BankAssociatedId;
+            hasher(blake2_128_concat) OnChainTreasuryID,
+            hasher(blake2_128_concat) BankMapID => T::BankAssociatedId;
 
         /// Source of truth for OnChainTreasuryId uniqueness checks
         /// WARNING: do not append a prefix because the keyspace is used directly for checking uniqueness of `OnChainTreasuryId`
         /// TODO: pre-reserve any known ModuleId's that could be accidentally generated that already exist elsewhere
-        BankStores get(fn bank_stores): map
-            hasher(opaque_blake2_256) OnChainTreasuryID => Option<BankState<T::OrgId, WithdrawalPermissions<T::OrgId, T::AccountId>, BalanceOf<T>>>;
+        pub BankStores get(fn bank_stores): map
+            hasher(blake2_128_concat) OnChainTreasuryID => Option<BankState<T::OrgId, WithdrawalPermissions<T::OrgId, T::AccountId>, BalanceOf<T>>>;
 
         /// All deposits made into the joint bank account represented by OnChainTreasuryID
-        /// - I want to use DepositInfo as a key so that I can add Option<WithdrawalPermissions<T::OrgId, T::AccountId>> as a value when deposits eventually have deposit-specific withdrawal permissions (like for grant milestones)
-        Deposits get(fn deposits): double_map
+        pub Deposits get(fn deposits): double_map
             hasher(blake2_128_concat) OnChainTreasuryID,
             hasher(blake2_128_concat) T::BankAssociatedId => Option<DepositInfo<T::AccountId, T::IpfsReference, BalanceOf<T>>>;
 
         /// Spend reservations which designated a committee for formally transferring ownership to specific destination addresses
-        SpendReservations get(fn spend_reservations): double_map
+        pub SpendReservations get(fn spend_reservations): double_map
             hasher(blake2_128_concat) OnChainTreasuryID,
             hasher(blake2_128_concat) T::BankAssociatedId => Option<ReservationInfo<T::IpfsReference, BalanceOf<T>, WithdrawalPermissions<T::OrgId, T::AccountId>>>;
 
-        /// Spend commitments, marks formal shift of power over capital from direct bank.controller() to reservation.controller()
-        SpendCommitments get(fn spend_commitments): double_map
-            hasher(blake2_128_concat) OnChainTreasuryID,
-            hasher(blake2_128_concat) WithdrawalPermissions<T::OrgId, T::AccountId> => Option<CommitmentInfo<T::IpfsReference, BalanceOf<T>>>;
-
         /// Internal transfers of control over capital that allow transfer liquidity rights to the current controller
-        InternalTransfers get(fn internal_transfers): double_map
+        pub InternalTransfers get(fn internal_transfers): double_map
             hasher(blake2_128_concat) OnChainTreasuryID,
             hasher(blake2_128_concat) T::BankAssociatedId => Option<InternalTransferInfo<T::BankAssociatedId, T::IpfsReference, BalanceOf<T>, WithdrawalPermissions<T::OrgId, T::AccountId>>>;
     }
@@ -198,8 +180,9 @@ decl_module! {
             bank_controller: WithdrawalPermissions<T::OrgId, T::AccountId>,
         ) -> DispatchResult {
             let seeder = ensure_signed(origin)?;
-
-            let new_bank_id = Self::register_account(Some(seeder.clone()), hosting_org, seeder.clone(), seed, bank_controller.clone())?;
+            let authentication = Self::can_register_account(seeder.clone(), hosting_org) && Self::withdrawal_permissions_satisfy_org_standards(hosting_org, bank_controller.clone());
+            ensure!(authentication, Error::<T>::CannotRegisterBankAccountBCPermissionsCheckFails);
+            let new_bank_id = Self::register_account(hosting_org, seeder.clone(), seed, bank_controller.clone())?;
             Self::deposit_event(RawEvent::RegisteredNewOnChainBank(seeder, new_bank_id, seed, hosting_org, bank_controller));
             Ok(())
         }
@@ -212,8 +195,9 @@ decl_module! {
             controller: WithdrawalPermissions<T::OrgId, T::AccountId>,
         ) -> DispatchResult {
             let reserver = ensure_signed(origin)?;
-            // auth happens in this method because the context for authentication requires the bank_account object in storage
-            let new_reservation_id = Self::reserve_for_spend(Some(reserver.clone()), bank_id, reason.clone(), amount, controller.clone())?;
+            let authentication = Self::can_reserve_for_spend(reserver.clone(), bank_id)?;
+            ensure!(authentication, Error::<T>::CannotReserveSpendBCPermissionsCheckFails);
+            let new_reservation_id = Self::reserve_for_spend(bank_id, reason.clone(), amount, controller.clone())?;
             Self::deposit_event(RawEvent::SpendReservedForBankAccount(reserver, bank_id, new_reservation_id, reason, amount, controller));
             Ok(())
         }
@@ -227,9 +211,10 @@ decl_module! {
             future_controller: WithdrawalPermissions<T::OrgId, T::AccountId>,
         ) -> DispatchResult {
             let committer = ensure_signed(origin)?;
-            // auth happens in this method because the context for authentication requires the bank_account object in storage
-            Self::commit_reserved_spend_for_transfer(Some(committer.clone()), bank_id, reservation_id, reason.clone(), amount, future_controller.clone())?;
-            Self::deposit_event(RawEvent::CommitSpendBeforeInternalTransfer(committer, bank_id, reservation_id, reason, amount, future_controller));
+            let authentication = Self::can_commit_reserved_spend_for_transfer(committer.clone(), bank_id)?;
+            ensure!(authentication, Error::<T>::CannotCommitSpendBCPermissionsCheckFails);
+            Self::commit_reserved_spend_for_transfer(bank_id, reservation_id, amount)?;
+            Self::deposit_event(RawEvent::CommitSpendBeforeInternalTransfer(committer, bank_id, reservation_id, amount));
             Ok(())
         }
         #[weight = 0]
@@ -240,8 +225,9 @@ decl_module! {
             amount: BalanceOf<T>,
         ) -> DispatchResult {
             let qualified_bank_controller = ensure_signed(origin)?;
-            // auth happens in this method because the context for authentication requires the bank_account object in storage
-            Self::unreserve_uncommitted_to_make_free(Some(qualified_bank_controller.clone()), bank_id, reservation_id, amount)?;
+            let authentication = Self::can_unreserve_uncommitted_to_make_free(qualified_bank_controller.clone(), bank_id)?;
+            ensure!(authentication, Error::<T>::CannotUnReserveUncommittedBCPermissionsCheckFails);
+            Self::unreserve_uncommitted_to_make_free(bank_id, reservation_id, amount)?;
             Self::deposit_event(RawEvent::UnReserveUncommittedReservationToMakeFree(qualified_bank_controller, bank_id, reservation_id, amount));
             Ok(())
         }
@@ -253,8 +239,9 @@ decl_module! {
             amount: BalanceOf<T>,
         ) -> DispatchResult {
             let qualified_spend_reservation_controller = ensure_signed(origin)?;
-            // auth happens in this method because the context for authentication requires the bank_account object in storage
-            Self::unreserve_committed_to_make_free(Some(qualified_spend_reservation_controller.clone()), bank_id, reservation_id, amount)?;
+            let authentication = Self::can_unreserve_committed_to_make_free(qualified_spend_reservation_controller.clone(), bank_id)?;
+            ensure!(authentication, Error::<T>::CannotUnReserveCommittedBCPermissionsCheckFails);
+            Self::unreserve_committed_to_make_free(bank_id, reservation_id, amount)?;
             Self::deposit_event(RawEvent::UnReserveCommittedReservationToMakeFree(qualified_spend_reservation_controller, bank_id, reservation_id, amount));
             Ok(())
         }
@@ -268,8 +255,9 @@ decl_module! {
             committed_controller: WithdrawalPermissions<T::OrgId, T::AccountId>,
         ) -> DispatchResult {
             let qualified_spend_reservation_controller = ensure_signed(origin)?;
-            // auth happens in this method because the context for authentication requires the bank_account object in storage
-            Self::transfer_spending_power(Some(qualified_spend_reservation_controller.clone()), bank_id, reason.clone(), reservation_id, amount, committed_controller.clone())?;
+            let authentication = Self::can_transfer_spending_power(qualified_spend_reservation_controller.clone(), bank_id)?;
+            ensure!(authentication, Error::<T>::CannotTransferSpendingPowerBCPermissionsCheckFails);
+            Self::transfer_spending_power(bank_id, reason.clone(), reservation_id, amount, committed_controller.clone())?;
             Self::deposit_event(RawEvent::InternalTransferExecutedAndSpendingPowerDoledOutToController(qualified_spend_reservation_controller, bank_id, reason, reservation_id, amount, committed_controller));
             Ok(())
         }
@@ -488,27 +476,15 @@ impl<T: Trait>
     > for Module<T>
 {
     fn register_account(
-        caller: Option<T::AccountId>,
         owners: T::OrgId,
         from: T::AccountId,
-        amount: BalanceOf<T>, // TODO: ADD MINIMUM AMOUNT TO OPEN BANK
+        amount: BalanceOf<T>,
         operators: WithdrawalPermissions<T::OrgId, T::AccountId>,
     ) -> Result<Self::TreasuryId, DispatchError> {
         ensure!(
             amount >= T::MinimumInitialDeposit::get(),
             Error::<T>::RegistrationMustDepositAboveModuleMinimum
         );
-        ensure!(
-            Self::withdrawal_permissions_satisfy_org_standards(owners, operators.clone()),
-            Error::<T>::CannotRegisterBankAccountIfWithdrawalPermissionsDontSatisfyOrgRequirements
-        );
-        if let Some(call_from_local_runtime_method) = caller {
-            // ensure it aligns with locally defined rules for registering bank accounts
-            ensure!(
-                Self::can_register_account(&call_from_local_runtime_method, owners),
-                Error::<T>::CallerNotAuthorizedToRegisterBankAccountInContextOfOrg
-            );
-        }
         // init new bank object
         let new_bank = BankState::new_from_deposit(owners, amount, operators);
         // generate bank id
@@ -621,6 +597,8 @@ impl<T: Trait> CheckBankBalances<BalanceOf<T>> for Module<T> {
     }
 }
 
+// We could NOT have the extra storage lookup in here but
+// the API design is much more extensible this way. See issue #85
 impl<T: Trait>
     DefaultBankPermissions<
         T::OrgId,
@@ -629,32 +607,118 @@ impl<T: Trait>
         WithdrawalPermissions<T::OrgId, T::AccountId>,
     > for Module<T>
 {
-    fn can_register_account(account: &T::AccountId, on_behalf_of: T::OrgId) -> bool {
-        false
+    fn can_register_account(account: T::AccountId, on_behalf_of: T::OrgId) -> bool {
+        // only the organization supervisor can register a bank account
+        <org::Module<T>>::is_organization_supervisor(on_behalf_of, &account)
     }
     fn withdrawal_permissions_satisfy_org_standards(
-        org: T::OrgId,
-        withdrawal_permissions: WithdrawalPermissions<T::OrgId, T::AccountId>,
+        _org: T::OrgId,
+        _withdrawal_permissions: WithdrawalPermissions<T::OrgId, T::AccountId>,
     ) -> bool {
-        false
+        // an example might require that withdrawal_permissions is a subgroup
+        //or contains members of OrgId but I don't think that's necessary to
+        //impl as a default...sometimes no default is OK
+        true
     }
-    fn can_reserve_for_spend(account: &T::AccountId, bank: Self::Bank) -> bool {
-        false
+    // bank.operators() can make spend reservations (indicates funding intent by beginning the formal shift of capital control)
+    fn can_reserve_for_spend(
+        account: T::AccountId,
+        bank: Self::TreasuryId,
+    ) -> Result<bool, DispatchError> {
+        let bank_account =
+            <BankStores<T>>::get(bank).ok_or(Error::<T>::BankAccountNotFoundForSpendReservation)?;
+        let ret_bool = match bank_account.operators() {
+            WithdrawalPermissions::TwoAccounts(acc1, acc2) => acc1 == account || acc2 == account,
+            WithdrawalPermissions::JointOrgAccount(org_id) => {
+                <org::Module<T>>::is_member_of_group(org_id, &account)
+            }
+        };
+        Ok(ret_bool)
     }
-    fn can_commit_reserved_spend_for_transfer(account: &T::AccountId, bank: Self::Bank) -> bool {
-        false
+    // bank.operators() can make spend commitments, thereby putting these funds outside of bank.owners() immediate reach
+    fn can_commit_reserved_spend_for_transfer(
+        account: T::AccountId,
+        bank: Self::TreasuryId,
+    ) -> Result<bool, DispatchError> {
+        let bank_account =
+            <BankStores<T>>::get(bank).ok_or(Error::<T>::BankAccountNotFoundForSpendCommitment)?;
+        let ret_bool = match bank_account.operators() {
+            WithdrawalPermissions::TwoAccounts(acc1, acc2) => acc1 == account || acc2 == account,
+            WithdrawalPermissions::JointOrgAccount(org_id) => {
+                <org::Module<T>>::is_member_of_group(org_id, &account)
+            }
+        };
+        Ok(ret_bool)
     }
-    fn can_unreserve_uncommitted_to_make_free(account: &T::AccountId, bank: Self::Bank) -> bool {
-        false
+    // bank.owners() || bank.operators() can unreserve if not committed
+    fn can_unreserve_uncommitted_to_make_free(
+        account: T::AccountId,
+        bank: Self::TreasuryId,
+    ) -> Result<bool, DispatchError> {
+        let bank_account = <BankStores<T>>::get(bank)
+            .ok_or(Error::<T>::BankAccountNotFoundForUnReservingUnCommitted)?;
+        let ret_bool = <org::Module<T>>::is_member_of_group(bank_account.owners(), &account)
+            || match bank_account.operators() {
+                WithdrawalPermissions::TwoAccounts(acc1, acc2) => {
+                    acc1 == account || acc2 == account
+                }
+                WithdrawalPermissions::JointOrgAccount(org_id) => {
+                    <org::Module<T>>::is_member_of_group(org_id, &account)
+                }
+            };
+        Ok(ret_bool)
     }
-    fn can_unreserve_committed_to_make_free(account: &T::AccountId, bank: Self::Bank) -> bool {
-        false
+    // ONLY bank.operators() can unreserve committed funds
+    fn can_unreserve_committed_to_make_free(
+        account: T::AccountId,
+        bank: Self::TreasuryId,
+    ) -> Result<bool, DispatchError> {
+        let bank_account = <BankStores<T>>::get(bank)
+            .ok_or(Error::<T>::BankAccountNotFoundForUnReservingCommitted)?;
+        let ret_bool = match bank_account.operators() {
+            WithdrawalPermissions::TwoAccounts(acc1, acc2) => acc1 == account || acc2 == account,
+            WithdrawalPermissions::JointOrgAccount(org_id) => {
+                <org::Module<T>>::is_member_of_group(org_id, &account)
+            }
+        };
+        Ok(ret_bool)
     }
-    fn can_transfer_spending_power(account: &T::AccountId, bank: Self::Bank) -> bool {
-        false
+    // bank.owners() || bank.operators() can transfer spending power (through reference of existing spend commitment)
+    fn can_transfer_spending_power(
+        account: T::AccountId,
+        bank: Self::TreasuryId,
+    ) -> Result<bool, DispatchError> {
+        let bank_account = <BankStores<T>>::get(bank)
+            .ok_or(Error::<T>::BankAccountNotFoundForUnReservingUnCommitted)?;
+        let ret_bool = <org::Module<T>>::is_member_of_group(bank_account.owners(), &account)
+            || match bank_account.operators() {
+                WithdrawalPermissions::TwoAccounts(acc1, acc2) => {
+                    acc1 == account || acc2 == account
+                }
+                WithdrawalPermissions::JointOrgAccount(org_id) => {
+                    <org::Module<T>>::is_member_of_group(org_id, &account)
+                }
+            };
+        Ok(ret_bool)
     }
-    fn can_commit_and_transfer_spending_power(account: &T::AccountId, bank: Self::Bank) -> bool {
-        false
+    // supervisor-oriented permissions for committing and transferring withdrawal permissions in a single step
+    fn can_commit_and_transfer_spending_power(
+        account: T::AccountId,
+        bank: Self::TreasuryId,
+    ) -> Result<bool, DispatchError> {
+        let bank_account = <BankStores<T>>::get(bank)
+            .ok_or(Error::<T>::BankAccountNotFoundForCommittingAndTransferringInOneStep)?;
+        Ok(
+            <org::Module<T>>::is_organization_supervisor(bank_account.owners(), &account)
+                || match bank_account.operators() {
+                    WithdrawalPermissions::TwoAccounts(acc1, acc2) => {
+                        acc1 == account || acc2 == account
+                    }
+                    WithdrawalPermissions::JointOrgAccount(org_id) => {
+                        <org::Module<T>>::is_organization_supervisor(org_id, &account)
+                    }
+                },
+        )
     }
 }
 
@@ -702,25 +766,15 @@ impl<T: Trait>
     > for Module<T>
 {
     fn reserve_for_spend(
-        caller: Option<T::AccountId>, // must be in owner_s: GovernanceConfig for BankState, that's the auth
         bank_id: Self::TreasuryId,
         reason: T::IpfsReference,
         amount: BalanceOf<T>,
-        // acceptance committee for approving set aside spends below the amount
-        controller: WithdrawalPermissions<T::OrgId, T::AccountId>, // default WithdrawalRules
+        controller: WithdrawalPermissions<T::OrgId, T::AccountId>,
     ) -> Result<Self::AssociatedId, DispatchError> {
         let bank_account = <BankStores<T>>::get(bank_id)
             .ok_or(Error::<T>::BankAccountNotFoundForSpendReservation)?;
-        if let Some(call_from_local_runtime_method) = caller {
-            // check that the account is authenticated to do this in the context of the bank account
-            ensure!(
-                Self::can_reserve_for_spend(&call_from_local_runtime_method, bank_account.clone()),
-                Error::<T>::CallerMustSatisfyBankOwnerPermissionsForSpendReservation
-            );
-        }
         // create Reservation Info object with 100 percent of it uncommitted
         let new_spend_reservation = ReservationInfo::new(reason, amount, controller);
-
         // change bank_account such free is less and reserved is more
         let new_bank = bank_account
             .move_from_free_to_reserved(amount)
@@ -731,51 +785,25 @@ impl<T: Trait>
         <SpendReservations<T>>::insert(bank_id, reservation_id, new_spend_reservation);
         Ok(reservation_id)
     }
-    // only reserve.controller() can unreserve funds after commitment (with method further down)
-    // - this method puts the funds out of reach of bank.controller() (at least immediate reach)
     fn commit_reserved_spend_for_transfer(
-        caller: Option<T::AccountId>,
         bank_id: Self::TreasuryId,
         reservation_id: Self::AssociatedId,
-        reason: T::IpfsReference,
         amount: BalanceOf<T>,
-        expected_future_owner: WithdrawalPermissions<T::OrgId, T::AccountId>,
     ) -> DispatchResult {
-        let bank_account = <BankStores<T>>::get(bank_id)
+        let _ = <BankStores<T>>::get(bank_id)
             .ok_or(Error::<T>::BankAccountNotFoundForSpendReservation)?;
         let spend_reservation = <SpendReservations<T>>::get(bank_id, reservation_id)
             .ok_or(Error::<T>::SpendReservationNotFound)?;
-        if let Some(call_from_local_runtime_method) = caller {
-            // check that the account is authenticated to do this in the context of the bank account
-            ensure!(
-                Self::can_commit_reserved_spend_for_transfer(
-                    &call_from_local_runtime_method,
-                    bank_account
-                ),
-                Error::<T>::CallerMustSatisfyBankOwnerPermissionsToCommitReservedSpendForTransfer
-            );
-        }
-        // only commit the reserved part
+        // only commit the reserved part and return error if not enough funds
         let reservation_after_commit = spend_reservation
             .commit_spend_reservation(amount)
-            .ok_or(Error::<T>::CannotCommitReservedSpendBecauseAmountExceedsSpendReservation)?; // TODO better error message here
-                                                                                                // tracks all spend commitments made to specific WithdrawalPermissions
-        let commit_amt = if let Some(existing_commitment_amt) =
-            <SpendCommitments<T>>::get(bank_id, expected_future_owner.clone())
-        {
-            existing_commitment_amt.amount() + amount
-        } else {
-            amount
-        };
-        let new_commitment = CommitmentInfo::new(reason, commit_amt);
-        // respective insertions (3)
-        <SpendCommitments<T>>::insert(bank_id.clone(), expected_future_owner, new_commitment);
+            .ok_or(Error::<T>::CannotCommitReservedSpendBecauseAmountExceedsSpendReservation)?;
+        // insert changed spend reservation
         <SpendReservations<T>>::insert(bank_id, reservation_id, reservation_after_commit);
         Ok(())
     }
     // bank controller can unreserve if not committed
     fn unreserve_uncommitted_to_make_free(
-        caller: Option<T::AccountId>,
         bank_id: Self::TreasuryId,
         reservation_id: Self::AssociatedId,
         amount: BalanceOf<T>,
@@ -784,22 +812,12 @@ impl<T: Trait>
             .ok_or(Error::<T>::BankAccountNotFoundForSpendReservation)?;
         let spend_reservation = <SpendReservations<T>>::get(bank_id, reservation_id)
             .ok_or(Error::<T>::SpendReservationNotFound)?;
-        // this request must be approved by unreserving from the spend_reservation's
-        // uncommitted funds
+        // this request must be approved by unreserving from the spend_reservation's uncommitted funds
         let new_spend_reservation = spend_reservation
             .move_funds_out_uncommitted_only(amount)
             .ok_or(Error::<T>::NotEnoughFundsInSpendReservationUnCommittedToSatisfyUnreserveUnCommittedRequest)?;
-        if let Some(call_from_local_runtime_method) = caller {
-            // check that the account is authenticated to do this in the context of the bank account
-            ensure!(
-                Self::can_unreserve_uncommitted_to_make_free(
-                    &call_from_local_runtime_method,
-                    bank_account.clone()
-                ),
-                Error::<T>::CallerMustSatisfyBankOwnerPermissionsToUnReserveUnCommittedToMakeFree
-            );
-        }
-        // the change in the bank account is equivalent to spending reserved and increasing free by the same amount
+
+        // the change in the underlying bank account is equivalent to spending reserved and increasing free by the same amount
         let new_bank_account = bank_account
             .spend_from_reserved(amount)
             .ok_or(Error::<T>::NotEnoughFundsInBankReservedToSatisfyUnReserveUnComittedRequest)?
@@ -810,9 +828,7 @@ impl<T: Trait>
         <SpendReservations<T>>::insert(bank_id, reservation_id, new_spend_reservation);
         Ok(())
     }
-    // reservation.controller() can unreserve committed funds
     fn unreserve_committed_to_make_free(
-        caller: Option<T::AccountId>,
         bank_id: Self::TreasuryId,
         reservation_id: Self::AssociatedId,
         amount: BalanceOf<T>,
@@ -825,16 +841,6 @@ impl<T: Trait>
         let new_spend_reservation = spend_reservation
             .move_funds_out_committed_only(amount)
             .ok_or(Error::<T>::NotEnoughFundsCommittedToSatisfyUnreserveAndFreeRequest)?;
-        if let Some(call_from_local_runtime_method) = caller {
-            // check that the account is authenticated to do this in the context of the bank account
-            ensure!(
-                Self::can_unreserve_committed_to_make_free(
-                    &call_from_local_runtime_method,
-                    bank_account.clone()
-                ),
-                Error::<T>::CallerMustSatisfyBankOwnerPermissionsToUnReserveCommittedToMakeFree
-            );
-        }
         // the change in the bank account is equivalent to spending reserved and increasing free by the same amount
         let new_bank_account = bank_account
             .spend_from_reserved(amount)
@@ -849,7 +855,6 @@ impl<T: Trait>
     // Allocate some funds (previously set aside for spending reasons) to be withdrawable by new group
     // - this is an internal transfer to a team and it makes this capital withdrawable by them
     fn transfer_spending_power(
-        caller: Option<T::AccountId>,
         bank_id: Self::TreasuryId,
         reason: T::IpfsReference,
         // reference to specific reservation
@@ -858,31 +863,11 @@ impl<T: Trait>
         // move control of funds to new outer group which can reserve or withdraw directly
         new_controller: WithdrawalPermissions<T::OrgId, T::AccountId>,
     ) -> Result<Self::AssociatedId, DispatchError> {
-        let bank_account = <BankStores<T>>::get(bank_id)
+        let _ = <BankStores<T>>::get(bank_id)
             .ok_or(Error::<T>::BankAccountNotFoundForInternalTransfer)?;
-        if let Some(call_from_local_runtime_method) = caller {
-            // check that the account is authenticated to do this in the context of the bank account
-            ensure!(
-                Self::can_transfer_spending_power(
-                    &call_from_local_runtime_method,
-                    bank_account.clone()
-                ),
-                Error::<T>::CallerMustSatisfyBankOwnerPermissionsToTransferSpendingPower
-            );
-        }
         let spend_reservation = <SpendReservations<T>>::get(bank_id, reservation_id)
             .ok_or(Error::<T>::SpendReservationNotFound)?;
-        let spend_commitment = <SpendCommitments<T>>::get(bank_id, new_controller.clone())
-            .ok_or(Error::<T>::SpendCommitmentNotFoundForInternalTransfer)?;
-        // ensure the spend_commitment exceeds the amount
-        ensure!(
-            spend_commitment.amount() >= amount,
-            Error::<T>::InternalTransferRequestExceedsReferencedSpendCommitment
-        ); // equivalent to CheckedSub
-        let new_spend_commitment_amt = spend_commitment.amount() - amount;
-        let new_spend_commitment =
-            CommitmentInfo::new(spend_commitment.reason(), new_spend_commitment_amt);
-        // ensure that the amount is less than the spend reservation amount
+        // fallible spend from committed part of `ReservationInfo` object
         let new_spend_reservation = spend_reservation
             .move_funds_out_committed_only(amount)
             .ok_or(Error::<T>::NotEnoughFundsCommittedToEnableInternalTransfer)?;
@@ -896,8 +881,6 @@ impl<T: Trait>
         <InternalTransfers<T>>::insert(bank_id, new_transfer_id, new_transfer);
         // insert update reservation info after the transfer was made
         <SpendReservations<T>>::insert(bank_id, reservation_id, new_spend_reservation);
-        // update spend commitment data
-        <SpendCommitments<T>>::insert(bank_id, new_controller, new_spend_commitment);
         Ok(new_transfer_id)
     }
 }
@@ -912,20 +895,14 @@ impl<T: Trait>
     > for Module<T>
 {
     fn commit_and_transfer_spending_power(
-        caller: T::AccountId,
         bank_id: Self::TreasuryId,
         reservation_id: Self::AssociatedId,
         reason: T::IpfsReference,
         amount: BalanceOf<T>,
         new_controller: WithdrawalPermissions<T::OrgId, T::AccountId>,
     ) -> Result<Self::AssociatedId, DispatchError> {
-        let bank_account = <BankStores<T>>::get(bank_id)
+        let _ = <BankStores<T>>::get(bank_id)
             .ok_or(Error::<T>::BankAccountNotFoundForInternalTransfer)?;
-        // check that the account is authenticated to do this in the context of the bank account
-        ensure!(
-            Self::can_commit_and_transfer_spending_power(&caller, bank_account.clone()),
-            Error::<T>::CallerMustSatisfyBankOwnerPermissionsToCommitAndTransferSpendingPower
-        );
         let spend_reservation = <SpendReservations<T>>::get(bank_id, reservation_id)
             .ok_or(Error::<T>::SpendReservationNotFound)?;
         // ensure that the amount is less than the spend reservation amount

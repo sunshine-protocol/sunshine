@@ -298,7 +298,6 @@ pub trait OnChainBank {
 pub trait RegisterAccount<OrgId, AccountId, GovernanceConfig, Currency>: OnChainBank {
     // requires a deposit of some size above the minimum and returns the OnChainTreasuryID
     fn register_account(
-        caller: Option<AccountId>,
         owners: OrgId,
         from: AccountId,
         amount: Currency,
@@ -378,19 +377,37 @@ pub trait DepositIntoBank<OrgId, AccountId, GovernanceConfig, Currency, Hash>:
 }
 
 pub trait DefaultBankPermissions<OrgId, AccountId, Currency, WithdrawalPermissions>:
-    DepositsAndSpends<Currency>
+    DepositsAndSpends<Currency> + OnChainBank
 {
-    fn can_register_account(account: &AccountId, on_behalf_of: OrgId) -> bool;
+    fn can_register_account(account: AccountId, on_behalf_of: OrgId) -> bool;
     fn withdrawal_permissions_satisfy_org_standards(
         org: OrgId,
         withdrawal_permissions: WithdrawalPermissions,
     ) -> bool;
-    fn can_reserve_for_spend(account: &AccountId, bank: Self::Bank) -> bool;
-    fn can_commit_reserved_spend_for_transfer(account: &AccountId, bank: Self::Bank) -> bool;
-    fn can_unreserve_uncommitted_to_make_free(account: &AccountId, bank: Self::Bank) -> bool;
-    fn can_unreserve_committed_to_make_free(account: &AccountId, bank: Self::Bank) -> bool;
-    fn can_transfer_spending_power(account: &AccountId, bank: Self::Bank) -> bool;
-    fn can_commit_and_transfer_spending_power(account: &AccountId, bank: Self::Bank) -> bool;
+    fn can_reserve_for_spend(
+        account: AccountId,
+        bank: Self::TreasuryId,
+    ) -> Result<bool, DispatchError>;
+    fn can_commit_reserved_spend_for_transfer(
+        account: AccountId,
+        bank: Self::TreasuryId,
+    ) -> Result<bool, DispatchError>;
+    fn can_unreserve_uncommitted_to_make_free(
+        account: AccountId,
+        bank: Self::TreasuryId,
+    ) -> Result<bool, DispatchError>;
+    fn can_unreserve_committed_to_make_free(
+        account: AccountId,
+        bank: Self::TreasuryId,
+    ) -> Result<bool, DispatchError>;
+    fn can_transfer_spending_power(
+        account: AccountId,
+        bank: Self::TreasuryId,
+    ) -> Result<bool, DispatchError>;
+    fn can_commit_and_transfer_spending_power(
+        account: AccountId,
+        bank: Self::TreasuryId,
+    ) -> Result<bool, DispatchError>;
 }
 
 // One good question here might be, why are we passing the caller into this
@@ -408,39 +425,31 @@ pub trait ReservationMachine<OrgId, AccountId, GovernanceConfig, Currency, Hash>
     RegisterAccount<OrgId, AccountId, GovernanceConfig, Currency>
 {
     fn reserve_for_spend(
-        caller: Option<AccountId>, // must be in owner_s: GovernanceConfig for BankState, that's the auth
         bank_id: Self::TreasuryId,
         reason: Hash,
         amount: Currency,
         // acceptance committee for approving set aside spends below the amount
         controller: GovernanceConfig,
     ) -> Result<Self::AssociatedId, DispatchError>;
-    // only reserve.controller() can unreserve funds after commitment (with method further down)
     fn commit_reserved_spend_for_transfer(
-        caller: Option<AccountId>,
         bank_id: Self::TreasuryId,
         reservation_id: Self::AssociatedId,
-        reason: Hash,
         amount: Currency,
-        expected_future_owner: GovernanceConfig,
     ) -> DispatchResult;
     // bank controller can unreserve if not committed
     fn unreserve_uncommitted_to_make_free(
-        caller: Option<AccountId>,
         bank_id: Self::TreasuryId,
         reservation_id: Self::AssociatedId,
         amount: Currency,
     ) -> DispatchResult;
     // reservation.controller() can unreserve committed funds
     fn unreserve_committed_to_make_free(
-        caller: Option<AccountId>,
         bank_id: Self::TreasuryId,
         reservation_id: Self::AssociatedId,
         amount: Currency,
     ) -> DispatchResult;
     // reservation.controller() transfers control power to new_controller and enables liquidity by this controller
     fn transfer_spending_power(
-        caller: Option<AccountId>,
         bank_id: Self::TreasuryId,
         reason: Hash,
         // reference to specific reservation
@@ -456,7 +465,6 @@ pub trait CommitAndTransfer<OrgId, AccountId, GovernanceConfig, Currency, Hash>:
 {
     // in one step
     fn commit_and_transfer_spending_power(
-        caller: AccountId,
         bank_id: Self::TreasuryId,
         reservation_id: Self::AssociatedId,
         reason: Hash,
@@ -511,7 +519,6 @@ pub trait TermSheetIssuance<AccountId, Hash, Shares, Currency>: OnChainBank {
 
     // sponsor application to trigger vote (only requires one member)
     fn sponsor_application_to_trigger_vote(
-        caller: AccountId,
         bank_id: Self::TreasuryId,
         application_id: u32,
         stake_promised: Currency,

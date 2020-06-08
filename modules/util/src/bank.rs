@@ -42,25 +42,6 @@ pub enum BankMapID {
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
-/// Identifiers for tracking actions by specific individual AccountId to _eventually_ enforce limits on this behavior
-pub enum BankTrackerID<T: From<u32>> {
-    // acceptable only if the withdrawer burns their ownership
-    SpentFromFree,
-    // allowed from any member of the bank's controller
-    ReservedSpend,
-    // wraos reservation_id, allowed from any member of bank's controller
-    UnReservedSpendFromUnCommitted(T),
-    // wraps reservation_id, allowed from any member of reservation's controller
-    UnReservedSpendFromCommitted(T),
-    // wraps reservation_id, allowed from any member of spend reservation's controller
-    CommitSpend(T),
-    // wraps reservation_id, allowed from any member of the controller in the reference
-    InternalTransferMade(T),
-    // wraps transfer_id, only acceptable withdrawal from reserved, must follow configured decision process
-    SpentFromReserved(T),
-}
-
-#[derive(PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
 /// The simplest `GovernanceConfig`
 /// - has no magnitude context and is limited for that reason
 /// - future version will use revocable representative governance
@@ -264,21 +245,6 @@ impl<
 }
 
 #[derive(new, PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
-pub struct CommitmentInfo<Hash, Currency> {
-    reason: Hash,
-    amount: Currency,
-}
-
-impl<Hash: Clone, Currency: Clone> CommitmentInfo<Hash, Currency> {
-    pub fn amount(&self) -> Currency {
-        self.amount.clone()
-    }
-    pub fn reason(&self) -> Hash {
-        self.reason.clone()
-    }
-}
-
-#[derive(new, PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
 pub struct DepositInfo<AccountId, Hash, Currency> {
     // Depositer's identity
     depositer: AccountId,
@@ -286,7 +252,7 @@ pub struct DepositInfo<AccountId, Hash, Currency> {
     reason: Hash,
     // Total amount of deposit into bank account (before fees, if any)
     amount: Currency,
-} // TODO: attach an enum Tax<AccountId, Currency, FineArithmetic> { Flat(account, currency), PercentofAmount(account, permill, currency), }
+}
 
 impl<AccountId: Clone, Hash: Clone, Currency: Clone> DepositInfo<AccountId, Hash, Currency> {
     pub fn depositer(&self) -> AccountId {
