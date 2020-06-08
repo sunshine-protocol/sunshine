@@ -70,7 +70,6 @@ serde = { version = "1.0.106", features = ["derive"], optional = true }
 # local deps
 util = { package = "sunshine-util", path = "../modules/util", default-features = false }
 sunshine-org = {package = "sunshine-org", path = "../modules/org", default-features=false }
-vote-threshold = { package = "sunshine-vote-threshold", path = "../modules/vote-threshold", default-features = false}
-vote-consent = { package = "sunshine-vote-consent", path = "../modules/vote-consent", default-features=false}
+vote = { package = "sunshine-vote", path = "../modules/vote", default-features=false}
 bank = { package = "sunshine-bank", path = "../modules/bank", default-features=false}
 bounty = { package = "sunshine-bounty", path = "../modules/bounty", default-features=false}

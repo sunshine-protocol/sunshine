@@ -5,8 +5,7 @@ panic = "unwind"
 members = [
     "modules/util",
     "modules/org",
-    "modules/vote-consent",
-    "modules/vote-threshold",
+    "modules/vote",
     "modules/bank",
     "modules/bounty",
     "runtime",

@@ -1,22 +1,22 @@
 
 [package]
-name = "sunshine-vote-threshold"
+name = "sunshine-vote"
 version = "0.0.1"
 authors = ["Amar Singh <asinghchrony@protonmail.com>"]
 edition = "2018"
 
 license = "GPL-3.0"
 repository = "https://github.com/sunshine-protocol/sunshine-node"
-description = "expressive vote module with threshold for passage and turnout"
+description = "minimal vote module for collecting signatures on-chain"
 keywords = ["sunshine", "substrate", "blockchain"]
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "1.2.0", default-features = false, features = ["derive"] }
+pallet-balances = { version = "2.0.0-rc2", default-features = false }
 sp-std = { version = "2.0.0-rc2", default-features = false }
 sp-runtime = { version = "2.0.0-rc2", default-features = false }
 frame-support = { version = "2.0.0-rc2", default-features = false }
 frame-system = { version = "2.0.0-rc2", default-features = false }
-pallet-balances = { version = "2.0.0-rc2", default-features = false }
 util = { package = "sunshine-util", path = "../util", default-features = false }
 org = { package = "sunshine-org", path = "../org", default-features=false}
 clear_on_drop = { version = "0.2.3", features = ["no_cc"] } # https://github.com/paritytech/substrate/issues/4179

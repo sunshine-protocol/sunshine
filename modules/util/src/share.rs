@@ -4,7 +4,7 @@ use frame_support::Parameter;
 use sp_runtime::{traits::Zero, RuntimeDebug};
 use sp_std::prelude::*;
 
-#[derive(PartialEq, Eq, Default, Copy, Clone, Encode, Decode, RuntimeDebug)]
+#[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug)]
 /// share profile reserves the total share amount every time but (might) have a limit on total reservations
 pub struct ShareProfile<Shares> {
     /// The total number of shares owned by this participant
@@ -21,7 +21,28 @@ impl<
             + Parameter
             + sp_std::ops::Add<Output = Shares>
             + sp_std::ops::Sub<Output = Shares>
-            + Zero,
+            + Zero
+            + From<u32>,
+    > Default for ShareProfile<Shares>
+{
+    /// The default is 1 shares for convenient usage of the vote module for flat votes
+    fn default() -> ShareProfile<Shares> {
+        ShareProfile {
+            total: Shares::zero() + 1u32.into(),
+            times_reserved: 0u32,
+            locked: false,
+        }
+    }
+}
+
+impl<
+        Shares: Copy
+            + Default
+            + Parameter
+            + sp_std::ops::Add<Output = Shares>
+            + sp_std::ops::Sub<Output = Shares>
+            + Zero
+            + From<u32>,
     > ShareProfile<Shares>
 {
     pub fn total(&self) -> Shares {

@@ -1,5 +1,6 @@
 use crate::traits::{
-    Apply, Approved, ConsistentThresholdStructure, DeriveThresholdRequirement, Revert, VoteVector,
+    Apply, Approved, ConsistentThresholdStructure, DeriveThresholdRequirement, Rejected, Revert,
+    VoteVector,
 };
 use codec::{Decode, Encode};
 use frame_support::Parameter;
@@ -7,25 +8,8 @@ use sp_runtime::PerThing;
 use sp_std::prelude::*;
 
 #[derive(Clone, Copy, PartialEq, Eq, Encode, Decode, sp_runtime::RuntimeDebug)]
-/// The types of vote weightings supported by default in `vote-yesno`
-pub enum SupportedVoteTypes {
-    /// 1 account 1 vote
-    OneAccountOneVote,
-    /// Defaults to share weights
-    ShareWeighted,
-    /// Special signal minting policy?
-    Custom,
-}
-
-impl Default for SupportedVoteTypes {
-    fn default() -> SupportedVoteTypes {
-        SupportedVoteTypes::ShareWeighted
-    }
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, Encode, Decode, sp_runtime::RuntimeDebug)]
-/// The vote-yesno voter options (direction)
-pub enum VoterYesNoView {
+/// The voter options (direction)
+pub enum VoterView {
     /// Not yet voted
     NoVote,
     /// Voted in favor
@@ -39,23 +23,23 @@ pub enum VoterYesNoView {
 #[derive(new, Clone, Copy, PartialEq, Eq, Encode, Decode, sp_runtime::RuntimeDebug)]
 /// Binary vote to express for/against with magnitude
 /// ~ vectors have direction and magnitude, not to be confused with `Vec`
-pub struct YesNoVote<Signal, Hash> {
+pub struct Vote<Signal, Hash> {
     magnitude: Signal,
-    direction: VoterYesNoView,
+    direction: VoterView,
     justification: Option<Hash>,
 }
 
-impl<Signal: Copy, Hash: Clone> YesNoVote<Signal, Hash> {
+impl<Signal: Copy, Hash: Clone> Vote<Signal, Hash> {
     pub fn set_new_view(
         &self,
-        new_direction: VoterYesNoView,
+        new_direction: VoterView,
         new_justification: Option<Hash>,
     ) -> Option<Self> {
         if self.direction == new_direction {
             // new view not set because same object
             None
         } else {
-            Some(YesNoVote {
+            Some(Vote {
                 magnitude: self.magnitude,
                 direction: new_direction,
                 justification: new_justification,
@@ -64,13 +48,11 @@ impl<Signal: Copy, Hash: Clone> YesNoVote<Signal, Hash> {
     }
 }
 
-impl<Signal: Copy, Hash: Clone> VoteVector<Signal, VoterYesNoView, Hash>
-    for YesNoVote<Signal, Hash>
-{
+impl<Signal: Copy, Hash: Clone> VoteVector<Signal, VoterView, Hash> for Vote<Signal, Hash> {
     fn magnitude(&self) -> Signal {
         self.magnitude
     }
-    fn direction(&self) -> VoterYesNoView {
+    fn direction(&self) -> VoterView {
         self.direction
     }
     fn justification(&self) -> Option<Hash> {
@@ -163,7 +145,7 @@ impl<
         FineArithmetic: PerThing + sp_std::ops::Mul<Signal, Output = Signal>,
     > DeriveThresholdRequirement<Signal> for ThresholdConfig<Signal, FineArithmetic>
 {
-    fn derive_support_requirement(&self, turnout: Signal) -> Signal {
+    fn derive_threshold_requirement(&self, turnout: Signal) -> Signal {
         match self.support_required {
             ThresholdType::Count(signal) => signal,
             ThresholdType::Percentage(signal) => signal * turnout,
@@ -177,26 +159,30 @@ impl<
     }
 }
 
-#[derive(PartialEq, Eq, Default, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
 /// The state of an ongoing vote
-pub struct VoteState<Signal, FineArithmetic, BlockNumber>
+pub struct VoteState<Signal, FineArithmetic, BlockNumber, Hash>
 where
     Signal: From<u32>,
     FineArithmetic: PerThing,
 {
-    /// u32 in favor
+    /// Vote state must often be anchored to offchain state, cid
+    topic: Option<Hash>,
+    /// All signal in favor
     in_favor: Signal,
-    /// u32 against
+    /// All signal against
     against: Signal,
-    /// All signal that votes
+    /// All signal that votes at all
     turnout: Signal,
-    /// All signal that could vote
+    /// All signal that can vote
     all_possible_turnout: Signal,
-    /// The threshold configuration for passage
-    threshold: ThresholdConfig<Signal, FineArithmetic>,
-    /// The time at which this is initialized
+    /// The threshold requirement for passage
+    passage_threshold: ThresholdConfig<Signal, FineArithmetic>,
+    /// The threshold requirement for rejection
+    rejection_threshold: Option<ThresholdConfig<Signal, FineArithmetic>>,
+    /// The time at which this vote state is initialized
     initialized: BlockNumber,
-    /// The time at which this vote state expired, now an Option
+    /// The time at which this vote state expires
     expires: Option<BlockNumber>,
     /// The vote outcome
     outcome: VoteOutcome,
@@ -210,22 +196,76 @@ impl<
             + sp_std::ops::Sub<Output = Signal>,
         FineArithmetic: PerThing + Default,
         BlockNumber: Parameter + Copy + Default,
-    > VoteState<Signal, FineArithmetic, BlockNumber>
+        Hash: Clone,
+    > Default for VoteState<Signal, FineArithmetic, BlockNumber, Hash>
+{
+    fn default() -> VoteState<Signal, FineArithmetic, BlockNumber, Hash> {
+        VoteState {
+            topic: None,
+            in_favor: 0u32.into(),
+            against: 0u32.into(),
+            turnout: 0u32.into(),
+            all_possible_turnout: 0u32.into(),
+            passage_threshold: ThresholdConfig::default(),
+            rejection_threshold: None,
+            initialized: BlockNumber::default(),
+            expires: None,
+            outcome: VoteOutcome::default(),
+        }
+    }
+}
+
+impl<
+        Signal: Copy
+            + From<u32>
+            + Default
+            + sp_std::ops::Add<Output = Signal>
+            + sp_std::ops::Sub<Output = Signal>,
+        FineArithmetic: PerThing + Default,
+        BlockNumber: Parameter + Copy + Default,
+        Hash: Clone,
+    > VoteState<Signal, FineArithmetic, BlockNumber, Hash>
 {
     pub fn new(
+        topic: Option<Hash>,
         all_possible_turnout: Signal,
-        threshold: ThresholdConfig<Signal, FineArithmetic>,
+        passage_threshold: ThresholdConfig<Signal, FineArithmetic>,
+        rejection_threshold: Option<ThresholdConfig<Signal, FineArithmetic>>,
         initialized: BlockNumber,
         expires: Option<BlockNumber>,
-    ) -> VoteState<Signal, FineArithmetic, BlockNumber> {
+    ) -> VoteState<Signal, FineArithmetic, BlockNumber, Hash> {
         VoteState {
+            topic,
             all_possible_turnout,
-            threshold,
+            passage_threshold,
+            rejection_threshold,
             initialized,
             expires,
             outcome: VoteOutcome::Voting,
             ..Default::default()
         }
+    }
+    pub fn new_unanimous_consent(
+        topic: Option<Hash>,
+        all_possible_turnout: Signal,
+        initialized: BlockNumber,
+        expires: Option<BlockNumber>,
+    ) -> VoteState<Signal, FineArithmetic, BlockNumber, Hash> {
+        let unanimous_passage_threshold =
+            ThresholdConfig::new_signal_count_threshold(all_possible_turnout, all_possible_turnout);
+        VoteState {
+            topic,
+            all_possible_turnout,
+            passage_threshold: unanimous_passage_threshold,
+            rejection_threshold: None,
+            initialized,
+            expires,
+            outcome: VoteOutcome::Voting,
+            ..Default::default()
+        }
+    }
+    pub fn topic(&self) -> Option<Hash> {
+        self.topic.clone()
     }
     pub fn in_favor(&self) -> Signal {
         self.in_favor
@@ -242,8 +282,11 @@ impl<
     pub fn expires(&self) -> Option<BlockNumber> {
         self.expires
     }
-    pub fn threshold(&self) -> ThresholdConfig<Signal, FineArithmetic> {
-        self.threshold
+    pub fn passage_threshold(&self) -> ThresholdConfig<Signal, FineArithmetic> {
+        self.passage_threshold
+    }
+    pub fn rejection_threshold(&self) -> Option<ThresholdConfig<Signal, FineArithmetic>> {
+        self.rejection_threshold
     }
     pub fn outcome(&self) -> VoteOutcome {
         self.outcome
@@ -317,17 +360,48 @@ impl<
             + sp_std::ops::Sub<Output = Signal>,
         FineArithmetic: PerThing + Default + sp_std::ops::Mul<Signal, Output = Signal>,
         BlockNumber: Parameter + Copy + Default,
-    > Approved for VoteState<Signal, FineArithmetic, BlockNumber>
+        Hash: Clone,
+    > Approved for VoteState<Signal, FineArithmetic, BlockNumber, Hash>
 {
     fn approved(&self) -> bool {
         self.in_favor()
             > self
-                .threshold
-                .derive_support_requirement(self.all_possible_turnout())
+                .passage_threshold
+                .derive_threshold_requirement(self.all_possible_turnout())
             && self.turnout()
                 > self
-                    .threshold
+                    .passage_threshold
                     .derive_turnout_requirement(self.all_possible_turnout())
+    }
+}
+
+impl<
+        Signal: Parameter
+            + Copy
+            + From<u32>
+            + Default
+            + PartialOrd
+            + sp_std::ops::Add<Output = Signal>
+            + sp_std::ops::Sub<Output = Signal>,
+        FineArithmetic: PerThing + Default + sp_std::ops::Mul<Signal, Output = Signal>,
+        BlockNumber: Parameter + Copy + Default,
+        Hash: Clone,
+    > Rejected for VoteState<Signal, FineArithmetic, BlockNumber, Hash>
+{
+    fn rejected(&self) -> Option<bool> {
+        if let Some(rejection_threshold_set) = self.rejection_threshold() {
+            Some(
+                self.against()
+                    > rejection_threshold_set
+                        .derive_threshold_requirement(self.all_possible_turnout())
+                    && self.turnout()
+                        > rejection_threshold_set
+                            .derive_turnout_requirement(self.all_possible_turnout()),
+            )
+        } else {
+            // rejection threshold not set!
+            None
+        }
     }
 }
 
@@ -341,16 +415,16 @@ impl<
         Hash: Clone,
         FineArithmetic: PerThing + Default,
         BlockNumber: Parameter + Copy + Default,
-    > Apply<YesNoVote<Signal, Hash>> for VoteState<Signal, FineArithmetic, BlockNumber>
+    > Apply<Vote<Signal, Hash>> for VoteState<Signal, FineArithmetic, BlockNumber, Hash>
 {
     fn apply(
         &self,
-        vote: YesNoVote<Signal, Hash>,
-    ) -> VoteState<Signal, FineArithmetic, BlockNumber> {
+        vote: Vote<Signal, Hash>,
+    ) -> VoteState<Signal, FineArithmetic, BlockNumber, Hash> {
         match vote.direction() {
-            VoterYesNoView::InFavor => self.add_in_favor_vote(vote.magnitude()),
-            VoterYesNoView::Against => self.add_against_vote(vote.magnitude()),
-            VoterYesNoView::Abstain => self.add_abstention(vote.magnitude()),
+            VoterView::InFavor => self.add_in_favor_vote(vote.magnitude()),
+            VoterView::Against => self.add_against_vote(vote.magnitude()),
+            VoterView::Abstain => self.add_abstention(vote.magnitude()),
             _ => self.clone(),
         }
     }
@@ -366,16 +440,16 @@ impl<
         Hash: Clone,
         FineArithmetic: PerThing + Default,
         BlockNumber: Parameter + Copy + Default,
-    > Revert<YesNoVote<Signal, Hash>> for VoteState<Signal, FineArithmetic, BlockNumber>
+    > Revert<Vote<Signal, Hash>> for VoteState<Signal, FineArithmetic, BlockNumber, Hash>
 {
     fn revert(
         &self,
-        vote: YesNoVote<Signal, Hash>,
-    ) -> VoteState<Signal, FineArithmetic, BlockNumber> {
+        vote: Vote<Signal, Hash>,
+    ) -> VoteState<Signal, FineArithmetic, BlockNumber, Hash> {
         match vote.direction() {
-            VoterYesNoView::InFavor => self.remove_in_favor_vote(vote.magnitude()),
-            VoterYesNoView::Against => self.remove_against_vote(vote.magnitude()),
-            VoterYesNoView::Abstain => self.remove_abstention(vote.magnitude()),
+            VoterView::InFavor => self.remove_in_favor_vote(vote.magnitude()),
+            VoterView::Against => self.remove_against_vote(vote.magnitude()),
+            VoterView::Abstain => self.remove_abstention(vote.magnitude()),
             _ => self.clone(),
         }
     }

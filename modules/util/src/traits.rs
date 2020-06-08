@@ -150,7 +150,7 @@ pub trait RemoveOrganization<OrgId> {
     fn recursive_remove_organization(id: OrgId) -> DispatchResult;
 }
 
-// ---------- Petition Logic ----------
+// ====== Vote Logic ======
 
 /// Retrieves the outcome of a vote associated with the vote identifier `vote_id`
 pub trait GetVoteOutcome<VoteId> {
@@ -159,51 +159,9 @@ pub trait GetVoteOutcome<VoteId> {
     fn get_vote_outcome(vote_id: VoteId) -> Result<Self::Outcome, DispatchError>;
 }
 
-pub trait OpenPetition<VoteId, OrgId, Hash, BlockNumber>: GetVoteOutcome<VoteId> {
-    fn open_petition(
-        organization: OrgId,
-        topic: Option<Hash>,
-        required_support: u32,
-        vetos_to_reject: u32,
-        duration: Option<BlockNumber>,
-    ) -> Result<VoteId, DispatchError>;
-    fn open_unanimous_approval_petition(
-        organization: OrgId,
-        topic: Option<Hash>,
-        vetos_to_reject: u32,
-        duration: Option<BlockNumber>,
-    ) -> Result<VoteId, DispatchError>;
-}
-
-pub trait UpdatePetitionTerms<Hash>: Sized {
-    fn update_petition_terms(&self, new_terms: Hash, clear_votes_on_update: bool) -> Self;
-}
-
-pub trait SignPetition<VoteId, AccountId, Hash, SignerView>: GetVoteOutcome<VoteId> {
-    type Petition: Approved + Rejected + UpdatePetitionTerms<Hash> + Apply<SignerView>;
-    fn check_petition_outcome(petition_state: Self::Petition) -> Option<Self::Outcome>;
-    fn sign_petition(
-        petition_id: VoteId,
-        signer: AccountId,
-        view: SignerView,
-    ) -> Result<Self::Outcome, DispatchError>;
-}
-
-pub trait UpdatePetition<VoteId, AccountId, Hash, SignerView>:
-    SignPetition<VoteId, AccountId, Hash, SignerView>
-{
-    fn update_petition(
-        petition_id: VoteId,
-        new_topic: Hash,
-        clear_previous_vote_state: bool,
-    ) -> DispatchResult;
-}
-
-// ====== Vote Logic ======
-
 /// Derives the threshold requirement from turnout (for `ThresholdConfig`)
 pub trait DeriveThresholdRequirement<Signal> {
-    fn derive_support_requirement(&self, turnout: Signal) -> Signal;
+    fn derive_threshold_requirement(&self, turnout: Signal) -> Signal;
     fn derive_turnout_requirement(&self, turnout: Signal) -> Signal;
 }
 
@@ -215,19 +173,34 @@ pub trait ConsistentThresholdStructure {
 }
 
 /// Open a new vote for the organization, share_id and a custom threshold requirement
-pub trait OpenVote<OrgId, Threshold, BlockNumber, VoteId>: GetVoteOutcome<VoteId> {
+pub trait OpenVote<OrgId, Threshold, BlockNumber, VoteId, Hash>: GetVoteOutcome<VoteId> {
     fn open_vote(
+        topic: Option<Hash>,
         organization: OrgId,
-        threshold: Threshold,
+        passage_threshold: Threshold,
+        rejection_threshold: Option<Threshold>,
         duration: Option<BlockNumber>,
     ) -> Result<VoteId, DispatchError>;
+    fn open_unanimous_consent(
+        topic: Option<Hash>,
+        organization: OrgId,
+        duration: Option<BlockNumber>,
+    ) -> Result<VoteId, DispatchError>;
+}
+
+pub trait UpdateVoteTopic<VoteId, Hash> {
+    fn update_vote(
+        vote_id: VoteId,
+        new_topic: Hash,
+        clear_previous_vote_state: bool,
+    ) -> DispatchResult;
 }
 
 pub trait Approved {
     fn approved(&self) -> bool;
 }
 pub trait Rejected {
-    fn rejected(&self) -> bool;
+    fn rejected(&self) -> Option<bool>;
 }
 pub trait Apply<Vote>: Sized {
     fn apply(&self, vote: Vote) -> Self;
@@ -261,7 +234,7 @@ pub trait CheckVoteStatus<Hash, VoteId>: ApplyVote<Hash> + GetVoteOutcome<VoteId
 }
 
 pub trait MintableSignal<AccountId, OrgId, Threshold, BlockNumber, VoteId, Hash>:
-    OpenVote<OrgId, Threshold, BlockNumber, VoteId> + ApplyVote<Hash>
+    OpenVote<OrgId, Threshold, BlockNumber, VoteId, Hash> + ApplyVote<Hash>
 {
     fn mint_custom_signal_for_account(vote_id: VoteId, who: &AccountId, signal: Self::Signal);
 
@@ -283,7 +256,7 @@ pub trait BurnableSignal<AccountId, OrgId, Threshold, BlockNumber, VoteId, Hash>
 }
 
 pub trait VoteOnProposal<AccountId, OrgId, Threshold, BlockNumber, VoteId, Hash>:
-    OpenVote<OrgId, Threshold, BlockNumber, VoteId> + CheckVoteStatus<Hash, VoteId>
+    OpenVote<OrgId, Threshold, BlockNumber, VoteId, Hash> + CheckVoteStatus<Hash, VoteId>
 {
     fn vote_on_proposal(
         vote_id: VoteId,

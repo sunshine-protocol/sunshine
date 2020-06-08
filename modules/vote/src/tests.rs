@@ -60,7 +60,7 @@ impl Trait for Test {
     type Signal = u64;
 }
 
-mod vote_threshold {
+mod vote {
     pub use crate::Event;
 }
 
@@ -68,7 +68,7 @@ impl_outer_event! {
     pub enum TestEvent for Test {
         system<T>,
         org<T>,
-        vote_threshold<T>,
+        vote<T>,
     }
 }
 pub type System = system::Module<Test>;
@@ -80,7 +80,7 @@ fn get_last_event() -> RawEvent<u64, u64, u64> {
         .into_iter()
         .map(|r| r.event)
         .filter_map(|e| {
-            if let TestEvent::vote_threshold(inner) = e {
+            if let TestEvent::vote(inner) = e {
                 Some(inner)
             } else {
                 None
@@ -141,4 +141,3 @@ fn vote_creation_works() {
         assert_eq!(get_last_event(), RawEvent::NewVoteStarted(1, 1, 2));
     });
 }
-// TODO: test thresholds; batch minting signal to weighted membership
