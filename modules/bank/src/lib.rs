@@ -44,7 +44,7 @@ use sp_std::{fmt::Debug, prelude::*};
 type BalanceOf<T> =
     <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 
-pub trait Trait: system::Trait + org::Trait {
+pub trait Trait: system::Trait + org::Trait + vote::Trait {
     type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 
     type BankAssociatedId: Parameter

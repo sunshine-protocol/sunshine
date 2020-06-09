@@ -76,7 +76,7 @@ use crate::bounty::{ReviewBoard, TeamID};
 impl<
         OrgId: Codec + PartialEq + Zero + From<u32> + Copy,
         AccountId: PartialEq,
-        Hash,
+        Hash: Clone,
         Threshold: Clone,
     > From<ReviewBoard<OrgId, AccountId, Hash, Threshold>>
     for WithdrawalPermissions<OrgId, AccountId>

@@ -85,7 +85,7 @@ impl<
 
 #[derive(new, PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug)]
 /// Identifier for each registered team
-pub struct TeamID<OrgId: Codec + PartialEq + Zero + From<u32> + Copy, AccountId> {
+pub struct TeamID<OrgId, AccountId> {
     /// Optional sudo (direction => revocable representative democracy)
     /// -> may not be same as self.org.sudo() but will be by default if not otherwise set
     sudo: Option<AccountId>,
@@ -110,12 +110,7 @@ impl<OrgId: Codec + PartialEq + Zero + From<u32> + Copy, AccountId: Clone + Part
 
 #[derive(new, PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 /// Vote call metadata, pre-call to dispatch votes
-pub struct ReviewBoard<
-    OrgId: Codec + PartialEq + Zero + From<u32> + Copy,
-    AccountId,
-    Hash,
-    Threshold,
-> {
+pub struct ReviewBoard<OrgId, AccountId, Hash, Threshold> {
     topic: Option<Hash>,
     sudo: Option<AccountId>,
     organization: OrgId,
@@ -125,12 +120,18 @@ pub struct ReviewBoard<
 impl<
         OrgId: Codec + PartialEq + Zero + From<u32> + Copy,
         AccountId: PartialEq,
-        Hash,
+        Hash: Clone,
         Threshold: Clone,
     > ReviewBoard<OrgId, AccountId, Hash, Threshold>
 {
+    pub fn topic(&self) -> Option<Hash> {
+        self.topic.clone()
+    }
     pub fn org(&self) -> OrgId {
         self.organization
+    }
+    pub fn threshold(&self) -> Threshold {
+        self.threshold.clone()
     }
     pub fn is_sudo(&self, acc: &AccountId) -> bool {
         if let Some(the_sudo) = &self.sudo {
@@ -154,11 +155,10 @@ pub enum MilestoneStatus<VoteId, TransferId> {
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-pub struct MilestoneSubmission<Hash, Currency, AccountId, ApplicationId, TeamId, MilestoneStatus> {
+pub struct MilestoneSubmission<Hash, Currency, AccountId, ApplicationId, MilestoneStatus> {
     submitter: AccountId,
     // the approved application from which the milestone derives its legitimacy
     referenced_application: ApplicationId,
-    team_id: TeamId, // TODO: map from team_id => TeamID<OrgId, ShareId, AccountId>, adds a lookup but worth it long term IMO
     submission: Hash,
     amount: Currency,
     // the review status, none upon immediate submission
@@ -170,7 +170,6 @@ impl<
         Currency: Clone,
         AccountId: Clone,
         ApplicationId: Copy,
-        OrgId: Codec + PartialEq + Zero + From<u32> + Copy,
         VoteId: Codec + PartialEq + Zero + From<u32> + Copy,
     >
     MilestoneSubmission<
@@ -178,14 +177,12 @@ impl<
         Currency,
         AccountId,
         ApplicationId,
-        TeamID<OrgId, AccountId>,
         MilestoneStatus<VoteId, ApplicationId>,
     >
 {
     pub fn new(
         submitter: AccountId,
         referenced_application: ApplicationId,
-        team_id: TeamID<OrgId, AccountId>,
         submission: Hash,
         amount: Currency,
     ) -> MilestoneSubmission<
@@ -193,13 +190,11 @@ impl<
         Currency,
         AccountId,
         ApplicationId,
-        TeamID<OrgId, AccountId>,
         MilestoneStatus<VoteId, ApplicationId>,
     > {
         MilestoneSubmission {
             submitter,
             referenced_application,
-            team_id,
             submission,
             amount,
             state: MilestoneStatus::SubmittedAwaitingResponse,
@@ -207,9 +202,6 @@ impl<
     }
     pub fn application_id(&self) -> ApplicationId {
         self.referenced_application
-    }
-    pub fn team_id(&self) -> TeamID<OrgId, AccountId> {
-        self.team_id.clone()
     }
     pub fn submission(&self) -> Hash {
         self.submission.clone()
@@ -233,7 +225,6 @@ impl<
         Currency: Clone,
         AccountId: Clone,
         ApplicationId: Copy,
-        OrgId: Codec + PartialEq + Zero + From<u32> + Copy,
         VoteId: Codec + PartialEq + Zero + From<u32> + Copy,
     > StartReview<VoteId>
     for MilestoneSubmission<
@@ -241,7 +232,6 @@ impl<
         Currency,
         AccountId,
         ApplicationId,
-        TeamID<OrgId, AccountId>,
         MilestoneStatus<VoteId, ApplicationId>,
     >
 {
@@ -249,7 +239,6 @@ impl<
         MilestoneSubmission {
             submitter: self.submitter.clone(),
             referenced_application: self.referenced_application,
-            team_id: self.team_id.clone(),
             submission: self.submission.clone(),
             amount: self.amount.clone(),
             state: MilestoneStatus::SubmittedReviewStarted(vote_id),
@@ -268,7 +257,6 @@ impl<
         Currency: Clone,
         AccountId: Clone,
         ApplicationId: Copy,
-        OrgId: Codec + PartialEq + Zero + From<u32> + Copy,
         VoteId: Codec + PartialEq + Zero + From<u32> + Copy,
     > ApproveWithoutTransfer
     for MilestoneSubmission<
@@ -276,7 +264,6 @@ impl<
         Currency,
         AccountId,
         ApplicationId,
-        TeamID<OrgId, AccountId>,
         MilestoneStatus<VoteId, ApplicationId>,
     >
 {
@@ -284,7 +271,6 @@ impl<
         MilestoneSubmission {
             submitter: self.submitter.clone(),
             referenced_application: self.referenced_application,
-            team_id: self.team_id.clone(),
             submission: self.submission.clone(),
             amount: self.amount.clone(),
             state: MilestoneStatus::ApprovedButNotTransferred,
@@ -297,7 +283,6 @@ impl<
         Currency: Clone,
         AccountId: Clone,
         ApplicationId: Copy,
-        OrgId: Codec + PartialEq + Zero + From<u32> + Copy,
         VoteId: Codec + PartialEq + Zero + From<u32> + Copy,
     > SetMakeTransfer<OnChainTreasuryID, ApplicationId>
     for MilestoneSubmission<
@@ -305,7 +290,6 @@ impl<
         Currency,
         AccountId,
         ApplicationId,
-        TeamID<OrgId, AccountId>,
         MilestoneStatus<VoteId, ApplicationId>,
     >
 {
@@ -313,7 +297,6 @@ impl<
         MilestoneSubmission {
             submitter: self.submitter.clone(),
             referenced_application: self.referenced_application,
-            team_id: self.team_id.clone(),
             submission: self.submission.clone(),
             amount: self.amount.clone(),
             state: MilestoneStatus::ApprovedAndTransferEnabled(bank_id, transfer_id),
@@ -395,7 +378,7 @@ pub struct GrantApplication<
     /// total amount
     total_amount: Currency,
     /// The terms of agreement that must agreed to by all members before the bounty execution starts
-    terms_of_agreement: TermsOfAgreement<AccountId, Shares>,
+    terms_of_agreement: TermsOfAgreement<AccountId, Shares, Hash>,
     /// state of the application
     state: State,
 }
@@ -413,7 +396,7 @@ impl<
         submitter: AccountId,
         description: Hash,
         total_amount: Currency,
-        terms_of_agreement: TermsOfAgreement<AccountId, Shares>,
+        terms_of_agreement: TermsOfAgreement<AccountId, Shares, Hash>,
     ) -> GrantApplication<AccountId, Shares, Currency, Hash, ApplicationState<TeamId, VoteId>> {
         GrantApplication {
             submitter,
@@ -429,7 +412,7 @@ impl<
     pub fn total_amount(&self) -> Currency {
         self.total_amount.clone()
     }
-    pub fn terms_of_agreement(&self) -> TermsOfAgreement<AccountId, Shares> {
+    pub fn terms_of_agreement(&self) -> TermsOfAgreement<AccountId, Shares, Hash> {
         self.terms_of_agreement.clone()
     }
 }

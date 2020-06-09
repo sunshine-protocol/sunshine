@@ -173,19 +173,20 @@ pub trait ConsistentThresholdStructure {
 }
 
 /// Open a new vote for the organization, share_id and a custom threshold requirement
-pub trait OpenVote<OrgId, Threshold, BlockNumber, VoteId, Hash>: GetVoteOutcome<VoteId> {
+pub trait OpenVote<OrgId, Threshold, BlockNumber, Hash> {
+    type VoteIdentifier;
     fn open_vote(
         topic: Option<Hash>,
         organization: OrgId,
         passage_threshold: Threshold,
         rejection_threshold: Option<Threshold>,
         duration: Option<BlockNumber>,
-    ) -> Result<VoteId, DispatchError>;
+    ) -> Result<Self::VoteIdentifier, DispatchError>;
     fn open_unanimous_consent(
         topic: Option<Hash>,
         organization: OrgId,
         duration: Option<BlockNumber>,
-    ) -> Result<VoteId, DispatchError>;
+    ) -> Result<Self::VoteIdentifier, DispatchError>;
 }
 
 pub trait UpdateVoteTopic<VoteId, Hash> {
@@ -234,7 +235,7 @@ pub trait CheckVoteStatus<Hash, VoteId>: ApplyVote<Hash> + GetVoteOutcome<VoteId
 }
 
 pub trait MintableSignal<AccountId, OrgId, Threshold, BlockNumber, VoteId, Hash>:
-    OpenVote<OrgId, Threshold, BlockNumber, VoteId, Hash> + ApplyVote<Hash>
+    OpenVote<OrgId, Threshold, BlockNumber, Hash> + ApplyVote<Hash>
 {
     fn mint_custom_signal_for_account(vote_id: VoteId, who: &AccountId, signal: Self::Signal);
     fn batch_mint_equal_signal(
@@ -259,7 +260,7 @@ pub trait BurnableSignal<AccountId, OrgId, Threshold, BlockNumber, VoteId, Hash>
 }
 
 pub trait VoteOnProposal<AccountId, OrgId, Threshold, BlockNumber, VoteId, Hash>:
-    OpenVote<OrgId, Threshold, BlockNumber, VoteId, Hash> + CheckVoteStatus<Hash, VoteId>
+    OpenVote<OrgId, Threshold, BlockNumber, Hash> + CheckVoteStatus<Hash, VoteId>
 {
     fn vote_on_proposal(
         vote_id: VoteId,
@@ -579,10 +580,6 @@ pub trait UseTermsOfAgreement<OrgId, TermsOfAgreement> {
         bounty_org: OrgId,
         terms: TermsOfAgreement,
     ) -> Result<(Self::TeamIdentifier, Self::VoteIdentifier), DispatchError>;
-    fn approve_grant_to_register_team(
-        bounty_org: OrgId,
-        terms: TermsOfAgreement,
-    ) -> Result<Self::TeamIdentifier, DispatchError>;
 }
 
 // used for application and milestone review dispatch and diagnostics
@@ -634,78 +631,55 @@ pub trait SubmitGrantApplication<
         + ApproveGrant<Self::TeamIdentifier>;
     fn form_grant_application(
         caller: AccountId,
-        bounty_id: OrgId,
+        bounty_id: Self::BountyId,
         description: Hash,
         total_amount: Currency,
         terms_of_agreement: TermsOfAgreement,
     ) -> Result<Self::GrantApp, DispatchError>;
     fn submit_grant_application(
         caller: AccountId,
-        bounty_id: OrgId,
+        bounty_id: Self::BountyId,
         description: Hash,
         total_amount: Currency,
         terms_of_agreement: TermsOfAgreement,
-    ) -> Result<u32, DispatchError>; // returns application identifier
+    ) -> Result<Self::BountyId, DispatchError>; // returns application identifier
 }
 
-pub trait SuperviseGrantApplication<
-    OrgId,
-    Currency,
-    AccountId,
-    Hash,
-    ReviewCommittee,
-    ApplicationId,
->: CreateBounty<OrgId, Currency, AccountId, Hash, ReviewCommittee>
-{
+pub trait SuperviseGrantApplication<BountyId, AccountId> {
     type AppState;
     fn trigger_application_review(
-        trigger: AccountId, // must be authorized to trigger in context of objects
-        bounty_id: OrgId,
-        application_id: ApplicationId,
+        bounty_id: BountyId,
+        application_id: BountyId,
     ) -> Result<Self::AppState, DispatchError>;
     // someone can try to call this and only the sudo can push things through at whim
     // -> notably no sudo deny for demo functionality
     fn sudo_approve_application(
         sudo: AccountId,
-        bounty_id: OrgId,
-        application_id: ApplicationId,
+        bounty_id: BountyId,
+        application_id: BountyId,
     ) -> Result<Self::AppState, DispatchError>;
     // this returns the AppState but also pushes it along if necessary
     // - it should be called in on_finalize periodically
     fn poll_application(
-        bounty_id: OrgId,
-        application_id: ApplicationId,
+        bounty_id: BountyId,
+        application_id: BountyId,
     ) -> Result<Self::AppState, DispatchError>;
 }
 
-pub trait SubmitMilestone<
-    OrgId,
-    Currency,
-    AccountId,
-    Hash,
-    ReviewCommittee,
-    TermsOfAgreement,
-    BountyId,
-    TransferId,
->:
-    CreateBounty<OrgId, Currency, AccountId, Hash, ReviewCommittee>
-    + UseTermsOfAgreement<OrgId, TermsOfAgreement>
-{
-    type Milestone: StartReview<Self::VoteIdentifier>
+pub trait SubmitMilestone<AccountId, BountyId, Hash, Currency, VoteId, BankId, TransferId> {
+    type Milestone: StartReview<VoteId>
         + ApproveWithoutTransfer
-        + SetMakeTransfer<Self::BankId, TransferId>;
+        + SetMakeTransfer<BankId, TransferId>;
     type MilestoneState;
     fn submit_milestone(
         caller: AccountId, // must be from the team, maybe check sudo || flat_org_member
-        bounty_id: OrgId,
+        bounty_id: BountyId,
         application_id: BountyId,
-        team_id: Self::TeamIdentifier,
         submission_reference: Hash,
         amount_requested: Currency,
     ) -> Result<BountyId, DispatchError>; // returns milestone_id
     fn trigger_milestone_review(
-        caller: AccountId,
-        bounty_id: OrgId,
+        bounty_id: BountyId,
         milestone_id: BountyId,
     ) -> Result<Self::MilestoneState, DispatchError>;
     // someone can try to call this and only the sudo can push things through at whim
@@ -715,7 +689,6 @@ pub trait SubmitMilestone<
         milestone_id: BountyId,
     ) -> Result<Self::MilestoneState, DispatchError>;
     fn poll_milestone(
-        caller: AccountId,
         bounty_id: BountyId,
         milestone_id: BountyId,
     ) -> Result<Self::MilestoneState, DispatchError>;

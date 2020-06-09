@@ -19,6 +19,7 @@ frame-support = { version = "2.0.0-rc2", default-features = false }
 frame-system = { version = "2.0.0-rc2", default-features = false }
 util = { package = "sunshine-util", path = "../util", default-features = false }
 org = { package = "sunshine-org", path = "../org", default-features=false}
+vote = { package = "sunshine-vote", path = "../vote", default-features=false}
 clear_on_drop = { version = "0.2.3", features = ["no_cc"] } # https://github.com/paritytech/substrate/issues/4179
 
 [dev-dependencies]

@@ -22,6 +22,7 @@ impl_outer_event! {
         system<T>,
         pallet_balances<T>,
         org<T>,
+        vote<T>,
         bank<T>,
     }
 }
@@ -76,6 +77,11 @@ impl org::Trait for Test {
     type OrgId = u64;
     type Shares = u64;
     type ReservationLimit = ReservationLimit;
+}
+impl vote::Trait for Test {
+    type Event = TestEvent;
+    type VoteId = u64;
+    type Signal = u64;
 }
 parameter_types! {
     // minimum deposit to register an on-chain bank

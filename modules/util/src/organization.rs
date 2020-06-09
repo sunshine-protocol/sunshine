@@ -63,7 +63,6 @@ pub enum OrganizationSource<AccountId, Shares> {
     /// "" weighted governance strength by Shares
     AccountsWeighted(Vec<(AccountId, Shares)>),
 }
-
 impl<AccountId: PartialEq, Shares> Default for OrganizationSource<AccountId, Shares> {
     fn default() -> OrganizationSource<AccountId, Shares> {
         OrganizationSource::Accounts(Vec::new())
@@ -72,14 +71,19 @@ impl<AccountId: PartialEq, Shares> Default for OrganizationSource<AccountId, Sha
 
 #[derive(new, PartialEq, Eq, Default, Clone, Encode, Decode, RuntimeDebug)]
 /// Static terms of agreement, define how the enforced payout structure for grants
-pub struct TermsOfAgreement<AccountId, Shares> {
+pub struct TermsOfAgreement<AccountId, Shares, Hash> {
+    /// Value constitution
+    constitution: Hash,
     /// If Some(account), then account is the sudo for the duration of the grant
     supervisor: Option<AccountId>,
     /// The share allocation for metadata
     share_metadata: Vec<(AccountId, Shares)>,
 }
 
-impl<AccountId: Clone, Shares: Clone> TermsOfAgreement<AccountId, Shares> {
+impl<AccountId: Clone, Shares: Clone, Hash: Clone> TermsOfAgreement<AccountId, Shares, Hash> {
+    pub fn constitution(&self) -> Hash {
+        self.constitution.clone()
+    }
     pub fn supervisor(&self) -> Option<AccountId> {
         self.supervisor.clone()
     }
@@ -97,15 +101,11 @@ impl<AccountId: Clone, Shares: Clone> TermsOfAgreement<AccountId, Shares> {
 
 #[derive(PartialEq, Eq, Default, Clone, Encode, Decode, RuntimeDebug)]
 /// Defined paths for how the terms of agreement can change
-pub struct FullTermsOfAgreement<AccountId, Shares, OrgId, BlockNumber> {
+pub struct FullTermsOfAgreement<AccountId, Rules, Decisions, Outcomes> {
     /// The starting state for the group
-    basic_terms: TermsOfAgreement<AccountId, Shares>,
+    basic_terms: Rules,
     /// This represents the metagovernance configuration, how the group can coordinate changes
-    allowed_changes: Vec<(
-        Catalyst<AccountId>,
-        Option<VoteConfig<AccountId, OrgId, BlockNumber>>,
-        Option<EnforcedOutcome<AccountId>>,
-    )>,
+    allowed_changes: Vec<(Catalyst<AccountId>, Option<Decisions>, Option<Outcomes>)>,
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]

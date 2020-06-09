@@ -221,21 +221,17 @@ impl<T: Trait> GetVoteOutcome<T::VoteId> for Module<T> {
 }
 
 impl<T: Trait>
-    OpenVote<
-        T::OrgId,
-        ThresholdConfig<T::Signal, Permill>,
-        T::BlockNumber,
-        T::VoteId,
-        T::IpfsReference,
-    > for Module<T>
+    OpenVote<T::OrgId, ThresholdConfig<T::Signal, Permill>, T::BlockNumber, T::IpfsReference>
+    for Module<T>
 {
+    type VoteIdentifier = T::VoteId;
     fn open_vote(
         topic: Option<T::IpfsReference>,
         organization: T::OrgId,
         passage_threshold: ThresholdConfig<T::Signal, Permill>,
         rejection_threshold: Option<ThresholdConfig<T::Signal, Permill>>,
         duration: Option<T::BlockNumber>,
-    ) -> Result<T::VoteId, DispatchError> {
+    ) -> Result<Self::VoteIdentifier, DispatchError> {
         // calculate `initialized` and `expires` fields for vote state
         let now = system::Module::<T>::block_number();
         let ends: Option<T::BlockNumber> = if let Some(time_to_add) = duration {
@@ -267,7 +263,7 @@ impl<T: Trait>
         topic: Option<T::IpfsReference>,
         organization: T::OrgId,
         duration: Option<T::BlockNumber>,
-    ) -> Result<T::VoteId, DispatchError> {
+    ) -> Result<Self::VoteIdentifier, DispatchError> {
         // calculate `initialized` and `expires` fields for vote state
         let now = system::Module::<T>::block_number();
         let ends: Option<T::BlockNumber> = if let Some(time_to_add) = duration {
