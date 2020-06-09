@@ -112,8 +112,9 @@ fn vote_creation_works() {
         let one = Origin::signed(1);
         let twentytwo = Origin::signed(22);
         assert_noop!(
-            VoteThreshold::create_share_weighted_percentage_threshold_vote(
+            VoteThreshold::create_weighted_percentage_threshold_approval_vote(
                 twentytwo,
+                None,
                 1,
                 Permill::from_percent(10),
                 Permill::from_percent(5),
@@ -122,8 +123,9 @@ fn vote_creation_works() {
             Error::<Test>::NotAuthorizedToCreateVoteForOrganization
         );
         assert_ok!(
-            VoteThreshold::create_share_weighted_percentage_threshold_vote(
+            VoteThreshold::create_weighted_percentage_threshold_approval_vote(
                 one.clone(),
+                None,
                 1,
                 Permill::from_percent(10),
                 Permill::from_percent(5),
@@ -131,13 +133,16 @@ fn vote_creation_works() {
             )
         );
         assert_eq!(get_last_event(), RawEvent::NewVoteStarted(1, 1, 1));
-        assert_ok!(VoteThreshold::create_share_weighted_count_threshold_vote(
-            one.clone(),
-            1,
-            3,
-            4,
-            None
-        ));
+        assert_ok!(
+            VoteThreshold::create_weighted_count_threshold_approval_vote(
+                one.clone(),
+                None,
+                1,
+                3,
+                4,
+                None
+            )
+        );
         assert_eq!(get_last_event(), RawEvent::NewVoteStarted(1, 1, 2));
     });
 }

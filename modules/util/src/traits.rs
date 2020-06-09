@@ -189,7 +189,7 @@ pub trait OpenVote<OrgId, Threshold, BlockNumber, VoteId, Hash>: GetVoteOutcome<
 }
 
 pub trait UpdateVoteTopic<VoteId, Hash> {
-    fn update_vote(
+    fn update_vote_topic(
         vote_id: VoteId,
         new_topic: Hash,
         clear_previous_vote_state: bool,
@@ -237,7 +237,10 @@ pub trait MintableSignal<AccountId, OrgId, Threshold, BlockNumber, VoteId, Hash>
     OpenVote<OrgId, Threshold, BlockNumber, VoteId, Hash> + ApplyVote<Hash>
 {
     fn mint_custom_signal_for_account(vote_id: VoteId, who: &AccountId, signal: Self::Signal);
-
+    fn batch_mint_equal_signal(
+        vote_id: VoteId,
+        organization: OrgId,
+    ) -> Result<Self::Signal, DispatchError>;
     fn batch_mint_signal(
         vote_id: VoteId,
         organization: OrgId,

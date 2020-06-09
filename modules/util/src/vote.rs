@@ -348,6 +348,21 @@ impl<
             ..self.clone()
         }
     }
+    pub fn update_topic_and_clear_state(&self, new_topic: Hash) -> Self {
+        VoteState {
+            in_favor: 0u32.into(),
+            against: 0u32.into(),
+            turnout: 0u32.into(),
+            topic: Some(new_topic),
+            ..self.clone()
+        }
+    }
+    pub fn update_topic_without_clearing_state(&self, new_topic: Hash) -> Self {
+        VoteState {
+            topic: Some(new_topic),
+            ..self.clone()
+        }
+    }
 }
 
 impl<

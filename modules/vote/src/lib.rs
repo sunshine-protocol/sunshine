@@ -21,7 +21,7 @@ use sp_std::{fmt::Debug, prelude::*};
 use util::{
     traits::{
         AccessGenesis, Apply, ApplyVote, Approved, ChainSudoPermissions, CheckVoteStatus,
-        GenerateUniqueID, GetVoteOutcome, IDIsAvailable, MintableSignal, OpenVote,
+        GenerateUniqueID, GetGroup, GetVoteOutcome, IDIsAvailable, MintableSignal, OpenVote,
         OrganizationSupervisorPermissions, Revert, ShareInformation, UpdateVoteTopic,
         VoteOnProposal, VoteVector,
     },
@@ -79,8 +79,10 @@ decl_error! {
         NotAuthorizedToCreateVoteForOrganization,
         NoVoteStateForOutcomeQuery,
         NoVoteStateForVoteRequest,
+        CannotMintSignalBecauseGroupMembershipDNE,
         CannotMintSignalBecauseMembershipShapeDNE,
         OldVoteDirectionEqualsNewVoteDirectionSoNoChange,
+        CannotUpdateVoteTopicIfVoteStateDNE,
     }
 }
 
@@ -113,13 +115,13 @@ decl_module! {
         fn deposit_event() = default;
 
         #[weight = 0]
-        pub fn create_share_weighted_percentage_threshold_vote(
+        pub fn create_weighted_percentage_threshold_approval_vote(
             origin,
             topic: Option<T::IpfsReference>,
             organization: T::OrgId,
             passage_threshold_pct: Permill,
             turnout_threshold_pct: Permill,
-            ends: Option<T::BlockNumber>,
+            duration: Option<T::BlockNumber>,
         ) -> DispatchResult {
             let vote_creator = ensure_signed(origin)?;
             // default authentication is organization supervisor or sudo key
@@ -128,20 +130,19 @@ decl_module! {
             ensure!(authentication, Error::<T>::NotAuthorizedToCreateVoteForOrganization);
             let threshold_config = ThresholdConfig::new_percentage_threshold(passage_threshold_pct, turnout_threshold_pct);
             // share weighted percentage threshold vote started
-            let new_vote_id = Self::open_vote(topic, organization, threshold_config, None, ends)?;
+            let new_vote_id = Self::open_vote(topic, organization, threshold_config, None, duration)?;
             // emit event
             Self::deposit_event(RawEvent::NewVoteStarted(vote_creator, organization, new_vote_id));
             Ok(())
         }
-
         #[weight = 0]
-        pub fn create_share_weighted_count_threshold_vote(
+        pub fn create_weighted_count_threshold_approval_vote(
             origin,
             topic: Option<T::IpfsReference>,
             organization: T::OrgId,
             support_requirement: T::Signal,
             turnout_requirement: T::Signal,
-            ends: Option<T::BlockNumber>,
+            duration: Option<T::BlockNumber>,
         ) -> DispatchResult {
             let vote_creator = ensure_signed(origin)?;
             // default authentication is organization supervisor or sudo key
@@ -149,12 +150,27 @@ decl_module! {
             ensure!(authentication, Error::<T>::NotAuthorizedToCreateVoteForOrganization);
             let threshold_config = ThresholdConfig::new_signal_count_threshold(support_requirement, turnout_requirement);
             // share weighted count threshold vote started
-            let new_vote_id = Self::open_vote(topic, organization, threshold_config, None, ends)?;
+            let new_vote_id = Self::open_vote(topic, organization, threshold_config, None, duration)?;
             // emit event
             Self::deposit_event(RawEvent::NewVoteStarted(vote_creator, organization, new_vote_id));
             Ok(())
         }
-
+        #[weight = 0]
+        pub fn create_unanimous_consent_approval_vote(
+            origin,
+            topic: Option<T::IpfsReference>,
+            organization: T::OrgId,
+            ends: Option<T::BlockNumber>,
+        ) -> DispatchResult {
+            let vote_creator = ensure_signed(origin)?;
+            // default authentication is organization supervisor or sudo key
+            let authentication: bool = <org::Module<T>>::is_organization_supervisor(organization, &vote_creator) || <org::Module<T>>::is_sudo_key(&vote_creator);
+            ensure!(authentication, Error::<T>::NotAuthorizedToCreateVoteForOrganization);
+            let new_vote_id = Self::open_unanimous_consent(topic, organization, ends)?;
+            // emit event
+            Self::deposit_event(RawEvent::NewVoteStarted(vote_creator, organization, new_vote_id));
+            Ok(())
+        }
         #[weight = 0]
         pub fn submit_vote(
             origin,
@@ -252,17 +268,44 @@ impl<T: Trait>
         organization: T::OrgId,
         duration: Option<T::BlockNumber>,
     ) -> Result<T::VoteId, DispatchError> {
-        todo!()
+        // calculate `initialized` and `expires` fields for vote state
+        let now = system::Module::<T>::block_number();
+        let ends: Option<T::BlockNumber> = if let Some(time_to_add) = duration {
+            Some(now + time_to_add)
+        } else {
+            None
+        };
+        // generate new vote_id
+        let new_vote_id = Self::generate_unique_id();
+        // mints 1 signal per participant
+        let total_possible_turnout = Self::batch_mint_equal_signal(new_vote_id, organization)?;
+        // instantiate new VoteState for unanimous consent
+        let new_vote_state =
+            VoteState::new_unanimous_consent(topic, total_possible_turnout, now, ends);
+        // insert the VoteState
+        <VoteStates<T>>::insert(new_vote_id, new_vote_state);
+        // increment open vote count
+        let new_vote_count = <OpenVoteCounter>::get() + 1u32;
+        <OpenVoteCounter>::put(new_vote_count);
+        Ok(new_vote_id)
     }
 }
 
 impl<T: Trait> UpdateVoteTopic<T::VoteId, T::IpfsReference> for Module<T> {
-    fn update_vote(
+    fn update_vote_topic(
         vote_id: T::VoteId,
         new_topic: T::IpfsReference,
         clear_previous_vote_state: bool,
     ) -> DispatchResult {
-        todo!()
+        let old_vote_state =
+            <VoteStates<T>>::get(vote_id).ok_or(Error::<T>::CannotUpdateVoteTopicIfVoteStateDNE)?;
+        let new_vote_state = if clear_previous_vote_state {
+            old_vote_state.update_topic_and_clear_state(new_topic)
+        } else {
+            old_vote_state.update_topic_without_clearing_state(new_topic)
+        };
+        <VoteStates<T>>::insert(vote_id, new_vote_state);
+        Ok(())
     }
 }
 
@@ -284,6 +327,24 @@ impl<T: Trait>
         <VoteLogger<T>>::insert(vote_id, who, new_vote);
     }
 
+    /// Mints equal signal for all members of the group (1u32.into())
+    /// -> used most often for the unanimous consent vote path
+    fn batch_mint_equal_signal(
+        vote_id: T::VoteId,
+        organization: T::OrgId,
+    ) -> Result<T::Signal, DispatchError> {
+        let new_vote_group = <org::Module<T>>::get_group(organization)
+            .ok_or(Error::<T>::CannotMintSignalBecauseGroupMembershipDNE)?;
+        let total_minted: T::Signal = (new_vote_group.len() as u32).into();
+        new_vote_group.into_iter().for_each(|who| {
+            let minted_signal: T::Signal = 1u32.into();
+            let new_vote = Vote::new(minted_signal, VoterView::NoVote, None);
+            <VoteLogger<T>>::insert(vote_id, who, new_vote);
+        });
+        <TotalSignalIssuance<T>>::insert(vote_id, total_minted);
+        Ok(total_minted)
+    }
+    /// Mints signal based on weighted membership of the group
     fn batch_mint_signal(
         vote_id: T::VoteId,
         organization: T::OrgId,
@@ -294,10 +355,9 @@ impl<T: Trait>
         let total_minted: T::Signal = new_vote_group.total().into();
         new_vote_group
             .account_ownership()
-            .into_iter() // we don't need amt because we assume full reservation by default
+            .into_iter()
             .for_each(|(who, shares)| {
                 let minted_signal: T::Signal = shares.into();
-                // TODO: could reserve shares here to track usage in some measurable way
                 let new_vote = Vote::new(minted_signal, VoterView::NoVote, None);
                 <VoteLogger<T>>::insert(vote_id, who, new_vote);
             });
