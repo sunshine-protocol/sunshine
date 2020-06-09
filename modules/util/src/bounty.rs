@@ -169,7 +169,7 @@ impl<
         Hash: Clone,
         Currency: Clone,
         AccountId: Clone,
-        ApplicationId: Copy,
+        ApplicationId: Codec + Copy,
         VoteId: Codec + PartialEq + Zero + From<u32> + Copy,
     >
     MilestoneSubmission<
@@ -224,7 +224,7 @@ impl<
         Hash: Clone,
         Currency: Clone,
         AccountId: Clone,
-        ApplicationId: Copy,
+        ApplicationId: Codec + Copy,
         VoteId: Codec + PartialEq + Zero + From<u32> + Copy,
     > StartReview<VoteId>
     for MilestoneSubmission<
@@ -245,7 +245,7 @@ impl<
         }
     }
     fn get_review_id(&self) -> Option<VoteId> {
-        match self.state.clone() {
+        match self.state {
             MilestoneStatus::SubmittedReviewStarted(vote_id) => Some(vote_id),
             _ => None,
         }
@@ -256,7 +256,7 @@ impl<
         Hash: Clone,
         Currency: Clone,
         AccountId: Clone,
-        ApplicationId: Copy,
+        ApplicationId: Codec + Copy,
         VoteId: Codec + PartialEq + Zero + From<u32> + Copy,
     > ApproveWithoutTransfer
     for MilestoneSubmission<
@@ -282,7 +282,7 @@ impl<
         Hash: Clone,
         Currency: Clone,
         AccountId: Clone,
-        ApplicationId: Copy,
+        ApplicationId: Codec + Copy,
         VoteId: Codec + PartialEq + Zero + From<u32> + Copy,
     > SetMakeTransfer<OnChainTreasuryID, ApplicationId>
     for MilestoneSubmission<

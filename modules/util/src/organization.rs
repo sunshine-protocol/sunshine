@@ -63,6 +63,13 @@ pub enum OrganizationSource<AccountId, Shares> {
     /// "" weighted governance strength by Shares
     AccountsWeighted(Vec<(AccountId, Shares)>),
 }
+impl<AccountId: PartialEq, Shares> From<Vec<(AccountId, Shares)>>
+    for OrganizationSource<AccountId, Shares>
+{
+    fn from(other: Vec<(AccountId, Shares)>) -> OrganizationSource<AccountId, Shares> {
+        OrganizationSource::AccountsWeighted(other)
+    }
+}
 impl<AccountId: PartialEq, Shares> Default for OrganizationSource<AccountId, Shares> {
     fn default() -> OrganizationSource<AccountId, Shares> {
         OrganizationSource::Accounts(Vec::new())

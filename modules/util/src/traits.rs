@@ -1,4 +1,4 @@
-use sp_runtime::{DispatchError, DispatchResult};
+use sp_runtime::{traits::Zero, DispatchError, DispatchResult};
 use sp_std::prelude::*;
 
 // === Unique ID Logic, Useful for All Modules ===
@@ -272,9 +272,10 @@ pub trait VoteOnProposal<AccountId, OrgId, Threshold, BlockNumber, VoteId, Hash>
 
 // ~~~~~~~~ Bank Module ~~~~~~~~
 use crate::bank::OnChainTreasuryID;
+use codec::Codec;
 pub trait OnChainBank {
     type TreasuryId: Clone + From<OnChainTreasuryID>;
-    type AssociatedId;
+    type AssociatedId: Codec + Copy + PartialEq + From<u32> + Zero;
 }
 pub trait RegisterAccount<OrgId, AccountId, GovernanceConfig, Currency>: OnChainBank {
     // requires a deposit of some size above the minimum and returns the OnChainTreasuryID

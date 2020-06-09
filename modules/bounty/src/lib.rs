@@ -37,10 +37,10 @@ use util::{
         CheckBankBalances, CheckVoteStatus, CommitAndTransfer, CreateBounty, DepositIntoBank,
         DepositsAndSpends, ExecuteSpends, GenerateUniqueID, GetVoteOutcome, IDIsAvailable,
         MintableSignal, OnChainBank, OpenVote, RegisterAccount, RegisterFoundation,
-        ReservationMachine, SeededGenerateUniqueID, SetMakeTransfer, SpendApprovedGrant,
-        StartReview, StartTeamConsentPetition, SubmitGrantApplication, SubmitMilestone,
-        SuperviseGrantApplication, TermSheetExit, UpdateVoteTopic, UseTermsOfAgreement,
-        VoteOnProposal,
+        RegisterOrganization, ReservationMachine, SeededGenerateUniqueID, SetMakeTransfer,
+        SpendApprovedGrant, StartReview, StartTeamConsentPetition, SubmitGrantApplication,
+        SubmitMilestone, SuperviseGrantApplication, TermSheetExit, UpdateVoteTopic,
+        UseTermsOfAgreement, VoteOnProposal,
     },
     vote::{ThresholdConfig, VoteOutcome},
 };
@@ -304,7 +304,7 @@ decl_module! {
             application_id: T::BountyId,
         ) -> DispatchResult {
             let trigger = ensure_signed(origin)?;
-            let application_state = Self::trigger_application_review(trigger.clone(), bounty_id, application_id)?;
+            let application_state = Self::trigger_application_review(bounty_id, application_id)?;
             Self::deposit_event(RawEvent::ApplicationReviewTriggered(trigger, bounty_id, application_id, application_state));
             Ok(())
         }
@@ -335,12 +335,11 @@ decl_module! {
             origin,
             bounty_id: T::BountyId,
             application_id: T::BountyId,
-            team_id: TeamID<T::OrgId, T::AccountId>,
             submission_reference: T::IpfsReference,
             amount_requested: BalanceOf<T>,
         ) -> DispatchResult {
             let submitter = ensure_signed(origin)?;
-            let new_milestone_id = Self::submit_milestone(submitter.clone(), bounty_id, application_id, team_id, submission_reference, amount_requested)?;
+            let new_milestone_id = Self::submit_milestone(submitter.clone(), bounty_id, application_id, submission_reference, amount_requested)?;
             Self::deposit_event(RawEvent::MilestoneSubmitted(submitter, bounty_id, application_id, new_milestone_id));
             Ok(())
         }
@@ -351,7 +350,7 @@ decl_module! {
             milestone_id: T::BountyId,
         ) -> DispatchResult {
             let trigger = ensure_signed(origin)?;
-            let milestone_state = Self::trigger_milestone_review(trigger.clone(), bounty_id, milestone_id)?;
+            let milestone_state = Self::trigger_milestone_review(bounty_id, milestone_id)?;
             Self::deposit_event(RawEvent::MilestoneReviewTriggered(trigger, bounty_id, milestone_id, milestone_state));
             Ok(())
         }
@@ -373,7 +372,7 @@ decl_module! {
             milestone_id: T::BountyId,
         ) -> DispatchResult {
             let poller = ensure_signed(origin)?;
-            let milestone_state = Self::poll_milestone(poller.clone(), bounty_id, milestone_id)?;
+            let milestone_state = Self::poll_milestone(bounty_id, milestone_id)?;
             Self::deposit_event(RawEvent::MilestonePolled(poller, bounty_id, milestone_id, milestone_state));
             Ok(())
         }
@@ -387,9 +386,19 @@ impl<T: Trait> Module<T> {
     }
 }
 
-impl<T: Trait> IDIsAvailable<T::BountyId> for Module<T> {
-    fn id_is_available(id: T::BountyId) -> bool {
-        <FoundationSponsoredBounties<T>>::get(id).is_none()
+pub struct BIdWrapper<T> {
+    pub id: T,
+}
+
+impl<T: Copy> BIdWrapper<T> {
+    pub fn new(id: T) -> BIdWrapper<T> {
+        BIdWrapper { id }
+    }
+}
+
+impl<T: Trait> IDIsAvailable<BIdWrapper<T::BountyId>> for Module<T> {
+    fn id_is_available(id: BIdWrapper<T::BountyId>) -> bool {
+        <FoundationSponsoredBounties<T>>::get(id.id).is_none()
     }
 }
 
@@ -416,7 +425,7 @@ impl<T: Trait> SeededGenerateUniqueID<T::BountyId, (T::BountyId, BountyMapID)> f
 impl<T: Trait> GenerateUniqueID<T::BountyId> for Module<T> {
     fn generate_unique_id() -> T::BountyId {
         let mut id_counter = <BountyNonce<T>>::get() + 1u32.into();
-        while !Self::id_is_available(id_counter) {
+        while !Self::id_is_available(BIdWrapper::new(id_counter)) {
             id_counter += 1u32.into();
         }
         <BountyNonce<T>>::put(id_counter);
@@ -446,7 +455,7 @@ impl<T: Trait> RegisterFoundation<T::OrgId, BalanceOf<T>, T::AccountId> for Modu
             >>::verify_owner(bank.into(), org),
             Error::<T>::CannotRegisterFoundationFromOrgBankRelationshipThatDNE
         );
-        RegisteredFoundations::insert(org, bank, true);
+        <RegisteredFoundations<T>>::insert(org, bank, true);
         Ok(())
     }
 }
@@ -496,7 +505,7 @@ impl<T: Trait>
     ) -> Result<Self::BountyInfo, DispatchError> {
         // required registration of relationship between OrgId and OnChainBankId
         ensure!(
-            RegisteredFoundations::get(foundation, bank_account),
+            <RegisteredFoundations<T>>::get(foundation, bank_account),
             Error::<T>::FoundationMustBeRegisteredToCreateBounty
         );
         // enforce module constraints for all posted bounties
@@ -562,7 +571,7 @@ impl<T: Trait>
     ) -> Result<T::BountyId, DispatchError> {
         // check that the organization is registered
         ensure!(
-            !<org::Module<T>>::id_is_available(foundation),
+            !<org::Module<T>>::id_is_available(foundation.into()),
             Error::<T>::NoBankExistsAtInputTreasuryIdForCreatingBounty
         );
         // creates object and propagates any error
@@ -673,7 +682,7 @@ impl<T: Trait>
     }
 }
 
-impl<T: Trait> SuperviseGrantApplication<T::AccountId, T::BountyId> for Module<T> {
+impl<T: Trait> SuperviseGrantApplication<T::BountyId, T::AccountId> for Module<T> {
     type AppState = ApplicationState<TeamID<T::OrgId, T::AccountId>, T::VoteId>;
     fn trigger_application_review(
         bounty_id: T::BountyId,
@@ -725,10 +734,11 @@ impl<T: Trait> SuperviseGrantApplication<T::AccountId, T::BountyId> for Module<T
         let app = <BountyApplications<T>>::get(bounty_id, application_id)
             .ok_or(Error::<T>::CannotSudoApproveIfGrantAppDNE)?;
         // check that the state of the application satisfies the requirements for approval
-        ensure!(
-            app.state().live(),
-            Error::<T>::AppStateCannotBeSudoApprovedForAGrantFromCurrentState
-        );
+        // TODO: add back check
+        // ensure!(
+        //     app.state().live(),
+        //     Error::<T>::AppStateCannotBeSudoApprovedForAGrantFromCurrentState
+        // );
         // use terms of agreement to register new org
         let new_team_org = <org::Module<T>>::register_sub_organization(
             bounty_info.foundation(),
@@ -793,7 +803,7 @@ impl<T: Trait> SuperviseGrantApplication<T::AccountId, T::BountyId> for Module<T
             }
             ApplicationState::ApprovedByFoundationAwaitingTeamConsent(team_id, vote_id) => {
                 // check vote outcome
-                let status = Self::get_vote_outcome(vote_id)?;
+                let status = <vote::Module<T>>::get_vote_outcome(vote_id)?;
                 // match on vote outcome
                 match status {
                     VoteOutcome::ApprovedAndNotExpired => {
@@ -835,10 +845,10 @@ impl<T: Trait>
         T::IpfsReference,
         BalanceOf<T>,
         T::AccountId,
-        T::BountyId,
-        MilestoneStatus<T::VoteId, T::BountyId>,
+        BankAssociatedId<T>,
+        MilestoneStatus<T::VoteId, BankAssociatedId<T>>,
     >;
-    type MilestoneState = MilestoneStatus<T::VoteId, T::BountyId>;
+    type MilestoneState = MilestoneStatus<T::VoteId, BankAssociatedId<T>>;
     fn submit_milestone(
         caller: T::AccountId, // must be from the team, maybe check sudo || flat_org_member
         bounty_id: T::BountyId,
@@ -956,8 +966,8 @@ impl<T: Trait>
     // someone can try to call this but only the sudo can push things through
     fn sudo_approves_milestone(
         caller: T::AccountId,
-        bounty_id: u32,
-        milestone_id: u32,
+        bounty_id: T::BountyId,
+        milestone_id: T::BountyId,
     ) -> Result<Self::MilestoneState, DispatchError> {
         // get the bounty
         let bounty_info = <FoundationSponsoredBounties<T>>::get(bounty_id)
@@ -1004,11 +1014,12 @@ impl<T: Trait>
         // <MilestoneSubmissions<T>>::insert(bounty_id, milestone_id, new_milestone_submission);
         // Ok(new_milestone_state)
     }
-    // must be called by member of supervision board for specific milestone (which reserved the bounty) to poll and push along the milestone
+    /// Must be called by member of supervision board for
+    /// specific milestone (which reserved the bounty) to poll and
+    /// push along the milestone
     fn poll_milestone(
-        caller: T::AccountId,
-        bounty_id: u32,
-        milestone_id: u32,
+        bounty_id: T::BountyId,
+        milestone_id: T::BountyId,
     ) -> Result<Self::MilestoneState, DispatchError> {
         // get the bounty
         let bounty_info = <FoundationSponsoredBounties<T>>::get(bounty_id)
