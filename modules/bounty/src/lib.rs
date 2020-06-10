@@ -18,7 +18,7 @@ use frame_support::{
 };
 use frame_system::{self as system, ensure_signed};
 use sp_runtime::{
-    traits::{AccountIdConversion, AtLeast32Bit, MaybeSerializeDeserialize, Member, Zero}, // CheckedAdd, CheckedSub
+    traits::{AtLeast32Bit, MaybeSerializeDeserialize, Member, Zero}, // CheckedAdd, CheckedSub
     DispatchError,
     DispatchResult,
     Permill,
@@ -33,15 +33,14 @@ use util::{
     }, //BountyPaymentTracker
     organization::TermsOfAgreement,
     traits::{
-        ApplyVote, ApproveGrant, ApproveWithoutTransfer, Approved, CalculateOwnership,
-        CheckBankBalances, CheckVoteStatus, CommitAndTransfer, CreateBounty, DepositIntoBank,
-        DepositsAndSpends, ExecuteSpends, GenerateUniqueID, GetVoteOutcome, IDIsAvailable,
-        MintableSignal, OnChainBank, OpenVote, RegisterAccount, RegisterFoundation,
-        RegisterOrganization, ReservationMachine, SeededGenerateUniqueID, SetMakeTransfer,
-        SpendApprovedGrant, StartReview, StartTeamConsentPetition, SubmitGrantApplication,
-        SubmitMilestone, SuperviseGrantApplication, TermSheetExit, UpdateVoteTopic,
-        UseTermsOfAgreement, VoteOnProposal,
-    },
+        ApproveGrant, ApproveWithoutTransfer, CalculateOwnership, CheckBankBalances,
+        CommitAndTransfer, CreateBounty, DepositIntoBank, DepositsAndSpends, ExecuteSpends,
+        GenerateUniqueID, GetTeamOrg, GetVoteOutcome, IDIsAvailable, OnChainBank, OpenVote,
+        RegisterAccount, RegisterFoundation, RegisterOrganization, ReservationMachine,
+        SeededGenerateUniqueID, SetMakeTransfer, SpendApprovedGrant, StartReview,
+        StartTeamConsentPetition, SubmitGrantApplication, SubmitMilestone,
+        SuperviseGrantApplication, TermSheetExit, UseTermsOfAgreement,
+    }, // UpdateVoteTopic, VoteOnProposal
     vote::{ThresholdConfig, VoteOutcome},
 };
 
@@ -146,9 +145,9 @@ decl_event!(
         // BountyId, ApplicationId, MilestoneId (u32s)
         MilestoneSubmitted(AccountId, BountyId, BountyId, BountyId),
         // BountyId, MilestoneId (u32s)
-        MilestoneReviewTriggered(AccountId, BountyId, BountyId, MilestoneStatus<VoteId, BankAssociatedId>),
-        SudoApprovedMilestone(AccountId, BountyId, BountyId, MilestoneStatus<VoteId, BankAssociatedId>),
-        MilestonePolled(AccountId, BountyId, BountyId, MilestoneStatus<VoteId, BankAssociatedId>),
+        MilestoneReviewTriggered(AccountId, BountyId, BountyId, MilestoneStatus<OrgId, VoteId, BankAssociatedId>),
+        SudoApprovedMilestone(AccountId, BountyId, BountyId, MilestoneStatus<OrgId, VoteId, BankAssociatedId>),
+        MilestonePolled(AccountId, BountyId, BountyId, MilestoneStatus<OrgId, VoteId, BankAssociatedId>),
     }
 );
 
@@ -228,7 +227,7 @@ decl_storage! {
         /// All milestone submissions
         MilestoneSubmissions get(fn milestone_submissions): double_map
             hasher(opaque_blake2_256) T::BountyId,
-            hasher(opaque_blake2_256) T::BountyId => Option<MilestoneSubmission<T::IpfsReference, BalanceOf<T>, T::AccountId, T::BountyId, MilestoneStatus<T::VoteId, T::BountyId>>>;
+            hasher(opaque_blake2_256) T::BountyId => Option<MilestoneSubmission<T::IpfsReference, BalanceOf<T>, T::AccountId, T::BountyId, MilestoneStatus<T::OrgId, T::VoteId, BankAssociatedId<T>>>>;
     }
 }
 
@@ -265,7 +264,6 @@ decl_module! {
             // TODO: AUTH
             let bounty_identifier = Self::create_bounty(
                 registered_organization,
-                bounty_creator.clone(),
                 bank_account,
                 description.clone(),
                 amount_reserved_for_bounty,
@@ -483,7 +481,6 @@ impl<T: Trait>
     /// Helper to screen, prepare and form bounty information object
     fn screen_bounty_creation(
         foundation: T::OrgId, // registered OrgId
-        caller: T::AccountId,
         bank_account: Self::BankId,
         description: T::IpfsReference,
         amount_reserved_for_bounty: BalanceOf<T>, // collateral requirement
@@ -549,7 +546,6 @@ impl<T: Trait>
     }
     fn create_bounty(
         foundation: T::OrgId, // registered OrgId
-        caller: T::AccountId,
         bank_account: Self::BankId,
         description: T::IpfsReference,
         amount_reserved_for_bounty: BalanceOf<T>, // collateral requirement
@@ -577,7 +573,6 @@ impl<T: Trait>
         // creates object and propagates any error
         let new_bounty_info = Self::screen_bounty_creation(
             foundation,
-            caller,
             bank_account,
             description,
             amount_reserved_for_bounty,
@@ -708,7 +703,9 @@ impl<T: Trait> SuperviseGrantApplication<T::BountyId, T::AccountId> for Module<T
             None,
         )?;
         // change the application status such that review is started
-        let new_application = application_to_review.start_review(new_vote_id);
+        let new_application = application_to_review
+            .start_review(new_vote_id)
+            .ok_or(Error::<T>::ApplicationMustBeSubmittedAwaitingResponseToTriggerReview)?;
         let app_state = new_application.state();
         // insert new application into relevant map
         <BountyApplications<T>>::insert(bounty_id, application_id, new_application);
@@ -734,11 +731,10 @@ impl<T: Trait> SuperviseGrantApplication<T::BountyId, T::AccountId> for Module<T
         let app = <BountyApplications<T>>::get(bounty_id, application_id)
             .ok_or(Error::<T>::CannotSudoApproveIfGrantAppDNE)?;
         // check that the state of the application satisfies the requirements for approval
-        // TODO: add back check
-        // ensure!(
-        //     app.state().live(),
-        //     Error::<T>::AppStateCannotBeSudoApprovedForAGrantFromCurrentState
-        // );
+        ensure!(
+            app.state().awaiting_review(),
+            Error::<T>::AppStateCannotBeSudoApprovedForAGrantFromCurrentState
+        );
         // use terms of agreement to register new org
         let new_team_org = <org::Module<T>>::register_sub_organization(
             bounty_info.foundation(),
@@ -746,7 +742,9 @@ impl<T: Trait> SuperviseGrantApplication<T::BountyId, T::AccountId> for Module<T
             app.terms_of_agreement().supervisor(),
             app.terms_of_agreement().constitution(),
         )?;
+        // form new team_id
         let new_team_id = TeamID::new(app.terms_of_agreement().supervisor(), new_team_org);
+        // store it in the application state
         let new_application = app.approve_grant(new_team_id);
         let ret_state = new_application.state();
         <BountyApplications<T>>::insert(bounty_id, application_id, new_application);
@@ -778,7 +776,8 @@ impl<T: Trait> SuperviseGrantApplication<T::BountyId, T::AccountId> for Module<T
                                 application_under_review.terms_of_agreement(),
                             )?;
                         let new_application = application_under_review
-                            .start_team_consent_petition(team_id, team_consent_id);
+                            .start_team_consent_petition(team_id, team_consent_id)
+                            .ok_or(Error::<T>::CannotPollApplicationIfApplicationDNE)?;
                         // insert into map because application.state() changed => application changed
                         let new_state = new_application.state();
                         <BountyApplications<T>>::insert(bounty_id, application_id, new_application);
@@ -792,7 +791,8 @@ impl<T: Trait> SuperviseGrantApplication<T::BountyId, T::AccountId> for Module<T
                                 application_under_review.terms_of_agreement(),
                             )?;
                         let new_application = application_under_review
-                            .start_team_consent_petition(team_id, team_consent_id);
+                            .start_team_consent_petition(team_id, team_consent_id)
+                            .ok_or(Error::<T>::CannotPollApplicationIfApplicationDNE)?;
                         // insert into map because application.state() changed => application changed
                         let new_state = new_application.state();
                         <BountyApplications<T>>::insert(bounty_id, application_id, new_application);
@@ -832,6 +832,7 @@ impl<T: Trait> SuperviseGrantApplication<T::BountyId, T::AccountId> for Module<T
 
 impl<T: Trait>
     SubmitMilestone<
+        T::OrgId,
         T::AccountId,
         T::BountyId,
         T::IpfsReference,
@@ -845,10 +846,10 @@ impl<T: Trait>
         T::IpfsReference,
         BalanceOf<T>,
         T::AccountId,
-        BankAssociatedId<T>,
-        MilestoneStatus<T::VoteId, BankAssociatedId<T>>,
+        T::BountyId,
+        MilestoneStatus<T::OrgId, T::VoteId, BankAssociatedId<T>>,
     >;
-    type MilestoneState = MilestoneStatus<T::VoteId, BankAssociatedId<T>>;
+    type MilestoneState = MilestoneStatus<T::OrgId, T::VoteId, BankAssociatedId<T>>;
     fn submit_milestone(
         caller: T::AccountId, // must be from the team, maybe check sudo || flat_org_member
         bounty_id: T::BountyId,
@@ -865,8 +866,12 @@ impl<T: Trait>
             application_to_review.total_amount() >= amount_requested,
             Error::<T>::MilestoneSubmissionRequestExceedsApprovedApplicationsLimit
         );
+        let team_id = application_to_review
+            .get_full_team_id()
+            .ok_or(Error::<T>::MilestoneSubmissionRequestExceedsApprovedApplicationsLimit)?;
         // form the milestone
-        let new_milestone = MilestoneSubmission::new(
+        let new_milestone: Self::Milestone = MilestoneSubmission::new(
+            team_id.org(),
             caller,
             application_id,
             submission_reference,
@@ -888,82 +893,49 @@ impl<T: Trait>
         // get the milestone submission
         let milestone_submission = <MilestoneSubmissions<T>>::get(bounty_id, milestone_id)
             .ok_or(Error::<T>::CannotTriggerMilestoneReviewIfMilestoneSubmissionDNE)?;
-        todo!()
-        // // check that the caller is in the supervision committee if it exists and
-        // // the acceptance committee otherwise
-        // let milestone_review_board =
-        //     if let Some(separate_board) = bounty_info.supervision_committee() {
-        //         separate_board
-        //     } else {
-        //         bounty_info.acceptance_committee()
-        //     }; //defaults...
-        // // check that it is in a valid state to trigger a review
-        // ensure!(
-        //     // TODO: error should tell user that it is already in review when it is instead of returning this error?
-        //     milestone_submission.ready_for_review(),
-        //     Error::<T>::SubmissionIsNotReadyForReview
-        // );
-        // // commit reserved spend for transfer before vote begins
-        // // -> this sets funds aside in case of a positive outcome,
-        // // it is not _optimistic_, it is fair to add this commitment
-        // <<T as Trait>::Bank as BankReservations<
-        //     T::AccountId,
-        //     WithdrawalPermissions<T::OrgId, T::AccountId>,
-        //     BalanceOf<T>,
-        //     T::IpfsReference,
-        // >>::commit_reserved_spend_for_transfer(
-        //     caller,
-        //     bounty_info.bank_account().into(),
-        //     bounty_info.spend_reservation(),
-        //     milestone_submission.submission(), // reason = hash of milestone submission
-        //     milestone_submission.amount(),
-        //     milestone_submission.team().into(), // uses the weighted share issuance by default to enforce payout structure
-        // )?;
-
-        // // vote should dispatch based on the supervision_committee variant here
-        // let new_vote_id = match milestone_review_board {
-        //     ReviewBoard::FlatPetitionReview(
-        //         _,
-        //         org_id,
-        //         flat_share_id,
-        //         required_support,
-        //         required_against,
-        //         _,
-        //     ) => {
-        //         // TODO: create two defaults (1) global for unset, here
-        //         // (2) for each foundation, enable setting a default for this?
-        //         Self::dispatch_petition_review(
-        //             org_id,
-        //             flat_share_id,
-        //             None,
-        //             required_support,
-        //             required_against,
-        //             None,
-        //         )?
-        //     }
-        //     // TODO: add thresholds to this ReviewBoard variant instead of relying on passed defaults
-        //     // - or we could get the thresholds from some config stored somewhere and gotten
-        //     // in the called helper methods (`dispatch_threshold_review`)
-        //     ReviewBoard::WeightedThresholdReview(
-        //         _,
-        //         org_id,
-        //         weighted_share_id,
-        //         vote_type,
-        //         threshold,
-        //     ) => Self::dispatch_threshold_review(
-        //         org_id,
-        //         weighted_share_id,
-        //         vote_type,
-        //         threshold,
-        //         None,
-        //     )?,
-        // };
-        // let new_milestone_submission = milestone_submission.start_review(new_vote_id);
-        // let milestone_state = new_milestone_submission.state();
-        // <MilestoneSubmissions<T>>::insert(bounty_id, milestone_id, new_milestone_submission);
-        // Ok(milestone_state)
+        // set review board
+        let milestone_review_board =
+            if let Some(separate_board) = bounty_info.supervision_committee() {
+                separate_board
+            } else {
+                bounty_info.acceptance_committee()
+            };
+        // check that milestone is in a valid state to trigger a review
+        ensure!(
+            // TODO: error should tell user that it is already in review when it is instead of returning this error?
+            milestone_submission.ready_for_review(),
+            Error::<T>::SubmissionIsNotReadyForReview
+        );
+        // commit reserved spend for transfer before vote begins
+        // -> this sets funds aside in case of a positive outcome,
+        // it is not _optimistic_, it is fair to add this commitment
+        <<T as Trait>::Bank as ReservationMachine<
+            T::OrgId,
+            T::AccountId,
+            WithdrawalPermissions<T::OrgId, T::AccountId>,
+            BalanceOf<T>,
+            T::IpfsReference,
+        >>::commit_reserved_spend_for_transfer(
+            bounty_info.bank_account().into(),
+            bounty_info.spend_reservation(),
+            milestone_submission.amount(),
+        )?;
+        // dispatch vote among review board on the submission
+        let new_vote_id = <vote::Module<T>>::open_vote(
+            Some(milestone_submission.submission()),
+            milestone_review_board.org(),
+            milestone_review_board.threshold(),
+            None,
+            None,
+        )?;
+        let new_milestone_submission = milestone_submission
+            .start_review(new_vote_id)
+            .ok_or(Error::<T>::CannotTriggerMilestoneReviewIfMilestoneSubmissionDNE)?;
+        let milestone_state = new_milestone_submission.state();
+        <MilestoneSubmissions<T>>::insert(bounty_id, milestone_id, new_milestone_submission);
+        Ok(milestone_state)
     }
-    // someone can try to call this but only the sudo can push things through
+    /// Anyone can try to call this but only the sudo can push things through
     fn sudo_approves_milestone(
         caller: T::AccountId,
         bounty_id: T::BountyId,
@@ -972,51 +944,54 @@ impl<T: Trait>
         // get the bounty
         let bounty_info = <FoundationSponsoredBounties<T>>::get(bounty_id)
             .ok_or(Error::<T>::CannotTriggerMilestoneReviewIfBountyDNE)?;
-        todo!()
-        // let milestone_review_board =
-        //     if let Some(separate_board) = bounty_info.supervision_committee() {
-        //         separate_board
-        //     } else {
-        //         bounty_info.acceptance_committee()
-        //     };
-        // // check if caller is sudo for review board
-        // ensure!(
-        //     milestone_review_board.is_sudo(&caller),
-        //     Error::<T>::CannotSudoApproveMilestoneIfNotAssignedSudo
-        // );
-        // // check that it is in a valid state to approve
-        // // get the milestone submission
-        // let milestone_submission = <MilestoneSubmissions<T>>::get(bounty_id, milestone_id)
-        //     .ok_or(Error::<T>::CannotSudoApproveMilestoneIfMilestoneSubmissionDNE)?;
-        // // check that it is in a valid state to approve
-        // ensure!(
-        //     milestone_submission.ready_for_review(),
-        //     Error::<T>::SubmissionIsNotReadyForReview
-        // ); // we do not assume this pushes through ongoing review because that seems like an unnecessary and dangerous assumption
+        let milestone_review_board =
+            if let Some(separate_board) = bounty_info.supervision_committee() {
+                separate_board
+            } else {
+                bounty_info.acceptance_committee()
+            };
+        // check if caller is sudo for review board
+        ensure!(
+            milestone_review_board.is_sudo(&caller),
+            Error::<T>::CannotSudoApproveMilestoneIfNotAssignedSudo
+        );
+        // check that it is in a valid state to approve
+        // get the milestone submission
+        let milestone_submission = <MilestoneSubmissions<T>>::get(bounty_id, milestone_id)
+            .ok_or(Error::<T>::CannotSudoApproveMilestoneIfMilestoneSubmissionDNE)?;
+        // check that it is in a valid state to approve
+        ensure!(
+            milestone_submission.ready_for_review(),
+            Error::<T>::SubmissionIsNotReadyForReview
+        );
+        let team_org_id = milestone_submission
+            .get_team_org()
+            .ok_or(Error::<T>::SubmissionIsNotReadyForReview)?;
 
-        // // commit and transfer control over capital in the same step
-        // let new_transfer_id = <<T as Trait>::Bank as CommitAndTransfer<
-        //     T::AccountId,
-        //     WithdrawalPermissions<T::OrgId, T::AccountId>,
-        //     BalanceOf<T>,
-        //     T::IpfsReference,
-        // >>::commit_and_transfer_spending_power(
-        //     caller,
-        //     bounty_info.bank_account().into(),
-        //     bounty_info.spend_reservation(),
-        //     milestone_submission.submission(), // reason = hash of milestone submission
-        //     milestone_submission.amount(),
-        //     milestone_submission.team().into(), // uses the weighted share issuance by default to enforce payout structure
-        // )?;
-        // let new_milestone_submission =
-        //     milestone_submission.set_make_transfer(bounty_info.bank_account(), new_transfer_id);
-        // let new_milestone_state = new_milestone_submission.state();
-        // <MilestoneSubmissions<T>>::insert(bounty_id, milestone_id, new_milestone_submission);
-        // Ok(new_milestone_state)
+        // commit and transfer control over capital in the same step
+        let new_transfer_id = <<T as Trait>::Bank as CommitAndTransfer<
+            T::OrgId,
+            T::AccountId,
+            WithdrawalPermissions<T::OrgId, T::AccountId>,
+            BalanceOf<T>,
+            T::IpfsReference,
+        >>::commit_and_transfer_spending_power(
+            bounty_info.bank_account().into(),
+            bounty_info.spend_reservation(),
+            milestone_submission.submission(), // reason = hash of milestone submission
+            milestone_submission.amount(),
+            WithdrawalPermissions::JointOrgAccount(team_org_id),
+        )?;
+        let new_milestone_submission = milestone_submission
+            .set_make_transfer(bounty_info.bank_account(), new_transfer_id)
+            .ok_or(Error::<T>::SubmissionIsNotReadyForReview)?;
+        let new_milestone_state = new_milestone_submission.state();
+        <MilestoneSubmissions<T>>::insert(bounty_id, milestone_id, new_milestone_submission);
+        Ok(new_milestone_state)
     }
     /// Must be called by member of supervision board for
     /// specific milestone (which reserved the bounty) to poll and
-    /// push along the milestone
+    /// push along the milestone (DOES NOT TRIGGER MILESTONE REVIEW)
     fn poll_milestone(
         bounty_id: T::BountyId,
         milestone_id: T::BountyId,
@@ -1024,115 +999,153 @@ impl<T: Trait>
         // get the bounty
         let bounty_info = <FoundationSponsoredBounties<T>>::get(bounty_id)
             .ok_or(Error::<T>::CannotPollMilestoneReviewIfBountyDNE)?;
-        todo!()
-        // let milestone_review_board =
-        //     if let Some(separate_board) = bounty_info.supervision_committee() {
-        //         separate_board
-        //     } else {
-        //         bounty_info.acceptance_committee()
-        //     };
-        // ensure!(
-        //     Self::account_can_trigger_review(&caller, milestone_review_board),
-        //     Error::<T>::CannotPollMilestoneReviewUnlessMember
-        // );
-        // // get the milestone submission
-        // let milestone_submission = <MilestoneSubmissions<T>>::get(bounty_id, milestone_id)
-        //     .ok_or(Error::<T>::CannotPollMilestoneIfMilestoneSubmissionDNE)?;
-        // // poll the state of the submission and return the result
-        // // -> pushes along if milestone review passes
-        // match milestone_submission.state() {
-        //     MilestoneStatus::SubmittedReviewStarted(wrapped_vote_id) => {
-        //         // poll the vote_id
-        //         let passed = Self::check_vote_status(wrapped_vote_id)?;
-        //         if passed {
-        //             // TODO: substract from application_id
-        //             let application = <BountyApplications<T>>::get(
-        //                 bounty_id,
-        //                 milestone_submission.application_id(),
-        //             )
-        //             .ok_or(Error::<T>::CannotPollMilestoneIfReferenceApplicationDNE)?;
-        //             let new_milestone_submission = if let Some(new_application) =
-        //                 application.spend_approved_grant(milestone_submission.amount())
-        //             {
-        //                 // make the transfer
-        //                 let transfer_id = <<T as Trait>::Bank as BankReservations<
-        //                     T::AccountId,
-        //                     WithdrawalPermissions<T::OrgId, T::AccountId>,
-        //                     BalanceOf<T>,
-        //                     T::IpfsReference,
-        //                 >>::transfer_spending_power(
-        //                     caller,
-        //                     bounty_info.bank_account().into(),
-        //                     milestone_submission.submission(), // reason = hash of milestone submission
-        //                     bounty_info.spend_reservation(),
-        //                     milestone_submission.amount(),
-        //                     milestone_submission.team().into(), // uses the weighted share issuance by default to enforce payout structure
-        //                 )?;
-        //                 // insert updated application into storage
-        //                 <BountyApplications<T>>::insert(
-        //                     bounty_id,
-        //                     milestone_submission.application_id(),
-        //                     new_application,
-        //                 );
-        //                 milestone_submission
-        //                     .set_make_transfer(bounty_info.bank_account(), transfer_id)
-        //             } else {
-        //                 // can't afford to the make the transfer at the moment
-        //                 milestone_submission.approve_without_transfer()
-        //             };
-        //             let new_milestone_state = new_milestone_submission.state();
-        //             <MilestoneSubmissions<T>>::insert(
-        //                 bounty_id,
-        //                 milestone_id,
-        //                 new_milestone_submission,
-        //             );
-        //             Ok(new_milestone_state)
-        //         } else {
-        //             Ok(milestone_submission.state())
-        //         }
-        //     }
-        //     MilestoneStatus::ApprovedButNotTransferred => {
-        //         // try to make the transfer again and change the state
-        //         let application =
-        //             <BountyApplications<T>>::get(bounty_id, milestone_submission.application_id())
-        //                 .ok_or(Error::<T>::CannotPollMilestoneIfReferenceApplicationDNE)?;
-        //         if let Some(new_application) =
-        //             application.spend_approved_grant(milestone_submission.amount())
-        //         {
-        //             // make the transfer
-        //             let transfer_id = <<T as Trait>::Bank as BankReservations<
-        //                 T::AccountId,
-        //                 WithdrawalPermissions<T::OrgId, T::AccountId>,
-        //                 BalanceOf<T>,
-        //                 T::IpfsReference,
-        //             >>::transfer_spending_power(
-        //                 caller,
-        //                 bounty_info.bank_account().into(),
-        //                 milestone_submission.submission(), // reason = hash of milestone submission
-        //                 bounty_info.spend_reservation(),
-        //                 milestone_submission.amount(),
-        //                 milestone_submission.team().into(), // uses the weighted share issuance by default to enforce payout structure
-        //             )?;
-        //             let new_milestone_submission = milestone_submission
-        //                 .set_make_transfer(bounty_info.bank_account(), transfer_id);
-        //             let new_milestone_state = new_milestone_submission.state();
-        //             <MilestoneSubmissions<T>>::insert(
-        //                 bounty_id,
-        //                 milestone_id,
-        //                 new_milestone_submission,
-        //             );
-        //             <BountyApplications<T>>::insert(
-        //                 bounty_id,
-        //                 milestone_submission.application_id(),
-        //                 new_application,
-        //             );
-        //             Ok(new_milestone_state)
-        //         } else {
-        //             // can't afford to the make the transfer at the moment
-        //             Ok(milestone_submission.state())
-        //         }
-        //     }
-        //     _ => Ok(milestone_submission.state()),
-        // }
+        // get the milestone submission
+        let milestone_submission = <MilestoneSubmissions<T>>::get(bounty_id, milestone_id)
+            .ok_or(Error::<T>::CannotPollMilestoneIfMilestoneSubmissionDNE)?;
+        // poll the state of the submission and return the result
+        // -> pushes along if milestone review passes
+        match milestone_submission.state() {
+            MilestoneStatus::SubmittedReviewStarted(org_id, vote_id) => {
+                // poll the vote_id
+                let passed = <vote::Module<T>>::get_vote_outcome(vote_id)?;
+                // match on vote outcome
+                let latest_submission: Self::Milestone = match passed {
+                    VoteOutcome::ApprovedAndNotExpired => {
+                        let application = <BountyApplications<T>>::get(
+                            bounty_id,
+                            milestone_submission.application_id(),
+                        )
+                        .ok_or(Error::<T>::CannotPollMilestoneIfReferenceApplicationDNE)?;
+                        let new_milestone_submission = if let Some(new_application) =
+                            application.spend_approved_grant(milestone_submission.amount())
+                        {
+                            // make the transfer
+                            let transfer_id = <<T as Trait>::Bank as ReservationMachine<
+                                T::OrgId,
+                                T::AccountId,
+                                WithdrawalPermissions<T::OrgId, T::AccountId>,
+                                BalanceOf<T>,
+                                T::IpfsReference,
+                            >>::transfer_spending_power(
+                                bounty_info.bank_account().into(),
+                                milestone_submission.submission(), // reason = hash of milestone submission
+                                bounty_info.spend_reservation(),
+                                milestone_submission.amount(),
+                                WithdrawalPermissions::JointOrgAccount(org_id), // uses the weighted share issuance by default to enforce payout structure
+                            )?;
+                            // insert updated application into storage
+                            <BountyApplications<T>>::insert(
+                                bounty_id,
+                                milestone_submission.application_id(),
+                                new_application,
+                            );
+                            milestone_submission
+                                .set_make_transfer(bounty_info.bank_account(), transfer_id)
+                                .ok_or(Error::<T>::CannotPollMilestoneIfMilestoneSubmissionDNE)
+                        } else {
+                            // can't afford to the make the transfer at the moment
+                            milestone_submission
+                                .approve_without_transfer()
+                                .ok_or(Error::<T>::CannotPollMilestoneIfMilestoneSubmissionDNE)
+                        }?;
+                        <MilestoneSubmissions<T>>::insert(
+                            bounty_id,
+                            milestone_id,
+                            new_milestone_submission.clone(),
+                        );
+                        new_milestone_submission
+                    }
+                    VoteOutcome::ApprovedAndExpired => {
+                        let application = <BountyApplications<T>>::get(
+                            bounty_id,
+                            milestone_submission.application_id(),
+                        )
+                        .ok_or(Error::<T>::CannotPollMilestoneIfReferenceApplicationDNE)?;
+                        let new_milestone_submission = if let Some(new_application) =
+                            application.spend_approved_grant(milestone_submission.amount())
+                        {
+                            // make the transfer
+                            let transfer_id = <<T as Trait>::Bank as ReservationMachine<
+                                T::OrgId,
+                                T::AccountId,
+                                WithdrawalPermissions<T::OrgId, T::AccountId>,
+                                BalanceOf<T>,
+                                T::IpfsReference,
+                            >>::transfer_spending_power(
+                                bounty_info.bank_account().into(),
+                                milestone_submission.submission(), // reason = hash of milestone submission
+                                bounty_info.spend_reservation(),
+                                milestone_submission.amount(),
+                                WithdrawalPermissions::JointOrgAccount(org_id), // uses the weighted share issuance by default to enforce payout structure
+                            )?;
+                            // insert updated application into storage
+                            <BountyApplications<T>>::insert(
+                                bounty_id,
+                                milestone_submission.application_id(),
+                                new_application,
+                            );
+                            milestone_submission
+                                .set_make_transfer(bounty_info.bank_account(), transfer_id)
+                                .ok_or(Error::<T>::CannotPollMilestoneIfMilestoneSubmissionDNE)
+                        } else {
+                            // can't afford to the make the transfer at the moment
+                            milestone_submission
+                                .approve_without_transfer()
+                                .ok_or(Error::<T>::CannotPollMilestoneIfMilestoneSubmissionDNE)
+                        }?;
+                        <MilestoneSubmissions<T>>::insert(
+                            bounty_id,
+                            milestone_id,
+                            new_milestone_submission.clone(),
+                        );
+                        new_milestone_submission
+                    }
+                    _ => milestone_submission,
+                };
+                Ok(latest_submission.state())
+            }
+            MilestoneStatus::ApprovedButNotTransferred(org_id) => {
+                // try to make the transfer again and change the state
+                let application =
+                    <BountyApplications<T>>::get(bounty_id, milestone_submission.application_id())
+                        .ok_or(Error::<T>::CannotPollMilestoneIfReferenceApplicationDNE)?;
+                if let Some(new_application) =
+                    application.spend_approved_grant(milestone_submission.amount())
+                {
+                    // make the transfer
+                    let transfer_id = <<T as Trait>::Bank as ReservationMachine<
+                        T::OrgId,
+                        T::AccountId,
+                        WithdrawalPermissions<T::OrgId, T::AccountId>,
+                        BalanceOf<T>,
+                        T::IpfsReference,
+                    >>::transfer_spending_power(
+                        bounty_info.bank_account().into(),
+                        milestone_submission.submission(), // reason = hash of milestone submission
+                        bounty_info.spend_reservation(),
+                        milestone_submission.amount(),
+                        WithdrawalPermissions::JointOrgAccount(org_id),
+                    )?;
+                    let new_milestone_submission = milestone_submission
+                        .set_make_transfer(bounty_info.bank_account(), transfer_id)
+                        .ok_or(Error::<T>::CannotPollMilestoneIfReferenceApplicationDNE)?;
+                    let new_milestone_state = new_milestone_submission.state();
+                    <MilestoneSubmissions<T>>::insert(
+                        bounty_id,
+                        milestone_id,
+                        new_milestone_submission,
+                    );
+                    <BountyApplications<T>>::insert(
+                        bounty_id,
+                        milestone_submission.application_id(),
+                        new_application,
+                    );
+                    Ok(new_milestone_state)
+                } else {
+                    Ok(milestone_submission.state())
+                }
+            }
+            _ => Ok(milestone_submission.state()),
+        }
     }
 }

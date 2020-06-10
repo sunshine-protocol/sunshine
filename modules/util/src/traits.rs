@@ -552,7 +552,6 @@ pub trait CreateBounty<OrgId, Currency, AccountId, Hash, ReviewCommittee>:
     // helper to screen, prepare and form bounty information object
     fn screen_bounty_creation(
         foundation: OrgId,
-        caller: AccountId,
         bank_account: Self::BankId,
         description: Hash,
         amount_reserved_for_bounty: Currency, // collateral requirement
@@ -564,7 +563,6 @@ pub trait CreateBounty<OrgId, Currency, AccountId, Hash, ReviewCommittee>:
     // - requirement might be the inner shares of an organization for example
     fn create_bounty(
         foundation: OrgId, // registered OrgId
-        caller: AccountId,
         bank_account: Self::BankId,
         description: Hash,
         amount_reserved_for_bounty: Currency, // collateral requirement
@@ -583,30 +581,32 @@ pub trait UseTermsOfAgreement<OrgId, TermsOfAgreement> {
     ) -> Result<(Self::TeamIdentifier, Self::VoteIdentifier), DispatchError>;
 }
 
-// used for application and milestone review dispatch and diagnostics
-pub trait StartReview<VoteIdentifier> {
-    fn start_review(&self, vote_id: VoteIdentifier) -> Self;
+pub trait GetTeamOrg<OrgId>: Sized {
+    fn get_team_org(&self) -> Option<OrgId>;
+}
+
+pub trait StartReview<VoteIdentifier>: Sized {
+    fn start_review(&self, vote_id: VoteIdentifier) -> Option<Self>;
     fn get_review_id(&self) -> Option<VoteIdentifier>;
 }
 
-pub trait ApproveWithoutTransfer {
-    fn approve_without_transfer(&self) -> Self;
+pub trait ApproveWithoutTransfer: Sized {
+    fn approve_without_transfer(&self) -> Option<Self>;
 }
 
 pub trait SetMakeTransfer<BankId, TransferId>: Sized {
-    fn set_make_transfer(&self, bank_id: BankId, transfer_id: TransferId) -> Self;
+    fn set_make_transfer(&self, bank_id: BankId, transfer_id: TransferId) -> Option<Self>;
     fn get_bank_id(&self) -> Option<BankId>;
     fn get_transfer_id(&self) -> Option<TransferId>;
 }
 
-pub trait StartTeamConsentPetition<Id, VoteIdentifier> {
-    fn start_team_consent_petition(&self, org_id: Id, vote_id: VoteIdentifier) -> Self;
+pub trait StartTeamConsentPetition<Id, VoteIdentifier>: Sized {
+    fn start_team_consent_petition(&self, team_id: Id, vote_id: VoteIdentifier) -> Option<Self>;
     fn get_team_consent_id(&self) -> Option<VoteIdentifier>;
     fn get_team_id(&self) -> Option<Id>;
 }
 
-// TODO: clean up the outer_flat_share_id dispatched for team consent if NOT formally approved
-pub trait ApproveGrant<TeamIdentifier> {
+pub trait ApproveGrant<TeamIdentifier>: Sized {
     fn approve_grant(&self, team_id: TeamIdentifier) -> Self;
     fn get_full_team_id(&self) -> Option<TeamIdentifier>;
 }
@@ -667,8 +667,9 @@ pub trait SuperviseGrantApplication<BountyId, AccountId> {
     ) -> Result<Self::AppState, DispatchError>;
 }
 
-pub trait SubmitMilestone<AccountId, BountyId, Hash, Currency, VoteId, BankId, TransferId> {
-    type Milestone: StartReview<VoteId>
+pub trait SubmitMilestone<OrgId, AccountId, BountyId, Hash, Currency, VoteId, BankId, TransferId> {
+    type Milestone: GetTeamOrg<OrgId>
+        + StartReview<VoteId>
         + ApproveWithoutTransfer
         + SetMakeTransfer<BankId, TransferId>;
     type MilestoneState;
