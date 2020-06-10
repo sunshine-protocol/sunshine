@@ -321,7 +321,7 @@ pub use org;
 parameter_types! {
     pub const ReservationLimit: u32 = 10000;
 }
-impl org::Trait for TestRuntime {
+impl org::Trait for Runtime {
     type Event = Event;
     type IpfsReference = u32; // TODO: replace with utils_identity::Cid
     type OrgId = u64;
@@ -329,7 +329,7 @@ impl org::Trait for TestRuntime {
     type ReservationLimit = ReservationLimit;
 }
 pub use vote;
-impl vote::Trait for TestRuntime {
+impl vote::Trait for Runtime {
     type Event = Event;
     type VoteId = u64;
     type Signal = u64;
@@ -339,7 +339,7 @@ parameter_types! {
     // minimum deposit to register an on-chain bank
     pub const MinimumInitialDeposit: u64 = 5;
 }
-impl bank::Trait for TestRuntime {
+impl bank::Trait for Runtime {
     type Event = Event;
     type BankAssociatedId = u64;
     type Currency = Balances;
