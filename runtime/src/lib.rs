@@ -186,7 +186,7 @@ parameter_types! {
     pub const MaximumBlockWeight: Weight = 2 * WEIGHT_PER_SECOND;
     pub const AvailableBlockRatio: Perbill = Perbill::from_percent(75);
     /// Assume 10% of weight for average on_initialize calls.
-    pub const MaximumExtrinsicWeight: Weight = AvailableBlockRatio::get()
+    pub MaximumExtrinsicWeight: Weight = AvailableBlockRatio::get()
         .saturating_sub(Perbill::from_percent(10)) * MaximumBlockWeight::get();
     pub const MaximumBlockLength: u32 = 5 * 1024 * 1024;
     pub const Version: RuntimeVersion = VERSION;
@@ -317,72 +317,44 @@ impl pallet_sudo::Trait for Runtime {
     type Event = Event;
     type Call = Call;
 }
-pub use membership;
-impl membership::Trait for Runtime {
-    type Event = Event;
-}
-pub use shares_membership::Trait;
-impl shares_membership::Trait for Runtime {
-    type Event = Event;
-    type OrgData = Membership;
-}
-pub use shares_atomic;
-pub type Shares = u64;
+pub use org;
 parameter_types! {
     pub const ReservationLimit: u32 = 10000;
 }
-impl shares_atomic::Trait for Runtime {
+impl org::Trait for TestRuntime {
     type Event = Event;
-    type OrgData = Membership;
-    type Shares = Shares;
+    type IpfsReference = u32; // TODO: replace with utils_identity::Cid
+    type OrgId = u64;
+    type Shares = u64;
     type ReservationLimit = ReservationLimit;
 }
-pub use vote_petition;
-impl vote_petition::Trait for Runtime {
+pub use vote;
+impl vote::Trait for TestRuntime {
     type Event = Event;
-    type OrgData = Membership;
-    type ShareData = SharesMembership;
+    type VoteId = u64;
+    type Signal = u64;
 }
-pub use vote_yesno;
-pub type Signal = u64;
-pub type VoteId = u64;
-impl vote_yesno::Trait for Runtime {
-    type Event = Event;
-    type Signal = Signal;
-    type OrgData = Membership;
-    type FlatShareData = SharesMembership;
-    type WeightedShareData = SharesAtomic;
-}
-pub use sunshine_org;
-impl sunshine_org::Trait for Runtime {
-    type Event = Event;
-    type OrgData = Membership;
-    type FlatShareData = SharesMembership;
-    type WeightedShareData = SharesAtomic;
-}
+pub use bank;
 parameter_types! {
-    pub const MinimumInitialDeposit: u128 = 5;
+    // minimum deposit to register an on-chain bank
+    pub const MinimumInitialDeposit: u64 = 5;
 }
-pub use bank_onchain;
-impl bank_onchain::Trait for Runtime {
+impl bank::Trait for TestRuntime {
     type Event = Event;
+    type BankAssociatedId = u64;
     type Currency = Balances;
-    type Organization = SunshineOrg;
     type MinimumInitialDeposit = MinimumInitialDeposit;
 }
-// => every bounty has at least 10 reserved behind it
-parameter_types! {
-    pub const MinimumBountyCollateralRatio: Permill = Permill::from_percent(50);
-    pub const BountyLowerBound: u128 = 20;
-}
 pub use bounty;
+parameter_types! {
+    pub const MinimumBountyCollateralRatio: Permill = Permill::from_percent(20);
+    pub const BountyLowerBound: u64 = 10;
+}
 impl bounty::Trait for Runtime {
     type Event = Event;
     type Currency = Balances;
-    type Organization = SunshineOrg;
-    type Bank = BankOnChain;
-    type VotePetition = VotePetition;
-    type VoteYesNo = VoteYesNo;
+    type BountyId = u64;
+    type Bank = Bank;
     type MinimumBountyCollateralRatio = MinimumBountyCollateralRatio;
     type BountyLowerBound = BountyLowerBound;
 }
@@ -403,13 +375,9 @@ construct_runtime!(
         Sudo: pallet_sudo::{Module, Call, Config<T>, Storage, Event<T>},
         Indices: pallet_indices::{Module, Call, Storage, Config<T>, Event<T>},
         // sunshine modules
-        Membership: membership::{Module, Call, Config<T>, Storage, Event<T>},
-        SharesMembership: shares_membership::{Module, Call, Config<T>, Storage, Event<T>},
-        SharesAtomic: shares_atomic::{Module, Call, Config<T>, Storage, Event<T>},
-        VotePetition: vote_petition::{Module, Call, Storage, Event<T>},
-        VoteYesNo: vote_yesno::{Module, Call, Storage, Event<T>},
-        SunshineOrg: sunshine_org::{Module, Call, Config<T>, Storage, Event<T>},
-        BankOnChain: bank_onchain::{Module, Call, Storage, Event<T>},
+        Org: org::{Module, Call, Config<T>, Storage, Event<T>},
+        Vote: vote::{Module, Call, Storage, Event<T>},
+        Bank: bank::{Module, Call, Storage, Event<T>},
         Bounty: bounty::{Module, Call, Storage, Event<T>},
     }
 );
