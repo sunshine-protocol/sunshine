@@ -24,6 +24,7 @@ use sp_std::prelude::*;
 #[cfg(feature = "std")]
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
+use utils_identity::cid::CidBytes;
 
 // A few exports that help ease life for downstream crates.
 pub use frame_support::{
@@ -323,7 +324,7 @@ parameter_types! {
 }
 impl org::Trait for Runtime {
     type Event = Event;
-    type IpfsReference = u32; // TODO: replace with utils_identity::Cid
+    type IpfsReference = CidBytes;
     type OrgId = u64;
     type Shares = u64;
     type ReservationLimit = ReservationLimit;
