@@ -453,7 +453,7 @@ impl<T: Trait>
             old_vote.direction(),
         );
         // set the new vote for the voter's profile
-        <VoteLogger<T>>::insert(vote_id, voter.clone(), new_vote);
+        <VoteLogger<T>>::insert(vote_id, voter, new_vote);
         // commit new vote state to storage
         <VoteStates<T>>::insert(vote_id, new_state);
         Ok(())

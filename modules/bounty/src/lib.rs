@@ -567,7 +567,7 @@ impl<T: Trait>
     ) -> Result<T::BountyId, DispatchError> {
         // check that the organization is registered
         ensure!(
-            !<org::Module<T>>::id_is_available(foundation.into()),
+            !<org::Module<T>>::id_is_available(foundation),
             Error::<T>::NoBankExistsAtInputTreasuryIdForCreatingBounty
         );
         // creates object and propagates any error

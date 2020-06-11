@@ -1,4 +1,4 @@
-use crate::srml::shares_atomic::SharesAtomic;
+use crate::srml::org::Org;
 use codec::{Decode, Encode};
 use core::fmt::Debug;
 use sp_runtime::{
@@ -13,6 +13,7 @@ use substrate_subxt::{
     system::System,
     CheckEra, CheckGenesis, CheckNonce, CheckSpecVersion, CheckTxVersion, CheckWeight, SignedExtra,
 };
+use utils_identity::cid::CidBytes;
 
 pub type Pair = sp_core::sr25519::Pair;
 pub type ClientBuilder = substrate_subxt::ClientBuilder<Runtime, MultiSignature, RuntimeExtra>;
@@ -39,9 +40,9 @@ impl Balances for Runtime {
     type Balance = u128;
 }
 
-impl SharesAtomic for Runtime {
-    type OrgId = u32;
-    type ShareId = u32;
+impl Org for Runtime {
+    type IpfsReference = CidBytes;
+    type OrgId = u64;
     type Shares = u64;
 }
 

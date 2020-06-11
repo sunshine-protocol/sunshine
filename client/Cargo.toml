@@ -31,7 +31,7 @@ frame-support = "2.0.0-rc3"
 pallet-indices = "2.0.0-rc3"
 # local deps
 util = { package = "sunshine-util", path = "../modules/util", default-features = false }
-sunshine-org = {package = "sunshine-org", path = "../modules/org", default-features=false }
+org = {package = "sunshine-org", path = "../modules/org", default-features=false }
 vote = { package = "sunshine-vote", path = "../modules/vote", default-features=false}
 bank = { package = "sunshine-bank", path = "../modules/bank", default-features=false}
 bounty = { package = "sunshine-bounty", path = "../modules/bounty", default-features=false}

@@ -209,7 +209,7 @@ pub fn new_light(config: Configuration) -> Result<impl AbstractService, ServiceE
                 .ok_or_else(|| "Trying to start light transaction pool without active fetcher")?;
 
             let pool_api =
-                sc_transaction_pool::LightChainApi::new(builder.client().clone(), fetcher.clone());
+                sc_transaction_pool::LightChainApi::new(builder.client().clone(), fetcher);
             let pool = sc_transaction_pool::BasicPool::with_revalidation_type(
                 builder.config().transaction_pool.clone(),
                 Arc::new(pool_api),

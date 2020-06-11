@@ -2,7 +2,7 @@ use crate::error::Error;
 #[cfg(feature = "light-client")]
 use crate::light_client::ChainType;
 use crate::runtime::{Client, Pair, Runtime}; //XtBuilder
-use crate::srml::shares_atomic::*;
+                                             // use crate::srml::org::*;
 use ipfs_embed::{Config, Store};
 use ipld_block_builder::{BlockBuilder, Codec};
 use sp_core::Pair as _;

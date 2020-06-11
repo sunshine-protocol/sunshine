@@ -873,7 +873,7 @@ impl<T: Trait>
             .ok_or(Error::<T>::NotEnoughFundsCommittedToEnableInternalTransfer)?;
         // form a transfer_info
         let new_transfer =
-            InternalTransferInfo::new(reservation_id, reason, amount, new_controller.clone());
+            InternalTransferInfo::new(reservation_id, reason, amount, new_controller);
         // generate the unique transfer_id
         let new_transfer_id =
             Self::seeded_generate_unique_id((bank_id, BankMapID::InternalTransfer));

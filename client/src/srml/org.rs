@@ -1,15 +1,17 @@
 use codec::{Codec, Decode, Encode};
 use frame_support::Parameter;
 use sp_runtime::traits::{AtLeast32Bit, MaybeSerializeDeserialize, Member, Zero};
-use sp_std::fmt::Debug;
+use std::fmt::Debug;
 use substrate_subxt::system::{System, SystemEventsDecoder};
-//use util::share::ShareProfile;
-//use util::uuid::UUID2;
+use util::{organization::Organization, share::ShareProfile};
 
 /// The subset of the org trait and its inherited traits that the client must inherit
 #[module]
-pub trait OrganizationInterface: System {
-    // from membership module
+pub trait Org: System {
+    /// Cid type
+    type IpfsReference: Parameter + Member + Default;
+
+    /// Organization Identifier
     type OrgId: Parameter
         + Member
         + AtLeast32Bit
@@ -19,30 +21,8 @@ pub trait OrganizationInterface: System {
         + MaybeSerializeDeserialize
         + Debug
         + Zero;
-    
-    // from shares-membership module
-    type FlatShareId: Parameter
-        + Member
-        + AtLeast32Bit
-        + Codec
-        + Default
-        + Copy
-        + MaybeSerializeDeserialize
-        + Debug
-        + Zero;
 
-    // from shares-atomic module
-    type WeightedShareId: Parameter
-        + Member
-        + AtLeast32Bit
-        + Codec
-        + Default
-        + Copy
-        + MaybeSerializeDeserialize
-        + Debug
-        + Zero;
-
-    // from shares-atomic module
+    /// Metric for measuring ownership in context of OrgId (group)
     type Shares: Parameter
         + Member
         + AtLeast32Bit
@@ -54,179 +34,155 @@ pub trait OrganizationInterface: System {
         + Zero;
 }
 
-/*
+// ~~ Values ~~
+
+#[derive(Clone, Debug, Eq, PartialEq, Encode)]
+pub struct SudoKeyStore<T: Org> {
+    pub sudo: Option<<T as System>::AccountId>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Encode)]
+pub struct OrganizationIdentifierNonceStore<T: Org> {
+    pub nonce: T::OrgId,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Encode)]
+pub struct OrganizationCounterStore {
+    pub counter: u32,
+}
+
+// ~~ Maps ~~
+
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
-pub struct ShareGroupSupervisorStore<T: SharesAtomic> {
-    #[store(returns = <T as System>::AccountId)]
+pub struct OrgStateStore<T: Org> {
+    #[store(returns = Organization<<T as System>::AccountId, T::OrgId, T::IpfsReference>)]
     pub org: T::OrgId,
-    pub share: T::ShareId,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
-pub struct ShareIdCounterStore<T: SharesAtomic> {
-    #[store(returns = u32)]
-    pub org: T::OrgId,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
-pub struct ClaimedShareIdentityStore<T: SharesAtomic> {
-    #[store(returns = bool)]
-    pub org: T::OrgId,
-    pub share: T::ShareId,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
-pub struct MembershipReferenceCounterStore<T: SharesAtomic> {
-    #[store(returns = u32)]
-    pub org: T::OrgId,
-    pub account: <T as System>::AccountId,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
-pub struct TotalIssuanceStore<T: SharesAtomic> {
+pub struct TotalIssuanceStore<T: Org> {
     #[store(returns = T::Shares)]
     pub org: T::OrgId,
-    pub share: T::ShareId,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
-pub struct ProfileStore<'a, T: SharesAtomic> {
+pub struct ProfileStore<'a, T: Org> {
     #[store(returns = ShareProfile<T::Shares>)]
-    pub prefix: UUID2,
-    pub account_id: &'a <T as System>::AccountId,
+    pub org: T::OrgId,
+    pub account: &'a <T as System>::AccountId,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
-pub struct ShareGroupSizeStore<T: SharesAtomic> {
+pub struct OrganizationSupervisor<T: Org> {
+    #[store(returns = Option<<T as System>::AccountId>)]
+    pub org: T::OrgId,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
+pub struct OrganizationSizeStore<T: Org> {
     #[store(returns = u32)]
     pub org: T::OrgId,
-    pub share: T::ShareId,
 }
-*/
 
 #[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
-pub struct IssueSharesCall<'a, T: SharesAtomic> {
+pub struct IssueSharesCall<'a, T: Org> {
     pub org: T::OrgId,
-    pub share: T::ShareId,
     pub who: &'a <T as System>::AccountId,
     pub amount: T::Shares,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
-pub struct BurnSharesCall<'a, T: SharesAtomic> {
+pub struct BurnSharesCall<'a, T: Org> {
     pub org: T::OrgId,
-    pub share: T::ShareId,
     pub who: &'a <T as System>::AccountId,
     pub amount: T::Shares,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
-pub struct BatchIssueSharesCall<'a, T: SharesAtomic> {
+pub struct BatchIssueSharesCall<'a, T: Org> {
     pub org: T::OrgId,
-    pub share: T::ShareId,
     pub new_accounts: &'a [(<T as System>::AccountId, T::Shares)],
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
-pub struct BatchBurnSharesCall<'a, T: SharesAtomic> {
+pub struct BatchBurnSharesCall<'a, T: Org> {
     pub org: T::OrgId,
-    pub share: T::ShareId,
     pub new_accounts: &'a [(<T as System>::AccountId, T::Shares)],
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
-pub struct LockSharesCall<'a, T: SharesAtomic> {
+pub struct LockSharesCall<'a, T: Org> {
     pub org: T::OrgId,
-    pub share: T::ShareId,
     pub who: &'a <T as System>::AccountId,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
-pub struct UnlockSharesCall<'a, T: SharesAtomic> {
+pub struct UnlockSharesCall<'a, T: Org> {
     pub org: T::OrgId,
-    pub share: T::ShareId,
-    pub who: &'a <T as System>::AccountId,
-}
-
-/// Request the share reservation.
-#[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
-pub struct ReserveSharesCall<'a, T: SharesAtomic> {
-    pub org: T::OrgId,
-    pub share: T::ShareId,
     pub who: &'a <T as System>::AccountId,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
-pub struct UnreserveSharesCall<'a, T: SharesAtomic> {
+pub struct ReserveSharesCall<'a, T: Org> {
     pub org: T::OrgId,
-    pub share: T::ShareId,
+    pub who: &'a <T as System>::AccountId,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
+pub struct UnreserveSharesCall<'a, T: Org> {
+    pub org: T::OrgId,
     pub who: &'a <T as System>::AccountId,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
-pub struct SharesReservedEvent<T: SharesAtomic> {
+pub struct SharesReservedEvent<T: Org> {
     pub org: T::OrgId,
-    pub share: T::ShareId,
-    pub account: <T as System>::AccountId,
-    pub reserved: u32,
+    pub who: <T as System>::AccountId,
+    pub amount: T::Shares,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
-pub struct SharesUnReservedEvent<T: SharesAtomic> {
+pub struct SharesUnReservedEvent<T: Org> {
     pub org: T::OrgId,
-    pub share: T::ShareId,
-    pub account: <T as System>::AccountId,
-    pub reserved: u32,
+    pub who: <T as System>::AccountId,
+    pub amount: T::Shares,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
-pub struct SharesLockedEvent<T: SharesAtomic> {
+pub struct SharesLockedEvent<T: Org> {
     pub org: T::OrgId,
-    pub share: T::ShareId,
-    pub account: <T as System>::AccountId,
+    pub who: <T as System>::AccountId,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
-pub struct SharesUnlockedEvent<T: SharesAtomic> {
+pub struct SharesUnlockedEvent<T: Org> {
     pub org: T::OrgId,
-    pub share: T::ShareId,
-    pub account: <T as System>::AccountId,
+    pub who: <T as System>::AccountId,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
-pub struct SharesIssuedEvent<T: SharesAtomic> {
+pub struct SharesIssuedEvent<T: Org> {
     pub org: T::OrgId,
-    pub share: T::ShareId,
     pub account: <T as System>::AccountId,
     pub amount: T::Shares,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
-pub struct SharesBurnedEvent<T: SharesAtomic> {
+pub struct SharesBurnedEvent<T: Org> {
     pub org: T::OrgId,
-    pub share: T::ShareId,
     pub account: <T as System>::AccountId,
     pub amount: T::Shares,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
-pub struct SharesBatchIssuedEvent<T: SharesAtomic> {
+pub struct SharesBatchIssuedEvent<T: Org> {
     pub org: T::OrgId,
-    pub share: T::ShareId,
     pub amount: T::Shares,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
-pub struct SharesBatchBurnedEvent<T: SharesAtomic> {
+pub struct SharesBatchBurnedEvent<T: Org> {
     pub org: T::OrgId,
-    pub share: T::ShareId,
-    pub amount: T::Shares,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
-pub struct TotalSharesIssuedEvent<T: SharesAtomic> {
-    pub org: T::OrgId,
-    pub share: T::ShareId,
     pub amount: T::Shares,
 }
 

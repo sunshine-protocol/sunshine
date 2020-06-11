@@ -688,7 +688,6 @@ impl<T: Trait> ShareInformation<T::OrgId, T::AccountId, T::Shares> for Module<T>
     }
 }
 impl<T: Trait> ShareIssuance<T::OrgId, T::AccountId, T::Shares> for Module<T> {
-    // TODO: change to infallible instead of returning DispatchResult?
     fn issue(
         organization: T::OrgId,
         new_owner: T::AccountId,
