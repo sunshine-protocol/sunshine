@@ -13,4 +13,4 @@ mod sunshine;
 pub use error::Error;
 #[cfg(feature = "light-client")]
 pub use light_client::ChainType;
-pub use sunshine::Sunshine;
+pub use sunshine::SunClient;
