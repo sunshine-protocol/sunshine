@@ -47,15 +47,6 @@ pub trait GetGroupSize<OrgId> {
 pub trait GroupMembership<OrgId, AccountId>: GetGroupSize<OrgId> {
     fn is_member_of_group(org_id: OrgId, who: &AccountId) -> bool;
 }
-
-/// All changes to the organizational membership are infallible
-pub trait ChangeGroupMembership<OrgId, AccountId>: GroupMembership<OrgId, AccountId> {
-    fn add_member_to_org(org_id: OrgId, new_member: AccountId, batch: bool) -> DispatchResult;
-    fn remove_member_from_org(org_id: OrgId, old_member: AccountId, batch: bool) -> DispatchResult;
-    /// WARNING: the vector fed as inputs to the following methods must have NO duplicates
-    fn batch_add_members_to_org(org_id: OrgId, new_members: Vec<AccountId>) -> DispatchResult;
-    fn batch_remove_members_from_org(org_id: OrgId, old_members: Vec<AccountId>) -> DispatchResult;
-}
 pub trait GetGroup<OrgId, AccountId> {
     fn get_group(organization: OrgId) -> Option<Vec<AccountId>>;
 }
