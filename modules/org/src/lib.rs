@@ -114,11 +114,8 @@ decl_error! {
     pub enum Error for Module<T: Trait> {
         UnAuthorizedSwapSudoRequest,
         NoExistingSudoKey,
-        NotAuthorizedToChangeMembership,
         OrganizationMustExistToClearSupervisor,
         OrganizationMustExistToPutSupervisor,
-        CannotAddAnExistingMemberToOrg,
-        CannotRemoveNonMemberFromOrg,
         CannotBurnMoreThanTotalIssuance,
         NotEnoughSharesToSatisfyBurnRequest,
         IssuanceCannotGoNegative,
