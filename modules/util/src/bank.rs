@@ -1,9 +1,8 @@
 use crate::{
-    organization::ShareID,
     share::SimpleShareGenesis,
     traits::{
         AccessGenesis, CommitSpendReservation, DepositSpendOps, FreeToReserved, GetBalance,
-        MoveFundsOutCommittedOnly, MoveFundsOutUnCommittedOnly,
+        Increment, MoveFundsOutCommittedOnly, MoveFundsOutUnCommittedOnly,
     },
 };
 use codec::{Codec, Decode, Encode};
@@ -22,8 +21,8 @@ pub type OffChainTreasuryID = u32;
 #[derive(Clone, Copy, Eq, PartialEq, Default, Encode, Decode, sp_runtime::RuntimeDebug)]
 pub struct OnChainTreasuryID(pub [u8; 8]);
 
-impl OnChainTreasuryID {
-    pub fn iterate(self) -> OnChainTreasuryID {
+impl Increment for OnChainTreasuryID {
+    fn increment(self) -> OnChainTreasuryID {
         let old_inner = u64::from_be_bytes(self.0);
         let new_inner = old_inner.saturating_add(1u64);
         OnChainTreasuryID(new_inner.to_be_bytes())
@@ -43,136 +42,90 @@ pub enum BankMapID {
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
-pub struct BankTrackerIdentifier {
-    treasury_id: OnChainTreasuryID,
-    tracker_id: BankTrackerID,
-}
-
-impl BankTrackerIdentifier {
-    pub fn new(treasury_id: OnChainTreasuryID, tracker_id: BankTrackerID) -> BankTrackerIdentifier {
-        BankTrackerIdentifier {
-            treasury_id,
-            tracker_id,
-        }
-    }
-}
-
-impl From<(OnChainTreasuryID, BankTrackerID)> for BankTrackerIdentifier {
-    fn from(other: (OnChainTreasuryID, BankTrackerID)) -> BankTrackerIdentifier {
-        BankTrackerIdentifier::new(other.0, other.1)
-    }
-}
-
-#[derive(PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
-/// Identifiers for tracking actions by specific individual AccountId to _eventually_ enforce limits on this behavior
-pub enum BankTrackerID {
-    // acceptable only if the withdrawer burns their ownership
-    SpentFromFree,
-    // allowed from any member of the bank's controller
-    ReservedSpend,
-    // wraos reservation_id, allowed from any member of bank's controller
-    UnReservedSpendFromUnCommitted(u32),
-    // wraps reservation_id, allowed from any member of reservation's controller
-    UnReservedSpendFromCommitted(u32),
-    // wraps reservation_id, allowed from any member of spend reservation's controller
-    CommitSpend(u32),
-    // wraps reservation_id, allowed from any member of the controller in the reference
-    InternalTransferMade(u32),
-    // wraps transfer_id, only acceptable withdrawal from reserved, must follow configured decision process
-    SpentFromReserved(u32),
-}
-
-#[derive(PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
 /// The simplest `GovernanceConfig`
 /// - has no magnitude context and is limited for that reason
 /// - future version will use revocable representative governance
-pub enum WithdrawalPermissions<AccountId> {
-    // two accounts can reserve free capital for spending
-    AnyOfTwoAccounts(AccountId, AccountId),
-    // any account in org
-    AnyAccountInOrg(u32),
-    // all accounts in this organization can reserve free capital for spending
-    AnyMemberOfOrgShareGroup(u32, ShareID),
+pub enum WithdrawalPermissions<Id, AccountId> {
+    // any of two accounts can reserve free capital for spending
+    TwoAccounts(AccountId, AccountId),
+    // withdrawal permissions restricted by weighted membership in organization
+    // -> sudo might have additional power, depends on impl
+    JointOrgAccount(Id),
 }
 
-impl<AccountId> Default for WithdrawalPermissions<AccountId> {
-    fn default() -> WithdrawalPermissions<AccountId> {
-        WithdrawalPermissions::AnyAccountInOrg(0u32)
+impl<OrgId: Codec + PartialEq + Zero + From<u32> + Copy, AccountId> Default
+    for WithdrawalPermissions<OrgId, AccountId>
+{
+    fn default() -> WithdrawalPermissions<OrgId, AccountId> {
+        // the chain's dev account?
+        WithdrawalPermissions::JointOrgAccount(OrgId::zero())
     }
 }
 
-impl<AccountId> WithdrawalPermissions<AccountId> {
-    pub fn extract_org_weighted_share_id(&self) -> Option<(u32, u32)> {
+impl<OrgId: Codec + PartialEq + Zero + From<u32> + Copy, AccountId>
+    WithdrawalPermissions<OrgId, AccountId>
+{
+    pub fn extract_org_id(&self) -> Option<OrgId> {
         match self {
-            WithdrawalPermissions::AnyMemberOfOrgShareGroup(org_id, wrapped_share_id) => {
-                match wrapped_share_id {
-                    ShareID::WeightedAtomic(share_id) => Some((*org_id, *share_id)),
-                    _ => None,
-                }
-            }
+            WithdrawalPermissions::JointOrgAccount(org_id) => Some(*org_id),
             _ => None,
         }
     }
 }
 use crate::bounty::{ReviewBoard, TeamID};
-impl<AccountId, Hash, WeightThreshold> From<ReviewBoard<AccountId, Hash, WeightThreshold>>
-    for WithdrawalPermissions<AccountId>
+impl<
+        OrgId: Codec + PartialEq + Zero + From<u32> + Copy,
+        AccountId: PartialEq,
+        Hash: Clone,
+        Threshold: Clone,
+    > From<ReviewBoard<OrgId, AccountId, Hash, Threshold>>
+    for WithdrawalPermissions<OrgId, AccountId>
 {
     fn from(
-        other: ReviewBoard<AccountId, Hash, WeightThreshold>,
-    ) -> WithdrawalPermissions<AccountId> {
-        match other {
-            ReviewBoard::FlatPetitionReview(_, org_id, share_id, _, _, _) => {
-                WithdrawalPermissions::AnyMemberOfOrgShareGroup(org_id, ShareID::Flat(share_id))
-            }
-            ReviewBoard::WeightedThresholdReview(_, org_id, share_id, _, _) => {
-                WithdrawalPermissions::AnyMemberOfOrgShareGroup(
-                    org_id,
-                    ShareID::WeightedAtomic(share_id),
-                )
-            }
-        }
+        other: ReviewBoard<OrgId, AccountId, Hash, Threshold>,
+    ) -> WithdrawalPermissions<OrgId, AccountId> {
+        WithdrawalPermissions::JointOrgAccount(other.org())
     }
 }
-impl<AccountId: Clone + PartialEq> From<TeamID<AccountId>> for WithdrawalPermissions<AccountId> {
-    fn from(other: TeamID<AccountId>) -> WithdrawalPermissions<AccountId> {
-        WithdrawalPermissions::AnyMemberOfOrgShareGroup(
-            other.org(),
-            ShareID::WeightedAtomic(other.weighted_share_id()),
-        )
+impl<OrgId: Codec + PartialEq + Zero + From<u32> + Copy, AccountId: Clone + PartialEq>
+    From<TeamID<OrgId, AccountId>> for WithdrawalPermissions<OrgId, AccountId>
+{
+    fn from(other: TeamID<OrgId, AccountId>) -> WithdrawalPermissions<OrgId, AccountId> {
+        WithdrawalPermissions::JointOrgAccount(other.org())
     }
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
 /// This is the state for an OnChainBankId, associated with each bank registered in the runtime
-pub struct BankState<GovernanceConfig, Currency> {
-    /// Registered organization identifier
-    registered_org: u32,
-    // free capital, available for spends
+pub struct BankState<OrgId: Codec + PartialEq + Zero + From<u32> + Copy, GovernanceConfig, Currency>
+{
+    // Registered organization identifier
+    owners: OrgId,
+    // Free capital, available for spends
     free: Currency,
-    // set aside for future spends, already allocated but can only be _liquidated_ after free == 0?
+    // Set aside for future spends, already allocated but can only be _liquidated_ after free == 0?
     reserved: Currency,
-    // owner of vault, likely WithdrawalPermissions<AccountId>
-    owner_s: GovernanceConfig,
+    // Operator of the organization, might be required to be a suborg or `owners` or not
+    // -> power should be restricted by actions made by the `self.owners`
+    operators: GovernanceConfig,
 }
 
-impl<GovernanceConfig: Clone + PartialEq, Currency: Zero + AtLeast32Bit + Clone>
-    BankState<GovernanceConfig, Currency>
+impl<
+        OrgId: Codec + PartialEq + Zero + From<u32> + Copy,
+        GovernanceConfig: Clone + PartialEq,
+        Currency: Zero + AtLeast32Bit + Clone,
+    > BankState<OrgId, GovernanceConfig, Currency>
 {
-    pub fn new_from_deposit(
-        registered_org: u32,
-        amount: Currency,
-        owner_s: GovernanceConfig,
-    ) -> Self {
+    pub fn new_from_deposit(owners: OrgId, amount: Currency, operators: GovernanceConfig) -> Self {
         BankState {
-            registered_org,
+            owners,
             free: amount,
             reserved: Currency::zero(),
-            owner_s,
+            operators,
         }
     }
-    pub fn registered_org(&self) -> u32 {
-        self.registered_org
+    pub fn owners(&self) -> OrgId {
+        self.owners
     }
     pub fn free(&self) -> Currency {
         self.free.clone()
@@ -180,18 +133,22 @@ impl<GovernanceConfig: Clone + PartialEq, Currency: Zero + AtLeast32Bit + Clone>
     pub fn reserved(&self) -> Currency {
         self.reserved.clone()
     }
-    pub fn owner_s(&self) -> GovernanceConfig {
-        self.owner_s.clone()
+    pub fn operators(&self) -> GovernanceConfig {
+        self.operators.clone()
     }
-    pub fn is_owner_s(&self, cmp_owner: GovernanceConfig) -> bool {
-        cmp_owner == self.owner_s
+    pub fn is_owners(&self, org: OrgId) -> bool {
+        org == self.owners
+    }
+    pub fn is_operator(&self, cmp_owner: GovernanceConfig) -> bool {
+        cmp_owner == self.operators.clone()
     }
 }
 
 impl<
+        OrgId: Codec + PartialEq + Zero + From<u32> + Copy,
         GovernanceConfig: Clone + PartialEq,
         Currency: Zero + AtLeast32Bit + Clone + sp_std::ops::Add + sp_std::ops::Sub,
-    > FreeToReserved<Currency> for BankState<GovernanceConfig, Currency>
+    > FreeToReserved<Currency> for BankState<OrgId, GovernanceConfig, Currency>
 {
     fn move_from_free_to_reserved(&self, amount: Currency) -> Option<Self> {
         if self.free() >= amount {
@@ -199,10 +156,10 @@ impl<
             let new_free = self.free() - amount.clone();
             let new_reserved = self.reserved() + amount;
             Some(BankState {
-                registered_org: self.registered_org(),
+                owners: self.owners(),
                 free: new_free,
                 reserved: new_reserved,
-                owner_s: self.owner_s(),
+                operators: self.operators(),
             })
         } else {
             // failed, not enough in free to make reservation of amount
@@ -212,9 +169,10 @@ impl<
 }
 
 impl<
+        OrgId: Codec + PartialEq + Zero + From<u32> + Copy,
         GovernanceConfig: Clone + PartialEq,
         Currency: Zero + AtLeast32Bit + Clone + sp_std::ops::Add,
-    > GetBalance<Currency> for BankState<GovernanceConfig, Currency>
+    > GetBalance<Currency> for BankState<OrgId, GovernanceConfig, Currency>
 {
     fn total_free_funds(&self) -> Currency {
         self.free()
@@ -227,26 +185,29 @@ impl<
     }
 }
 
-impl<GovernanceConfig: Clone + PartialEq, Currency: Zero + AtLeast32Bit + Clone>
-    DepositSpendOps<Currency> for BankState<GovernanceConfig, Currency>
+impl<
+        OrgId: Codec + PartialEq + Zero + From<u32> + Copy,
+        GovernanceConfig: Clone + PartialEq,
+        Currency: Zero + AtLeast32Bit + Clone,
+    > DepositSpendOps<Currency> for BankState<OrgId, GovernanceConfig, Currency>
 {
     // infallible
     fn deposit_into_free(&self, amount: Currency) -> Self {
         let new_free = self.free() + amount;
         BankState {
-            registered_org: self.registered_org(),
+            owners: self.owners(),
             free: new_free,
             reserved: self.reserved(),
-            owner_s: self.owner_s(),
+            operators: self.operators(),
         }
     }
     fn deposit_into_reserved(&self, amount: Currency) -> Self {
         let new_reserved = self.reserved() + amount;
         BankState {
-            registered_org: self.registered_org(),
+            owners: self.owners(),
             free: self.free(),
             reserved: new_reserved,
-            owner_s: self.owner_s(),
+            operators: self.operators(),
         }
     }
     // fallible, not enough capital in relative account
@@ -254,10 +215,10 @@ impl<GovernanceConfig: Clone + PartialEq, Currency: Zero + AtLeast32Bit + Clone>
         if self.free() >= amount {
             let new_free = self.free() - amount;
             Some(BankState {
-                registered_org: self.registered_org(),
+                owners: self.owners(),
                 free: new_free,
                 reserved: self.reserved(),
-                owner_s: self.owner_s(),
+                operators: self.operators(),
             })
         } else {
             // not enough capital in account, spend failed
@@ -268,10 +229,10 @@ impl<GovernanceConfig: Clone + PartialEq, Currency: Zero + AtLeast32Bit + Clone>
         if self.reserved() >= amount {
             let new_reserved = self.reserved() - amount;
             Some(BankState {
-                registered_org: self.registered_org(),
+                owners: self.owners(),
                 free: self.free(),
                 reserved: new_reserved,
-                owner_s: self.owner_s(),
+                operators: self.operators(),
             })
         } else {
             // not enough capital in account, spend failed
@@ -280,25 +241,7 @@ impl<GovernanceConfig: Clone + PartialEq, Currency: Zero + AtLeast32Bit + Clone>
     }
 }
 
-#[derive(PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
-pub struct CommitmentInfo<Hash, Currency> {
-    reason: Hash,
-    amount: Currency,
-}
-
-impl<Hash: Clone, Currency: Clone> CommitmentInfo<Hash, Currency> {
-    pub fn new(reason: Hash, amount: Currency) -> CommitmentInfo<Hash, Currency> {
-        CommitmentInfo { reason, amount }
-    }
-    pub fn amount(&self) -> Currency {
-        self.amount.clone()
-    }
-    pub fn reason(&self) -> Hash {
-        self.reason.clone()
-    }
-}
-
-#[derive(PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
+#[derive(new, PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
 pub struct DepositInfo<AccountId, Hash, Currency> {
     // Depositer's identity
     depositer: AccountId,
@@ -306,20 +249,9 @@ pub struct DepositInfo<AccountId, Hash, Currency> {
     reason: Hash,
     // Total amount of deposit into bank account (before fees, if any)
     amount: Currency,
-} // TODO: attach an enum Tax<AccountId, Currency, FineArithmetic> { Flat(account, currency), PercentofAmount(account, permill, currency), }
+}
 
 impl<AccountId: Clone, Hash: Clone, Currency: Clone> DepositInfo<AccountId, Hash, Currency> {
-    pub fn new(
-        depositer: AccountId,
-        reason: Hash,
-        amount: Currency,
-    ) -> DepositInfo<AccountId, Hash, Currency> {
-        DepositInfo {
-            depositer,
-            reason,
-            amount,
-        }
-    }
     pub fn depositer(&self) -> AccountId {
         self.depositer.clone()
     }
@@ -484,12 +416,12 @@ impl<
     }
 }
 
-#[derive(PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
+#[derive(new, PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
 /// Transfers withdrawal control to the new_controller
 /// - them referencing this item in storage is the authentication necessary for withdrawals from the Bank
-pub struct InternalTransferInfo<Hash, Currency, GovernanceConfig> {
+pub struct InternalTransferInfo<Id, Hash, Currency, GovernanceConfig> {
     // the referenced Reservation from which this originated
-    reference_id: u32,
+    reference_id: Id,
     // the reason for this transfer
     reason: Hash,
     // the amount transferred
@@ -498,23 +430,10 @@ pub struct InternalTransferInfo<Hash, Currency, GovernanceConfig> {
     controller: GovernanceConfig,
 }
 
-impl<Hash: Clone, Currency: Clone, GovernanceConfig: Clone>
-    InternalTransferInfo<Hash, Currency, GovernanceConfig>
+impl<Id: Copy, Hash: Clone, Currency: Clone, GovernanceConfig: Clone>
+    InternalTransferInfo<Id, Hash, Currency, GovernanceConfig>
 {
-    pub fn new(
-        reference_id: u32,
-        reason: Hash,
-        amount: Currency,
-        controller: GovernanceConfig,
-    ) -> InternalTransferInfo<Hash, Currency, GovernanceConfig> {
-        InternalTransferInfo {
-            reference_id,
-            reason,
-            amount,
-            controller,
-        }
-    }
-    pub fn id(&self) -> u32 {
+    pub fn id(&self) -> Id {
         self.reference_id
     }
     pub fn reason(&self) -> Hash {
@@ -529,16 +448,17 @@ impl<Hash: Clone, Currency: Clone, GovernanceConfig: Clone>
 }
 
 impl<
+        Id: Copy,
         Hash: Clone,
         Currency: Clone + sp_std::ops::Sub<Output = Currency> + PartialOrd,
         GovernanceConfig: Clone,
     > MoveFundsOutCommittedOnly<Currency>
-    for InternalTransferInfo<Hash, Currency, GovernanceConfig>
+    for InternalTransferInfo<Id, Hash, Currency, GovernanceConfig>
 {
     fn move_funds_out_committed_only(
         &self,
         amount: Currency,
-    ) -> Option<InternalTransferInfo<Hash, Currency, GovernanceConfig>> {
+    ) -> Option<InternalTransferInfo<Id, Hash, Currency, GovernanceConfig>> {
         if self.amount() >= amount {
             let new_amount = self.amount() - amount;
             Some(InternalTransferInfo {
@@ -553,8 +473,6 @@ impl<
         }
     }
 }
-
-// 000experiment with type states000
 
 // Withdrawal States as Zero Sized Types To Enforce State Guarantees
 #[derive(PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
@@ -626,7 +544,7 @@ impl<
 
 // ~~ Off Chain Bank ~~
 
-#[derive(PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
+#[derive(new, PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
 // TODO: add Currency type that is more compatible with off chain payments (USD)
 pub struct Payment<AccountId, Currency> {
     salt: u32,
@@ -636,19 +554,6 @@ pub struct Payment<AccountId, Currency> {
 }
 
 impl<AccountId: Clone, Currency: Clone> Payment<AccountId, Currency> {
-    pub fn new(
-        salt: u32,
-        sender: AccountId,
-        receiver: AccountId,
-        amount: Currency,
-    ) -> Payment<AccountId, Currency> {
-        Payment {
-            salt,
-            sender,
-            receiver,
-            amount,
-        }
-    }
     pub fn salt(&self) -> u32 {
         self.salt
     }

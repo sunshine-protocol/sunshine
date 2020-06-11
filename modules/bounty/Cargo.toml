@@ -11,25 +11,21 @@ keywords = ["sunshine", "substrate", "blockchain"]
 
 [dependencies]
 serde = { version = "1.0.104", optional = true }
-codec = { package = "parity-scale-codec", version = "1.2.0", default-features = false, features = ["derive"] }
-sp-std = { version = "2.0.0-rc2", default-features = false }
-sp-runtime = { version = "2.0.0-rc2", default-features = false }
-frame-support = { version = "2.0.0-rc2", default-features = false }
-frame-system = { version = "2.0.0-rc2", default-features = false }
-pallet-balances = { version = "2.0.0-rc2", default-features = false }
+codec = { package = "parity-scale-codec", version = "1.3.0", default-features = false, features = ["derive"] }
+sp-std = { version = "2.0.0-rc3", default-features = false }
+sp-runtime = { version = "2.0.0-rc3", default-features = false }
+frame-support = { version = "2.0.0-rc3", default-features = false }
+frame-system = { version = "2.0.0-rc3", default-features = false }
+pallet-balances = { version = "2.0.0-rc3", default-features = false }
 util = { package = "sunshine-util", path = "../util", default-features=false}
-membership = { package = "sunshine-membership", path = "../membership", default-features = false }
-shares-membership = { package = "sunshine-shares-membership", path = "../shares-membership", default-features = false }
-shares-atomic = { package = "sunshine-shares-atomic", path = "../shares-atomic", default-features = false }
 org = { package = "sunshine-org", path = "../org", default-features=false}
-bank-onchain = { package = "sunshine-bank-onchain", path = "../bank-onchain", default-features=false}
-vote-petition = { package = "sunshine-vote-petition", path = "../vote-petition", default-features=false}
-vote-yesno = { package = "sunshine-vote-yesno", path = "../vote-yesno", default-features=false}
-clear_on_drop = { version = "0.2.3", features = ["no_cc"] }	# https://github.com/paritytech/substrate/issues/4179
+bank = { package = "sunshine-bank", path = "../bank", default-features=false}
+vote = { package = "sunshine-vote", path = "../vote", default-features=false}
+clear_on_drop = { version = "0.2.4", features = ["no_cc"] }	# https://github.com/paritytech/substrate/issues/4179
 
 [dev-dependencies]
-sp-io = { version = "2.0.0-rc2", default-features = false }
-sp-core = { version = "2.0.0-rc2", default-features = false }
+sp-io = { version = "2.0.0-rc3", default-features = false }
+sp-core = { version = "2.0.0-rc3", default-features = false }
 
 [features]
 default = ["std"]
@@ -41,8 +37,5 @@ std = [
 	"frame-support/std",
 	"frame-system/std",
 	"pallet-balances/std",
-	"membership/std",
-	"shares-membership/std",
-	"shares-atomic/std",
 	"org/std",
 ]

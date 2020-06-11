@@ -1,25 +1,95 @@
-use codec::{Decode, Encode};
-use sp_runtime::RuntimeDebug;
+use codec::{Codec, Decode, Encode};
+use sp_runtime::{traits::Zero, RuntimeDebug};
 use sp_std::prelude::*;
 
-#[derive(PartialEq, Eq, Default, Clone, Encode, Decode, RuntimeDebug)]
+#[derive(new, PartialEq, Eq, Default, Clone, Encode, Decode, RuntimeDebug)]
+/// The struct to track the organization's state
+pub struct Organization<AccountId, Id: Codec + PartialEq + Zero + From<u32> + Copy, Hash> {
+    /// The default sudo for this organization, optional because not _encouraged_
+    sudo: Option<AccountId>,
+    /// The parent organization for this organization
+    parent_id: Option<Id>,
+    /// The constitution
+    constitution: Hash,
+}
+
+impl<
+        AccountId: Clone + PartialEq,
+        Id: Codec + PartialEq + Zero + From<u32> + Copy,
+        Hash: Clone,
+    > Organization<AccountId, Id, Hash>
+{
+    pub fn parent(&self) -> Option<Id> {
+        self.parent_id
+    }
+    pub fn constitution(&self) -> Hash {
+        self.constitution.clone()
+    }
+    pub fn is_parent(&self, cmp: Id) -> bool {
+        if let Some(unwrapped_parent) = self.parent_id {
+            unwrapped_parent == cmp
+        } else {
+            false
+        }
+    }
+    pub fn is_sudo(&self, cmp: &AccountId) -> bool {
+        if let Some(unwrapped_sudo) = &self.sudo {
+            unwrapped_sudo == cmp
+        } else {
+            false
+        }
+    }
+    pub fn clear_sudo(&self) -> Self {
+        Organization {
+            sudo: None,
+            parent_id: self.parent_id,
+            constitution: self.constitution.clone(),
+        }
+    }
+    pub fn put_sudo(&self, new_sudo: AccountId) -> Self {
+        Organization {
+            sudo: Some(new_sudo),
+            parent_id: self.parent_id,
+            constitution: self.constitution.clone(),
+        }
+    }
+}
+
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+/// The pieces of information used to register an organization in `org`
+pub enum OrganizationSource<AccountId, Shares> {
+    /// Will be initialized as an organization with a single ShareId and equal governance strength from all members
+    Accounts(Vec<AccountId>),
+    /// "" weighted governance strength by Shares
+    AccountsWeighted(Vec<(AccountId, Shares)>),
+}
+impl<AccountId: PartialEq, Shares> From<Vec<(AccountId, Shares)>>
+    for OrganizationSource<AccountId, Shares>
+{
+    fn from(other: Vec<(AccountId, Shares)>) -> OrganizationSource<AccountId, Shares> {
+        OrganizationSource::AccountsWeighted(other)
+    }
+}
+impl<AccountId: PartialEq, Shares> Default for OrganizationSource<AccountId, Shares> {
+    fn default() -> OrganizationSource<AccountId, Shares> {
+        OrganizationSource::Accounts(Vec::new())
+    }
+}
+
+#[derive(new, PartialEq, Eq, Default, Clone, Encode, Decode, RuntimeDebug)]
 /// Static terms of agreement, define how the enforced payout structure for grants
-pub struct TermsOfAgreement<AccountId, Shares> {
+pub struct TermsOfAgreement<AccountId, Shares, Hash> {
+    /// Value constitution
+    constitution: Hash,
     /// If Some(account), then account is the sudo for the duration of the grant
     supervisor: Option<AccountId>,
     /// The share allocation for metadata
     share_metadata: Vec<(AccountId, Shares)>,
 }
 
-impl<AccountId: Clone, Shares: Clone> TermsOfAgreement<AccountId, Shares> {
-    pub fn new(
-        supervisor: Option<AccountId>,
-        share_metadata: Vec<(AccountId, Shares)>,
-    ) -> TermsOfAgreement<AccountId, Shares> {
-        TermsOfAgreement {
-            supervisor,
-            share_metadata,
-        }
+impl<AccountId: Clone, Shares: Clone, Hash: Clone> TermsOfAgreement<AccountId, Shares, Hash> {
+    pub fn constitution(&self) -> Hash {
+        self.constitution.clone()
     }
     pub fn supervisor(&self) -> Option<AccountId> {
         self.supervisor.clone()
@@ -38,15 +108,11 @@ impl<AccountId: Clone, Shares: Clone> TermsOfAgreement<AccountId, Shares> {
 
 #[derive(PartialEq, Eq, Default, Clone, Encode, Decode, RuntimeDebug)]
 /// Defined paths for how the terms of agreement can change
-pub struct FullTermsOfAgreement<AccountId, Shares, OrgId, ShareId, BlockNumber> {
+pub struct FullTermsOfAgreement<AccountId, Rules, Decisions, Outcomes> {
     /// The starting state for the group
-    basic_terms: TermsOfAgreement<AccountId, Shares>,
+    basic_terms: Rules,
     /// This represents the metagovernance configuration, how the group can coordinate changes
-    allowed_changes: Vec<(
-        Catalyst<AccountId>,
-        Option<VoteConfig<AccountId, OrgId, ShareId, BlockNumber>>,
-        Option<EnforcedOutcome<AccountId>>,
-    )>,
+    allowed_changes: Vec<(Catalyst<AccountId>, Option<Decisions>, Option<Outcomes>)>,
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
@@ -62,84 +128,56 @@ pub enum Catalyst<AccountId> {
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 /// These are all the vote configs planned to be supported
 /// TODO: we have n = 1, 2 so do it with AccountId, up to `12`, one day somehow
-pub enum VoteConfig<AccountId, OrgId, ShareId, BlockNumber> {
+pub enum VoteConfig<AccountId, OrgId, BlockNumber> {
     /// Only one supervisor approval is required but everyone has veto rights, for BlockNumber after approval
-    OneSupervisorApprovalWithFullOrgShareVetoRights(AccountId, OrgId, ShareId, BlockNumber),
+    OneSupervisorApprovalWithFullOrgShareVetoRights(AccountId, OrgId, BlockNumber),
     /// Two supervisor approvals is required but everyone has veto rights, for BlockNumber after approval
-    TwoSupervisorsApprovalWithFullOrgShareVetoRights(
-        AccountId,
-        AccountId,
-        OrgId,
-        ShareId,
-        BlockNumber,
-    ),
+    TwoSupervisorsApprovalWithFullOrgShareVetoRights(AccountId, AccountId, OrgId, BlockNumber),
     /// Only one supervisor approval is required but everyone can vote to veto must reach threshold, for BlockNumber after approval
-    OneSupervisorApprovalWith1P1VCountThresholdVetoRights(
-        AccountId,
-        OrgId,
-        ShareId,
-        u32,
-        BlockNumber,
-    ),
+    OneSupervisorApprovalWith1P1VCountThresholdVetoRights(AccountId, OrgId, u32, BlockNumber),
     /// Two supervisor approvals is required but everyone can vote to veto must reach threshold, for BlockNumber after approval
     TwoSupervisorsApprovalWith1P1VCountThresholdVetoRights(
         AccountId,
         AccountId,
         OrgId,
-        ShareId,
         u32,
         BlockNumber,
     ),
     /// Only one supervisor approval is required but everyone can vote to veto must reach share weighted threshold, for BlockNumber after approval
-    OneSupervisorApprovalWithShareWeightedVetoRights(AccountId, OrgId, ShareId, u32, BlockNumber),
+    OneSupervisorApprovalWithShareWeightedVetoRights(AccountId, OrgId, u32, BlockNumber),
     /// Two supervisor approvals is required but everyone can vote to veto must reach share weighted threshold, for BlockNumber after approval
     TwoSupervisorsApprovalWithShareWeightedVetoRights(
         AccountId,
         AccountId,
         OrgId,
-        ShareId,
         u32,
         BlockNumber,
     ),
     /// Warning: Dictatorial and Centralized Governance, some say _practical_
-    OnePersonOneVoteThresholdWithOneSupervisorVetoRights(
-        OrgId,
-        ShareId,
-        u32,
-        AccountId,
-        BlockNumber,
-    ),
+    OnePersonOneVoteThresholdWithOneSupervisorVetoRights(OrgId, u32, AccountId, BlockNumber),
     OnePersonOneVoteThresholdWithTwoSupervisorsVetoRights(
         OrgId,
-        ShareId,
         u32,
         AccountId,
         AccountId,
         BlockNumber,
     ),
-    ShareWeightedVoteThresholdWithOneSupervisorVetoRights(
-        OrgId,
-        ShareId,
-        u32,
-        AccountId,
-        BlockNumber,
-    ),
+    ShareWeightedVoteThresholdWithOneSupervisorVetoRights(OrgId, u32, AccountId, BlockNumber),
     ShareWeightedVoteThresholdWithTwoSupervisorsVetoRights(
         OrgId,
-        ShareId,
         u32,
         AccountId,
         AccountId,
         BlockNumber,
     ),
     /// 1 person 1 vote, u32 threshold for approval, but everyone has veto rights, for BlockNumber after approval
-    OnePersonOneVoteThresholdWithFullOrgShareVetoRights(OrgId, ShareId, u32, BlockNumber),
+    OnePersonOneVoteThresholdWithFullOrgShareVetoRights(OrgId, u32, BlockNumber),
     /// 1 person 1 vote, u32 threshold; only the second share group has veto rights (also must be flat!), for BlockNumber after approval
-    OnePersonOneVoteThresholdANDVetoEnabledGroup(OrgId, ShareId, u32, ShareId, BlockNumber),
+    OnePersonOneVoteThresholdANDVetoEnabledGroup(OrgId, u32, OrgId, BlockNumber),
     /// ShareWeighted vote, u32 threshold for approval, but everyone has veto rights, for BlockNumber after approval
-    ShareWeightedVoteThresholdWithFullOrgShareVetoRights(OrgId, ShareId, u32, BlockNumber),
-    /// ShareWeighted vote, u32 threshold for approval, but everyone has veto rights, for BlockNumber after approval
-    ShareWeightedVoteThresholdANDVetoEnabledGroup(OrgId, ShareId, u32, ShareId, BlockNumber),
+    ShareWeightedVoteThresholdWithFullOrgShareVetoRights(OrgId, u32, BlockNumber),
+    /// ShareWeighted vote, u32 threshold for approval, but everyone in second org has veto rights, for BlockNumber after approval
+    ShareWeightedVoteThresholdANDVetoEnabledGroup(OrgId, u32, OrgId, BlockNumber),
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
@@ -153,99 +191,4 @@ pub enum EnforcedOutcome<AccountId> {
     /// Swap the first account for the second account in the same role for a grant team
     /// (OrgId, ShareId)
     SwapRoleOnGrantTeam(u32, u32, AccountId, AccountId),
-}
-
-#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug)]
-// make it easy to verify existence in the context of Bank
-pub enum ShareID {
-    Flat(u32),
-    WeightedAtomic(u32),
-} // TODO: add `DivisibleShares` => Ranked Choice Voting
-
-impl Default for ShareID {
-    fn default() -> Self {
-        ShareID::Flat(0u32)
-    }
-}
-impl Into<u32> for ShareID {
-    fn into(self) -> u32 {
-        match self {
-            ShareID::Flat(val) => val,
-            ShareID::WeightedAtomic(val) => val,
-        }
-    }
-}
-
-#[derive(PartialEq, Eq, Default, Clone, Encode, Decode, RuntimeDebug)]
-/// The struct to track the `ShareId`s and `ProposalIndex` associated with an organization
-/// TODO: in the future, each of these should be separate maps
-pub struct Organization<Hash> {
-    /// The supervising ShareId for the organization, like a Board of Directors
-    admin_id: ShareID,
-    /// The constitution
-    constitution: Hash,
-}
-
-impl<Hash: Clone> Organization<Hash> {
-    pub fn new(admin_id: ShareID, constitution: Hash) -> Self {
-        Organization {
-            admin_id,
-            constitution,
-        }
-    }
-    pub fn admin_id(&self) -> ShareID {
-        self.admin_id
-    }
-    pub fn constitution(&self) -> Hash {
-        self.constitution.clone()
-    }
-}
-
-#[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug)]
-/// These are the types of formed and registered organizations in the `bank` module
-pub enum FormedOrganization {
-    FlatOrg(u32),
-    FlatShares(u32, u32),
-    WeightedShares(u32, u32),
-}
-
-impl Default for FormedOrganization {
-    fn default() -> FormedOrganization {
-        // The organization that controls the chain
-        FormedOrganization::FlatOrg(1u32)
-    }
-}
-
-impl From<u32> for FormedOrganization {
-    fn from(other: u32) -> FormedOrganization {
-        FormedOrganization::FlatOrg(other)
-    }
-}
-
-impl From<(u32, ShareID)> for FormedOrganization {
-    fn from(other: (u32, ShareID)) -> FormedOrganization {
-        match other.1 {
-            ShareID::Flat(share_id) => FormedOrganization::FlatShares(other.0, share_id),
-            ShareID::WeightedAtomic(share_id) => {
-                FormedOrganization::WeightedShares(other.0, share_id)
-            }
-        }
-    }
-}
-
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-/// The pieces of information used to register an organization in `bank`
-pub enum OrganizationSource<AccountId, Shares> {
-    /// Will be initialized as an organization with a single ShareId and equal governance strength from all members
-    Accounts(Vec<AccountId>),
-    /// "" weighted governance strength by Shares
-    AccountsWeighted(Vec<(AccountId, Shares)>),
-    /// References a share group registering to become an organization (OrgId, ShareId)
-    SpinOffShareGroup(u32, ShareID),
-}
-
-impl<AccountId, Shares> Default for OrganizationSource<AccountId, Shares> {
-    fn default() -> OrganizationSource<AccountId, Shares> {
-        OrganizationSource::Accounts(Vec::new())
-    }
 }

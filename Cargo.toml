@@ -4,17 +4,13 @@ panic = "unwind"
 [workspace]
 members = [
     "modules/util",
-    "modules/membership",
-    "modules/shares-membership",
-    "modules/shares-atomic",
     "modules/org",
-    "modules/vote-petition",
-    "modules/vote-yesno",
-    "modules/bank-offchain",
-    "modules/bank-onchain",
+    "modules/vote",
+    "modules/bank",
     "modules/bounty",
     "runtime",
-    #"client",
+    "utils",
+    "client",
     "node",
 ]
 

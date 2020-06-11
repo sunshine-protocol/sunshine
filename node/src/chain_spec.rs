@@ -4,22 +4,10 @@ use sp_core::{sr25519, Pair, Public};
 use sp_finality_grandpa::AuthorityId as GrandpaId;
 use sp_runtime::traits::{IdentifyAccount, Verify};
 use suntime::{
-    AccountId,
-    AuraConfig,
-    BalancesConfig,
-    GenesisConfig,
-    GrandpaConfig,
-    IndicesConfig,
-    MembershipConfig,
-    Shares,
-    SharesAtomicConfig,
-    SharesMembershipConfig,
-    Signature,
-    SudoConfig,
-    SunshineOrgConfig,
-    SystemConfig,
-    WASM_BINARY, // Signal, VoteId
+    AccountId, AuraConfig, BalancesConfig, GenesisConfig, GrandpaConfig, IndicesConfig, OrgConfig,
+    Signature, SudoConfig, SystemConfig, WASM_BINARY,
 };
+use utils_identity::cid::CidBytes;
 
 /// Specialized `ChainSpec`.
 pub type ChainSpec = sc_service::GenericChainSpec<GenesisConfig>;
@@ -64,18 +52,8 @@ pub fn development_config() -> ChainSpec {
                     get_account_id_from_seed::<sr25519::Public>("Alice//stash"),
                     get_account_id_from_seed::<sr25519::Public>("Bob//stash"),
                 ],
-                // org membership
-                None,
-                // flat share supervisors
-                None,
-                // flat share membership
-                None,
-                // weighted share supervisors
-                None,
-                // weighted share membership
-                None,
                 // first org value constitution
-                b"build cool shit".to_vec(),
+                CidBytes::default(),
                 // flat share membership
                 vec![
                     get_account_id_from_seed::<sr25519::Public>("Alice"),
@@ -121,18 +99,8 @@ pub fn local_testnet_config() -> ChainSpec {
                     get_account_id_from_seed::<sr25519::Public>("Eve//stash"),
                     get_account_id_from_seed::<sr25519::Public>("Ferdie//stash"),
                 ],
-                // org membership
-                None,
-                // flat share supervisors
-                None,
-                // flat share membership
-                None,
-                // weighted share supervisors
-                None,
-                // weighted share membership
-                None,
                 // first org value constitution
-                b"build cool shit".to_vec(),
+                CidBytes::default(),
                 // first org flat membership
                 vec![
                     get_account_id_from_seed::<sr25519::Public>("Alice"),
@@ -157,12 +125,7 @@ pub fn testnet_genesis(
     initial_authorities: Vec<(AuraId, GrandpaId)>,
     root_key: AccountId,
     endowed_accounts: Vec<AccountId>,
-    org_membership: Option<Vec<(u32, AccountId, bool)>>,
-    flat_share_supervisors: Option<Vec<(u32, u32, AccountId)>>,
-    flat_share_membership: Option<Vec<(u32, u32, AccountId, bool)>>,
-    weighted_share_supervisors: Option<Vec<(u32, u32, AccountId)>>,
-    weighted_share_membership: Option<Vec<(u32, u32, AccountId, Shares)>>,
-    first_org_value_constitution: Vec<u8>,
+    first_org_value_constitution: CidBytes,
     first_org_flat_membership: Vec<AccountId>,
     _enable_println: bool,
 ) -> GenesisConfig {
@@ -179,19 +142,7 @@ pub fn testnet_genesis(
                 .collect(),
         }),
         pallet_indices: Some(IndicesConfig { indices: vec![] }),
-        membership: Some(MembershipConfig {
-            omnipotent_key: root_key.clone(),
-            membership: org_membership,
-        }),
-        shares_membership: Some(SharesMembershipConfig {
-            share_supervisors: flat_share_supervisors,
-            shareholder_membership: flat_share_membership,
-        }),
-        shares_atomic: Some(SharesAtomicConfig {
-            share_supervisors: weighted_share_supervisors,
-            shareholder_membership: weighted_share_membership,
-        }),
-        sunshine_org: Some(SunshineOrgConfig {
+        org: Some(OrgConfig {
             first_organization_supervisor: root_key.clone(),
             first_organization_value_constitution: first_org_value_constitution,
             first_organization_flat_membership: first_org_flat_membership,

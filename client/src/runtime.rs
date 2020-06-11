@@ -1,4 +1,4 @@
-use crate::srml::shares_atomic::SharesAtomic;
+use crate::srml::org::Org;
 use codec::{Decode, Encode};
 use core::fmt::Debug;
 use sp_runtime::{
@@ -11,13 +11,14 @@ use std::marker::PhantomData;
 use substrate_subxt::{
     balances::{AccountData, Balances},
     system::System,
-    CheckEra, CheckGenesis, CheckNonce, CheckVersion, CheckWeight, SignedExtra,
+    CheckEra, CheckGenesis, CheckNonce, CheckSpecVersion, CheckTxVersion, CheckWeight, SignedExtra,
 };
+use utils_identity::cid::CidBytes;
 
 pub type Pair = sp_core::sr25519::Pair;
 pub type ClientBuilder = substrate_subxt::ClientBuilder<Runtime, MultiSignature, RuntimeExtra>;
 pub type Client = substrate_subxt::Client<Runtime, MultiSignature, RuntimeExtra>;
-pub type XtBuilder = substrate_subxt::XtBuilder<Runtime, Pair, MultiSignature, RuntimeExtra>;
+//pub type XtBuilder = substrate_subxt::XtBuilder<Runtime, Pair, MultiSignature, RuntimeExtra>;
 
 /// Concrete type definitions compatible w/ sunshine's runtime aka `suntime`
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -39,9 +40,9 @@ impl Balances for Runtime {
     type Balance = u128;
 }
 
-impl SharesAtomic for Runtime {
-    type OrgId = u32;
-    type ShareId = u32;
+impl Org for Runtime {
+    type IpfsReference = CidBytes;
+    type OrgId = u64;
     type Shares = u64;
 }
 
@@ -49,23 +50,26 @@ pub type RuntimeExtra = Extra<Runtime>;
 
 #[derive(Encode, Decode, Clone, Eq, PartialEq, Debug)]
 pub struct Extra<T: System> {
-    version: u32,
+    spec_version: u32,
+    tx_version: u32,
     nonce: T::Index,
     genesis_hash: T::Hash,
 }
 
 impl<T: System + Balances + Clone + Debug + Eq + Send + Sync> SignedExtra<T> for Extra<T> {
     type Extra = (
-        CheckVersion<T>,
+        CheckSpecVersion<T>,
+        CheckTxVersion<T>,
         CheckGenesis<T>,
         CheckEra<T>,
         CheckNonce<T>,
         CheckWeight<T>,
     );
 
-    fn new(version: u32, nonce: T::Index, genesis_hash: T::Hash) -> Self {
+    fn new(spec_version: u32, tx_version: u32, nonce: T::Index, genesis_hash: T::Hash) -> Self {
         Self {
-            version,
+            spec_version,
+            tx_version,
             nonce,
             genesis_hash,
         }
@@ -73,7 +77,8 @@ impl<T: System + Balances + Clone + Debug + Eq + Send + Sync> SignedExtra<T> for
 
     fn extra(&self) -> Self::Extra {
         (
-            CheckVersion(PhantomData, self.version),
+            CheckSpecVersion(PhantomData, self.spec_version),
+            CheckTxVersion(PhantomData, self.tx_version),
             CheckGenesis(PhantomData, self.genesis_hash),
             CheckEra((Era::Immortal, PhantomData), self.genesis_hash),
             CheckNonce(self.nonce),

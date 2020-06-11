@@ -1,144 +1,194 @@
+#![recursion_limit = "256"]
 #![allow(clippy::string_lit_as_bytes)]
 #![allow(clippy::redundant_closure_call)]
 #![allow(clippy::type_complexity)]
 #![cfg_attr(not(feature = "std"), no_std)]
-//! The org module is a shim for the membership modules for deeper inheritance
+//! This module expresses a framework for configurable group governance
 
 #[cfg(test)]
 mod tests;
 
 use util::{
-    organization::{Organization, OrganizationSource, ShareID},
-    share::SimpleShareGenesis,
+    organization::{Organization, OrganizationSource},
+    share::{ShareProfile, SimpleShareGenesis},
     traits::{
-        AccessGenesis, AccessProfile, ChainSudoPermissions, ChangeGroupMembership,
-        FlatShareWrapper, GenerateUniqueID, GetFlatShareGroup, GetGroupSize,
-        GetInnerOuterShareGroups, GroupMembership, IDIsAvailable, LockableProfile, OrgChecks,
-        OrganizationDNS, OrganizationSupervisorPermissions, RegisterShareGroup, ReservableProfile,
-        SeededGenerateUniqueID, ShareBank, ShareGroupChecks, SubGroupSupervisorPermissions,
-        SupervisorPermissions, WeightedShareGroup, WeightedShareIssuanceWrapper,
-        WeightedShareWrapper,
-    },
-    uuid::UUID2,
+        AccessGenesis, ChainSudoPermissions, ChangeGroupMembership, GenerateUniqueID, GetGroup,
+        GetGroupSize, GroupMembership, IDIsAvailable, LockProfile,
+        OrganizationSupervisorPermissions, RegisterOrganization, RemoveOrganization,
+        ReserveProfile, ShareInformation, ShareIssuance, VerifyShape,
+    }, // AccessProfile, SeededGenerateUniqueID
 };
 
+use codec::Codec;
 use frame_support::{
-    decl_error, decl_event, decl_module, decl_storage, ensure, storage::IterableStorageDoubleMap,
+    decl_error, decl_event, decl_module, decl_storage, ensure,
+    storage::{IterableStorageDoubleMap, IterableStorageMap},
+    traits::Get,
+    Parameter,
 };
 use frame_system::{self as system, ensure_signed};
-use sp_runtime::{DispatchError, DispatchResult, Permill};
-use sp_std::prelude::*;
-
-/// Common ipfs type alias for our modules
-pub type IpfsReference = Vec<u8>;
-/// The weighted shares
-pub type SharesOf<T> = <<T as Trait>::WeightedShareData as WeightedShareGroup<
-    <T as frame_system::Trait>::AccountId,
->>::Shares;
+use sp_runtime::{
+    traits::{AtLeast32Bit, CheckedAdd, CheckedSub, MaybeSerializeDeserialize, Member, Zero},
+    DispatchError, DispatchResult,
+};
+use sp_std::{fmt::Debug, prelude::*};
 
 pub trait Trait: system::Trait {
+    /// Overarching event type
     type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 
-    /// Used for permissions and shared for organizational membership in both
-    /// shares modules
-    type OrgData: GetGroupSize<GroupId = u32>
-        + GroupMembership<Self::AccountId>
-        + IDIsAvailable<u32>
-        + GenerateUniqueID<u32>
-        + ChainSudoPermissions<Self::AccountId>
-        + OrganizationSupervisorPermissions<u32, Self::AccountId>
-        + ChangeGroupMembership<Self::AccountId>;
+    /// Cid type
+    type IpfsReference: Parameter + Member + Default;
 
-    /// Used for shares-membership -> vote-petition
-    type FlatShareData: GetGroupSize<GroupId = UUID2>
-        + GroupMembership<Self::AccountId, GroupId = UUID2>
-        + IDIsAvailable<UUID2>
-        + SeededGenerateUniqueID<u32, u32>
-        + SubGroupSupervisorPermissions<u32, u32, Self::AccountId>
-        + ChangeGroupMembership<Self::AccountId>
-        + GetFlatShareGroup<Self::AccountId>;
+    /// Organizational identifier
+    type OrgId: Parameter
+        + Member
+        + AtLeast32Bit
+        + Codec
+        + Default
+        + Copy
+        + MaybeSerializeDeserialize
+        + Debug
+        + PartialOrd
+        + PartialEq
+        + Zero;
 
-    /// Used for shares-atomic -> vote-yesno
-    /// - this is NOT synced with FlatShareData
-    /// so the `SharesOf<T>` and `ShareId` checks must be treated separately
-    type WeightedShareData: GetGroupSize<GroupId = UUID2>
-        + GroupMembership<Self::AccountId>
-        + IDIsAvailable<UUID2>
-        + SeededGenerateUniqueID<u32, u32>
-        + WeightedShareGroup<Self::AccountId>
-        + ShareBank<Self::AccountId>
-        + ReservableProfile<Self::AccountId>
-        + LockableProfile<Self::AccountId>
-        + SubGroupSupervisorPermissions<u32, u32, Self::AccountId>;
+    /// Metric for ownership in the context of OrgId
+    type Shares: Parameter
+        + Member
+        + AtLeast32Bit
+        + Codec
+        + Default
+        + Copy
+        + MaybeSerializeDeserialize
+        + Debug
+        + PartialOrd
+        + CheckedSub
+        + Zero;
+
+    /// The hard limit on the number of times shares can be reserved
+    /// - why? we need to track how much the group check is called and limit it somehow and this is the best I've come up with for now...TODO: make issue and get feedback
+    type ReservationLimit: Get<u32>;
 }
 
 decl_event!(
     pub enum Event<T>
     where
         <T as frame_system::Trait>::AccountId,
+        OrgId = <T as Trait>::OrgId,
+        <T as Trait>::Shares,
+        <T as Trait>::IpfsReference,
     {
-        /// Registrar, Newly Register organization identifier, Admin ShareID, BankId, IpfsReference
-        NewOrganizationRegistered(AccountId, u32, ShareID, IpfsReference),
-        /// Registrar, OrgId, ShareId for UnWeighted Shares
-        FlatInnerShareGroupAddedToOrg(AccountId, u32, ShareID),
-        /// Registrar, OrgId, ShareId for Weighted Shares
-        WeightedInnerShareGroupAddedToOrg(AccountId, u32, ShareID),
-        /// Registrar, OrgId, ShareId for Weighted Shares
-        WeightedOuterShareGroupAddedToOrg(AccountId, u32, ShareID),
+        /// No shares issued but an organization was registered with flat membership with the last `u32` as the number of members
+        NewFlatOrganizationRegistered(AccountId, OrgId, IpfsReference, u32),
+        /// Shares issued for a weighted ownership org s.t. the last element `Shares` is total issuance
+        NewWeightedOrganizationRegistered(AccountId, OrgId, IpfsReference, Shares),
+        /// Organization ID, New Member Account ID, Amount Issued
+        NewMemberAddedToOrg(OrgId, AccountId, Shares),
+        /// Organization ID, Old Member Account Id, Amount Burned
+        OldMemberRemovedFromOrg(OrgId, AccountId, Shares),
+        /// Batch Addition by the Account ID, _,  total shares added
+        BatchMemberAdditionForOrg(AccountId, OrgId, Shares),
+        /// Batch Removal by the Account ID, _, total shares burned
+        BatchMemberRemovalForOrg(AccountId, OrgId, Shares),
+        /// Organization ID, Account ID of reservee, times_reserved of their profile
+        SharesReserved(OrgId, AccountId, Shares),
+        /// Organization ID, Account ID of unreservee, times_reserved of their profile
+        SharesUnReserved(OrgId, AccountId, Shares),
+        /// Organization ID, Account Id
+        SharesLocked(OrgId, AccountId),
+        /// Organization ID, Account Id
+        SharesUnlocked(OrgId, AccountId),
+        /// Organization ID, Recipient AccountId, Issued Amount
+        SharesIssued(OrgId, AccountId, Shares),
+        /// Organization ID, Burned AccountId, Burned Amount
+        SharesBurned(OrgId, AccountId, Shares),
+        /// Organization ID, Total Shares Minted
+        SharesBatchIssued(OrgId, Shares),
+        /// Organization ID, Total Shares Burned
+        SharesBatchBurned(OrgId, Shares),
     }
 );
 
 decl_error! {
     pub enum Error for Module<T: Trait> {
-        ShareIdTypeNotShareMembershipVariantSoCantAddMembers,
-        ShareIdTypeNotAtomicSharesVariantSoCantAddMembers,
-        SpinOffCannotOccurFromNonExistentShareGroup,
-        /// This is an auth restriction to provide some anti-sybil mechanism for certain actions within the system
-        /// - the 0th organization is registered at genesis and its members are essentially sudo
-        /// - in the future, I'd like to be able to invite people to open an organization in a controlled way so that their
-        /// invitation takes a unique form
-        MustBeAMemberOf0thOrgToRegisterNewOrg,
-        MustHaveCertainAuthorityToRegisterInnerShares,
-        MustHaveCertainAuthorityToRegisterOuterShares,
-        FlatShareGroupNotFound,
-        WeightedShareGroupNotFound,
-        NoProfileFoundForAccountToBurn,
+        UnAuthorizedSwapSudoRequest,
+        NoExistingSudoKey,
+        NotAuthorizedToChangeMembership,
+        OrganizationMustExistToClearSupervisor,
+        OrganizationMustExistToPutSupervisor,
+        CannotAddAnExistingMemberToOrg,
+        CannotRemoveNonMemberFromOrg,
+        CannotBurnMoreThanTotalIssuance,
+        NotEnoughSharesToSatisfyBurnRequest,
+        IssuanceCannotGoNegative,
+        GenesisTotalMustEqualSumToUseBatchOps,
+        IssuanceWouldOverflowShares,
+        IssuanceGoesNegativeWhileRemovingMember,
+        CannotReserveMoreThanShareTotal,
+        ReservationWouldExceedHardLimit,
+        CannotUnReserveMoreThanShareTotal,
+        CannotLockIfAlreadyLocked,
+        CannotUnLockIfAlreadyUnLocked,
+        CannotUnLockProfileThatDNE,
+        CannotLockProfileThatDNE,
+        CannotReserveIfMemberProfileDNE,
+        CannotUnReserveIfMemberProfileDNE,
+        OrganizationMustBeRegisteredToIssueShares,
+        OrganizationMustBeRegisteredToBurnShares,
+        OrganizationMustBeRegisteredToLockShares,
+        OrganizationMustBeRegisteredToUnLockShares,
+        OrganizationMustBeRegisteredToReserveShares,
+        OrganizationMustBeRegisteredToUnReserveShares,
+        NotAuthorizedToLockShares,
+        NotAuthorizedToUnLockShares,
+        NotAuthorizedToReserveShares,
+        NotAuthorizedToUnReserveShares,
+        NotAuthorizedToIssueShares,
+        NotAuthorizedToBurnShares,
+        OrganizationCannotBeRemovedIfInputIdIsAvailable,
     }
 }
 
 decl_storage! {
     trait Store for Module<T: Trait> as Org {
-        /// The number of organizations in this module (eventually add nuance like `Active` tiers)
+        /// The account that can set all the organization supervisors, should be replaced by committee-based governance from Org0
+        SudoKey get(fn sudo_key): Option<T::AccountId>;
+
+        /// Identity nonce for registering organizations
+        OrgIdNonce get(fn org_id_counter): T::OrgId;
+
+        /// The total number of organizations registered at any given time
         OrganizationCounter get(fn organization_counter): u32;
 
-        /// Organizations that were registered in this module
+        /// The main storage item for Organization registration
         OrganizationStates get(fn organization_states): map
-            hasher(opaque_blake2_256) u32 => Option<Organization<IpfsReference>>;
+            hasher(blake2_128_concat) T::OrgId => Option<Organization<T::AccountId, T::OrgId, T::IpfsReference>>;
 
-        /// Organization Inner Shares
-        /// - purpose: organizational governance, task supervision
-        OrganizationInnerShares get(fn organization_inner_shares): double_map
-            hasher(blake2_128_concat) u32,
-            hasher(blake2_128_concat) ShareID => bool;
+        /// The map to track organizational membership
+        Members get(fn members): double_map
+            hasher(blake2_128_concat) T::OrgId,
+            hasher(blake2_128_concat) T::AccountId => Option<ShareProfile<T::Shares>>;
 
-        /// Organization Outer Shares
-        /// - purpose: funded teams ownership enforcement, external contractors
-        OrganizationOuterShares get(fn organization_outer_shares): double_map
-            hasher(blake2_128_concat) u32,
-            hasher(blake2_128_concat) ShareID => bool;
+        /// Total number of outstanding shares that express relative ownership in group
+        TotalIssuance get(fn total_issuance): map
+            hasher(opaque_blake2_256) T::OrgId => T::Shares;
+
+        /// The size for each organization
+        OrganizationSize get(fn organization_size): map hasher(opaque_blake2_256) T::OrgId => u32;
     }
     add_extra_genesis {
-        // supervisor set to sudo according to rules of only module call in build(..)
         config(first_organization_supervisor): T::AccountId;
-        config(first_organization_value_constitution): IpfsReference;
+        config(first_organization_value_constitution): T::IpfsReference;
         config(first_organization_flat_membership): Vec<T::AccountId>;
 
         build(|config: &GenesisConfig<T>| {
-            <Module<T>>::register_organization_from_accounts(
+            <Module<T>>::register_flat_org(
                 T::Origin::from(Some(config.first_organization_supervisor.clone()).into()),
+                Some(config.first_organization_supervisor.clone()),
+                None,
                 config.first_organization_value_constitution.clone(),
                 config.first_organization_flat_membership.clone(),
-                Some(config.first_organization_supervisor.clone())
             ).expect("first organization config set up failed");
         })
     }
@@ -150,480 +200,667 @@ decl_module! {
         fn deposit_event() = default;
 
         #[weight = 0]
-        fn register_organization_from_accounts(
+        fn register_flat_org(
             origin,
-            value_constitution: IpfsReference,
-            accounts: Vec<T::AccountId>,
-            supervisor: Option<T::AccountId>,
+            sudo: Option<T::AccountId>,
+            parent_org: Option<T::OrgId>,
+            constitution: T::IpfsReference,
+            members: Vec<T::AccountId>,
         ) -> DispatchResult {
             let caller = ensure_signed(origin)?;
-            let authentication: bool = Self::is_sudo_account(&caller)
-                || Self::check_membership_in_org(1u32, &caller);
-            ensure!(authentication, Error::<T>::MustBeAMemberOf0thOrgToRegisterNewOrg);
-
-            let new_organization_state = Self::register_organization(OrganizationSource::<_, SharesOf<T>>::Accounts(accounts), value_constitution, supervisor)?;
-            Self::deposit_event(RawEvent::NewOrganizationRegistered(caller, new_organization_state.0, new_organization_state.1.admin_id(), new_organization_state.1.constitution()));
+            let total: u32 = members.len() as u32;
+            let new_id = if let Some(parent_id) = parent_org {
+                Self::register_sub_organization(parent_id, OrganizationSource::Accounts(members), sudo, constitution.clone())?
+            } else {
+                Self::register_organization(OrganizationSource::Accounts(members), sudo, constitution.clone())?
+            };
+            Self::deposit_event(RawEvent::NewFlatOrganizationRegistered(caller, new_id, constitution, total));
             Ok(())
         }
         #[weight = 0]
-        fn register_inner_flat_share_group_for_organization(
+        fn register_weighted_org(
             origin,
-            organization: u32,
-            group: Vec<T::AccountId>,
+            sudo: Option<T::AccountId>,
+            parent_org: Option<T::OrgId>,
+            constitution: T::IpfsReference,
+            weighted_members: Vec<(T::AccountId, T::Shares)>,
         ) -> DispatchResult {
             let caller = ensure_signed(origin)?;
-            let authentication: bool = Self::is_sudo_account(&caller)
-                || Self::is_organization_supervisor(organization, &caller);
-            ensure!(authentication, Error::<T>::MustHaveCertainAuthorityToRegisterInnerShares);
-
-            let new_share_id = Self::register_inner_flat_share_group(organization, group)?;
-            Self::deposit_event(RawEvent::FlatInnerShareGroupAddedToOrg(caller, organization, new_share_id));
+            // auth will usually be specific to the module context in which this is used
+            let wm_cpy: SimpleShareGenesis<T::AccountId, T::Shares> = weighted_members.clone().into();
+            let new_id = if let Some(parent_id) = parent_org {
+                Self::register_sub_organization(parent_id, OrganizationSource::AccountsWeighted(weighted_members), sudo, constitution.clone())?
+            } else {
+                Self::register_organization(OrganizationSource::AccountsWeighted(weighted_members), sudo, constitution.clone())?
+            };
+            Self::deposit_event(RawEvent::NewWeightedOrganizationRegistered(caller, new_id, constitution, wm_cpy.total()));
             Ok(())
         }
         #[weight = 0]
-        fn register_inner_weighted_share_group_for_organization(
+        fn add_new_member_to_org(
             origin,
-            organization: u32,
-            group: Vec<(T::AccountId, SharesOf<T>)>,
+            organization: T::OrgId,
+            new_member: T::AccountId,
+            shares_issued: T::Shares,
         ) -> DispatchResult {
             let caller = ensure_signed(origin)?;
-            let authentication: bool = Self::is_sudo_account(&caller)
-                || Self::is_organization_supervisor(organization, &caller);
-            ensure!(authentication, Error::<T>::MustHaveCertainAuthorityToRegisterInnerShares);
+            let authentication: bool = Self::is_sudo_key(&caller) || Self::is_organization_supervisor(organization, &caller);
+            ensure!(authentication, Error::<T>::NotAuthorizedToChangeMembership);
 
-            let new_share_id = Self::register_inner_weighted_share_group(organization, group)?;
-            Self::deposit_event(RawEvent::WeightedInnerShareGroupAddedToOrg(caller, organization, new_share_id));
+            Self::add_member_to_org(organization, new_member.clone(), false)?;
+            Self::deposit_event(RawEvent::NewMemberAddedToOrg(organization, new_member, T::Shares::zero()));
             Ok(())
         }
         #[weight = 0]
-        fn register_outer_weighted_share_group_for_organization(
+        fn remove_old_member_from_org(
             origin,
-            organization: u32,
-            group: Vec<(T::AccountId, SharesOf<T>)>,
+            organization: T::OrgId,
+            old_member: T::AccountId,
         ) -> DispatchResult {
             let caller = ensure_signed(origin)?;
-            let authentication: bool = Self::is_sudo_account(&caller)
-                || Self::is_organization_supervisor(organization, &caller);
-            ensure!(authentication, Error::<T>::MustHaveCertainAuthorityToRegisterOuterShares);
+            let authentication: bool = Self::is_sudo_key(&caller) || Self::is_organization_supervisor(organization, &caller);
+            ensure!(authentication, Error::<T>::NotAuthorizedToChangeMembership);
 
-            let new_share_id = Self::register_outer_weighted_share_group(organization, group)?;
-            Self::deposit_event(RawEvent::WeightedOuterShareGroupAddedToOrg(caller, organization, new_share_id));
+            Self::remove_member_from_org(organization, old_member.clone(), false)?;
+            Self::deposit_event(RawEvent::OldMemberRemovedFromOrg(organization, old_member, T::Shares::zero()));
             Ok(())
         }
-        // setting all permissions
-    }
-}
+        #[weight = 0]
+        fn add_new_members_to_org(
+            origin,
+            organization: T::OrgId,
+            new_members: Vec<T::AccountId>,
+        ) -> DispatchResult {
+            let caller = ensure_signed(origin)?;
+            let authentication: bool = Self::is_sudo_key(&caller) || Self::is_organization_supervisor(organization, &caller);
+            ensure!(authentication, Error::<T>::NotAuthorizedToChangeMembership);
 
-impl<T: Trait> OrgChecks<u32, T::AccountId> for Module<T> {
-    fn check_org_existence(org: u32) -> bool {
-        !<<T as Trait>::OrgData as IDIsAvailable<u32>>::id_is_available(org)
-    }
-    fn check_membership_in_org(org: u32, account: &T::AccountId) -> bool {
-        <<T as Trait>::OrgData as GroupMembership<
-                <T as frame_system::Trait>::AccountId,
-        >>::is_member_of_group(
-            org, account
-        )
-    }
-    fn get_org_size(org: u32) -> u32 {
-        <<T as Trait>::OrgData as GetGroupSize>::get_size_of_group(org)
-    }
-}
+            Self::batch_add_members_to_org(organization, new_members)?;
+            Self::deposit_event(RawEvent::BatchMemberAdditionForOrg(caller, organization, T::Shares::zero()));
+            Ok(())
+        }
+        #[weight = 0]
+        fn remove_old_members_from_org(
+            origin,
+            organization: T::OrgId,
+            old_members: Vec<T::AccountId>,
+        ) -> DispatchResult {
+            let caller = ensure_signed(origin)?;
+            let authentication: bool = Self::is_sudo_key(&caller) || Self::is_organization_supervisor(organization, &caller);
+            ensure!(authentication, Error::<T>::NotAuthorizedToChangeMembership);
 
-impl<T: Trait> ShareGroupChecks<u32, ShareID, T::AccountId> for Module<T> {
-    fn check_share_group_existence(org_id: u32, share_group: ShareID) -> bool {
-        match share_group {
-            ShareID::Flat(sid) => {
-                let prefix = UUID2::new(org_id, sid);
-                !<<T as Trait>::FlatShareData as IDIsAvailable<UUID2>>::id_is_available(prefix)
-            }
-            ShareID::WeightedAtomic(sid) => {
-                let prefix = UUID2::new(org_id, sid);
-                !<<T as Trait>::WeightedShareData as IDIsAvailable<UUID2>>::id_is_available(prefix)
-            }
+            Self::batch_remove_members_from_org(organization, old_members)?;
+            Self::deposit_event(RawEvent::BatchMemberRemovalForOrg(caller, organization, T::Shares::zero()));
+            Ok(())
         }
-    }
-    fn check_membership_in_share_group(
-        org_id: u32,
-        share_group: ShareID,
-        account: &T::AccountId,
-    ) -> bool {
-        match share_group {
-            ShareID::Flat(share_id) => {
-                let group_id = UUID2::new(org_id, share_id);
-                <<T as Trait>::FlatShareData as GroupMembership<
-                    <T as frame_system::Trait>::AccountId,
-                >>::is_member_of_group(group_id, account)
-            }
-            ShareID::WeightedAtomic(share_id) => {
-                let group_id = UUID2::new(org_id, share_id);
-                <<T as Trait>::WeightedShareData as GroupMembership<
-                    <T as frame_system::Trait>::AccountId,
-                >>::is_member_of_group(group_id, account)
-            }
-        }
-    }
-    fn get_share_group_size(org: u32, share_group: ShareID) -> u32 {
-        match share_group {
-            ShareID::Flat(share_id) => {
-                let group_id = UUID2::new(org, share_id);
-                <<T as Trait>::FlatShareData as GetGroupSize>::get_size_of_group(group_id)
-            }
-            ShareID::WeightedAtomic(share_id) => {
-                let group_id = UUID2::new(org, share_id);
-                <<T as Trait>::WeightedShareData as GetGroupSize>::get_size_of_group(group_id)
-            }
-        }
-    }
-}
+        /// Share Issuance Runtime Methods
+        #[weight = 0]
+        fn issue_shares(origin, organization: T::OrgId, who: T::AccountId, shares: T::Shares) -> DispatchResult {
+            let issuer = ensure_signed(origin)?;
+            // first check is that the organization exists
+            ensure!(!Self::id_is_available(organization), Error::<T>::OrganizationMustBeRegisteredToIssueShares);
+            // second check is that this is an authorized party for issuance (the supervisor or the module's sudo account)
+            let authentication: bool = Self::is_sudo_key(&issuer)
+                                    || Self::is_organization_supervisor(organization, &issuer);
+            ensure!(authentication, Error::<T>::NotAuthorizedToIssueShares);
 
-impl<T: Trait> SupervisorPermissions<u32, ShareID, T::AccountId> for Module<T> {
-    fn is_sudo_account(who: &T::AccountId) -> bool {
-        <<T as Trait>::OrgData as ChainSudoPermissions<<T as frame_system::Trait>::AccountId>>::is_sudo_key(who)
-    }
-    fn is_organization_supervisor(organization: u32, who: &T::AccountId) -> bool {
-        <<T as Trait>::OrgData as OrganizationSupervisorPermissions<
-            u32,
-            <T as frame_system::Trait>::AccountId,
-        >>::is_organization_supervisor(organization, who)
-    }
-    fn is_share_supervisor(organization: u32, share_id: ShareID, who: &T::AccountId) -> bool {
-        match share_id {
-            ShareID::Flat(sid) => <<T as Trait>::FlatShareData as SubGroupSupervisorPermissions<
-                u32,
-                u32,
-                <T as frame_system::Trait>::AccountId,
-            >>::is_sub_group_supervisor(organization, sid, who),
-            ShareID::WeightedAtomic(sid) => {
-                <<T as Trait>::WeightedShareData as SubGroupSupervisorPermissions<
-                    u32,
-                    u32,
-                    <T as frame_system::Trait>::AccountId,
-                >>::is_sub_group_supervisor(organization, sid, who)
-            }
+            Self::issue(organization, who.clone(), shares, false)?;
+            Self::deposit_event(RawEvent::SharesIssued(organization, who, shares));
+            Ok(())
         }
-    }
-    // infallible, not protected in any way
-    fn put_sudo_account(who: T::AccountId) {
-        <<T as Trait>::OrgData as ChainSudoPermissions<
-            <T as frame_system::Trait>::AccountId,
-        >>::put_sudo_key(who);
-    }
-    fn put_organization_supervisor(organization: u32, who: T::AccountId) {
-        <<T as Trait>::OrgData as OrganizationSupervisorPermissions<
-            u32,
-            <T as frame_system::Trait>::AccountId,
-        >>::put_organization_supervisor(organization, who);
-    }
-    fn put_share_group_supervisor(organization: u32, share_id: ShareID, who: T::AccountId) {
-        match share_id {
-            ShareID::Flat(sid) => {
-                <<T as Trait>::FlatShareData as SubGroupSupervisorPermissions<
-                    u32,
-                    u32,
-                    <T as frame_system::Trait>::AccountId,
-                >>::put_sub_group_supervisor(organization, sid, who);
-            }
-            ShareID::WeightedAtomic(sid) => {
-                <<T as Trait>::WeightedShareData as SubGroupSupervisorPermissions<
-                    u32,
-                    u32,
-                    <T as frame_system::Trait>::AccountId,
-                >>::put_sub_group_supervisor(organization, sid, who);
-            }
+        #[weight = 0]
+        fn burn_shares(origin, organization: T::OrgId, who: T::AccountId, shares: T::Shares) -> DispatchResult {
+            let burner = ensure_signed(origin)?;
+            // first check is that the organization exists
+            ensure!(!Self::id_is_available(organization), Error::<T>::OrganizationMustBeRegisteredToBurnShares);
+            // second check is that this is an authorized party for burning
+            let authentication: bool = Self::is_sudo_key(&burner)
+                                    || Self::is_organization_supervisor(organization, &burner);
+            ensure!(authentication, Error::<T>::NotAuthorizedToBurnShares);
+
+            Self::burn(organization, who.clone(), Some(shares), false)?;
+            Self::deposit_event(RawEvent::SharesBurned(organization, who, shares));
+            Ok(())
         }
-    }
-    // CAS by default to enforce existing permissions and isolate logic
-    fn set_sudo_account(setter: &T::AccountId, new: T::AccountId) -> DispatchResult {
-        <<T as Trait>::OrgData as ChainSudoPermissions<
-            <T as frame_system::Trait>::AccountId,
-        >>::set_sudo_key(setter, new)
-    }
-    fn set_organization_supervisor(
-        organization: u32,
-        setter: &T::AccountId,
-        new: T::AccountId,
-    ) -> DispatchResult {
-        <<T as Trait>::OrgData as OrganizationSupervisorPermissions<
-            u32,
-            <T as frame_system::Trait>::AccountId,
-        >>::set_organization_supervisor(organization, setter, new)
-    }
-    fn set_share_supervisor(
-        organization: u32,
-        share_id: ShareID,
-        setter: &T::AccountId,
-        new: T::AccountId,
-    ) -> DispatchResult {
-        match share_id {
-            ShareID::Flat(sid) => {
-                <<T as Trait>::FlatShareData as SubGroupSupervisorPermissions<
-                    u32,
-                    u32,
-                    <T as frame_system::Trait>::AccountId,
-                >>::set_sub_group_supervisor(organization, sid, setter, new)
-            }
-            ShareID::WeightedAtomic(sid) => {
-                <<T as Trait>::WeightedShareData as SubGroupSupervisorPermissions<
-                    u32,
-                    u32,
-                    <T as frame_system::Trait>::AccountId,
-                >>::set_sub_group_supervisor(organization, sid, setter, new)
-            }
+        #[weight = 0]
+        fn batch_issue_shares(origin, organization: T::OrgId, new_accounts: Vec<(T::AccountId, T::Shares)>) -> DispatchResult {
+            let issuer = ensure_signed(origin)?;
+            // first check is that the organization exists
+            ensure!(!Self::id_is_available(organization), Error::<T>::OrganizationMustBeRegisteredToIssueShares);
+            // second check is that this is an authorized party for issuance
+            let authentication: bool = Self::is_sudo_key(&issuer)
+                                    || Self::is_organization_supervisor(organization, &issuer);
+            ensure!(authentication, Error::<T>::NotAuthorizedToIssueShares);
+            let genesis: SimpleShareGenesis<T::AccountId, T::Shares> = new_accounts.into();
+            let total_new_shares_minted = genesis.total();
+            Self::batch_issue(organization, genesis)?;
+            Self::deposit_event(RawEvent::SharesBatchIssued(organization, total_new_shares_minted));
+            Ok(())
+        }
+        #[weight = 0]
+        fn batch_burn_shares(origin, organization: T::OrgId, old_accounts: Vec<(T::AccountId, T::Shares)>) -> DispatchResult {
+            let issuer = ensure_signed(origin)?;
+            // first check is that the organization exists
+            ensure!(!Self::id_is_available(organization), Error::<T>::OrganizationMustBeRegisteredToIssueShares);
+            // second check is that this is an authorized party for burning
+            let authentication: bool = Self::is_sudo_key(&issuer)
+                                    || Self::is_organization_supervisor(organization, &issuer);
+            ensure!(authentication, Error::<T>::NotAuthorizedToBurnShares);
+            let genesis: SimpleShareGenesis<T::AccountId, T::Shares> = old_accounts.into();
+            let total_new_shares_burned = genesis.total();
+            Self::batch_burn(organization, genesis)?;
+            Self::deposit_event(RawEvent::SharesBatchBurned(organization, total_new_shares_burned));
+            Ok(())
+        }
+        #[weight = 0]
+        fn lock_shares(origin, organization: T::OrgId, who: T::AccountId) -> DispatchResult {
+            let locker = ensure_signed(origin)?;
+            // first check is that the organization exists
+            ensure!(!Self::id_is_available(organization), Error::<T>::OrganizationMustBeRegisteredToLockShares);
+            // second check is that this is an authorized party for locking shares
+            let authentication: bool = Self::is_sudo_key(&locker)
+                                    || Self::is_organization_supervisor(organization, &locker)
+                                    || locker == who;
+            ensure!(authentication, Error::<T>::NotAuthorizedToLockShares);
+
+            Self::lock_profile(organization, &who)?;
+            Self::deposit_event(RawEvent::SharesLocked(organization, who));
+            Ok(())
+        }
+        #[weight = 0]
+        fn unlock_shares(origin, organization: T::OrgId, who: T::AccountId) -> DispatchResult {
+            let unlocker = ensure_signed(origin)?;
+            // first check is that the organization exists
+            ensure!(!Self::id_is_available(organization), Error::<T>::OrganizationMustBeRegisteredToUnLockShares);
+            // second check is that this is an authorized party for unlocking shares
+            let authentication: bool = Self::is_sudo_key(&unlocker)
+                                    || Self::is_organization_supervisor(organization, &unlocker)
+                                    || unlocker == who;
+            ensure!(authentication, Error::<T>::NotAuthorizedToUnLockShares);
+
+            Self::unlock_profile(organization, &who)?;
+            Self::deposit_event(RawEvent::SharesUnlocked(organization, who));
+            Ok(())
+        }
+        #[weight = 0]
+        fn reserve_shares(origin, organization: T::OrgId, who: T::AccountId) -> DispatchResult {
+            let reserver = ensure_signed(origin)?;
+            // first check is that the organization exists
+            ensure!(!Self::id_is_available(organization), Error::<T>::OrganizationMustBeRegisteredToReserveShares);
+            // second check is that this is an authorized party for unlocking shares
+            let authentication: bool = Self::is_sudo_key(&reserver)
+                                    || Self::is_organization_supervisor(organization, &reserver)
+                                    || reserver == who;
+            ensure!(authentication, Error::<T>::NotAuthorizedToReserveShares);
+
+
+            let amount_reserved = Self::reserve(organization, &who, None)?;
+            Self::deposit_event(RawEvent::SharesReserved(organization, who, amount_reserved));
+            Ok(())
+        }
+        #[weight = 0]
+        fn unreserve_shares(origin, organization: T::OrgId, who: T::AccountId) -> DispatchResult {
+            let unreserver = ensure_signed(origin)?;
+            // first check is that the organization exists
+            ensure!(!Self::id_is_available(organization), Error::<T>::OrganizationMustBeRegisteredToUnReserveShares);
+            // second check is that this is an authorized party for unlocking shares
+            let authentication: bool = Self::is_sudo_key(&unreserver)
+                                    || Self::is_organization_supervisor(organization, &unreserver)
+                                    || unreserver == who;
+            ensure!(authentication, Error::<T>::NotAuthorizedToUnReserveShares);
+
+            let amount_reserved = Self::unreserve(organization, &who, None)?;
+            Self::deposit_event(RawEvent::SharesUnReserved(organization, who, amount_reserved));
+            Ok(())
         }
     }
 }
 
-impl<T: Trait> FlatShareWrapper<u32, u32, T::AccountId> for Module<T> {
-    fn get_flat_share_group(
-        organization: u32,
-        share_id: u32,
-    ) -> Result<Vec<T::AccountId>, DispatchError> {
-        let ret = <<T as Trait>::FlatShareData as GetFlatShareGroup<
-            <T as frame_system::Trait>::AccountId,
-        >>::get_organization_share_group(organization, share_id)
-        .ok_or(Error::<T>::FlatShareGroupNotFound)?;
-        Ok(ret)
-    }
-    fn generate_unique_flat_share_id(organization: u32) -> u32 {
-        <<T as Trait>::FlatShareData as SeededGenerateUniqueID<u32, u32>>::seeded_generate_unique_id(
-            organization,
-        )
-    }
-    fn add_members_to_flat_share_group(
-        organization: u32,
-        share_id: u32,
-        members: Vec<T::AccountId>,
-    ) {
-        let prefix = UUID2::new(organization, share_id);
-        <<T as Trait>::FlatShareData as ChangeGroupMembership<
-            <T as frame_system::Trait>::AccountId,
-        >>::batch_add_group_members(prefix, members);
+impl<T: Trait> GetGroupSize<T::OrgId> for Module<T> {
+    fn get_size_of_group(org_id: T::OrgId) -> u32 {
+        <OrganizationSize<T>>::get(org_id)
     }
 }
 
-impl<T: Trait> WeightedShareWrapper<u32, u32, T::AccountId> for Module<T> {
-    type Shares = SharesOf<T>; // exists only to pass inheritance to modules that inherit org
-    type Profile = <<T as Trait>::WeightedShareData as WeightedShareGroup<
-        <T as frame_system::Trait>::AccountId,
-    >>::Profile;
-    type Genesis = SimpleShareGenesis<T::AccountId, Self::Shares>;
-    fn get_member_share_profile(
-        organization: u32,
-        share_id: u32,
-        member: &T::AccountId,
-    ) -> Option<Self::Profile> {
-        <<T as Trait>::WeightedShareData as WeightedShareGroup<
-            <T as frame_system::Trait>::AccountId,
-        >>::get_share_profile(organization, share_id, member)
-    }
-    fn get_weighted_share_group(
-        organization: u32,
-        share_id: u32,
-    ) -> Result<Self::Genesis, DispatchError> {
-        let ret = <<T as Trait>::WeightedShareData as WeightedShareGroup<
-            <T as frame_system::Trait>::AccountId,
-        >>::shareholder_membership(organization, share_id)
-        .ok_or(Error::<T>::WeightedShareGroupNotFound)?;
-        Ok(ret.into())
-    }
-    fn get_outstanding_weighted_shares(organization: u32, share_id: u32) -> Option<Self::Shares> {
-        <<T as Trait>::WeightedShareData as WeightedShareGroup<
-            <T as frame_system::Trait>::AccountId,
-        >>::outstanding_shares(organization, share_id)
-    }
-    fn generate_unique_weighted_share_id(organization: u32) -> u32 {
-        <<T as Trait>::WeightedShareData as SeededGenerateUniqueID<u32, u32>>::seeded_generate_unique_id(
-            organization,
-        )
+impl<T: Trait> GroupMembership<T::OrgId, T::AccountId> for Module<T> {
+    fn is_member_of_group(org_id: T::OrgId, who: &T::AccountId) -> bool {
+        <Members<T>>::get(org_id, who).is_some()
     }
 }
 
-impl<T: Trait> WeightedShareIssuanceWrapper<u32, u32, T::AccountId, Permill> for Module<T> {
-    fn issue_weighted_shares_from_accounts(
-        organization: u32,
-        members: Vec<(T::AccountId, Self::Shares)>,
-    ) -> Result<u32, DispatchError> {
-        let share_id = Self::generate_unique_weighted_share_id(organization);
-        <<T as Trait>::WeightedShareData as ShareBank<
-            <T as frame_system::Trait>::AccountId,
-        >>::batch_issue(organization, share_id, members.into())?;
-        Ok(share_id)
-    }
-    fn burn_weighted_shares_for_member(
-        organization: u32,
-        share_id: u32,
-        account: T::AccountId,
-        // TODO: make portion an enum that expresses amount or permill
-        // execute logic in here to decide that amount
-        amount_to_burn: Option<Permill>,
-    ) -> Result<Self::Shares, DispatchError> {
-        let total_shares = Self::get_member_share_profile(organization, share_id, &account)
-            .ok_or(Error::<T>::NoProfileFoundForAccountToBurn)?
-            .total();
-        let shares_to_burn = if let Some(pct_2_burn) = amount_to_burn {
-            pct_2_burn * total_shares
-        } else {
-            total_shares
-        };
-        <<T as Trait>::WeightedShareData as ShareBank<<T as frame_system::Trait>::AccountId>>::burn(
-            organization,
-            share_id,
-            account,
-            shares_to_burn.clone(),
-            false,
-        )?;
-        Ok(shares_to_burn)
+impl<T: Trait> IDIsAvailable<T::OrgId> for Module<T> {
+    fn id_is_available(id: T::OrgId) -> bool {
+        <OrganizationStates<T>>::get(id).is_none()
     }
 }
 
-impl<T: Trait> RegisterShareGroup<u32, ShareID, T::AccountId, SharesOf<T>> for Module<T> {
-    fn register_inner_flat_share_group(
-        organization: u32,
-        group: Vec<T::AccountId>,
-    ) -> Result<ShareID, DispatchError> {
-        let raw_share_id = Self::generate_unique_flat_share_id(organization);
-        Self::add_members_to_flat_share_group(organization, raw_share_id, group);
-        let new_share_id = ShareID::Flat(raw_share_id);
-        OrganizationInnerShares::insert(organization, new_share_id, true);
-        Ok(new_share_id)
-    }
-    fn register_inner_weighted_share_group(
-        organization: u32,
-        group: Vec<(T::AccountId, SharesOf<T>)>,
-    ) -> Result<ShareID, DispatchError> {
-        let raw_share_id = Self::issue_weighted_shares_from_accounts(organization, group)?;
-        let new_share_id = ShareID::WeightedAtomic(raw_share_id);
-        OrganizationInnerShares::insert(organization, new_share_id, true);
-        Ok(new_share_id)
-    }
-    fn register_outer_flat_share_group(
-        organization: u32,
-        group: Vec<T::AccountId>,
-    ) -> Result<ShareID, DispatchError> {
-        let raw_share_id = Self::generate_unique_flat_share_id(organization);
-        Self::add_members_to_flat_share_group(organization, raw_share_id, group);
-        let new_share_id = ShareID::Flat(raw_share_id);
-        OrganizationOuterShares::insert(organization, new_share_id, true);
-        Ok(new_share_id)
-    }
-    fn register_outer_weighted_share_group(
-        organization: u32,
-        group: Vec<(T::AccountId, SharesOf<T>)>,
-    ) -> Result<ShareID, DispatchError> {
-        let raw_share_id = Self::issue_weighted_shares_from_accounts(organization, group)?;
-        let new_share_id = ShareID::WeightedAtomic(raw_share_id);
-        OrganizationOuterShares::insert(organization, new_share_id, true);
-        Ok(new_share_id)
-    }
-}
-
-impl<T: Trait> GetInnerOuterShareGroups<u32, ShareID, T::AccountId> for Module<T> {
-    fn get_inner_share_group_identifiers(organization: u32) -> Option<Vec<ShareID>> {
-        let inner_shares = <OrganizationInnerShares>::iter()
-            .filter(|(org, _, exists)| (org == &organization) && *exists)
-            .map(|(_, share_id, _)| share_id)
-            .collect::<Vec<_>>();
-        if inner_shares.is_empty() {
-            None
-        } else {
-            Some(inner_shares)
+impl<T: Trait> GenerateUniqueID<T::OrgId> for Module<T> {
+    fn generate_unique_id() -> T::OrgId {
+        let mut id_counter = <OrgIdNonce<T>>::get() + 1u32.into();
+        while <OrganizationStates<T>>::get(id_counter).is_some() {
+            // add overflow check here? not really necessary
+            id_counter += 1u32.into();
         }
-    }
-    fn get_outer_share_group_identifiers(organization: u32) -> Option<Vec<ShareID>> {
-        let outer_shares = <OrganizationOuterShares>::iter()
-            .filter(|(org, _, exists)| (org == &organization) && *exists)
-            .map(|(_, share_id, _)| share_id)
-            .collect::<Vec<_>>();
-        if outer_shares.is_empty() {
-            None
-        } else {
-            Some(outer_shares)
-        }
+        <OrgIdNonce<T>>::put(id_counter);
+        id_counter
     }
 }
 
-impl<T: Trait> OrganizationDNS<u32, T::AccountId, IpfsReference> for Module<T> {
-    type OrgSrc = OrganizationSource<T::AccountId, SharesOf<T>>;
-    type OrganizationState = Organization<IpfsReference>;
-    /// This method registers all the necessary ShareId and Power Structures from `Self::OrgSrc` and returns the `OrganizationState`
-    /// which contains all the identifiers to track all of those power structures independently within the inherited modules
+impl<T: Trait> ChainSudoPermissions<T::AccountId> for Module<T> {
+    fn is_sudo_key(who: &T::AccountId) -> bool {
+        if let Some(okey) = <SudoKey<T>>::get() {
+            return who == &okey;
+        }
+        false
+    }
+    fn put_sudo_key(who: T::AccountId) {
+        <SudoKey<T>>::put(who);
+    }
+    // only the sudo key can swap the sudo key (todo experiment: key recovery from some number of supervisors?)
+    fn set_sudo_key(old_key: &T::AccountId, new_key: T::AccountId) -> DispatchResult {
+        if let Some(okey) = <SudoKey<T>>::get() {
+            if old_key == &okey {
+                <SudoKey<T>>::put(new_key);
+                return Ok(());
+            }
+            return Err(Error::<T>::UnAuthorizedSwapSudoRequest.into());
+        }
+        Err(Error::<T>::NoExistingSudoKey.into())
+    }
+}
+
+impl<T: Trait> OrganizationSupervisorPermissions<T::OrgId, T::AccountId> for Module<T> {
+    fn is_organization_supervisor(org: T::OrgId, who: &T::AccountId) -> bool {
+        if let Some(state) = <OrganizationStates<T>>::get(org) {
+            return state.is_sudo(who);
+        }
+        false
+    }
+    /// Removes any existing sudo and places None
+    fn clear_organization_supervisor(org: T::OrgId) -> DispatchResult {
+        let old_org = <OrganizationStates<T>>::get(org)
+            .ok_or(Error::<T>::OrganizationMustExistToClearSupervisor)?;
+        let new_org = old_org.clear_sudo();
+        <OrganizationStates<T>>::insert(org, new_org);
+        Ok(())
+    }
+    /// Removes any existing sudo and places `who`
+    fn put_organization_supervisor(org: T::OrgId, who: T::AccountId) -> DispatchResult {
+        let old_org = <OrganizationStates<T>>::get(org)
+            .ok_or(Error::<T>::OrganizationMustExistToPutSupervisor)?;
+        let new_org = old_org.put_sudo(who);
+        <OrganizationStates<T>>::insert(org, new_org);
+        Ok(())
+    }
+}
+
+impl<T: Trait> RegisterOrganization<T::OrgId, T::AccountId, T::IpfsReference> for Module<T> {
+    type OrgSrc = OrganizationSource<T::AccountId, T::Shares>;
+    type OrganizationState = Organization<T::AccountId, T::OrgId, T::IpfsReference>;
     fn organization_from_src(
         src: Self::OrgSrc,
-        organization: u32,
-        value_constitution: IpfsReference,
+        org_id: T::OrgId,
+        parent_id: Option<T::OrgId>,
+        supervisor: Option<T::AccountId>,
+        value_constitution: T::IpfsReference,
     ) -> Result<Self::OrganizationState, DispatchError> {
-        let share_id = match src {
-            OrganizationSource::Accounts(unweighted_members) => {
-                // register shares membership group with this membership set
-                let new_share_id = Self::generate_unique_flat_share_id(organization);
-                Self::add_members_to_flat_share_group(
-                    organization,
-                    new_share_id,
-                    unweighted_members,
-                );
-                ShareID::Flat(new_share_id)
+        match src {
+            OrganizationSource::Accounts(accounts) => {
+                // batch_add (flat membership group)
+                Self::batch_add_members_to_org(org_id, accounts)?;
+                Ok(Organization::new(supervisor, parent_id, value_constitution))
             }
-            OrganizationSource::AccountsWeighted(weighted_members) => {
-                let raw_share_id =
-                    Self::issue_weighted_shares_from_accounts(organization, weighted_members)?;
-                ShareID::WeightedAtomic(raw_share_id)
+            OrganizationSource::AccountsWeighted(weighted_accounts) => {
+                // batch_issue (share weighted membership group)
+                Self::batch_issue(org_id, weighted_accounts.into())?;
+                Ok(Organization::new(supervisor, parent_id, value_constitution))
             }
-            OrganizationSource::SpinOffShareGroup(org_id, share_id) => {
-                // check existence of the share group with this identifier and return the variant
-                let existence_check = Self::check_share_group_existence(org_id, share_id);
-                ensure!(
-                    existence_check,
-                    Error::<T>::SpinOffCannotOccurFromNonExistentShareGroup
-                );
-                match share_id {
-                    ShareID::Flat(sid) => {
-                        // register it as a new organization and set it as the set
-                        let new_members = Self::get_flat_share_group(org_id, sid)?;
-                        let new_share_id = Self::generate_unique_flat_share_id(organization);
-                        Self::add_members_to_flat_share_group(
-                            organization,
-                            new_share_id,
-                            new_members,
-                        );
-                        ShareID::Flat(new_share_id)
-                    }
-                    ShareID::WeightedAtomic(sid) => {
-                        let new_weighted_membership =
-                            Self::get_weighted_share_group(org_id, sid)?.account_ownership();
-                        let raw_share_id = Self::issue_weighted_shares_from_accounts(
-                            organization,
-                            new_weighted_membership,
-                        )?;
-                        ShareID::WeightedAtomic(raw_share_id)
-                    }
-                }
-            }
-        };
-        // TODO: symmetric API for deletion (removal and state gc)
-        OrganizationInnerShares::insert(organization, share_id, true);
-        // use it to create an organization
-        let new_organization = Organization::new(share_id, value_constitution);
-        Ok(new_organization)
+        }
     }
     fn register_organization(
         source: Self::OrgSrc,
-        value_constitution: IpfsReference,
         supervisor: Option<T::AccountId>,
-    ) -> Result<(u32, Self::OrganizationState), DispatchError> {
-        let new_org_id = <<T as Trait>::OrgData as GenerateUniqueID<u32>>::generate_unique_id();
-        // use helper method to register everything and return main storage item for tracking associated state/permissions for org
-        let new_organization_state =
-            Self::organization_from_src(source, new_org_id, value_constitution)?;
-        // insert _canonical_ state of the organization
-        OrganizationStates::insert(new_org_id, new_organization_state.clone());
-        // assign the supervisor to supervisor if that assignment is specified
-        if let Some(org_sudo) = supervisor {
-            Self::put_organization_supervisor(new_org_id, org_sudo);
+        value_constitution: T::IpfsReference,
+    ) -> Result<T::OrgId, DispatchError> {
+        let new_org_id = Self::generate_unique_id();
+        let new_organization =
+            Self::organization_from_src(source, new_org_id, None, supervisor, value_constitution)?;
+        let new_org_count = <OrganizationCounter>::get() + 1u32;
+        <OrganizationStates<T>>::insert(new_org_id, new_organization);
+        <OrganizationCounter>::put(new_org_count);
+        Ok(new_org_id)
+    }
+    fn register_sub_organization(
+        parent_id: T::OrgId,
+        source: Self::OrgSrc,
+        supervisor: Option<T::AccountId>,
+        value_constitution: T::IpfsReference,
+    ) -> Result<T::OrgId, DispatchError> {
+        let new_org_id = Self::generate_unique_id();
+        // TODO: could check if parent has a child_id and limit depth with a module constant; seems like a good idea, unbounded size not good in runtime context
+        let new_organization = Self::organization_from_src(
+            source,
+            new_org_id,
+            Some(parent_id),
+            supervisor,
+            value_constitution,
+        )?;
+        let new_org_count = <OrganizationCounter>::get() + 1u32;
+        <OrganizationStates<T>>::insert(new_org_id, new_organization);
+        <OrganizationCounter>::put(new_org_count);
+        Ok(new_org_id)
+    }
+}
+impl<T: Trait> RemoveOrganization<T::OrgId> for Module<T> {
+    fn remove_organization(id: T::OrgId) -> Result<Option<Vec<T::OrgId>>, DispatchError> {
+        ensure!(
+            !Self::id_is_available(id),
+            Error::<T>::OrganizationCannotBeRemovedIfInputIdIsAvailable
+        );
+        let new_org_count = <OrganizationCounter>::get().saturating_sub(1u32);
+        <OrganizationCounter>::put(new_org_count);
+        let ret: Vec<T::OrgId> = <OrganizationStates<T>>::iter()
+            .filter(|(_, org_state)| (*org_state).parent() == Some(id))
+            .map(|(child_id, _)| child_id)
+            .collect::<Vec<_>>();
+        if !ret.is_empty() {
+            Ok(Some(ret))
+        } else {
+            Ok(None)
         }
-        // iterate the OrganizationCounter
-        let new_counter = OrganizationCounter::get() + 1u32;
-        OrganizationCounter::put(new_counter);
-        Ok((new_org_id, new_organization_state))
+    }
+    fn recursive_remove_organization(_id: T::OrgId) -> DispatchResult {
+        todo!()
+    }
+}
+
+impl<T: Trait> ChangeGroupMembership<T::OrgId, T::AccountId> for Module<T> {
+    fn add_member_to_org(
+        org_id: T::OrgId,
+        new_member: T::AccountId,
+        batch: bool,
+    ) -> DispatchResult {
+        // prevent adding duplicate members
+        ensure!(
+            <Members<T>>::get(org_id, &new_member).is_none(),
+            Error::<T>::CannotAddAnExistingMemberToOrg
+        );
+        if !batch {
+            let new_organization_size = <OrganizationSize<T>>::get(org_id) + 1u32;
+            <OrganizationSize<T>>::insert(org_id, new_organization_size);
+        }
+        // default 0 share profile inserted for this method
+        <Members<T>>::insert(org_id, new_member, ShareProfile::default());
+        Ok(())
+    }
+    fn remove_member_from_org(
+        org_id: T::OrgId,
+        old_member: T::AccountId,
+        batch: bool,
+    ) -> DispatchResult {
+        // prevent removal of non-member
+        let current_profile = <Members<T>>::get(org_id, &old_member)
+            .ok_or(Error::<T>::CannotRemoveNonMemberFromOrg)?;
+        // update issuance if it changes due to this removal
+        if current_profile.total() > T::Shares::zero() {
+            let new_issuance = <TotalIssuance<T>>::get(org_id)
+                .checked_sub(&current_profile.total())
+                .ok_or(Error::<T>::IssuanceGoesNegativeWhileRemovingMember)?;
+            <TotalIssuance<T>>::insert(org_id, new_issuance);
+        }
+        if !batch {
+            let new_organization_size = <OrganizationSize<T>>::get(org_id).saturating_sub(1u32);
+            <OrganizationSize<T>>::insert(org_id, new_organization_size);
+        }
+        <Members<T>>::remove(org_id, old_member);
+        Ok(())
+    }
+    // WARNING: the vector fed as inputs to the following methods must have NO duplicates
+    fn batch_add_members_to_org(
+        org_id: T::OrgId,
+        new_members: Vec<T::AccountId>,
+    ) -> DispatchResult {
+        let size_increase: u32 = new_members.len() as u32;
+        let new_organization_size: u32 =
+            <OrganizationSize<T>>::get(org_id).saturating_add(size_increase);
+        <OrganizationSize<T>>::insert(org_id, new_organization_size);
+        new_members
+            .into_iter()
+            .map(|member| Self::add_member_to_org(org_id, member, true))
+            .collect::<DispatchResult>()
+    }
+    fn batch_remove_members_from_org(
+        org_id: T::OrgId,
+        old_members: Vec<T::AccountId>,
+    ) -> DispatchResult {
+        let size_decrease: u32 = old_members.len() as u32;
+        let new_organization_size: u32 =
+            <OrganizationSize<T>>::get(org_id).saturating_sub(size_decrease);
+        <OrganizationSize<T>>::insert(org_id, new_organization_size);
+        old_members
+            .into_iter()
+            .map(|member| Self::remove_member_from_org(org_id, member, true))
+            .collect::<DispatchResult>()
+    }
+}
+
+impl<T: Trait> GetGroup<T::OrgId, T::AccountId> for Module<T> {
+    fn get_group(organization: T::OrgId) -> Option<Vec<T::AccountId>> {
+        if !Self::id_is_available(organization) {
+            Some(
+                // is this the same performance as a get() with Key=Vec<AccountId>
+                <Members<T>>::iter()
+                    .filter(|(org, _, _)| *org == organization)
+                    .map(|(_, account, _)| account)
+                    .collect::<Vec<_>>(),
+            )
+        } else {
+            None
+        }
+    }
+}
+
+impl<T: Trait> ShareInformation<T::OrgId, T::AccountId, T::Shares> for Module<T> {
+    type Profile = ShareProfile<T::Shares>;
+    type Genesis = SimpleShareGenesis<T::AccountId, T::Shares>;
+    /// Gets the total number of shares issued for an organization's share identifier
+    fn outstanding_shares(organization: T::OrgId) -> T::Shares {
+        <TotalIssuance<T>>::get(organization)
+    }
+    /// Get input's share profile if it exists
+    fn get_share_profile(organization: T::OrgId, who: &T::AccountId) -> Option<Self::Profile> {
+        <Members<T>>::get(organization, who)
+    }
+    /// Returns the entire membership group associated with a share identifier, fallible bc checks existence
+    fn get_membership_with_shape(organization: T::OrgId) -> Option<Self::Genesis> {
+        if !Self::id_is_available(organization) {
+            Some(
+                // is this the same performance as a get() with Key=Vec<AccountId>
+                <Members<T>>::iter()
+                    .filter(|(org, _, _)| *org == organization)
+                    .map(|(_, account, profile)| (account, profile.total()))
+                    .collect::<Vec<(T::AccountId, T::Shares)>>()
+                    .into(),
+            )
+        } else {
+            None
+        }
+    }
+}
+impl<T: Trait> ShareIssuance<T::OrgId, T::AccountId, T::Shares> for Module<T> {
+    fn issue(
+        organization: T::OrgId,
+        new_owner: T::AccountId,
+        amount: T::Shares,
+        batch: bool,
+    ) -> DispatchResult {
+        let new_profile =
+            if let Some(existing_profile) = <Members<T>>::get(organization, &new_owner) {
+                existing_profile.add_shares(amount)
+            } else {
+                ShareProfile::new_shares(amount)
+            };
+        if !batch {
+            let new_issuance = <TotalIssuance<T>>::get(organization) + amount;
+            <TotalIssuance<T>>::insert(organization, new_issuance);
+        }
+        <Members<T>>::insert(organization, new_owner, new_profile);
+        Ok(())
+    }
+    fn burn(
+        organization: T::OrgId,
+        old_owner: T::AccountId,
+        amount: Option<T::Shares>,
+        batch: bool,
+    ) -> DispatchResult {
+        let old_profile = <Members<T>>::get(organization, &old_owner)
+            .ok_or(Error::<T>::NotEnoughSharesToSatisfyBurnRequest)?;
+        let old_issuance = <TotalIssuance<T>>::get(organization);
+        let amt_to_burn = if let Some(specific_amt) = amount {
+            ensure!(
+                old_profile.total() >= specific_amt,
+                Error::<T>::NotEnoughSharesToSatisfyBurnRequest
+            );
+            specific_amt
+        } else {
+            old_profile.total()
+        };
+        ensure!(
+            old_issuance >= amt_to_burn,
+            Error::<T>::CannotBurnMoreThanTotalIssuance
+        );
+        if !batch {
+            let new_issuance = old_issuance - amt_to_burn;
+            <TotalIssuance<T>>::insert(organization, new_issuance);
+        }
+        let new_profile = old_profile.subtract_shares(amt_to_burn);
+        if new_profile.is_zero() {
+            // leave the group
+            <Members<T>>::remove(organization, old_owner);
+        } else {
+            <Members<T>>::insert(organization, old_owner, new_profile);
+        }
+        Ok(())
+    }
+    fn batch_issue(organization: T::OrgId, genesis: Self::Genesis) -> DispatchResult {
+        ensure!(
+            genesis.verify_shape(),
+            Error::<T>::GenesisTotalMustEqualSumToUseBatchOps
+        );
+        let old_issuance = <TotalIssuance<T>>::get(organization);
+        let new_issuance = old_issuance
+            .checked_add(&genesis.total())
+            .ok_or(Error::<T>::IssuanceWouldOverflowShares)?;
+        genesis
+            .account_ownership()
+            .into_iter()
+            .map(|(member, shares)| -> DispatchResult {
+                Self::issue(organization, member, shares, true)
+            })
+            .collect::<DispatchResult>()?;
+        <TotalIssuance<T>>::insert(organization, new_issuance);
+        Ok(())
+    }
+    fn batch_burn(organization: T::OrgId, genesis: Self::Genesis) -> DispatchResult {
+        ensure!(
+            genesis.verify_shape(),
+            Error::<T>::GenesisTotalMustEqualSumToUseBatchOps
+        );
+        let old_issuance = <TotalIssuance<T>>::get(organization);
+        let new_issuance = old_issuance
+            .checked_sub(&genesis.total())
+            .ok_or(Error::<T>::IssuanceCannotGoNegative)?;
+        genesis
+            .account_ownership()
+            .into_iter()
+            .map(|(member, shares)| -> DispatchResult {
+                Self::burn(organization, member, Some(shares), true)
+            })
+            .collect::<DispatchResult>()?;
+        <TotalIssuance<T>>::insert(organization, new_issuance);
+        Ok(())
+    }
+}
+impl<T: Trait> ReserveProfile<T::OrgId, T::AccountId, T::Shares> for Module<T> {
+    fn reserve(
+        organization: T::OrgId,
+        who: &T::AccountId,
+        amount: Option<T::Shares>,
+    ) -> Result<T::Shares, DispatchError> {
+        let old_profile = <Members<T>>::get(organization, who)
+            .ok_or(Error::<T>::CannotReserveIfMemberProfileDNE)?;
+        let amount_to_reserve = if let Some(amt) = amount {
+            ensure!(
+                amt >= old_profile.total(),
+                Error::<T>::CannotReserveMoreThanShareTotal
+            );
+            amt
+        } else {
+            old_profile.total()
+        };
+        // increment times_reserved
+        let times_reserved = old_profile.times_reserved() + 1u32;
+        // make sure it's below the hard reservation limit
+        ensure!(
+            times_reserved < T::ReservationLimit::get(),
+            Error::<T>::ReservationWouldExceedHardLimit
+        );
+        // instantiate new share profile which just iterates times_reserved
+        let new_share_profile = old_profile.increment_times_reserved();
+        <Members<T>>::insert(organization, who, new_share_profile);
+        Ok(amount_to_reserve)
+    }
+    fn unreserve(
+        organization: T::OrgId,
+        who: &T::AccountId,
+        amount: Option<T::Shares>,
+    ) -> Result<T::Shares, DispatchError> {
+        let old_profile = <Members<T>>::get(organization, who)
+            .ok_or(Error::<T>::CannotUnReserveIfMemberProfileDNE)?;
+        let amount_to_unreserve = if let Some(amt) = amount {
+            ensure!(
+                amt >= old_profile.total(),
+                Error::<T>::CannotUnReserveMoreThanShareTotal
+            );
+            amt
+        } else {
+            old_profile.total()
+        };
+        // make sure there is some existing reservation which is being closed
+        ensure!(
+            old_profile.times_reserved() > 0,
+            Error::<T>::ReservationWouldExceedHardLimit
+        );
+        // instantiate new share profile which just iterates times_reserved
+        let new_share_profile = old_profile.decrement_times_reserved();
+        <Members<T>>::insert(organization, who, new_share_profile);
+        Ok(amount_to_unreserve)
+    }
+}
+// TODO: enforce lock on other actions in this module?
+// -> burning shares is not allowed?
+// -> reserving shares is not allowed?
+impl<T: Trait> LockProfile<T::OrgId, T::AccountId> for Module<T> {
+    fn lock_profile(organization: T::OrgId, who: &T::AccountId) -> DispatchResult {
+        let old_profile =
+            <Members<T>>::get(organization, who).ok_or(Error::<T>::CannotLockProfileThatDNE)?;
+        ensure!(
+            old_profile.is_unlocked(),
+            Error::<T>::CannotLockIfAlreadyLocked
+        );
+        let new_profile = old_profile.lock();
+        <Members<T>>::insert(organization, who, new_profile);
+        Ok(())
+    }
+    fn unlock_profile(organization: T::OrgId, who: &T::AccountId) -> DispatchResult {
+        let old_profile =
+            <Members<T>>::get(organization, who).ok_or(Error::<T>::CannotUnLockProfileThatDNE)?;
+        ensure!(
+            !old_profile.is_unlocked(),
+            Error::<T>::CannotUnLockIfAlreadyUnLocked
+        );
+        let new_profile = old_profile.unlock();
+        <Members<T>>::insert(organization, who, new_profile);
+        Ok(())
     }
 }
