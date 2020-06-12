@@ -30,7 +30,7 @@ impl System for Runtime {
     type Hash = sp_core::H256;
     type Hashing = BlakeTwo256;
     type AccountId = <<MultiSignature as Verify>::Signer as IdentifyAccount>::AccountId;
-    type Address = pallet_indices::address::Address<Self::AccountId, u32>;
+    type Address = pallet_indices::address::Address<Self::AccountId, u64>;
     type Header = Header<Self::BlockNumber, BlakeTwo256>;
     type Extrinsic = OpaqueExtrinsic;
     type AccountData = AccountData<<Self as Balances>::Balance>;
