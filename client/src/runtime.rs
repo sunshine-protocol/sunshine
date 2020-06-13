@@ -18,7 +18,7 @@ use utils_identity::cid::CidBytes;
 pub type Pair = sp_core::sr25519::Pair;
 pub type ClientBuilder = substrate_subxt::ClientBuilder<Runtime, MultiSignature, RuntimeExtra>;
 pub type Client = substrate_subxt::Client<Runtime, MultiSignature, RuntimeExtra>;
-pub type PairSigner = substrate_subxt::PairSigner<Runtime, MultiSignature, RuntimeExtra, Pair>;
+pub type PairSigner<P> = substrate_subxt::PairSigner<Runtime, MultiSignature, RuntimeExtra, P>;
 
 /// Concrete type definitions compatible w/ sunshine's runtime aka `suntime`
 #[derive(Debug, Clone, Eq, PartialEq)]

@@ -11,6 +11,12 @@ pub enum Error {
     Sled(#[from] sled::Error),
     #[error("{0}")]
     Ipfs(#[from] ipfs_embed::Error),
+    #[error(transparent)]
+    Keystore(#[from] keystore::Error),
+    #[error("keystore already initialized")]
+    KeystoreInitialized,
     #[error("event not found")]
     EventNotFound,
 }
+
+pub type Result<T> = core::result::Result<T, Error>;

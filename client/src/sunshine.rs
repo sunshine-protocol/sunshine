@@ -1,22 +1,32 @@
-use crate::error::Error;
+use crate::error::{Error, Result};
 #[cfg(feature = "light-client")]
 use crate::light_client::ChainType;
 use crate::runtime::{Client, PairSigner, Runtime};
 use crate::srml::org::*;
+use core::marker::PhantomData;
 use ipfs_embed::{Config, Store};
 use ipld_block_builder::{BlockBuilder, Codec};
-// use sp_core::Pair as _;
+use keystore::{DeviceKey, KeyStore, Password};
 use std::path::Path;
+use substrate_subxt::sp_core::crypto::Pair;
 use substrate_subxt::{sp_runtime::AccountId32, system::*};
 use utils_identity::cid::CidBytes;
 
-pub struct SunClient {
+pub struct SunClient<P>
+where
+    P: Pair,
+{
+    _marker: PhantomData<P>,
     client: Client,
+    keystore: KeyStore,
     ipld: BlockBuilder<Store, Codec>,
 }
 
-impl SunClient {
-    pub async fn new<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
+impl<P> SunClient<P>
+where
+    P: Pair,
+{
+    pub async fn new<T: AsRef<Path>>(path: T, keystore: KeyStore) -> Result<Self> {
         let db = sled::open(path)?;
         let ipld_tree = db.open_tree("ipld_tree")?;
         let config = Config::from_tree(ipld_tree);
@@ -24,11 +34,38 @@ impl SunClient {
         let codec = Codec::new();
         let ipld = BlockBuilder::new(store, codec);
         let client = crate::runtime::ClientBuilder::new().build().await?;
-        Ok(Self { client, ipld })
+        Ok(Self {
+            _marker: PhantomData,
+            client,
+            keystore,
+            ipld,
+        })
+    }
+    /// Set device key, directly from substrate-identity to use with keystore
+    pub fn has_device_key(&self) -> bool {
+        self.keystore.is_initialized()
+    }
+    /// Set device key, directly from substrate-identity to use with keystore
+    pub fn set_device_key(
+        &self,
+        dk: &DeviceKey,
+        password: &Password,
+        force: bool,
+    ) -> Result<AccountId32> {
+        if self.keystore.is_initialized() && !force {
+            return Err(Error::KeystoreInitialized);
+        }
+        let pair = P::from_seed(&P::Seed::from(*dk.expose_secret()));
+        self.keystore.initialize(&dk, &password)?;
+        Ok(pair.public().into())
     }
     /// Returns a signer for alice
-    pub fn alice_signer(&self) -> PairSigner {
-        PairSigner::new(sp_keyring::sr25519::Keyring::Alice.pair())
+    pub fn signer(&self) -> Result<PairSigner<P>> {
+        // fetch device key from disk every time to make sure account is unlocked.
+        let dk = self.keystore.device_key()?;
+        Ok(PairSigner::new(P::from_seed(&P::Seed::from(
+            *dk.expose_secret(),
+        ))))
     }
     /// Register flat organization
     pub async fn register_flat_org(
@@ -37,16 +74,11 @@ impl SunClient {
         parent_org: Option<u64>,
         constitution: CidBytes,
         members: &[AccountId32],
-    ) -> Result<FlatOrgRegisteredEvent<Runtime>, Error> {
+    ) -> Result<FlatOrgRegisteredEvent<Runtime>> {
+        let signer = self.signer()?;
         self.client
             .clone()
-            .register_flat_org_and_watch(
-                &self.alice_signer(),
-                sudo,
-                parent_org,
-                constitution,
-                members,
-            )
+            .register_flat_org_and_watch(&signer, sudo, parent_org, constitution, members)
             .await?
             .flat_org_registered()
             .map_err(|e| substrate_subxt::Error::Codec(e))?
@@ -59,11 +91,12 @@ impl SunClient {
         parent_org: Option<u64>,
         constitution: CidBytes,
         weighted_members: &[(AccountId32, u64)],
-    ) -> Result<WeightedOrgRegisteredEvent<Runtime>, Error> {
+    ) -> Result<WeightedOrgRegisteredEvent<Runtime>> {
+        let signer = self.signer()?;
         self.client
             .clone()
             .register_weighted_org_and_watch(
-                &self.alice_signer(),
+                &signer,
                 sudo,
                 parent_org,
                 constitution,
@@ -80,10 +113,11 @@ impl SunClient {
         organization: u64,
         who: AccountId32,
         shares: u64,
-    ) -> Result<SharesIssuedEvent<Runtime>, Error> {
+    ) -> Result<SharesIssuedEvent<Runtime>> {
+        let signer = self.signer()?;
         self.client
             .clone()
-            .issue_shares_and_watch(&self.alice_signer(), organization, &who, shares)
+            .issue_shares_and_watch(&signer, organization, &who, shares)
             .await?
             .shares_issued()
             .map_err(|e| substrate_subxt::Error::Codec(e))?
@@ -95,10 +129,11 @@ impl SunClient {
         organization: u64,
         who: AccountId32,
         shares: u64,
-    ) -> Result<SharesBurnedEvent<Runtime>, Error> {
+    ) -> Result<SharesBurnedEvent<Runtime>> {
+        let signer = self.signer()?;
         self.client
             .clone()
-            .burn_shares_and_watch(&self.alice_signer(), organization, &who, shares)
+            .burn_shares_and_watch(&signer, organization, &who, shares)
             .await?
             .shares_burned()
             .map_err(|e| substrate_subxt::Error::Codec(e))?
@@ -109,10 +144,11 @@ impl SunClient {
         &self,
         organization: u64,
         new_accounts: &[(AccountId32, u64)],
-    ) -> Result<SharesBatchIssuedEvent<Runtime>, Error> {
+    ) -> Result<SharesBatchIssuedEvent<Runtime>> {
+        let signer = self.signer()?;
         self.client
             .clone()
-            .batch_issue_shares_and_watch(&self.alice_signer(), organization, new_accounts)
+            .batch_issue_shares_and_watch(&signer, organization, new_accounts)
             .await?
             .shares_batch_issued()
             .map_err(|e| substrate_subxt::Error::Codec(e))?
@@ -123,21 +159,23 @@ impl SunClient {
         &self,
         organization: u64,
         old_accounts: &[(AccountId32, u64)],
-    ) -> Result<SharesBatchBurnedEvent<Runtime>, Error> {
+    ) -> Result<SharesBatchBurnedEvent<Runtime>> {
+        let signer = self.signer()?;
         self.client
             .clone()
-            .batch_burn_shares_and_watch(&self.alice_signer(), organization, old_accounts)
+            .batch_burn_shares_and_watch(&signer, organization, old_accounts)
             .await?
             .shares_batch_burned()
             .map_err(|e| substrate_subxt::Error::Codec(e))?
             .ok_or(Error::EventNotFound)
     }
     /// Reserves shares for alice
-    pub async fn reserve_shares(&self, org: u64) -> Result<SharesReservedEvent<Runtime>, Error> {
+    pub async fn reserve_shares(&self, org: u64) -> Result<SharesReservedEvent<Runtime>> {
+        let signer = self.signer()?;
         self.client
             .clone()
             .reserve_shares_and_watch(
-                &self.alice_signer(),
+                &signer,
                 org,
                 &sp_keyring::sr25519::Keyring::Alice.to_account_id(),
             )
@@ -147,14 +185,12 @@ impl SunClient {
             .ok_or(Error::EventNotFound)
     }
     /// Reserves shares for alice
-    pub async fn unreserve_shares(
-        &self,
-        org: u64,
-    ) -> Result<SharesUnReservedEvent<Runtime>, Error> {
+    pub async fn unreserve_shares(&self, org: u64) -> Result<SharesUnReservedEvent<Runtime>> {
+        let signer = self.signer()?;
         self.client
             .clone()
             .unreserve_shares_and_watch(
-                &self.alice_signer(),
+                &signer,
                 org,
                 &sp_keyring::sr25519::Keyring::Alice.to_account_id(),
             )
@@ -164,11 +200,12 @@ impl SunClient {
             .ok_or(Error::EventNotFound)
     }
     /// Lock shares for alice
-    pub async fn lock_shares(&self, org: u64) -> Result<SharesLockedEvent<Runtime>, Error> {
+    pub async fn lock_shares(&self, org: u64) -> Result<SharesLockedEvent<Runtime>> {
+        let signer = self.signer()?;
         self.client
             .clone()
             .lock_shares_and_watch(
-                &self.alice_signer(),
+                &signer,
                 org,
                 &sp_keyring::sr25519::Keyring::Alice.to_account_id(),
             )
@@ -178,11 +215,12 @@ impl SunClient {
             .ok_or(Error::EventNotFound)
     }
     /// Unlock shares for alice
-    pub async fn unlock_shares(&self, org: u64) -> Result<SharesUnlockedEvent<Runtime>, Error> {
+    pub async fn unlock_shares(&self, org: u64) -> Result<SharesUnlockedEvent<Runtime>> {
+        let signer = self.signer()?;
         self.client
             .clone()
             .unlock_shares_and_watch(
-                &self.alice_signer(),
+                &signer,
                 org,
                 &sp_keyring::sr25519::Keyring::Alice.to_account_id(),
             )

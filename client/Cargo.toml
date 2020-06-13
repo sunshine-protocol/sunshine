@@ -31,6 +31,7 @@ frame-support = "2.0.0-rc3"
 pallet-indices = "2.0.0-rc3"
 # just for now, until replaced with keystore
 sp-keyring = "2.0.0-rc3"
+keystore = {package = "keybase-keystore", git = "https://github.com/sunshine-protocol/substrate-identity"}
 # local deps
 util = { package = "sunshine-util", path = "../modules/util", default-features = false }
 org = {package = "sunshine-org", path = "../modules/org", default-features=false }

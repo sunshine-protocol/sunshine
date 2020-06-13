@@ -12,7 +12,7 @@ async fn main() -> Result<(), Error> {
     #[cfg(feature = "light-client")]
     let client = Sunshine::new("/tmp/db", signer, ChainType::Development).await?;
 
-    let event = client.reserve_shares(1, 1).await?;
+    let event = client.reserve_shares(1).await?;
 
     println!(
         "Account {:?} reserved {:?} shares with share id {:?} for organization {:?}",
