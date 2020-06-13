@@ -10,15 +10,21 @@ use sp_runtime::{
 use std::marker::PhantomData;
 use substrate_subxt::{
     balances::{AccountData, Balances},
-    system::System,
-    CheckEra, CheckGenesis, CheckNonce, CheckSpecVersion, CheckTxVersion, CheckWeight, SignedExtra,
+    system::System, //sp_core::crypto::Pair,
+    CheckEra,
+    CheckGenesis,
+    CheckNonce,
+    CheckSpecVersion,
+    CheckTxVersion,
+    CheckWeight,
+    SignedExtra,
 };
 use utils_identity::cid::CidBytes;
 
 pub type Pair = sp_core::sr25519::Pair;
 pub type ClientBuilder = substrate_subxt::ClientBuilder<Runtime, MultiSignature, RuntimeExtra>;
 pub type Client = substrate_subxt::Client<Runtime, MultiSignature, RuntimeExtra>;
-pub type PairSigner<P> = substrate_subxt::PairSigner<Runtime, MultiSignature, RuntimeExtra, P>;
+pub type PairSigner = substrate_subxt::PairSigner<Runtime, MultiSignature, RuntimeExtra, Pair>;
 
 /// Concrete type definitions compatible w/ sunshine's runtime aka `suntime`
 #[derive(Debug, Clone, Eq, PartialEq)]

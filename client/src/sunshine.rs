@@ -1,31 +1,23 @@
 use crate::error::{Error, Result};
 #[cfg(feature = "light-client")]
 use crate::light_client::ChainType;
-use crate::runtime::{Client, PairSigner, Runtime};
+use crate::runtime::{Client, Pair, PairSigner, Runtime};
 use crate::srml::org::*;
-use core::marker::PhantomData;
 use ipfs_embed::{Config, Store};
 use ipld_block_builder::{BlockBuilder, Codec};
 use keystore::{DeviceKey, KeyStore, Password};
 use std::path::Path;
-use substrate_subxt::sp_core::crypto::Pair;
-use substrate_subxt::{sp_runtime::AccountId32, system::*};
+use substrate_subxt::sp_core::crypto::Pair as SubPair;
+use substrate_subxt::sp_runtime::AccountId32;
 use utils_identity::cid::CidBytes;
 
-pub struct SunClient<P>
-where
-    P: Pair,
-{
-    _marker: PhantomData<P>,
+pub struct SunClient {
     client: Client,
     keystore: KeyStore,
     ipld: BlockBuilder<Store, Codec>,
 }
 
-impl<P> SunClient<P>
-where
-    P: Pair,
-{
+impl SunClient {
     pub async fn new<T: AsRef<Path>>(path: T, keystore: KeyStore) -> Result<Self> {
         let db = sled::open(path)?;
         let ipld_tree = db.open_tree("ipld_tree")?;
@@ -35,7 +27,6 @@ where
         let ipld = BlockBuilder::new(store, codec);
         let client = crate::runtime::ClientBuilder::new().build().await?;
         Ok(Self {
-            _marker: PhantomData,
             client,
             keystore,
             ipld,
@@ -55,17 +46,17 @@ where
         if self.keystore.is_initialized() && !force {
             return Err(Error::KeystoreInitialized);
         }
-        let pair = P::from_seed(&P::Seed::from(*dk.expose_secret()));
+        let pair = Pair::from_seed(&<Pair as SubPair>::Seed::from(*dk.expose_secret()));
         self.keystore.initialize(&dk, &password)?;
         Ok(pair.public().into())
     }
     /// Returns a signer for alice
-    pub fn signer(&self) -> Result<PairSigner<P>> {
+    pub fn signer(&self) -> Result<PairSigner> {
         // fetch device key from disk every time to make sure account is unlocked.
         let dk = self.keystore.device_key()?;
-        Ok(PairSigner::new(P::from_seed(&P::Seed::from(
-            *dk.expose_secret(),
-        ))))
+        Ok(PairSigner::new(Pair::from_seed(
+            &<Pair as SubPair>::Seed::from(*dk.expose_secret()),
+        )))
     }
     /// Register flat organization
     pub async fn register_flat_org(
