@@ -8,7 +8,7 @@ use ipld_block_builder::{BlockBuilder, Codec};
 use keystore::{DeviceKey, KeyStore, Password};
 use std::path::Path;
 use substrate_subxt::sp_core::crypto::Pair as SubPair;
-use substrate_subxt::sp_runtime::AccountId32;
+use substrate_subxt::{sp_runtime::AccountId32, Signer};
 use utils_identity::cid::CidBytes;
 
 pub struct SunClient {
@@ -165,11 +165,7 @@ impl SunClient {
         let signer = self.signer()?;
         self.client
             .clone()
-            .reserve_shares_and_watch(
-                &signer,
-                org,
-                &sp_keyring::sr25519::Keyring::Alice.to_account_id(),
-            )
+            .reserve_shares_and_watch(&signer, org, &signer.account_id())
             .await?
             .shares_reserved()
             .map_err(|e| substrate_subxt::Error::Codec(e))?
@@ -180,11 +176,7 @@ impl SunClient {
         let signer = self.signer()?;
         self.client
             .clone()
-            .unreserve_shares_and_watch(
-                &signer,
-                org,
-                &sp_keyring::sr25519::Keyring::Alice.to_account_id(),
-            )
+            .unreserve_shares_and_watch(&signer, org, &signer.account_id())
             .await?
             .shares_un_reserved()
             .map_err(|e| substrate_subxt::Error::Codec(e))?
@@ -195,11 +187,7 @@ impl SunClient {
         let signer = self.signer()?;
         self.client
             .clone()
-            .lock_shares_and_watch(
-                &signer,
-                org,
-                &sp_keyring::sr25519::Keyring::Alice.to_account_id(),
-            )
+            .lock_shares_and_watch(&signer, org, &signer.account_id())
             .await?
             .shares_locked()
             .map_err(|e| substrate_subxt::Error::Codec(e))?
@@ -210,11 +198,7 @@ impl SunClient {
         let signer = self.signer()?;
         self.client
             .clone()
-            .unlock_shares_and_watch(
-                &signer,
-                org,
-                &sp_keyring::sr25519::Keyring::Alice.to_account_id(),
-            )
+            .unlock_shares_and_watch(&signer, org, &signer.account_id())
             .await?
             .shares_unlocked()
             .map_err(|e| substrate_subxt::Error::Codec(e))?
