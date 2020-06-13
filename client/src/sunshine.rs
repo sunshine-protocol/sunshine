@@ -161,44 +161,60 @@ impl SunClient {
             .ok_or(Error::EventNotFound)
     }
     /// Reserves shares for alice
-    pub async fn reserve_shares(&self, org: u64) -> Result<SharesReservedEvent<Runtime>> {
+    pub async fn reserve_shares(
+        &self,
+        org: u64,
+        who: &AccountId32,
+    ) -> Result<SharesReservedEvent<Runtime>> {
         let signer = self.signer()?;
         self.client
             .clone()
-            .reserve_shares_and_watch(&signer, org, &signer.account_id())
+            .reserve_shares_and_watch(&signer, org, who)
             .await?
             .shares_reserved()
             .map_err(|e| substrate_subxt::Error::Codec(e))?
             .ok_or(Error::EventNotFound)
     }
     /// Reserves shares for alice
-    pub async fn unreserve_shares(&self, org: u64) -> Result<SharesUnReservedEvent<Runtime>> {
+    pub async fn unreserve_shares(
+        &self,
+        org: u64,
+        who: &AccountId32,
+    ) -> Result<SharesUnReservedEvent<Runtime>> {
         let signer = self.signer()?;
         self.client
             .clone()
-            .unreserve_shares_and_watch(&signer, org, &signer.account_id())
+            .unreserve_shares_and_watch(&signer, org, who)
             .await?
             .shares_un_reserved()
             .map_err(|e| substrate_subxt::Error::Codec(e))?
             .ok_or(Error::EventNotFound)
     }
     /// Lock shares for alice
-    pub async fn lock_shares(&self, org: u64) -> Result<SharesLockedEvent<Runtime>> {
+    pub async fn lock_shares(
+        &self,
+        org: u64,
+        who: &AccountId32,
+    ) -> Result<SharesLockedEvent<Runtime>> {
         let signer = self.signer()?;
         self.client
             .clone()
-            .lock_shares_and_watch(&signer, org, &signer.account_id())
+            .lock_shares_and_watch(&signer, org, who)
             .await?
             .shares_locked()
             .map_err(|e| substrate_subxt::Error::Codec(e))?
             .ok_or(Error::EventNotFound)
     }
     /// Unlock shares for alice
-    pub async fn unlock_shares(&self, org: u64) -> Result<SharesUnlockedEvent<Runtime>> {
+    pub async fn unlock_shares(
+        &self,
+        org: u64,
+        who: &AccountId32,
+    ) -> Result<SharesUnlockedEvent<Runtime>> {
         let signer = self.signer()?;
         self.client
             .clone()
-            .unlock_shares_and_watch(&signer, org, &signer.account_id())
+            .unlock_shares_and_watch(&signer, org, who)
             .await?
             .shares_unlocked()
             .map_err(|e| substrate_subxt::Error::Codec(e))?

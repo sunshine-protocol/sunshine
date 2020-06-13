@@ -84,6 +84,8 @@ pub struct OrganizationSizeStore<T: Org> {
     pub org: T::OrgId,
 }
 
+// ~~ (Calls, Events) ~~
+
 #[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
 pub struct RegisterFlatOrgCall<'a, T: Org> {
     pub sudo: Option<<T as System>::AccountId>,
