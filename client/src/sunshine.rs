@@ -3,7 +3,7 @@ use crate::error::{Error, Result};
 use crate::light_client::ChainType;
 use crate::runtime::{Client, Pair, PairSigner, Runtime};
 use crate::srml::org::*;
-use ipfs_embed::{Config, Store};
+use ipfs_embed::Store;
 use ipld_block_builder::{BlockBuilder, Codec};
 use keystore::{DeviceKey, KeyStore, Password};
 use std::path::Path;
@@ -11,6 +11,7 @@ use substrate_subxt::sp_core::crypto::Pair as SubPair;
 use substrate_subxt::{sp_runtime::AccountId32, Signer};
 use utils_identity::cid::CidBytes;
 
+#[derive(new)]
 pub struct SunClient {
     client: Client,
     keystore: KeyStore,
@@ -18,20 +19,6 @@ pub struct SunClient {
 }
 
 impl SunClient {
-    pub async fn new<T: AsRef<Path>>(path: T, keystore: KeyStore) -> Result<Self> {
-        let db = sled::open(path)?;
-        let ipld_tree = db.open_tree("ipld_tree")?;
-        let config = Config::from_tree(ipld_tree);
-        let store = Store::new(config)?;
-        let codec = Codec::new();
-        let ipld = BlockBuilder::new(store, codec);
-        let client = crate::runtime::ClientBuilder::new().build().await?;
-        Ok(Self {
-            client,
-            keystore,
-            ipld,
-        })
-    }
     /// Set device key, directly from substrate-identity to use with keystore
     pub fn has_device_key(&self) -> bool {
         self.keystore.is_initialized()
