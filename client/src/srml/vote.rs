@@ -112,7 +112,7 @@ pub struct NewVoteStartedEvent<T: Vote> {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
-pub struct Voted<T: Vote> {
+pub struct VotedEvent<T: Vote> {
     pub vote_id: T::VoteId,
     pub voter: <T as System>::AccountId,
     pub view: VoterView,
