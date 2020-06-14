@@ -1,22 +1,17 @@
-//! Implements support for the vote_yesno module
-
-use codec::Codec;
+use crate::srml::org::{Org, OrgEventsDecoder};
+use codec::{Codec, Decode, Encode};
 use frame_support::Parameter;
 use sp_runtime::{
     traits::{AtLeast32Bit, MaybeSerializeDeserialize, Member, Zero},
     Permill,
 };
 use std::fmt::Debug;
-use substrate_subxt::{system::System, Call};
-use substrate_subxt_proc_macro::*;
-use util::{
-    traits::{GroupMembership, LockableProfile, ReservableProfile, ShareBank},
-    voteyesno::VoterYesNoView,
-};
+use substrate_subxt::system::{System, SystemEventsDecoder};
+use util::vote::{Vote as VoteVector, VoteState, VoterView};
 
-/// The subset of the `vote_yesno::Trait` that a client must implement.
+/// The subset of the `vote::Trait` that a client must implement.
 #[module]
-pub trait VoteYesNo: System {
+pub trait Vote: System + Org {
     /// The identifier for each vote; ProposalId => Vec<VoteId> s.t. sum(VoteId::Outcomes) => ProposalId::Outcome
     type VoteId: Parameter
         + Member
@@ -37,174 +32,88 @@ pub trait VoteYesNo: System {
         + MaybeSerializeDeserialize
         + Debug
         + Zero;
-
-    /// An instance of the shares module
-    type ShareData: GroupMembership<Self::AccountId>
-        + RegisterShareGroup<Self::AccountId>
-        + ReservableProfile<Self::AccountId>
-        + LockableProfile<Self::AccountId>
-        + ShareBank<Self::AccountId>;
 }
 
-/// The share identifier type
-pub type Shares<T> =
-    <<T as VoteYesNo>::ShareData as ShareRegistration<<T as System>::AccountId>>::ShareId;
+// ~~ Values ~~
 
-/// The organization identifier type
-pub type OrgId<T> =
-    <<T as VoteYesNo>::ShareData as ShareRegistration<<T as System>::AccountId>>::OrgId;
-
-const MODULE: &str = "VoteYesNo";
-const CREATE_SHARE_WEIGHTED_PERCENTAGE_VOTE_NO_EXPIRY: &str =
-    "create_share_weighted_percentage_threshold_vote";
-const CREATE_SHARE_WEIGHTED_COUNT_VOTE_NO_EXPIRY: &str =
-    "create_share_weighted_count_threshold_vote";
-const CREATE_1P1V_PERCENTAGE_VOTE_NO_EXPIRY: &str = "create_1p1v_percentage_threshold_vote";
-const CREATE_1P1V_COUNT_VOTE_NO_EXPIRY: &str = "create_1p1v_count_threshold_vote";
-const SUBMIT_VOTE: &str = "submit_vote";
-
-/// Arguments for creating a share weighted vote with thresholds based on percents
-#[derive(codec::Encode)]
-pub struct CreateShareWeightedPercentageVoteArgs<T: VoteYesNo> {
-    organization: OrgId<T>,
-    share_id: ShareId<T>,
-    support_requirement: Permill,
-    turnout_requirement: Permill,
+#[derive(Clone, Debug, Eq, PartialEq, Encode)]
+pub struct VoteIdCounterStore<T: Vote> {
+    pub nonce: T::VoteId,
 }
 
-/// Arguments for creating a share weighted vote with thresholds based on signal amounts
-#[derive(codec::Encode)]
-pub struct CreateShareWeightedCountVoteArgs<T: VoteYesNo> {
-    organization: OrgId<T>,
-    share_id: ShareId<T>,
-    support_requirement: T::Signal,
-    turnout_requirement: T::Signal,
+#[derive(Clone, Debug, Eq, PartialEq, Encode)]
+pub struct OpenVoteCounterStore {
+    pub counter: u32,
 }
 
-/// Arguments for creating a 1p1v vote with thresholds based on signal amounts
-#[derive(codec::Encode)]
-pub struct Create1P1VPercentageVoteArgs<T: VoteYesNo> {
-    organization: OrgId<T>,
-    share_id: ShareId<T>,
-    support_requirement: T::Signal,
-    turnout_requirement: T::Signal,
+// ~~ Maps ~~
+
+#[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
+pub struct VoteStateStore<T: Vote> {
+    #[store(returns = VoteState<T::Signal, Permill, <T as System>::BlockNumber, <T as Org>::IpfsReference>)]
+    pub vote: T::VoteId,
 }
 
-/// Arguments for creating a 1p1v vote with thresholds based on signal amounts
-#[derive(codec::Encode)]
-pub struct Create1P1VCountVoteArgs<T: VoteYesNo> {
-    organization: OrgId<T>,
-    share_id: ShareId<T>,
-    support_requirement: T::Signal,
-    turnout_requirement: T::Signal,
+#[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
+pub struct TotalSignalIssuanceStore<T: Vote> {
+    #[store(returns = T::Signal)]
+    pub vote: T::VoteId,
 }
 
-/// Arguments for submitting a vote
-#[derive(codec::Encode)]
-pub struct SubmitVoteArgs<T: VoteYesNo> {
-    organization: OrgId<T>,
-    share_id: ShareId<T>,
-    vote_id: T::Signal,
-    voter: <T as System>::AccountId,
-    direction: VoterYesNoView,
-    magnitude: Option<T::Signal>,
+#[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
+pub struct VoteLoggerStore<T: Vote> {
+    #[store(returns = VoteVector<T::Signal, <T as Org>::IpfsReference>)]
+    pub vote: T::VoteId,
+    pub who: <T as System>::AccountId,
 }
 
-/// Create share weighted percentage threshold vote in the context of an organizational share group
-pub fn create_share_weighted_percentage_vote<T: VoteYesNo>(
-    organization: OrgId<T>,
-    share_id: ShareId<T>,
-    support_requirement: Permill,
-    turnout_requirement: Permill,
-) -> Call<CreateShareWeightedPercentageVoteArgs<T>> {
-    Call::new(
-        MODULE,
-        CREATE_SHARE_WEIGHTED_PERCENTAGE_VOTE_NO_EXPIRY,
-        CreateShareWeightedPercentageVoteArgs {
-            organization,
-            share_id,
-            support_requirement,
-            turnout_requirement,
-        },
-    )
+// ~~ Calls ~~
+
+#[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
+pub struct CreateWeightedPercentageThresholdVoteCall<T: Vote> {
+    pub topic: Option<<T as Org>::IpfsReference>,
+    pub organization: T::OrgId,
+    pub passage_threshold_pct: Permill,
+    pub turnout_threshold_pct: Permill,
+    pub duration: Option<<T as System>::BlockNumber>,
 }
 
-/// Create share weighted count threshold vote in the context of an organizational share group
-pub fn create_share_weighted_count_vote<T: VoteYesNo>(
-    organization: OrgId<T>,
-    share_id: ShareId<T>,
-    support_requirement: T::Signal,
-    turnout_requirement: T::Signal,
-) -> Call<CreateShareWeightedCountVoteArgs<T>> {
-    Call::new(
-        MODULE,
-        CREATE_SHARE_WEIGHTED_COUNT_VOTE_NO_EXPIRY,
-        CreateShareWeightedCountVoteArgs {
-            organization,
-            share_id,
-            support_requirement,
-            turnout_requirement,
-        },
-    )
+#[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
+pub struct CreateWeightedCountThresholdVoteCall<T: Vote> {
+    pub topic: Option<<T as Org>::IpfsReference>,
+    pub organization: T::OrgId,
+    pub support_requirement: T::Signal,
+    pub turnout_requirement: T::Signal,
+    pub duration: Option<<T as System>::BlockNumber>,
 }
 
-/// Create share weighted count threshold vote in the context of an organizational share group
-pub fn create_1p1v_percentage_vote<T: VoteYesNo>(
-    organization: OrgId<T>,
-    share_id: ShareId<T>,
-    support_requirement: T::Signal,
-    turnout_requirement: T::Signal,
-) -> Call<Create1P1VPercentageVoteArgs<T>> {
-    Call::new(
-        MODULE,
-        CREATE_1P1V_PERCENTAGE_VOTE_NO_EXPIRY,
-        Create1P1VPercentageVoteArgs {
-            organization,
-            share_id,
-            support_requirement,
-            turnout_requirement,
-        },
-    )
+#[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
+pub struct CreateUnanimousConsentVoteCall<T: Vote> {
+    pub topic: Option<<T as Org>::IpfsReference>,
+    pub organization: T::OrgId,
+    pub duration: Option<<T as System>::BlockNumber>,
 }
 
-/// Create 1 account 1 vote count threshold vote in the context of an organizational share group
-pub fn create_1p1v_count_vote<T: VoteYesNo>(
-    organization: OrgId<T>,
-    share_id: ShareId<T>,
-    support_requirement: T::Signal,
-    turnout_requirement: T::Signal,
-) -> Call<Create1P1VCountVoteArgs<T>> {
-    Call::new(
-        MODULE,
-        CREATE_1P1V_COUNT_VOTE_NO_EXPIRY,
-        Create1P1VCountVoteArgs {
-            organization,
-            share_id,
-            support_requirement,
-            turnout_requirement,
-        },
-    )
+#[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
+pub struct SubmitVoteCall<T: Vote> {
+    pub vote_id: T::VoteId,
+    pub direction: VoterView,
+    pub magnitude: Option<T::Signal>,
+    pub justification: Option<<T as Org>::IpfsReference>,
 }
 
-/// Submits a vote
-pub fn submit_vote<T: VoteYesNo>(
-    organization: OrgId<T>,
-    share_id: ShareId<T>,
-    vote_id: T::Signal,
-    voter: <T as System>::AccountId,
-    direction: VoterYesNoView,
-    magnitude: Option<T::Signal>,
-) -> Call<SubmitVoteArgs<T>> {
-    Call::new(
-        MODULE,
-        SUBMIT_VOTE,
-        SubmitVoteArgs {
-            organization,
-            share_id,
-            vote_id,
-            voter,
-            direction,
-            magnitude,
-        },
-    )
+// ~~ Events ~~
+
+#[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
+pub struct NewVoteStartedEvent<T: Vote> {
+    pub caller: <T as System>::AccountId,
+    pub org: T::OrgId,
+    pub new_vote_id: T::VoteId,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
+pub struct Voted<T: Vote> {
+    pub vote_id: T::VoteId,
+    pub voter: <T as System>::AccountId,
+    pub view: VoterView,
 }

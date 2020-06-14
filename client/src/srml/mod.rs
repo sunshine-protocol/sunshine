@@ -1,2 +1,2 @@
 pub mod org;
-//pub mod vote;
+pub mod vote;

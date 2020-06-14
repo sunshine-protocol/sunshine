@@ -6,9 +6,9 @@ use crate::srml::org::*;
 use ipfs_embed::Store;
 use ipld_block_builder::{BlockBuilder, Codec};
 use keystore::{DeviceKey, KeyStore, Password};
-use std::path::Path;
+// use std::path::Path;
 use substrate_subxt::sp_core::crypto::Pair as SubPair;
-use substrate_subxt::{sp_runtime::AccountId32, Signer};
+use substrate_subxt::sp_runtime::AccountId32; //Signer
 use utils_identity::cid::CidBytes;
 
 #[derive(new)]
