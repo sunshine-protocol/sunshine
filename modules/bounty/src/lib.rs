@@ -26,7 +26,7 @@ use sp_runtime::{
 use sp_std::{fmt::Debug, prelude::*};
 
 use util::{
-    bank::{BankMapID, OnChainTreasuryID, WithdrawalPermissions},
+    bank::{BankMapID, OnChainTreasuryID},
     bounty::{
         ApplicationState, BountyInformation, BountyMapID, GrantApplication, MilestoneStatus,
         MilestoneSubmission, ReviewBoard, TeamID,
@@ -76,44 +76,15 @@ pub trait Trait: frame_system::Trait + org::Trait + vote::Trait {
         + GenerateUniqueID<OnChainTreasuryID>
         + SeededGenerateUniqueID<BankAssociatedId<Self>, (OnChainTreasuryID, BankMapID)>
         + OnChainBank
-        + RegisterAccount<
-            Self::OrgId,
-            Self::AccountId,
-            WithdrawalPermissions<Self::OrgId, Self::AccountId>,
-            BalanceOf<Self>,
-        > + CalculateOwnership<
-            Self::OrgId,
-            Self::AccountId,
-            WithdrawalPermissions<Self::OrgId, Self::AccountId>,
-            BalanceOf<Self>,
-            Permill,
-        > + DepositsAndSpends<BalanceOf<Self>>
+        + RegisterAccount<Self::OrgId, Self::AccountId, BalanceOf<Self>>
+        + CalculateOwnership<Self::OrgId, Self::AccountId, BalanceOf<Self>, Permill>
+        + DepositsAndSpends<BalanceOf<Self>>
         + CheckBankBalances<BalanceOf<Self>>
-        + DepositIntoBank<
-            Self::OrgId,
-            Self::AccountId,
-            WithdrawalPermissions<Self::OrgId, Self::AccountId>,
-            BalanceOf<Self>,
-            Self::IpfsReference,
-        > + ReservationMachine<
-            Self::OrgId,
-            Self::AccountId,
-            WithdrawalPermissions<Self::OrgId, Self::AccountId>,
-            BalanceOf<Self>,
-            Self::IpfsReference,
-        > + ExecuteSpends<
-            Self::OrgId,
-            Self::AccountId,
-            WithdrawalPermissions<Self::OrgId, Self::AccountId>,
-            BalanceOf<Self>,
-            Self::IpfsReference,
-        > + CommitAndTransfer<
-            Self::OrgId,
-            Self::AccountId,
-            WithdrawalPermissions<Self::OrgId, Self::AccountId>,
-            BalanceOf<Self>,
-            Self::IpfsReference,
-        > + TermSheetExit<Self::AccountId, BalanceOf<Self>>;
+        + DepositIntoBank<Self::OrgId, Self::AccountId, BalanceOf<Self>, Self::IpfsReference>
+        + ReservationMachine<Self::OrgId, Self::AccountId, BalanceOf<Self>, Self::IpfsReference>
+        + ExecuteSpends<Self::OrgId, Self::AccountId, BalanceOf<Self>, Self::IpfsReference>
+        + CommitAndTransfer<Self::OrgId, Self::AccountId, BalanceOf<Self>, Self::IpfsReference>
+        + TermSheetExit<Self::AccountId, BalanceOf<Self>>;
 
     /// This is the minimum percent of the total bounty that must be reserved as collateral
     type MinimumBountyCollateralRatio: Get<Permill>;
@@ -448,7 +419,6 @@ impl<T: Trait> RegisterFoundation<T::OrgId, BalanceOf<T>, T::AccountId> for Modu
             <<T as Trait>::Bank as RegisterAccount<
                 T::OrgId,
                 T::AccountId,
-                WithdrawalPermissions<T::OrgId, T::AccountId>,
                 BalanceOf<T>,
             >>::verify_owner(bank.into(), org),
             Error::<T>::CannotRegisterFoundationFromOrgBankRelationshipThatDNE
@@ -522,14 +492,13 @@ impl<T: Trait>
         let spend_reservation_id = <<T as Trait>::Bank as ReservationMachine<
             T::OrgId,
             T::AccountId,
-            WithdrawalPermissions<T::OrgId, T::AccountId>,
             BalanceOf<T>,
             T::IpfsReference,
         >>::reserve_for_spend(
             bank_account.into(),
             description.clone(),
             amount_reserved_for_bounty,
-            acceptance_committee.clone().into(), // converts ReviewBoard Into WithdrawalPermissions
+            acceptance_committee.org(), // reserved for who? should be the ultimate recipient?
         )?;
         // form the bounty_info
         let new_bounty_info = BountyInformation::new(
@@ -912,7 +881,6 @@ impl<T: Trait>
         <<T as Trait>::Bank as ReservationMachine<
             T::OrgId,
             T::AccountId,
-            WithdrawalPermissions<T::OrgId, T::AccountId>,
             BalanceOf<T>,
             T::IpfsReference,
         >>::commit_reserved_spend_for_transfer(
@@ -972,7 +940,6 @@ impl<T: Trait>
         let new_transfer_id = <<T as Trait>::Bank as CommitAndTransfer<
             T::OrgId,
             T::AccountId,
-            WithdrawalPermissions<T::OrgId, T::AccountId>,
             BalanceOf<T>,
             T::IpfsReference,
         >>::commit_and_transfer_spending_power(
@@ -980,7 +947,7 @@ impl<T: Trait>
             bounty_info.spend_reservation(),
             milestone_submission.submission(), // reason = hash of milestone submission
             milestone_submission.amount(),
-            WithdrawalPermissions::JointOrgAccount(team_org_id),
+            team_org_id,
         )?;
         let new_milestone_submission = milestone_submission
             .set_make_transfer(bounty_info.bank_account(), new_transfer_id)
@@ -1023,7 +990,6 @@ impl<T: Trait>
                             let transfer_id = <<T as Trait>::Bank as ReservationMachine<
                                 T::OrgId,
                                 T::AccountId,
-                                WithdrawalPermissions<T::OrgId, T::AccountId>,
                                 BalanceOf<T>,
                                 T::IpfsReference,
                             >>::transfer_spending_power(
@@ -1031,7 +997,7 @@ impl<T: Trait>
                                 milestone_submission.submission(), // reason = hash of milestone submission
                                 bounty_info.spend_reservation(),
                                 milestone_submission.amount(),
-                                WithdrawalPermissions::JointOrgAccount(org_id), // uses the weighted share issuance by default to enforce payout structure
+                                org_id, // uses the weighted share issuance by default to enforce payout structure
                             )?;
                             // insert updated application into storage
                             <BountyApplications<T>>::insert(
@@ -1068,7 +1034,6 @@ impl<T: Trait>
                             let transfer_id = <<T as Trait>::Bank as ReservationMachine<
                                 T::OrgId,
                                 T::AccountId,
-                                WithdrawalPermissions<T::OrgId, T::AccountId>,
                                 BalanceOf<T>,
                                 T::IpfsReference,
                             >>::transfer_spending_power(
@@ -1076,7 +1041,7 @@ impl<T: Trait>
                                 milestone_submission.submission(), // reason = hash of milestone submission
                                 bounty_info.spend_reservation(),
                                 milestone_submission.amount(),
-                                WithdrawalPermissions::JointOrgAccount(org_id), // uses the weighted share issuance by default to enforce payout structure
+                                org_id, // uses the weighted share issuance by default to enforce payout structure
                             )?;
                             // insert updated application into storage
                             <BountyApplications<T>>::insert(
@@ -1116,7 +1081,6 @@ impl<T: Trait>
                     let transfer_id = <<T as Trait>::Bank as ReservationMachine<
                         T::OrgId,
                         T::AccountId,
-                        WithdrawalPermissions<T::OrgId, T::AccountId>,
                         BalanceOf<T>,
                         T::IpfsReference,
                     >>::transfer_spending_power(
@@ -1124,7 +1088,7 @@ impl<T: Trait>
                         milestone_submission.submission(), // reason = hash of milestone submission
                         bounty_info.spend_reservation(),
                         milestone_submission.amount(),
-                        WithdrawalPermissions::JointOrgAccount(org_id),
+                        org_id,
                     )?;
                     let new_milestone_submission = milestone_submission
                         .set_make_transfer(bounty_info.bank_account(), transfer_id)

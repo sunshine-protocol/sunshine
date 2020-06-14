@@ -11,17 +11,16 @@ mod tests;
 
 use util::{
     bank::{
-        BankMapID, BankState, DepositInfo, InternalTransferInfo, OnChainTreasuryID,
-        ReservationInfo, WithdrawalPermissions,
+        BankMapID, BankState, DepositInfo, InternalTransferInfo, OnChainTreasuryID, ReservationInfo,
     },
     traits::{
         CalculateOwnership, CheckBankBalances, CommitAndTransfer, CommitSpendReservation,
         DefaultBankPermissions, DepositIntoBank, DepositSpendOps, DepositsAndSpends, ExecuteSpends,
-        FreeToReserved, GenerateUniqueID, GetGroupSize, GroupMembership, IDIsAvailable, Increment,
+        FreeToReserved, GenerateUniqueID, GroupMembership, IDIsAvailable, Increment,
         MoveFundsOutCommittedOnly, MoveFundsOutUnCommittedOnly, OnChainBank,
         OrganizationSupervisorPermissions, RegisterAccount, ReservationMachine,
         SeededGenerateUniqueID, ShareInformation, ShareIssuance, TermSheetExit,
-    }, // if sudo, import ChainSudoPermissions
+    }, // ChainSudoPermissions, GetGroupSize
 };
 
 use codec::Codec;
@@ -75,13 +74,13 @@ decl_event!(
         <T as Trait>::BankAssociatedId,
         Balance = BalanceOf<T>,
     {
-        RegisteredNewOnChainBank(AccountId, OnChainTreasuryID, Balance, OrgId, WithdrawalPermissions<OrgId, AccountId>),
+        RegisteredNewOnChainBank(AccountId, OnChainTreasuryID, Balance, OrgId, Option<OrgId>),
         CapitalDepositedIntoOnChainBankAccount(AccountId, OnChainTreasuryID, Balance, IpfsReference),
-        SpendReservedForBankAccount(AccountId, OnChainTreasuryID, BankAssociatedId, IpfsReference, Balance, WithdrawalPermissions<OrgId, AccountId>),
+        SpendReservedForBankAccount(AccountId, OnChainTreasuryID, BankAssociatedId, IpfsReference, Balance, OrgId),
         CommitSpendBeforeInternalTransfer(AccountId, OnChainTreasuryID, BankAssociatedId, Balance),
         UnReserveUncommittedReservationToMakeFree(AccountId, OnChainTreasuryID, BankAssociatedId, Balance),
         UnReserveCommittedReservationToMakeFree(AccountId, OnChainTreasuryID, BankAssociatedId, Balance),
-        InternalTransferExecutedAndSpendingPowerDoledOutToController(AccountId, OnChainTreasuryID, IpfsReference, BankAssociatedId, Balance, WithdrawalPermissions<OrgId, AccountId>),
+        InternalTransferExecutedAndSpendingPowerDoledOutToController(AccountId, OnChainTreasuryID, IpfsReference, BankAssociatedId, Balance, OrgId),
         SpendRequestForInternalTransferApprovedAndExecuted(OnChainTreasuryID, AccountId, Balance, BankAssociatedId),
         AccountLeftMembershipAndWithdrewProportionOfFreeCapitalInBank(OnChainTreasuryID, AccountId, Balance),
     }
@@ -105,8 +104,7 @@ decl_error! {
         NotEnoughFundsInSpendReservationUnCommittedToSatisfyUnreserveUnCommittedRequest,
         NotEnoughFundsInBankReservedToSatisfyUnReserveUnComittedRequest,
         RegistrationMustDepositAboveModuleMinimum,
-        AccountMatchesNoneOfTwoControllers,
-        AccountHasNoWeightedOwnershipInOrg,
+        AccountHasNoOwnershipInOrg,
         BankAccountNotFoundForCommittingAndTransferringInOneStep,
         BankAccountNotFoundForUnReservingCommitted,
         BankAccountNotFoundForUnReservingUnCommitted,
@@ -134,7 +132,7 @@ decl_storage! {
         /// WARNING: do not append a prefix because the keyspace is used directly for checking uniqueness of `OnChainTreasuryId`
         /// TODO: pre-reserve any known ModuleId's that could be accidentally generated that already exist elsewhere
         pub BankStores get(fn bank_stores): map
-            hasher(blake2_128_concat) OnChainTreasuryID => Option<BankState<T::OrgId, WithdrawalPermissions<T::OrgId, T::AccountId>, BalanceOf<T>>>;
+            hasher(blake2_128_concat) OnChainTreasuryID => Option<BankState<T::OrgId, BalanceOf<T>>>;
 
         /// All deposits made into the joint bank account represented by OnChainTreasuryID
         pub Deposits get(fn deposits): double_map
@@ -144,12 +142,12 @@ decl_storage! {
         /// Spend reservations which designated a committee for formally transferring ownership to specific destination addresses
         pub SpendReservations get(fn spend_reservations): double_map
             hasher(blake2_128_concat) OnChainTreasuryID,
-            hasher(blake2_128_concat) T::BankAssociatedId => Option<ReservationInfo<T::IpfsReference, BalanceOf<T>, WithdrawalPermissions<T::OrgId, T::AccountId>>>;
+            hasher(blake2_128_concat) T::BankAssociatedId => Option<ReservationInfo<T::IpfsReference, BalanceOf<T>, T::OrgId>>;
 
         /// Internal transfers of control over capital that allow transfer liquidity rights to the current controller
         pub InternalTransfers get(fn internal_transfers): double_map
             hasher(blake2_128_concat) OnChainTreasuryID,
-            hasher(blake2_128_concat) T::BankAssociatedId => Option<InternalTransferInfo<T::BankAssociatedId, T::IpfsReference, BalanceOf<T>, WithdrawalPermissions<T::OrgId, T::AccountId>>>;
+            hasher(blake2_128_concat) T::BankAssociatedId => Option<InternalTransferInfo<T::BankAssociatedId, T::IpfsReference, BalanceOf<T>, T::OrgId>>;
     }
 }
 
@@ -177,13 +175,14 @@ decl_module! {
             origin,
             seed: BalanceOf<T>,
             hosting_org: T::OrgId, // pre-requisite is registered organization
-            bank_controller: WithdrawalPermissions<T::OrgId, T::AccountId>,
+            bank_operator: Option<T::OrgId>,
         ) -> DispatchResult {
             let seeder = ensure_signed(origin)?;
-            let authentication = Self::can_register_account(seeder.clone(), hosting_org) && Self::withdrawal_permissions_satisfy_org_standards(hosting_org, bank_controller.clone());
+            let authentication = Self::can_register_account(seeder.clone(), hosting_org) &&
+                if let Some(op) = bank_operator { Self::operator_satisfies_requirements(hosting_org, op.clone()) } else {true};
             ensure!(authentication, Error::<T>::CannotRegisterBankAccountBCPermissionsCheckFails);
-            let new_bank_id = Self::register_account(hosting_org, seeder.clone(), seed, bank_controller.clone())?;
-            Self::deposit_event(RawEvent::RegisteredNewOnChainBank(seeder, new_bank_id, seed, hosting_org, bank_controller));
+            let new_bank_id = Self::register_account(hosting_org, seeder.clone(), seed, bank_operator.clone())?;
+            Self::deposit_event(RawEvent::RegisteredNewOnChainBank(seeder, new_bank_id, seed, hosting_org, bank_operator));
             Ok(())
         }
         #[weight = 0]
@@ -192,7 +191,7 @@ decl_module! {
             bank_id: OnChainTreasuryID,
             reason: T::IpfsReference,
             amount: BalanceOf<T>,
-            controller: WithdrawalPermissions<T::OrgId, T::AccountId>,
+            controller: T::OrgId,
         ) -> DispatchResult {
             let reserver = ensure_signed(origin)?;
             let authentication = Self::can_reserve_for_spend(reserver.clone(), bank_id)?;
@@ -208,7 +207,6 @@ decl_module! {
             reservation_id: T::BankAssociatedId,
             reason: T::IpfsReference,
             amount: BalanceOf<T>,
-            future_controller: WithdrawalPermissions<T::OrgId, T::AccountId>,
         ) -> DispatchResult {
             let committer = ensure_signed(origin)?;
             let authentication = Self::can_commit_reserved_spend_for_transfer(committer.clone(), bank_id)?;
@@ -252,7 +250,7 @@ decl_module! {
             reason: T::IpfsReference,
             reservation_id: T::BankAssociatedId,
             amount: BalanceOf<T>,
-            committed_controller: WithdrawalPermissions<T::OrgId, T::AccountId>,
+            committed_controller: T::OrgId,
         ) -> DispatchResult {
             let qualified_spend_reservation_controller = ensure_signed(origin)?;
             let authentication = Self::can_transfer_spending_power(qualified_spend_reservation_controller.clone(), bank_id)?;
@@ -331,37 +329,23 @@ impl<T: Trait> Module<T> {
             None
         }
     }
-    pub fn get_reservations_for_governance_config(
+    pub fn get_reservations_for_organization(
         bank_id: OnChainTreasuryID,
-        invoker: WithdrawalPermissions<T::OrgId, T::AccountId>,
-    ) -> Option<
-        Vec<
-            ReservationInfo<
-                T::IpfsReference,
-                BalanceOf<T>,
-                WithdrawalPermissions<T::OrgId, T::AccountId>,
-            >,
-        >,
-    > {
+        invoker: T::OrgId,
+    ) -> Option<Vec<ReservationInfo<T::IpfsReference, BalanceOf<T>, T::OrgId>>> {
         let ret = <SpendReservations<T>>::iter()
             .filter(|(id, _, reservation)| id == &bank_id && reservation.controller() == invoker)
             .map(|(_, _, reservation)| reservation)
-            .collect::<Vec<
-                ReservationInfo<
-                    T::IpfsReference,
-                    BalanceOf<T>,
-                    WithdrawalPermissions<T::OrgId, T::AccountId>,
-                >,
-            >>();
+            .collect::<Vec<ReservationInfo<T::IpfsReference, BalanceOf<T>, T::OrgId>>>();
         if ret.is_empty() {
             None
         } else {
             Some(ret)
         }
     }
-    pub fn total_capital_reserved_for_governance_config(
+    pub fn total_capital_reserved_for_organization(
         bank_id: OnChainTreasuryID,
-        invoker: WithdrawalPermissions<T::OrgId, T::AccountId>,
+        invoker: T::OrgId,
     ) -> BalanceOf<T> {
         <SpendReservations<T>>::iter()
             .filter(|(id, _, reservation)| id == &bank_id && reservation.controller() == invoker)
@@ -382,27 +366,15 @@ impl<T: Trait> Module<T> {
     }
     pub fn get_transfers_for_governance_config(
         bank_id: OnChainTreasuryID,
-        invoker: WithdrawalPermissions<T::OrgId, T::AccountId>,
+        invoker: T::OrgId,
     ) -> Option<
-        Vec<
-            InternalTransferInfo<
-                T::BankAssociatedId,
-                T::IpfsReference,
-                BalanceOf<T>,
-                WithdrawalPermissions<T::OrgId, T::AccountId>,
-            >,
-        >,
+        Vec<InternalTransferInfo<T::BankAssociatedId, T::IpfsReference, BalanceOf<T>, T::OrgId>>,
     > {
         let ret = <InternalTransfers<T>>::iter()
             .filter(|(id, _, transfer)| id == &bank_id && transfer.controller() == invoker)
             .map(|(_, _, transfer)| transfer)
             .collect::<Vec<
-                InternalTransferInfo<
-                    T::BankAssociatedId,
-                    T::IpfsReference,
-                    BalanceOf<T>,
-                    WithdrawalPermissions<T::OrgId, T::AccountId>,
-                >,
+                InternalTransferInfo<T::BankAssociatedId, T::IpfsReference, BalanceOf<T>, T::OrgId>,
             >>();
         if ret.is_empty() {
             None
@@ -412,7 +384,7 @@ impl<T: Trait> Module<T> {
     }
     pub fn total_capital_transferred_to_governance_config(
         bank_id: OnChainTreasuryID,
-        invoker: WithdrawalPermissions<T::OrgId, T::AccountId>,
+        invoker: T::OrgId,
     ) -> BalanceOf<T> {
         <InternalTransfers<T>>::iter()
             .filter(|(id, _, transfer)| id == &bank_id && transfer.controller() == invoker)
@@ -467,19 +439,12 @@ impl<T: Trait> OnChainBank for Module<T> {
     type AssociatedId = T::BankAssociatedId;
 }
 
-impl<T: Trait>
-    RegisterAccount<
-        T::OrgId,
-        T::AccountId,
-        WithdrawalPermissions<T::OrgId, T::AccountId>,
-        BalanceOf<T>,
-    > for Module<T>
-{
+impl<T: Trait> RegisterAccount<T::OrgId, T::AccountId, BalanceOf<T>> for Module<T> {
     fn register_account(
         owners: T::OrgId,
         from: T::AccountId,
         amount: BalanceOf<T>,
-        operators: WithdrawalPermissions<T::OrgId, T::AccountId>,
+        operators: Option<T::OrgId>,
     ) -> Result<Self::TreasuryId, DispatchError> {
         ensure!(
             amount >= T::MinimumInitialDeposit::get(),
@@ -505,50 +470,23 @@ impl<T: Trait>
     }
 }
 
-impl<T: Trait>
-    CalculateOwnership<
-        T::OrgId,
-        T::AccountId,
-        WithdrawalPermissions<T::OrgId, T::AccountId>,
-        BalanceOf<T>,
-        Permill,
-    > for Module<T>
-{
+impl<T: Trait> CalculateOwnership<T::OrgId, T::AccountId, BalanceOf<T>, Permill> for Module<T> {
     fn calculate_proportion_ownership_for_account(
         account: T::AccountId,
-        group: WithdrawalPermissions<T::OrgId, T::AccountId>,
+        group: T::OrgId,
     ) -> Result<Permill, DispatchError> {
-        match group {
-            WithdrawalPermissions::TwoAccounts(acc1, acc2) => {
-                // assumes that we never use this with acc1 == acc2; use sudo in that situation
-                if acc1 == account || acc2 == account {
-                    Ok(Permill::from_percent(50))
-                } else {
-                    Err(Error::<T>::AccountMatchesNoneOfTwoControllers.into())
-                }
-            }
-            WithdrawalPermissions::JointOrgAccount(org_id) => {
-                let issuance = <org::Module<T>>::total_issuance(org_id);
-                if issuance > T::Shares::zero() {
-                    // weighted group
-                    let acc_ownership = <org::Module<T>>::get_share_profile(org_id, &account)
-                        .ok_or(Error::<T>::AccountHasNoWeightedOwnershipInOrg)?;
-                    Ok(Permill::from_rational_approximation(
-                        acc_ownership.total(),
-                        issuance,
-                    ))
-                } else {
-                    // flat group
-                    let organization_size = <org::Module<T>>::get_size_of_group(org_id);
-                    Ok(Permill::from_rational_approximation(1, organization_size))
-                }
-            }
-        }
+        let issuance = <org::Module<T>>::total_issuance(group);
+        let acc_ownership = <org::Module<T>>::get_share_profile(group, &account)
+            .ok_or(Error::<T>::AccountHasNoOwnershipInOrg)?;
+        Ok(Permill::from_rational_approximation(
+            acc_ownership.total(),
+            issuance,
+        ))
     }
     fn calculate_proportional_amount_for_account(
         amount: BalanceOf<T>,
         account: T::AccountId,
-        group: WithdrawalPermissions<T::OrgId, T::AccountId>,
+        group: T::OrgId,
     ) -> Result<BalanceOf<T>, DispatchError> {
         let proportion_due = Self::calculate_proportion_ownership_for_account(account, group)?;
         Ok(proportion_due * amount)
@@ -556,7 +494,7 @@ impl<T: Trait>
 }
 
 impl<T: Trait> DepositsAndSpends<BalanceOf<T>> for Module<T> {
-    type Bank = BankState<T::OrgId, WithdrawalPermissions<T::OrgId, T::AccountId>, BalanceOf<T>>;
+    type Bank = BankState<<T as org::Trait>::OrgId, BalanceOf<T>>;
     fn make_infallible_deposit_into_free(bank: Self::Bank, amount: BalanceOf<T>) -> Self::Bank {
         bank.deposit_into_free(amount)
     }
@@ -599,25 +537,13 @@ impl<T: Trait> CheckBankBalances<BalanceOf<T>> for Module<T> {
 
 // We could NOT have the extra storage lookup in here but
 // the API design is much more extensible this way. See issue #85
-impl<T: Trait>
-    DefaultBankPermissions<
-        T::OrgId,
-        T::AccountId,
-        BalanceOf<T>,
-        WithdrawalPermissions<T::OrgId, T::AccountId>,
-    > for Module<T>
-{
+impl<T: Trait> DefaultBankPermissions<T::OrgId, T::AccountId, BalanceOf<T>> for Module<T> {
     fn can_register_account(account: T::AccountId, on_behalf_of: T::OrgId) -> bool {
         // only the organization supervisor can register a bank account
         <org::Module<T>>::is_organization_supervisor(on_behalf_of, &account)
     }
-    fn withdrawal_permissions_satisfy_org_standards(
-        _org: T::OrgId,
-        _withdrawal_permissions: WithdrawalPermissions<T::OrgId, T::AccountId>,
-    ) -> bool {
-        // an example might require that withdrawal_permissions is a subgroup
-        //or contains members of OrgId but I don't think that's necessary to
-        //impl as a default...sometimes no default is OK
+    fn operator_satisfies_requirements(_org: T::OrgId, _withdrawal_permissions: T::OrgId) -> bool {
+        // TODO: add default as a subgroup check? does this relation imply revocability of control
         true
     }
     // bank.operators() can make spend reservations (indicates funding intent by beginning the formal shift of capital control)
@@ -627,11 +553,11 @@ impl<T: Trait>
     ) -> Result<bool, DispatchError> {
         let bank_account =
             <BankStores<T>>::get(bank).ok_or(Error::<T>::BankAccountNotFoundForSpendReservation)?;
-        let ret_bool = match bank_account.operators() {
-            WithdrawalPermissions::TwoAccounts(acc1, acc2) => acc1 == account || acc2 == account,
-            WithdrawalPermissions::JointOrgAccount(org_id) => {
-                <org::Module<T>>::is_member_of_group(org_id, &account)
-            }
+        let ret_bool = if let Some(org_id) = bank_account.operators() {
+            <org::Module<T>>::is_member_of_group(org_id, &account)
+        } else {
+            // if bank.operators().is_none()
+            <org::Module<T>>::is_member_of_group(bank_account.owners(), &account)
         };
         Ok(ret_bool)
     }
@@ -642,11 +568,11 @@ impl<T: Trait>
     ) -> Result<bool, DispatchError> {
         let bank_account =
             <BankStores<T>>::get(bank).ok_or(Error::<T>::BankAccountNotFoundForSpendCommitment)?;
-        let ret_bool = match bank_account.operators() {
-            WithdrawalPermissions::TwoAccounts(acc1, acc2) => acc1 == account || acc2 == account,
-            WithdrawalPermissions::JointOrgAccount(org_id) => {
-                <org::Module<T>>::is_member_of_group(org_id, &account)
-            }
+        let ret_bool = if let Some(org_id) = bank_account.operators() {
+            <org::Module<T>>::is_member_of_group(org_id, &account)
+        } else {
+            // if bank.operators().is_none()
+            <org::Module<T>>::is_member_of_group(bank_account.owners(), &account)
         };
         Ok(ret_bool)
     }
@@ -657,15 +583,12 @@ impl<T: Trait>
     ) -> Result<bool, DispatchError> {
         let bank_account = <BankStores<T>>::get(bank)
             .ok_or(Error::<T>::BankAccountNotFoundForUnReservingUnCommitted)?;
-        let ret_bool = <org::Module<T>>::is_member_of_group(bank_account.owners(), &account)
-            || match bank_account.operators() {
-                WithdrawalPermissions::TwoAccounts(acc1, acc2) => {
-                    acc1 == account || acc2 == account
-                }
-                WithdrawalPermissions::JointOrgAccount(org_id) => {
-                    <org::Module<T>>::is_member_of_group(org_id, &account)
-                }
-            };
+        let ret_bool = if let Some(org_id) = bank_account.operators() {
+            <org::Module<T>>::is_member_of_group(org_id, &account)
+        } else {
+            // if bank.operators().is_none()
+            <org::Module<T>>::is_member_of_group(bank_account.owners(), &account)
+        };
         Ok(ret_bool)
     }
     // ONLY bank.operators() can unreserve committed funds
@@ -675,11 +598,11 @@ impl<T: Trait>
     ) -> Result<bool, DispatchError> {
         let bank_account = <BankStores<T>>::get(bank)
             .ok_or(Error::<T>::BankAccountNotFoundForUnReservingCommitted)?;
-        let ret_bool = match bank_account.operators() {
-            WithdrawalPermissions::TwoAccounts(acc1, acc2) => acc1 == account || acc2 == account,
-            WithdrawalPermissions::JointOrgAccount(org_id) => {
-                <org::Module<T>>::is_member_of_group(org_id, &account)
-            }
+        let ret_bool = if let Some(org_id) = bank_account.operators() {
+            <org::Module<T>>::is_member_of_group(org_id, &account)
+        } else {
+            // if bank.operators().is_none()
+            <org::Module<T>>::is_member_of_group(bank_account.owners(), &account)
         };
         Ok(ret_bool)
     }
@@ -690,15 +613,12 @@ impl<T: Trait>
     ) -> Result<bool, DispatchError> {
         let bank_account = <BankStores<T>>::get(bank)
             .ok_or(Error::<T>::BankAccountNotFoundForUnReservingUnCommitted)?;
-        let ret_bool = <org::Module<T>>::is_member_of_group(bank_account.owners(), &account)
-            || match bank_account.operators() {
-                WithdrawalPermissions::TwoAccounts(acc1, acc2) => {
-                    acc1 == account || acc2 == account
-                }
-                WithdrawalPermissions::JointOrgAccount(org_id) => {
-                    <org::Module<T>>::is_member_of_group(org_id, &account)
-                }
-            };
+        let ret_bool = if let Some(org_id) = bank_account.operators() {
+            <org::Module<T>>::is_member_of_group(org_id, &account)
+        } else {
+            // if bank.operators().is_none()
+            <org::Module<T>>::is_member_of_group(bank_account.owners(), &account)
+        };
         Ok(ret_bool)
     }
     // supervisor-oriented permissions for committing and transferring withdrawal permissions in a single step
@@ -708,28 +628,18 @@ impl<T: Trait>
     ) -> Result<bool, DispatchError> {
         let bank_account = <BankStores<T>>::get(bank)
             .ok_or(Error::<T>::BankAccountNotFoundForCommittingAndTransferringInOneStep)?;
-        Ok(
+        let ret_bool = if let Some(org_id) = bank_account.operators() {
+            <org::Module<T>>::is_organization_supervisor(org_id, &account)
+        } else {
+            // if bank.operators().is_none()
             <org::Module<T>>::is_organization_supervisor(bank_account.owners(), &account)
-                || match bank_account.operators() {
-                    WithdrawalPermissions::TwoAccounts(acc1, acc2) => {
-                        acc1 == account || acc2 == account
-                    }
-                    WithdrawalPermissions::JointOrgAccount(org_id) => {
-                        <org::Module<T>>::is_organization_supervisor(org_id, &account)
-                    }
-                },
-        )
+        };
+        Ok(ret_bool)
     }
 }
 
-impl<T: Trait>
-    DepositIntoBank<
-        T::OrgId,
-        T::AccountId,
-        WithdrawalPermissions<T::OrgId, T::AccountId>,
-        BalanceOf<T>,
-        T::IpfsReference,
-    > for Module<T>
+impl<T: Trait> DepositIntoBank<T::OrgId, T::AccountId, BalanceOf<T>, T::IpfsReference>
+    for Module<T>
 {
     fn deposit_into_bank(
         from: T::AccountId,
@@ -756,20 +666,14 @@ impl<T: Trait>
     }
 }
 
-impl<T: Trait>
-    ReservationMachine<
-        T::OrgId,
-        T::AccountId,
-        WithdrawalPermissions<T::OrgId, T::AccountId>,
-        BalanceOf<T>,
-        T::IpfsReference,
-    > for Module<T>
+impl<T: Trait> ReservationMachine<T::OrgId, T::AccountId, BalanceOf<T>, T::IpfsReference>
+    for Module<T>
 {
     fn reserve_for_spend(
         bank_id: Self::TreasuryId,
         reason: T::IpfsReference,
         amount: BalanceOf<T>,
-        controller: WithdrawalPermissions<T::OrgId, T::AccountId>,
+        controller: T::OrgId,
     ) -> Result<Self::AssociatedId, DispatchError> {
         let bank_account = <BankStores<T>>::get(bank_id)
             .ok_or(Error::<T>::BankAccountNotFoundForSpendReservation)?;
@@ -861,7 +765,7 @@ impl<T: Trait>
         reservation_id: Self::AssociatedId,
         amount: BalanceOf<T>,
         // move control of funds to new outer group which can reserve or withdraw directly
-        new_controller: WithdrawalPermissions<T::OrgId, T::AccountId>,
+        new_controller: T::OrgId,
     ) -> Result<Self::AssociatedId, DispatchError> {
         let _ = <BankStores<T>>::get(bank_id)
             .ok_or(Error::<T>::BankAccountNotFoundForInternalTransfer)?;
@@ -885,21 +789,15 @@ impl<T: Trait>
     }
 }
 
-impl<T: Trait>
-    CommitAndTransfer<
-        T::OrgId,
-        T::AccountId,
-        WithdrawalPermissions<T::OrgId, T::AccountId>,
-        BalanceOf<T>,
-        T::IpfsReference,
-    > for Module<T>
+impl<T: Trait> CommitAndTransfer<T::OrgId, T::AccountId, BalanceOf<T>, T::IpfsReference>
+    for Module<T>
 {
     fn commit_and_transfer_spending_power(
         bank_id: Self::TreasuryId,
         reservation_id: Self::AssociatedId,
         reason: T::IpfsReference,
         amount: BalanceOf<T>,
-        new_controller: WithdrawalPermissions<T::OrgId, T::AccountId>,
+        new_controller: T::OrgId,
     ) -> Result<Self::AssociatedId, DispatchError> {
         let _ = <BankStores<T>>::get(bank_id)
             .ok_or(Error::<T>::BankAccountNotFoundForInternalTransfer)?;
@@ -923,15 +821,7 @@ impl<T: Trait>
     }
 }
 
-impl<T: Trait>
-    ExecuteSpends<
-        T::OrgId,
-        T::AccountId,
-        WithdrawalPermissions<T::OrgId, T::AccountId>,
-        BalanceOf<T>,
-        T::IpfsReference,
-    > for Module<T>
-{
+impl<T: Trait> ExecuteSpends<T::OrgId, T::AccountId, BalanceOf<T>, T::IpfsReference> for Module<T> {
     /// This method authenticates the spend by checking that the caller
     /// input follows the same shape as the bank's controller...
     /// => any method that calls this one will need to define local
@@ -1003,7 +893,7 @@ impl<T: Trait> TermSheetExit<T::AccountId, BalanceOf<T>> for Module<T> {
         let withdrawal_amount = Self::calculate_proportional_amount_for_account(
             bank_account.free(),
             rage_quitter.clone(),
-            WithdrawalPermissions::JointOrgAccount(bank_account.owners()),
+            bank_account.owners(),
         )?;
         // <here is where we might apply some discount based on a vesting period/schedule>
         // burn the shares first
