@@ -91,15 +91,14 @@ impl SunClient {
         organization: u64,
         who: AccountId32,
         shares: u64,
-    ) -> Result<SharesIssuedEvent<Runtime>> {
+    ) -> Result<()> {
         let signer = self.signer()?;
         self.client
-            .clone()
             .issue_shares_and_watch(&signer, organization, &who, shares)
             .await?
             .shares_issued()
-            .map_err(|e| substrate_subxt::Error::Codec(e))?
-            .ok_or(Error::EventNotFound)
+            .map_err(|e| substrate_subxt::Error::Codec(e))?;
+        Ok(())
     }
     /// Burn shares
     pub async fn burn_shares(
