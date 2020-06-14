@@ -21,15 +21,20 @@ async fn main() -> Result<(), Error> {
     let codec = Codec::new();
     let ipld = BlockBuilder::new(store, codec);
     let keystore = KeyStore::new("/tmp/keystore");
+    let alice_seed: [u8; 32] = AccountKeyring::Alice.into();
+    let _ = keystore.initialize(
+        &DeviceKey::from_seed(alice_seed),
+        &Password::from("password".to_string()),
+    )?;
     // //#[cfg(not(feature = "light-client"))]
     let client = SunClient::new(subxt, keystore, ipld);
     // #[cfg(feature = "light-client")]
     // let client = Sunshine::new("/tmp/db", signer, ChainType::Development).await?;
     let account_id = sp_keyring::AccountKeyring::Alice.to_account_id();
-    let event = client.reserve_shares(1u64, &account_id).await?;
+    let event = client.issue_shares(1u64, account_id, 10u64).await?;
 
     println!(
-        "Account {:?} reserved {:?} shares for organization {:?}",
+        "Account {:?} was issued {:?} shares for organization {:?}",
         event.who, event.amount, event.org,
     );
 
