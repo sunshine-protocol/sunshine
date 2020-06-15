@@ -38,23 +38,23 @@ pub trait Org: System {
 
 #[derive(Clone, Debug, Eq, PartialEq, Encode)]
 pub struct SudoKeyStore<T: Org> {
-    pub sudo: Option<<T as System>::AccountId>,
+    pub sudo_key: Option<<T as System>::AccountId>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Encode)]
-pub struct OrganizationIdentifierNonceStore<T: Org> {
-    pub nonce: T::OrgId,
+pub struct OrganizationIdNonceStore<T: Org> {
+    pub org_id_nonce: T::OrgId,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Encode)]
 pub struct OrganizationCounterStore {
-    pub counter: u32,
+    pub organization_counter: u32,
 }
 
 // ~~ Maps ~~
 
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
-pub struct OrgStateStore<T: Org> {
+pub struct OrganizationStatesStore<T: Org> {
     #[store(returns = Organization<<T as System>::AccountId, T::OrgId, T::IpfsReference>)]
     pub org: T::OrgId,
 }
@@ -66,16 +66,10 @@ pub struct TotalIssuanceStore<T: Org> {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
-pub struct ProfileStore<'a, T: Org> {
+pub struct MembersStore<'a, T: Org> {
     #[store(returns = ShareProfile<T::Shares>)]
     pub org: T::OrgId,
     pub who: &'a <T as System>::AccountId,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
-pub struct OrganizationSupervisor<T: Org> {
-    #[store(returns = Option<<T as System>::AccountId>)]
-    pub org: T::OrgId,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
@@ -95,7 +89,7 @@ pub struct RegisterFlatOrgCall<'a, T: Org> {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
-pub struct FlatOrgRegisteredEvent<T: Org> {
+pub struct NewFlatOrganizationRegisteredEvent<T: Org> {
     pub caller: <T as System>::AccountId,
     pub new_id: T::OrgId,
     pub constitution: T::IpfsReference,
@@ -107,11 +101,11 @@ pub struct RegisterWeightedOrgCall<'a, T: Org> {
     pub sudo: Option<<T as System>::AccountId>,
     pub parent_org: Option<T::OrgId>,
     pub constitution: T::IpfsReference,
-    pub members: &'a [(<T as System>::AccountId, T::Shares)],
+    pub weighted_members: &'a [(<T as System>::AccountId, T::Shares)],
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
-pub struct WeightedOrgRegisteredEvent<T: Org> {
+pub struct NewWeightedOrganizationRegisteredEvent<T: Org> {
     pub caller: <T as System>::AccountId,
     pub new_id: T::OrgId,
     pub constitution: T::IpfsReference,
@@ -120,102 +114,102 @@ pub struct WeightedOrgRegisteredEvent<T: Org> {
 
 #[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
 pub struct IssueSharesCall<'a, T: Org> {
-    pub org: T::OrgId,
+    pub organization: T::OrgId,
     pub who: &'a <T as System>::AccountId,
-    pub amount: T::Shares,
+    pub shares: T::Shares,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
 pub struct SharesIssuedEvent<T: Org> {
-    pub org: T::OrgId,
+    pub organization: T::OrgId,
     pub who: <T as System>::AccountId,
-    pub amount: T::Shares,
+    pub shares: T::Shares,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
 pub struct BurnSharesCall<'a, T: Org> {
-    pub org: T::OrgId,
+    pub organization: T::OrgId,
     pub who: &'a <T as System>::AccountId,
-    pub amount: T::Shares,
+    pub shares: T::Shares,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
 pub struct SharesBurnedEvent<T: Org> {
-    pub org: T::OrgId,
+    pub organization: T::OrgId,
     pub who: <T as System>::AccountId,
-    pub amount: T::Shares,
+    pub shares: T::Shares,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
 pub struct BatchIssueSharesCall<'a, T: Org> {
-    pub org: T::OrgId,
+    pub organization: T::OrgId,
     pub new_accounts: &'a [(<T as System>::AccountId, T::Shares)],
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
 pub struct SharesBatchIssuedEvent<T: Org> {
-    pub org: T::OrgId,
-    pub amount: T::Shares,
+    pub organization: T::OrgId,
+    pub total_new_shares_minted: T::Shares,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
 pub struct BatchBurnSharesCall<'a, T: Org> {
-    pub org: T::OrgId,
+    pub organization: T::OrgId,
     pub old_accounts: &'a [(<T as System>::AccountId, T::Shares)],
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
 pub struct SharesBatchBurnedEvent<T: Org> {
-    pub org: T::OrgId,
-    pub amount: T::Shares,
+    pub organization: T::OrgId,
+    pub total_new_shares_burned: T::Shares,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
 pub struct LockSharesCall<'a, T: Org> {
-    pub org: T::OrgId,
+    pub organization: T::OrgId,
     pub who: &'a <T as System>::AccountId,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
 pub struct SharesLockedEvent<T: Org> {
-    pub org: T::OrgId,
+    pub organization: T::OrgId,
     pub who: <T as System>::AccountId,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
 pub struct UnlockSharesCall<'a, T: Org> {
-    pub org: T::OrgId,
+    pub organization: T::OrgId,
     pub who: &'a <T as System>::AccountId,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
 pub struct SharesUnlockedEvent<T: Org> {
-    pub org: T::OrgId,
+    pub organization: T::OrgId,
     pub who: <T as System>::AccountId,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
 pub struct ReserveSharesCall<'a, T: Org> {
-    pub org: T::OrgId,
+    pub organization: T::OrgId,
     pub who: &'a <T as System>::AccountId,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
 pub struct SharesReservedEvent<T: Org> {
-    pub org: T::OrgId,
+    pub organization: T::OrgId,
     pub who: <T as System>::AccountId,
-    pub amount: T::Shares,
+    pub amount_reserved: T::Shares,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
 pub struct UnreserveSharesCall<'a, T: Org> {
-    pub org: T::OrgId,
+    pub organization: T::OrgId,
     pub who: &'a <T as System>::AccountId,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
 pub struct SharesUnReservedEvent<T: Org> {
-    pub org: T::OrgId,
+    pub organization: T::OrgId,
     pub who: <T as System>::AccountId,
-    pub amount: T::Shares,
+    pub amount_unreserved: T::Shares,
 }

@@ -52,13 +52,13 @@ impl SunClient {
         parent_org: Option<u64>,
         constitution: CidBytes,
         members: &[AccountId32],
-    ) -> Result<FlatOrgRegisteredEvent<Runtime>> {
+    ) -> Result<NewFlatOrganizationRegisteredEvent<Runtime>> {
         let signer = self.signer()?;
         self.client
             .clone()
             .register_flat_org_and_watch(&signer, sudo, parent_org, constitution, members)
             .await?
-            .flat_org_registered()
+            .new_flat_organization_registered()
             .map_err(|e| substrate_subxt::Error::Codec(e))?
             .ok_or(Error::EventNotFound)
     }
@@ -69,7 +69,7 @@ impl SunClient {
         parent_org: Option<u64>,
         constitution: CidBytes,
         weighted_members: &[(AccountId32, u64)],
-    ) -> Result<WeightedOrgRegisteredEvent<Runtime>> {
+    ) -> Result<NewWeightedOrganizationRegisteredEvent<Runtime>> {
         let signer = self.signer()?;
         self.client
             .clone()
@@ -81,7 +81,7 @@ impl SunClient {
                 weighted_members,
             )
             .await?
-            .weighted_org_registered()
+            .new_weighted_organization_registered()
             .map_err(|e| substrate_subxt::Error::Codec(e))?
             .ok_or(Error::EventNotFound)
     }
@@ -91,14 +91,14 @@ impl SunClient {
         organization: u64,
         who: AccountId32,
         shares: u64,
-    ) -> Result<()> {
+    ) -> Result<SharesIssuedEvent<Runtime>> {
         let signer = self.signer()?;
         self.client
             .issue_shares_and_watch(&signer, organization, &who, shares)
             .await?
             .shares_issued()
-            .map_err(|e| substrate_subxt::Error::Codec(e))?;
-        Ok(())
+            .map_err(|e| substrate_subxt::Error::Codec(e))?
+            .ok_or(Error::EventNotFound)
     }
     /// Burn shares
     pub async fn burn_shares(

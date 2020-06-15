@@ -31,12 +31,12 @@ async fn main() -> Result<(), Error> {
     // #[cfg(feature = "light-client")]
     // let client = Sunshine::new("/tmp/db", signer, ChainType::Development).await?;
     let account_id = sp_keyring::AccountKeyring::Alice.to_account_id();
-    client.issue_shares(1u64, account_id, 10u64).await?;
+    let event = client.issue_shares(1u64, account_id, 10u64).await?;
 
-    // println!(
-    //     "Account {:?} was issued {:?} shares for organization {:?}",
-    //     event.who, event.amount, event.org,
-    // );
+    println!(
+        "Account {:?} was issued {:?} shares for organization {:?}",
+        event.who, event.shares, event.organization,
+    );
 
     Ok(())
 }

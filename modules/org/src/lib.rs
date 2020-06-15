@@ -156,23 +156,23 @@ decl_storage! {
         OrgIdNonce get(fn org_id_counter): T::OrgId;
 
         /// The total number of organizations registered at any given time
-        OrganizationCounter get(fn organization_counter): u32;
+        pub OrganizationCounter get(fn organization_counter): u32;
 
         /// The main storage item for Organization registration
-        OrganizationStates get(fn organization_states): map
+        pub OrganizationStates get(fn organization_states): map
             hasher(blake2_128_concat) T::OrgId => Option<Organization<T::AccountId, T::OrgId, T::IpfsReference>>;
 
         /// The map to track organizational membership
-        Members get(fn members): double_map
+        pub Members get(fn members): double_map
             hasher(blake2_128_concat) T::OrgId,
             hasher(blake2_128_concat) T::AccountId => Option<ShareProfile<T::Shares>>;
 
         /// Total number of outstanding shares that express relative ownership in group
-        TotalIssuance get(fn total_issuance): map
+        pub TotalIssuance get(fn total_issuance): map
             hasher(opaque_blake2_256) T::OrgId => T::Shares;
 
         /// The size for each organization
-        OrganizationSize get(fn organization_size): map hasher(opaque_blake2_256) T::OrgId => u32;
+        pub OrganizationSize get(fn organization_size): map hasher(opaque_blake2_256) T::OrgId => u32;
     }
     add_extra_genesis {
         config(first_organization_supervisor): T::AccountId;
@@ -349,8 +349,8 @@ decl_module! {
                                     || unreserver == who;
             ensure!(authentication, Error::<T>::NotAuthorizedToUnReserveShares);
 
-            let amount_reserved = Self::unreserve(organization, &who, None)?;
-            Self::deposit_event(RawEvent::SharesUnReserved(organization, who, amount_reserved));
+            let amount_unreserved = Self::unreserve(organization, &who, None)?;
+            Self::deposit_event(RawEvent::SharesUnReserved(organization, who, amount_unreserved));
             Ok(())
         }
     }
