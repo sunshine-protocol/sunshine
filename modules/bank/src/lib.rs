@@ -9,20 +9,6 @@
 #[cfg(test)]
 mod tests;
 
-use util::{
-    bank::{
-        BankMapID, BankState, DepositInfo, InternalTransferInfo, OnChainTreasuryID, ReservationInfo,
-    },
-    traits::{
-        CalculateOwnership, CheckBankBalances, CommitAndTransfer, CommitSpendReservation,
-        DefaultBankPermissions, DepositIntoBank, DepositSpendOps, DepositsAndSpends, ExecuteSpends,
-        FreeToReserved, GenerateUniqueID, GroupMembership, IDIsAvailable, Increment,
-        MoveFundsOutCommittedOnly, MoveFundsOutUnCommittedOnly, OnChainBank,
-        OrganizationSupervisorPermissions, RegisterAccount, ReservationMachine,
-        SeededGenerateUniqueID, ShareInformation, ShareIssuance, TermSheetExit,
-    }, // ChainSudoPermissions, GetGroupSize
-};
-
 use codec::Codec;
 use frame_support::{
     decl_error, decl_event, decl_module, decl_storage, ensure,
@@ -31,6 +17,7 @@ use frame_support::{
     Parameter,
 };
 use frame_system::{self as system, ensure_signed};
+use sp_core::TypeId;
 use sp_runtime::{
     traits::{AccountIdConversion, AtLeast32Bit, MaybeSerializeDeserialize, Member, Zero}, // CheckedAdd, CheckedSub
     DispatchError,
@@ -38,6 +25,18 @@ use sp_runtime::{
     Permill,
 };
 use sp_std::{fmt::Debug, prelude::*};
+use util::{
+    bank::{BankMapID, BankState, DepositInfo, InternalTransferInfo, ReservationInfo},
+    traits::{
+        CalculateOwnership, CheckBankBalances, CommitAndTransfer, CommitSpendReservation,
+        DefaultBankPermissions, DepositIntoBank, DepositSpendOps, DepositsAndSpends, ExecuteSpends,
+        FreeToReserved, GenerateUniqueID, GroupMembership, IDIsAvailable, Increment,
+        MoveFundsOutCommittedOnly, MoveFundsOutUnCommittedOnly, OnChainBank,
+        OrganizationSupervisorPermissions, RegisterAccount, ReservationMachine,
+        SeededGenerateUniqueID, ShareInformation, ShareIssuance, TermSheetExit,
+    }, // ChainSudoPermissions, GetGroupSize
+    uid::IdWrapper,
+};
 
 /// The balances type for this module
 type BalanceOf<T> =
@@ -46,6 +45,13 @@ type BalanceOf<T> =
 pub trait Trait: system::Trait + org::Trait + vote::Trait {
     type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 
+    /// The currency type for on-chain transactions
+    type Currency: Currency<Self::AccountId>;
+
+    /// The unique identifier type for every on-chain bank, convertible into the address which holds all funds in the account (with `to_account_id()`)
+    type TreasuryId: TypeId + Codec + Default + Clone + PartialEq + Debug + Increment;
+
+    /// The unique identifier for objects associated with each on-chain bank
     type BankAssociatedId: Parameter
         + Member
         + AtLeast32Bit
@@ -57,9 +63,6 @@ pub trait Trait: system::Trait + org::Trait + vote::Trait {
         + PartialOrd
         + PartialEq
         + Zero;
-
-    /// The currency type for on-chain transactions
-    type Currency: Currency<Self::AccountId>;
 
     /// The minimum amount for opening a bank account in the context of this module
     type MinimumInitialDeposit: Get<BalanceOf<Self>>;
@@ -73,16 +76,17 @@ decl_event!(
         <T as org::Trait>::IpfsReference,
         <T as Trait>::BankAssociatedId,
         Balance = BalanceOf<T>,
+        <T as Trait>::TreasuryId,
     {
-        RegisteredNewOnChainBank(AccountId, OnChainTreasuryID, Balance, OrgId, Option<OrgId>),
-        CapitalDepositedIntoOnChainBankAccount(AccountId, OnChainTreasuryID, Balance, IpfsReference),
-        SpendReservedForBankAccount(AccountId, OnChainTreasuryID, BankAssociatedId, IpfsReference, Balance, OrgId),
-        CommitSpendBeforeInternalTransfer(AccountId, OnChainTreasuryID, BankAssociatedId, Balance),
-        UnReserveUncommittedReservationToMakeFree(AccountId, OnChainTreasuryID, BankAssociatedId, Balance),
-        UnReserveCommittedReservationToMakeFree(AccountId, OnChainTreasuryID, BankAssociatedId, Balance),
-        InternalTransferExecutedAndSpendingPowerDoledOutToController(AccountId, OnChainTreasuryID, IpfsReference, BankAssociatedId, Balance, OrgId),
-        SpendRequestForInternalTransferApprovedAndExecuted(OnChainTreasuryID, AccountId, Balance, BankAssociatedId),
-        AccountLeftMembershipAndWithdrewProportionOfFreeCapitalInBank(OnChainTreasuryID, AccountId, Balance),
+        RegisteredNewOnChainBank(AccountId, TreasuryId, Balance, OrgId, Option<OrgId>),
+        CapitalDepositedIntoOnChainBankAccount(AccountId, TreasuryId, Balance, IpfsReference),
+        SpendReservedForBankAccount(AccountId, TreasuryId, BankAssociatedId, IpfsReference, Balance, OrgId),
+        CommitSpendBeforeInternalTransfer(AccountId, TreasuryId, BankAssociatedId, Balance),
+        UnReserveUncommittedReservationToMakeFree(AccountId, TreasuryId, BankAssociatedId, Balance),
+        UnReserveCommittedReservationToMakeFree(AccountId, TreasuryId, BankAssociatedId, Balance),
+        InternalTransferExecutedAndSpendingPowerDoledOutToController(AccountId, TreasuryId, IpfsReference, BankAssociatedId, Balance, OrgId),
+        SpendRequestForInternalTransferApprovedAndExecuted(TreasuryId, AccountId, Balance, BankAssociatedId),
+        AccountLeftMembershipAndWithdrewProportionOfFreeCapitalInBank(TreasuryId, AccountId, Balance),
     }
 );
 
@@ -121,32 +125,32 @@ decl_error! {
 decl_storage! {
     trait Store for Module<T: Trait> as Bank {
         /// Counter for generating uniqe bank accounts
-        BankIDNonce get(fn bank_id_nonce): OnChainTreasuryID;
+        BankIDNonce get(fn bank_id_nonce): IdWrapper<T::TreasuryId>;
 
         /// Map for managing counters associated with associated maps
         BankAssociatedNonces get(fn bank_associated_nonces): double_map
-            hasher(blake2_128_concat) OnChainTreasuryID,
+            hasher(blake2_128_concat) T::TreasuryId,
             hasher(blake2_128_concat) BankMapID => T::BankAssociatedId;
 
-        /// Source of truth for OnChainTreasuryId uniqueness checks
-        /// WARNING: do not append a prefix because the keyspace is used directly for checking uniqueness of `OnChainTreasuryId`
+        /// Source of truth for T::TreasuryId uniqueness checks
+        /// WARNING: do not append a prefix because the keyspace is used directly for checking uniqueness of `T::TreasuryId`
         /// TODO: pre-reserve any known ModuleId's that could be accidentally generated that already exist elsewhere
         pub BankStores get(fn bank_stores): map
-            hasher(blake2_128_concat) OnChainTreasuryID => Option<BankState<T::OrgId, BalanceOf<T>>>;
+            hasher(blake2_128_concat) T::TreasuryId => Option<BankState<T::OrgId, BalanceOf<T>>>;
 
-        /// All deposits made into the joint bank account represented by OnChainTreasuryID
+        /// All deposits made into the joint bank account represented by T::TreasuryId
         pub Deposits get(fn deposits): double_map
-            hasher(blake2_128_concat) OnChainTreasuryID,
+            hasher(blake2_128_concat) T::TreasuryId,
             hasher(blake2_128_concat) T::BankAssociatedId => Option<DepositInfo<T::AccountId, T::IpfsReference, BalanceOf<T>>>;
 
         /// Spend reservations which designated a committee for formally transferring ownership to specific destination addresses
         pub SpendReservations get(fn spend_reservations): double_map
-            hasher(blake2_128_concat) OnChainTreasuryID,
+            hasher(blake2_128_concat) T::TreasuryId,
             hasher(blake2_128_concat) T::BankAssociatedId => Option<ReservationInfo<T::IpfsReference, BalanceOf<T>, T::OrgId>>;
 
         /// Internal transfers of control over capital that allow transfer liquidity rights to the current controller
         pub InternalTransfers get(fn internal_transfers): double_map
-            hasher(blake2_128_concat) OnChainTreasuryID,
+            hasher(blake2_128_concat) T::TreasuryId,
             hasher(blake2_128_concat) T::BankAssociatedId => Option<InternalTransferInfo<T::BankAssociatedId, T::IpfsReference, BalanceOf<T>, T::OrgId>>;
     }
 }
@@ -159,14 +163,14 @@ decl_module! {
         #[weight = 0]
         fn deposit_from_signer_for_bank_account(
             origin,
-            bank_id: OnChainTreasuryID,
+            bank_id: T::TreasuryId,
             amount: BalanceOf<T>,
             //savings_tax: Option<Permill>, // l8rrr
             reason: T::IpfsReference,
         ) -> DispatchResult {
             let depositer = ensure_signed(origin)?;
 
-            Self::deposit_into_bank(depositer.clone(), bank_id, amount, reason.clone())?;
+            Self::deposit_into_bank(depositer.clone(), bank_id.clone(), amount, reason.clone())?;
             Self::deposit_event(RawEvent::CapitalDepositedIntoOnChainBankAccount(depositer, bank_id, amount, reason));
             Ok(())
         }
@@ -188,87 +192,87 @@ decl_module! {
         #[weight = 0]
         fn reserve_spend_for_bank_account(
             origin,
-            bank_id: OnChainTreasuryID,
+            bank_id: T::TreasuryId,
             reason: T::IpfsReference,
             amount: BalanceOf<T>,
             controller: T::OrgId,
         ) -> DispatchResult {
             let reserver = ensure_signed(origin)?;
-            let authentication = Self::can_reserve_for_spend(reserver.clone(), bank_id)?;
+            let authentication = Self::can_reserve_for_spend(reserver.clone(), bank_id.clone())?;
             ensure!(authentication, Error::<T>::CannotReserveSpendBCPermissionsCheckFails);
-            let new_reservation_id = Self::reserve_for_spend(bank_id, reason.clone(), amount, controller.clone())?;
+            let new_reservation_id = Self::reserve_for_spend(bank_id.clone(), reason.clone(), amount, controller.clone())?;
             Self::deposit_event(RawEvent::SpendReservedForBankAccount(reserver, bank_id, new_reservation_id, reason, amount, controller));
             Ok(())
         }
         #[weight = 0]
         fn commit_reserved_spend_for_transfer_inside_bank_account(
             origin,
-            bank_id: OnChainTreasuryID,
+            bank_id: T::TreasuryId,
             reservation_id: T::BankAssociatedId,
             reason: T::IpfsReference,
             amount: BalanceOf<T>,
         ) -> DispatchResult {
             let committer = ensure_signed(origin)?;
-            let authentication = Self::can_commit_reserved_spend_for_transfer(committer.clone(), bank_id)?;
+            let authentication = Self::can_commit_reserved_spend_for_transfer(committer.clone(), bank_id.clone())?;
             ensure!(authentication, Error::<T>::CannotCommitSpendBCPermissionsCheckFails);
-            Self::commit_reserved_spend_for_transfer(bank_id, reservation_id, amount)?;
+            Self::commit_reserved_spend_for_transfer(bank_id.clone(), reservation_id, amount)?;
             Self::deposit_event(RawEvent::CommitSpendBeforeInternalTransfer(committer, bank_id, reservation_id, amount));
             Ok(())
         }
         #[weight = 0]
         fn unreserve_uncommitted_reservation_to_make_free(
             origin,
-            bank_id: OnChainTreasuryID,
+            bank_id: T::TreasuryId,
             reservation_id: T::BankAssociatedId,
             amount: BalanceOf<T>,
         ) -> DispatchResult {
             let qualified_bank_controller = ensure_signed(origin)?;
-            let authentication = Self::can_unreserve_uncommitted_to_make_free(qualified_bank_controller.clone(), bank_id)?;
+            let authentication = Self::can_unreserve_uncommitted_to_make_free(qualified_bank_controller.clone(), bank_id.clone())?;
             ensure!(authentication, Error::<T>::CannotUnReserveUncommittedBCPermissionsCheckFails);
-            Self::unreserve_uncommitted_to_make_free(bank_id, reservation_id, amount)?;
+            Self::unreserve_uncommitted_to_make_free(bank_id.clone(), reservation_id, amount)?;
             Self::deposit_event(RawEvent::UnReserveUncommittedReservationToMakeFree(qualified_bank_controller, bank_id, reservation_id, amount));
             Ok(())
         }
         #[weight = 0]
         fn unreserve_committed_reservation_to_make_free(
             origin,
-            bank_id: OnChainTreasuryID,
+            bank_id: T::TreasuryId,
             reservation_id: T::BankAssociatedId,
             amount: BalanceOf<T>,
         ) -> DispatchResult {
             let qualified_spend_reservation_controller = ensure_signed(origin)?;
-            let authentication = Self::can_unreserve_committed_to_make_free(qualified_spend_reservation_controller.clone(), bank_id)?;
+            let authentication = Self::can_unreserve_committed_to_make_free(qualified_spend_reservation_controller.clone(), bank_id.clone())?;
             ensure!(authentication, Error::<T>::CannotUnReserveCommittedBCPermissionsCheckFails);
-            Self::unreserve_committed_to_make_free(bank_id, reservation_id, amount)?;
+            Self::unreserve_committed_to_make_free(bank_id.clone(), reservation_id, amount)?;
             Self::deposit_event(RawEvent::UnReserveCommittedReservationToMakeFree(qualified_spend_reservation_controller, bank_id, reservation_id, amount));
             Ok(())
         }
         #[weight = 0]
         fn transfer_spending_for_spend_commitment(
             origin,
-            bank_id: OnChainTreasuryID,
+            bank_id: T::TreasuryId,
             reason: T::IpfsReference,
             reservation_id: T::BankAssociatedId,
             amount: BalanceOf<T>,
             committed_controller: T::OrgId,
         ) -> DispatchResult {
             let qualified_spend_reservation_controller = ensure_signed(origin)?;
-            let authentication = Self::can_transfer_spending_power(qualified_spend_reservation_controller.clone(), bank_id)?;
+            let authentication = Self::can_transfer_spending_power(qualified_spend_reservation_controller.clone(), bank_id.clone())?;
             ensure!(authentication, Error::<T>::CannotTransferSpendingPowerBCPermissionsCheckFails);
-            Self::transfer_spending_power(bank_id, reason.clone(), reservation_id, amount, committed_controller.clone())?;
+            Self::transfer_spending_power(bank_id.clone(), reason.clone(), reservation_id, amount, committed_controller.clone())?;
             Self::deposit_event(RawEvent::InternalTransferExecutedAndSpendingPowerDoledOutToController(qualified_spend_reservation_controller, bank_id, reason, reservation_id, amount, committed_controller));
             Ok(())
         }
         #[weight = 0]
         fn withdraw_by_referencing_internal_transfer(
             origin,
-            bank_id: OnChainTreasuryID,
+            bank_id: T::TreasuryId,
             transfer_id: T::BankAssociatedId,
             amount: BalanceOf<T>,
         ) -> DispatchResult {
             let requester = ensure_signed(origin)?;
             let amount_received = Self::spend_from_transfers(
-                bank_id,
+                bank_id.clone(),
                 transfer_id,
                 requester.clone(),
                 amount,
@@ -279,10 +283,10 @@ decl_module! {
         #[weight = 0]
         fn burn_all_shares_to_leave_weighted_membership_bank_and_withdraw_related_free_capital(
             origin,
-            bank_id: OnChainTreasuryID,
+            bank_id: T::TreasuryId,
         ) -> DispatchResult {
             let leaving_member = ensure_signed(origin)?;
-            let amount_withdrawn_by_burning_shares = Self::burn_shares_to_exit_bank_ownership(leaving_member.clone(), bank_id)?;
+            let amount_withdrawn_by_burning_shares = Self::burn_shares_to_exit_bank_ownership(leaving_member.clone(), bank_id.clone())?;
             Self::deposit_event(RawEvent::AccountLeftMembershipAndWithdrewProportionOfFreeCapitalInBank(bank_id, leaving_member, amount_withdrawn_by_burning_shares));
             Ok(())
         }
@@ -290,12 +294,12 @@ decl_module! {
 }
 
 impl<T: Trait> Module<T> {
-    pub fn account_id(id: OnChainTreasuryID) -> T::AccountId {
+    pub fn account_id(id: T::TreasuryId) -> T::AccountId {
         id.into_account()
     }
     // deposits
     pub fn get_deposits_by_account(
-        bank_id: OnChainTreasuryID,
+        bank_id: T::TreasuryId,
         depositer: T::AccountId,
     ) -> Option<Vec<DepositInfo<T::AccountId, T::IpfsReference, BalanceOf<T>>>> {
         let depositers_deposits = <Deposits<T>>::iter()
@@ -309,7 +313,7 @@ impl<T: Trait> Module<T> {
         }
     }
     pub fn total_capital_deposited_by_account(
-        bank_id: OnChainTreasuryID,
+        bank_id: T::TreasuryId,
         depositer: T::AccountId,
     ) -> BalanceOf<T> {
         <Deposits<T>>::iter()
@@ -320,7 +324,7 @@ impl<T: Trait> Module<T> {
     }
     // reservations
     pub fn get_amount_left_in_spend_reservation(
-        bank_id: OnChainTreasuryID,
+        bank_id: T::TreasuryId,
         reservation_id: T::BankAssociatedId,
     ) -> Option<BalanceOf<T>> {
         if let Some(spend_reservation) = <SpendReservations<T>>::get(bank_id, reservation_id) {
@@ -330,7 +334,7 @@ impl<T: Trait> Module<T> {
         }
     }
     pub fn get_reservations_for_organization(
-        bank_id: OnChainTreasuryID,
+        bank_id: T::TreasuryId,
         invoker: T::OrgId,
     ) -> Option<Vec<ReservationInfo<T::IpfsReference, BalanceOf<T>, T::OrgId>>> {
         let ret = <SpendReservations<T>>::iter()
@@ -344,7 +348,7 @@ impl<T: Trait> Module<T> {
         }
     }
     pub fn total_capital_reserved_for_organization(
-        bank_id: OnChainTreasuryID,
+        bank_id: T::TreasuryId,
         invoker: T::OrgId,
     ) -> BalanceOf<T> {
         <SpendReservations<T>>::iter()
@@ -355,7 +359,7 @@ impl<T: Trait> Module<T> {
     }
     // transfers
     pub fn get_amount_left_in_approved_transfer(
-        bank_id: OnChainTreasuryID,
+        bank_id: T::TreasuryId,
         transfer_id: T::BankAssociatedId,
     ) -> Option<BalanceOf<T>> {
         if let Some(internal_transfer) = <InternalTransfers<T>>::get(bank_id, transfer_id) {
@@ -365,7 +369,7 @@ impl<T: Trait> Module<T> {
         }
     }
     pub fn get_transfers_for_governance_config(
-        bank_id: OnChainTreasuryID,
+        bank_id: T::TreasuryId,
         invoker: T::OrgId,
     ) -> Option<
         Vec<InternalTransferInfo<T::BankAssociatedId, T::IpfsReference, BalanceOf<T>, T::OrgId>>,
@@ -383,7 +387,7 @@ impl<T: Trait> Module<T> {
         }
     }
     pub fn total_capital_transferred_to_governance_config(
-        bank_id: OnChainTreasuryID,
+        bank_id: T::TreasuryId,
         invoker: T::OrgId,
     ) -> BalanceOf<T> {
         <InternalTransfers<T>>::iter()
@@ -394,14 +398,14 @@ impl<T: Trait> Module<T> {
     }
 }
 
-impl<T: Trait> IDIsAvailable<OnChainTreasuryID> for Module<T> {
-    fn id_is_available(id: OnChainTreasuryID) -> bool {
-        <BankStores<T>>::get(id).is_none()
+impl<T: Trait> IDIsAvailable<IdWrapper<T::TreasuryId>> for Module<T> {
+    fn id_is_available(id: IdWrapper<T::TreasuryId>) -> bool {
+        <BankStores<T>>::get(id.id).is_none()
     }
 }
 
-impl<T: Trait> IDIsAvailable<(OnChainTreasuryID, BankMapID, T::BankAssociatedId)> for Module<T> {
-    fn id_is_available(id: (OnChainTreasuryID, BankMapID, T::BankAssociatedId)) -> bool {
+impl<T: Trait> IDIsAvailable<(T::TreasuryId, BankMapID, T::BankAssociatedId)> for Module<T> {
+    fn id_is_available(id: (T::TreasuryId, BankMapID, T::BankAssociatedId)) -> bool {
         match id.1 {
             BankMapID::Deposit => <Deposits<T>>::get(id.0, id.2).is_none(),
             BankMapID::Reservation => <SpendReservations<T>>::get(id.0, id.2).is_none(),
@@ -410,12 +414,12 @@ impl<T: Trait> IDIsAvailable<(OnChainTreasuryID, BankMapID, T::BankAssociatedId)
     }
 }
 
-impl<T: Trait> SeededGenerateUniqueID<T::BankAssociatedId, (OnChainTreasuryID, BankMapID)>
+impl<T: Trait> SeededGenerateUniqueID<T::BankAssociatedId, (T::TreasuryId, BankMapID)>
     for Module<T>
 {
-    fn seeded_generate_unique_id(seed: (OnChainTreasuryID, BankMapID)) -> T::BankAssociatedId {
-        let mut new_id = <BankAssociatedNonces<T>>::get(seed.0, seed.1) + 1u32.into();
-        while !Self::id_is_available((seed.0, seed.1, new_id)) {
+    fn seeded_generate_unique_id(seed: (T::TreasuryId, BankMapID)) -> T::BankAssociatedId {
+        let mut new_id = <BankAssociatedNonces<T>>::get(seed.0.clone(), seed.1) + 1u32.into();
+        while !Self::id_is_available((seed.0.clone(), seed.1, new_id)) {
             new_id += 1u32.into();
         }
         <BankAssociatedNonces<T>>::insert(seed.0, seed.1, new_id);
@@ -423,19 +427,19 @@ impl<T: Trait> SeededGenerateUniqueID<T::BankAssociatedId, (OnChainTreasuryID, B
     }
 }
 
-impl<T: Trait> GenerateUniqueID<OnChainTreasuryID> for Module<T> {
-    fn generate_unique_id() -> OnChainTreasuryID {
-        let mut treasury_nonce_id = BankIDNonce::get().increment();
-        while !Self::id_is_available(treasury_nonce_id) {
-            treasury_nonce_id = treasury_nonce_id.increment();
+impl<T: Trait> GenerateUniqueID<T::TreasuryId> for Module<T> {
+    fn generate_unique_id() -> T::TreasuryId {
+        let mut treasury_nonce_id = <BankIDNonce<T>>::get().id.clone().increment();
+        while !Self::id_is_available(IdWrapper::new(treasury_nonce_id.clone())) {
+            treasury_nonce_id = treasury_nonce_id.id.clone().increment();
         }
-        BankIDNonce::put(treasury_nonce_id);
+        <BankIDNonce<T>>::put(IdWrapper::new(treasury_nonce_id.clone()));
         treasury_nonce_id
     }
 }
 
 impl<T: Trait> OnChainBank for Module<T> {
-    type TreasuryId = OnChainTreasuryID;
+    type TreasuryId = T::TreasuryId;
     type AssociatedId = T::BankAssociatedId;
 }
 
@@ -454,11 +458,11 @@ impl<T: Trait> RegisterAccount<T::OrgId, T::AccountId, BalanceOf<T>> for Module<
         let new_bank = BankState::new_from_deposit(owners, amount, operators);
         // generate bank id
         let generated_id = Self::generate_unique_id();
-        let to = Self::account_id(generated_id);
+        let to = Self::account_id(generated_id.clone());
         // make transfer to seed joint bank account with amount
         T::Currency::transfer(&from, &to, amount, ExistenceRequirement::KeepAlive)?;
         // insert new bank store
-        <BankStores<T>>::insert(generated_id, new_bank);
+        <BankStores<T>>::insert(generated_id.clone(), new_bank);
         Ok(generated_id)
     }
     fn verify_owner(bank_id: Self::TreasuryId, org: T::OrgId) -> bool {
@@ -648,17 +652,17 @@ impl<T: Trait> DepositIntoBank<T::OrgId, T::AccountId, BalanceOf<T>, T::IpfsRefe
         reason: T::IpfsReference,
     ) -> Result<Self::AssociatedId, DispatchError> {
         let bank_account =
-            <BankStores<T>>::get(to_bank_id).ok_or(Error::<T>::BankAccountNotFoundForDeposit)?;
+            <BankStores<T>>::get(&to_bank_id).ok_or(Error::<T>::BankAccountNotFoundForDeposit)?;
         // make the transfer
-        let dest = Self::account_id(to_bank_id);
+        let dest = Self::account_id(to_bank_id.clone());
         T::Currency::transfer(&from, &dest, amount, ExistenceRequirement::KeepAlive)?;
         // update the amount stored in the bank
         let updated_bank_balance = Self::make_infallible_deposit_into_free(bank_account, amount);
-        <BankStores<T>>::insert(to_bank_id, updated_bank_balance);
+        <BankStores<T>>::insert(to_bank_id.clone(), updated_bank_balance);
         // form the deposit, no savings_pct allocated
         let new_deposit = DepositInfo::new(from, reason, amount);
         // generate unique deposit
-        let deposit_id = Self::seeded_generate_unique_id((to_bank_id, BankMapID::Deposit));
+        let deposit_id = Self::seeded_generate_unique_id((to_bank_id.clone(), BankMapID::Deposit));
 
         // TODO: when will we delete this, how long is this going to stay in storage?
         <Deposits<T>>::insert(to_bank_id, deposit_id, new_deposit);
@@ -675,7 +679,7 @@ impl<T: Trait> ReservationMachine<T::OrgId, T::AccountId, BalanceOf<T>, T::IpfsR
         amount: BalanceOf<T>,
         controller: T::OrgId,
     ) -> Result<Self::AssociatedId, DispatchError> {
-        let bank_account = <BankStores<T>>::get(bank_id)
+        let bank_account = <BankStores<T>>::get(&bank_id)
             .ok_or(Error::<T>::BankAccountNotFoundForSpendReservation)?;
         // create Reservation Info object with 100 percent of it uncommitted
         let new_spend_reservation = ReservationInfo::new(reason, amount, controller);
@@ -683,9 +687,10 @@ impl<T: Trait> ReservationMachine<T::OrgId, T::AccountId, BalanceOf<T>, T::IpfsR
         let new_bank = bank_account
             .move_from_free_to_reserved(amount)
             .ok_or(Error::<T>::NotEnoughFundsInFreeToAllowReservation)?;
-        let reservation_id = Self::seeded_generate_unique_id((bank_id, BankMapID::Reservation));
+        let reservation_id =
+            Self::seeded_generate_unique_id((bank_id.clone(), BankMapID::Reservation));
         // insert new bank account
-        <BankStores<T>>::insert(bank_id, new_bank);
+        <BankStores<T>>::insert(bank_id.clone(), new_bank);
         <SpendReservations<T>>::insert(bank_id, reservation_id, new_spend_reservation);
         Ok(reservation_id)
     }
@@ -694,9 +699,9 @@ impl<T: Trait> ReservationMachine<T::OrgId, T::AccountId, BalanceOf<T>, T::IpfsR
         reservation_id: Self::AssociatedId,
         amount: BalanceOf<T>,
     ) -> DispatchResult {
-        let _ = <BankStores<T>>::get(bank_id)
+        let _ = <BankStores<T>>::get(&bank_id)
             .ok_or(Error::<T>::BankAccountNotFoundForSpendReservation)?;
-        let spend_reservation = <SpendReservations<T>>::get(bank_id, reservation_id)
+        let spend_reservation = <SpendReservations<T>>::get(bank_id.clone(), reservation_id)
             .ok_or(Error::<T>::SpendReservationNotFound)?;
         // only commit the reserved part and return error if not enough funds
         let reservation_after_commit = spend_reservation
@@ -712,9 +717,9 @@ impl<T: Trait> ReservationMachine<T::OrgId, T::AccountId, BalanceOf<T>, T::IpfsR
         reservation_id: Self::AssociatedId,
         amount: BalanceOf<T>,
     ) -> DispatchResult {
-        let bank_account = <BankStores<T>>::get(bank_id)
+        let bank_account = <BankStores<T>>::get(&bank_id)
             .ok_or(Error::<T>::BankAccountNotFoundForSpendReservation)?;
-        let spend_reservation = <SpendReservations<T>>::get(bank_id, reservation_id)
+        let spend_reservation = <SpendReservations<T>>::get(bank_id.clone(), reservation_id)
             .ok_or(Error::<T>::SpendReservationNotFound)?;
         // this request must be approved by unreserving from the spend_reservation's uncommitted funds
         let new_spend_reservation = spend_reservation
@@ -727,7 +732,7 @@ impl<T: Trait> ReservationMachine<T::OrgId, T::AccountId, BalanceOf<T>, T::IpfsR
             .ok_or(Error::<T>::NotEnoughFundsInBankReservedToSatisfyUnReserveUnComittedRequest)?
             .deposit_into_free(amount);
         // insert new bank account
-        <BankStores<T>>::insert(bank_id, new_bank_account);
+        <BankStores<T>>::insert(bank_id.clone(), new_bank_account);
         // insert update spend reservation object (with the new, lower amount reserved)
         <SpendReservations<T>>::insert(bank_id, reservation_id, new_spend_reservation);
         Ok(())
@@ -737,9 +742,9 @@ impl<T: Trait> ReservationMachine<T::OrgId, T::AccountId, BalanceOf<T>, T::IpfsR
         reservation_id: Self::AssociatedId,
         amount: BalanceOf<T>,
     ) -> DispatchResult {
-        let bank_account = <BankStores<T>>::get(bank_id)
+        let bank_account = <BankStores<T>>::get(&bank_id)
             .ok_or(Error::<T>::BankAccountNotFoundForSpendReservation)?;
-        let spend_reservation = <SpendReservations<T>>::get(bank_id, reservation_id)
+        let spend_reservation = <SpendReservations<T>>::get(bank_id.clone(), reservation_id)
             .ok_or(Error::<T>::SpendReservationNotFound)?;
         // ensure that the amount is less than the spend reservation amount
         let new_spend_reservation = spend_reservation
@@ -751,7 +756,7 @@ impl<T: Trait> ReservationMachine<T::OrgId, T::AccountId, BalanceOf<T>, T::IpfsR
             .ok_or(Error::<T>::NotEnoughFundsCommittedToSatisfyUnreserveAndFreeRequest)?
             .deposit_into_free(amount);
         // insert new bank account
-        <BankStores<T>>::insert(bank_id, new_bank_account);
+        <BankStores<T>>::insert(bank_id.clone(), new_bank_account);
         // insert update spend reservation object (with the new, lower amount reserved)
         <SpendReservations<T>>::insert(bank_id, reservation_id, new_spend_reservation);
         Ok(())
@@ -767,9 +772,9 @@ impl<T: Trait> ReservationMachine<T::OrgId, T::AccountId, BalanceOf<T>, T::IpfsR
         // move control of funds to new outer group which can reserve or withdraw directly
         new_controller: T::OrgId,
     ) -> Result<Self::AssociatedId, DispatchError> {
-        let _ = <BankStores<T>>::get(bank_id)
+        let _ = <BankStores<T>>::get(&bank_id)
             .ok_or(Error::<T>::BankAccountNotFoundForInternalTransfer)?;
-        let spend_reservation = <SpendReservations<T>>::get(bank_id, reservation_id)
+        let spend_reservation = <SpendReservations<T>>::get(bank_id.clone(), reservation_id)
             .ok_or(Error::<T>::SpendReservationNotFound)?;
         // fallible spend from committed part of `ReservationInfo` object
         let new_spend_reservation = spend_reservation
@@ -780,11 +785,11 @@ impl<T: Trait> ReservationMachine<T::OrgId, T::AccountId, BalanceOf<T>, T::IpfsR
             InternalTransferInfo::new(reservation_id, reason, amount, new_controller);
         // generate the unique transfer_id
         let new_transfer_id =
-            Self::seeded_generate_unique_id((bank_id, BankMapID::InternalTransfer));
+            Self::seeded_generate_unique_id((bank_id.clone(), BankMapID::InternalTransfer));
         // insert transfer_info, thereby unlocking the capital for the `new_controller` group
-        <InternalTransfers<T>>::insert(bank_id, new_transfer_id, new_transfer);
+        <InternalTransfers<T>>::insert(bank_id.clone(), new_transfer_id, new_transfer);
         // insert update reservation info after the transfer was made
-        <SpendReservations<T>>::insert(bank_id, reservation_id, new_spend_reservation);
+        <SpendReservations<T>>::insert(bank_id.clone(), reservation_id, new_spend_reservation);
         Ok(new_transfer_id)
     }
 }
@@ -799,9 +804,9 @@ impl<T: Trait> CommitAndTransfer<T::OrgId, T::AccountId, BalanceOf<T>, T::IpfsRe
         amount: BalanceOf<T>,
         new_controller: T::OrgId,
     ) -> Result<Self::AssociatedId, DispatchError> {
-        let _ = <BankStores<T>>::get(bank_id)
+        let _ = <BankStores<T>>::get(&bank_id)
             .ok_or(Error::<T>::BankAccountNotFoundForInternalTransfer)?;
-        let spend_reservation = <SpendReservations<T>>::get(bank_id, reservation_id)
+        let spend_reservation = <SpendReservations<T>>::get(&bank_id, reservation_id)
             .ok_or(Error::<T>::SpendReservationNotFound)?;
         // ensure that the amount is less than the spend reservation amount
         let new_spend_reservation = spend_reservation
@@ -812,9 +817,9 @@ impl<T: Trait> CommitAndTransfer<T::OrgId, T::AccountId, BalanceOf<T>, T::IpfsRe
             InternalTransferInfo::new(reservation_id, reason, amount, new_controller);
         // generate the unique transfer_id
         let new_transfer_id =
-            Self::seeded_generate_unique_id((bank_id, BankMapID::InternalTransfer));
+            Self::seeded_generate_unique_id((bank_id.clone(), BankMapID::InternalTransfer));
         // insert transfer_info, thereby unlocking the capital for the `new_controller` group
-        <InternalTransfers<T>>::insert(bank_id, new_transfer_id, new_transfer);
+        <InternalTransfers<T>>::insert(bank_id.clone(), new_transfer_id, new_transfer);
         // insert update reservation info after the transfer was made
         <SpendReservations<T>>::insert(bank_id, reservation_id, new_spend_reservation);
         Ok(new_transfer_id)
@@ -834,12 +839,12 @@ impl<T: Trait> ExecuteSpends<T::OrgId, T::AccountId, BalanceOf<T>, T::IpfsRefere
         to: T::AccountId,
         amount: BalanceOf<T>,
     ) -> DispatchResult {
-        let bank_account = <BankStores<T>>::get(from_bank_id)
+        let bank_account = <BankStores<T>>::get(&from_bank_id)
             .ok_or(Error::<T>::BankAccountNotFoundForWithdrawal)?;
         // update the amount stored in the bank
         let bank_after_withdrawal = Self::fallible_spend_from_free(bank_account, amount)?;
         // make the transfer
-        let from = Self::account_id(from_bank_id);
+        let from = Self::account_id(from_bank_id.clone());
         T::Currency::transfer(&from, &to, amount, ExistenceRequirement::KeepAlive)?;
         <BankStores<T>>::insert(from_bank_id, bank_after_withdrawal);
         Ok(())
@@ -853,9 +858,9 @@ impl<T: Trait> ExecuteSpends<T::OrgId, T::AccountId, BalanceOf<T>, T::IpfsRefere
         to: T::AccountId,
         amount: BalanceOf<T>,
     ) -> Result<BalanceOf<T>, DispatchError> {
-        let bank_account = <BankStores<T>>::get(from_bank_id)
+        let bank_account = <BankStores<T>>::get(&from_bank_id)
             .ok_or(Error::<T>::BankAccountNotFoundForWithdrawal)?;
-        let transfer_certificate = <InternalTransfers<T>>::get(from_bank_id, id)
+        let transfer_certificate = <InternalTransfers<T>>::get(&from_bank_id, id)
             .ok_or(Error::<T>::AllSpendsFromReserveMustReferenceInternalTransferNotFound)?;
         // calculate due amount
         let due_amount = Self::calculate_proportional_amount_for_account(
@@ -873,10 +878,10 @@ impl<T: Trait> ExecuteSpends<T::OrgId, T::AccountId, BalanceOf<T>, T::IpfsRefere
         // update the bank store
         let bank_after_withdrawal = Self::fallible_spend_from_reserved(bank_account, amount)?;
         // make the transfer
-        let from = Self::account_id(from_bank_id);
+        let from = Self::account_id(from_bank_id.clone());
         T::Currency::transfer(&from, &to, amount, ExistenceRequirement::KeepAlive)?;
         // insert updated transfer certificate after amount is spent
-        <InternalTransfers<T>>::insert(from_bank_id, id, new_transfer_certificate);
+        <InternalTransfers<T>>::insert(from_bank_id.clone(), id, new_transfer_certificate);
         <BankStores<T>>::insert(from_bank_id, bank_after_withdrawal);
         Ok(amount)
     }
@@ -888,8 +893,8 @@ impl<T: Trait> TermSheetExit<T::AccountId, BalanceOf<T>> for Module<T> {
         rage_quitter: T::AccountId,
         bank_id: Self::TreasuryId,
     ) -> Result<BalanceOf<T>, DispatchError> {
-        let bank_account =
-            <BankStores<T>>::get(bank_id).ok_or(Error::<T>::BankAccountNotFoundForTermSheetExit)?;
+        let bank_account = <BankStores<T>>::get(&bank_id)
+            .ok_or(Error::<T>::BankAccountNotFoundForTermSheetExit)?;
         let withdrawal_amount = Self::calculate_proportional_amount_for_account(
             bank_account.free(),
             rage_quitter.clone(),
@@ -899,7 +904,7 @@ impl<T: Trait> TermSheetExit<T::AccountId, BalanceOf<T>> for Module<T> {
         // burn the shares first
         let _ = <org::Module<T>>::burn(bank_account.owners(), rage_quitter.clone(), None, false)?;
         // Then make the transfer
-        Self::spend_from_free(bank_id, rage_quitter, withdrawal_amount)?;
+        Self::spend_from_free(bank_id.clone(), rage_quitter, withdrawal_amount)?;
         // -> TODO: if transfer errs, there should be a dispute process to recover share ownership by presenting
         // the transaction that Erred
         Ok(withdrawal_amount)

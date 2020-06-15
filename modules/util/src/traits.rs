@@ -262,10 +262,11 @@ pub trait VoteOnProposal<AccountId, OrgId, Threshold, BlockNumber, VoteId, Hash>
 }
 
 // ~~~~~~~~ Bank Module ~~~~~~~~
-use crate::bank::OnChainTreasuryID;
 use codec::Codec;
+use sp_core::TypeId;
+use sp_std::fmt::Debug;
 pub trait OnChainBank {
-    type TreasuryId: Clone + From<OnChainTreasuryID>;
+    type TreasuryId: TypeId + Codec + Default + Clone + PartialEq + Debug + Increment;
     type AssociatedId: Codec + Copy + PartialEq + From<u32> + Zero;
 }
 pub trait RegisterAccount<OrgId, AccountId, Currency>: OnChainBank {

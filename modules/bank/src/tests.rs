@@ -3,7 +3,7 @@ use frame_support::{assert_noop, assert_ok};
 use frame_support::{impl_outer_event, impl_outer_origin, parameter_types, weights::Weight};
 use sp_core::H256;
 use sp_runtime::{testing::Header, traits::IdentityLookup, Perbill};
-use util::{organization::Organization, traits::GroupMembership};
+use util::{bank::OnChainTreasuryID, organization::Organization, traits::GroupMembership};
 
 // type aliases
 pub type AccountId = u64;
@@ -89,8 +89,9 @@ parameter_types! {
 }
 impl Trait for Test {
     type Event = TestEvent;
-    type BankAssociatedId = u64;
     type Currency = Balances;
+    type TreasuryId = OnChainTreasuryID;
+    type BankAssociatedId = u64;
     type MinimumInitialDeposit = MinimumInitialDeposit;
 }
 pub type System = system::Module<Test>;
@@ -98,7 +99,7 @@ pub type Balances = pallet_balances::Module<Test>;
 pub type Org = org::Module<Test>;
 pub type Bank = Module<Test>;
 
-fn get_last_event() -> RawEvent<u64, u64, u32, u64, u64> {
+fn get_last_event() -> RawEvent<u64, u64, u32, u64, u64, OnChainTreasuryID> {
     System::events()
         .into_iter()
         .map(|r| r.event)

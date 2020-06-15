@@ -26,7 +26,7 @@ use sp_runtime::{
 use sp_std::{fmt::Debug, prelude::*};
 
 use util::{
-    bank::{BankMapID, OnChainTreasuryID},
+    bank::BankMapID,
     bounty::{
         ApplicationState, BountyInformation, BountyMapID, GrantApplication, MilestoneStatus,
         MilestoneSubmission, ReviewBoard, TeamID,
@@ -41,13 +41,16 @@ use util::{
         StartTeamConsentPetition, SubmitGrantApplication, SubmitMilestone,
         SuperviseGrantApplication, TermSheetExit, UseTermsOfAgreement,
     }, // UpdateVoteTopic, VoteOnProposal
+    uid::IdWrapper,
     vote::{ThresholdConfig, VoteOutcome},
 };
 
 /// The balances type for this module
 pub type BalanceOf<T> =
     <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
-/// The associate identifier for the bank module
+/// The identifier for banks in the bank module (and the address)
+pub type TreasuryId<T> = <<T as Trait>::Bank as OnChainBank>::TreasuryId;
+/// The identifier associated with bank state in the bank module
 pub type BankAssociatedId<T> = <<T as Trait>::Bank as OnChainBank>::AssociatedId;
 
 pub trait Trait: frame_system::Trait + org::Trait + vote::Trait {
@@ -71,10 +74,10 @@ pub trait Trait: frame_system::Trait + org::Trait + vote::Trait {
         + Zero;
 
     /// The bank module
-    type Bank: IDIsAvailable<OnChainTreasuryID>
-        + IDIsAvailable<(OnChainTreasuryID, BankMapID, BankAssociatedId<Self>)>
-        + GenerateUniqueID<OnChainTreasuryID>
-        + SeededGenerateUniqueID<BankAssociatedId<Self>, (OnChainTreasuryID, BankMapID)>
+    type Bank: IDIsAvailable<TreasuryId<Self>>
+        + IDIsAvailable<(TreasuryId<Self>, BankMapID, BankAssociatedId<Self>)>
+        + GenerateUniqueID<TreasuryId<Self>>
+        + SeededGenerateUniqueID<BankAssociatedId<Self>, (TreasuryId<Self>, BankMapID)>
         + OnChainBank
         + RegisterAccount<Self::OrgId, Self::AccountId, BalanceOf<Self>>
         + CalculateOwnership<Self::OrgId, Self::AccountId, BalanceOf<Self>, Permill>
@@ -103,10 +106,11 @@ decl_event!(
         <T as vote::Trait>::VoteId,
         <T as Trait>::BountyId,
         Currency = BalanceOf<T>,
+        TreasuryId = TreasuryId<T>,
         BankAssociatedId = BankAssociatedId<T>,
     {
-        FoundationRegisteredFromOnChainBank(OrgId, OnChainTreasuryID),
-        FoundationPostedBounty(AccountId, OrgId, BountyId, OnChainTreasuryID, IpfsReference, Currency, Currency),
+        FoundationRegisteredFromOnChainBank(OrgId, TreasuryId),
+        FoundationPostedBounty(AccountId, OrgId, BountyId, TreasuryId, IpfsReference, Currency, Currency),
         // BountyId, Application Id (u32s)
         GrantApplicationSubmittedForBounty(AccountId, BountyId, BountyId, IpfsReference, Currency),
         // BountyId, Application Id (u32s)
@@ -116,9 +120,9 @@ decl_event!(
         // BountyId, ApplicationId, MilestoneId (u32s)
         MilestoneSubmitted(AccountId, BountyId, BountyId, BountyId),
         // BountyId, MilestoneId (u32s)
-        MilestoneReviewTriggered(AccountId, BountyId, BountyId, MilestoneStatus<OrgId, VoteId, BankAssociatedId>),
-        SudoApprovedMilestone(AccountId, BountyId, BountyId, MilestoneStatus<OrgId, VoteId, BankAssociatedId>),
-        MilestonePolled(AccountId, BountyId, BountyId, MilestoneStatus<OrgId, VoteId, BankAssociatedId>),
+        MilestoneReviewTriggered(AccountId, BountyId, BountyId, MilestoneStatus<OrgId, VoteId, TreasuryId, BankAssociatedId>),
+        SudoApprovedMilestone(AccountId, BountyId, BountyId, MilestoneStatus<OrgId, VoteId, TreasuryId, BankAssociatedId>),
+        MilestonePolled(AccountId, BountyId, BountyId, MilestoneStatus<OrgId, VoteId, TreasuryId, BankAssociatedId>),
     }
 );
 
@@ -173,16 +177,17 @@ decl_storage! {
             hasher(opaque_blake2_256) T::BountyId,
             hasher(opaque_blake2_256) BountyMapID => T::BountyId;
 
-        /// Unordered set for tracking foundations as relationships b/t OrgId and OnChainTreasuryID
+        /// Unordered set for tracking foundations as relationships b/t OrgId and TreasuryId<T>
         RegisteredFoundations get(fn registered_foundations): double_map
             hasher(blake2_128_concat) T::OrgId,
-            hasher(blake2_128_concat) OnChainTreasuryID => bool;
+            hasher(blake2_128_concat) TreasuryId<T> => bool;
 
         /// Posted bounty details
         FoundationSponsoredBounties get(fn foundation_sponsored_bounties): map
             hasher(opaque_blake2_256) T::BountyId => Option<
                 BountyInformation<
                     T::OrgId,
+                    TreasuryId<T>,
                     BankAssociatedId<T>,
                     T::IpfsReference,
                     BalanceOf<T>,
@@ -198,7 +203,7 @@ decl_storage! {
         /// All milestone submissions
         MilestoneSubmissions get(fn milestone_submissions): double_map
             hasher(opaque_blake2_256) T::BountyId,
-            hasher(opaque_blake2_256) T::BountyId => Option<MilestoneSubmission<T::IpfsReference, BalanceOf<T>, T::AccountId, T::BountyId, MilestoneStatus<T::OrgId, T::VoteId, BankAssociatedId<T>>>>;
+            hasher(opaque_blake2_256) T::BountyId => Option<MilestoneSubmission<T::IpfsReference, BalanceOf<T>, T::AccountId, T::BountyId, MilestoneStatus<T::OrgId, T::VoteId, TreasuryId<T>, BankAssociatedId<T>>>>;
     }
 }
 
@@ -211,7 +216,7 @@ decl_module! {
         pub fn direct__register_foundation_from_existing_bank(
             origin,
             registered_organization: T::OrgId,
-            bank_account: OnChainTreasuryID,
+            bank_account: TreasuryId<T>,
         ) -> DispatchResult {
             let _ = ensure_signed(origin)?;
             // any authorization would need to be HERE
@@ -225,7 +230,7 @@ decl_module! {
             origin,
             registered_organization: T::OrgId,
             description: T::IpfsReference,
-            bank_account: OnChainTreasuryID,
+            bank_account: TreasuryId<T>,
             amount_reserved_for_bounty: BalanceOf<T>, // collateral requirement
             amount_claimed_available: BalanceOf<T>,  // claimed available amount, not necessarily liquid
             acceptance_committee: ReviewBoard<T::OrgId, T::AccountId, T::IpfsReference, ThresholdConfig<T::Signal, Permill>>,
@@ -355,18 +360,8 @@ impl<T: Trait> Module<T> {
     }
 }
 
-pub struct BIdWrapper<T> {
-    pub id: T,
-}
-
-impl<T: Copy> BIdWrapper<T> {
-    pub fn new(id: T) -> BIdWrapper<T> {
-        BIdWrapper { id }
-    }
-}
-
-impl<T: Trait> IDIsAvailable<BIdWrapper<T::BountyId>> for Module<T> {
-    fn id_is_available(id: BIdWrapper<T::BountyId>) -> bool {
+impl<T: Trait> IDIsAvailable<IdWrapper<T::BountyId>> for Module<T> {
+    fn id_is_available(id: IdWrapper<T::BountyId>) -> bool {
         <FoundationSponsoredBounties<T>>::get(id.id).is_none()
     }
 }
@@ -394,7 +389,7 @@ impl<T: Trait> SeededGenerateUniqueID<T::BountyId, (T::BountyId, BountyMapID)> f
 impl<T: Trait> GenerateUniqueID<T::BountyId> for Module<T> {
     fn generate_unique_id() -> T::BountyId {
         let mut id_counter = <BountyNonce<T>>::get() + 1u32.into();
-        while !Self::id_is_available(BIdWrapper::new(id_counter)) {
+        while !Self::id_is_available(IdWrapper::new(id_counter)) {
             id_counter += 1u32.into();
         }
         <BountyNonce<T>>::put(id_counter);
@@ -403,7 +398,7 @@ impl<T: Trait> GenerateUniqueID<T::BountyId> for Module<T> {
 }
 
 impl<T: Trait> RegisterFoundation<T::OrgId, BalanceOf<T>, T::AccountId> for Module<T> {
-    type BankId = OnChainTreasuryID;
+    type BankId = TreasuryId<T>;
     // helper method to quickly bootstrap an organization from a donation
     // -> it should register an on-chain bank account and return the on-chain bank account identifier
     // TODO
@@ -440,6 +435,7 @@ impl<T: Trait>
     /// Bounty information type
     type BountyInfo = BountyInformation<
         T::OrgId,
+        TreasuryId<T>,
         BankAssociatedId<T>,
         T::IpfsReference,
         BalanceOf<T>,
@@ -807,7 +803,7 @@ impl<T: Trait>
         T::IpfsReference,
         BalanceOf<T>,
         T::VoteId,
-        OnChainTreasuryID,
+        TreasuryId<T>,
         BankAssociatedId<T>,
     > for Module<T>
 {
@@ -816,9 +812,9 @@ impl<T: Trait>
         BalanceOf<T>,
         T::AccountId,
         T::BountyId,
-        MilestoneStatus<T::OrgId, T::VoteId, BankAssociatedId<T>>,
+        MilestoneStatus<T::OrgId, T::VoteId, TreasuryId<T>, BankAssociatedId<T>>,
     >;
-    type MilestoneState = MilestoneStatus<T::OrgId, T::VoteId, BankAssociatedId<T>>;
+    type MilestoneState = MilestoneStatus<T::OrgId, T::VoteId, TreasuryId<T>, BankAssociatedId<T>>;
     fn submit_milestone(
         caller: T::AccountId, // must be from the team, maybe check sudo || flat_org_member
         bounty_id: T::BountyId,
