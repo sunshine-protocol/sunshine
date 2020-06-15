@@ -174,12 +174,12 @@ decl_storage! {
             hasher(opaque_blake2_256) BountyMapID => T::BountyId;
 
         /// Unordered set for tracking foundations as relationships b/t OrgId and OnChainTreasuryID
-        RegisteredFoundations get(fn registered_foundations): double_map
+        pub RegisteredFoundations get(fn registered_foundations): double_map
             hasher(blake2_128_concat) T::OrgId,
             hasher(blake2_128_concat) OnChainTreasuryID => bool;
 
         /// Posted bounty details
-        FoundationSponsoredBounties get(fn foundation_sponsored_bounties): map
+        pub FoundationSponsoredBounties get(fn foundation_sponsored_bounties): map
             hasher(opaque_blake2_256) T::BountyId => Option<
                 BountyInformation<
                     T::OrgId,
@@ -191,12 +191,12 @@ decl_storage! {
             >;
 
         /// All bounty applications
-        BountyApplications get(fn bounty_applications): double_map
+        pub BountyApplications get(fn bounty_applications): double_map
             hasher(opaque_blake2_256) T::BountyId,
             hasher(opaque_blake2_256) T::BountyId => Option<GrantApplication<T::AccountId, T::Shares, BalanceOf<T>, T::IpfsReference, ApplicationState<TeamID<T::OrgId, T::AccountId>, T::VoteId>>>;
 
         /// All milestone submissions
-        MilestoneSubmissions get(fn milestone_submissions): double_map
+        pub MilestoneSubmissions get(fn milestone_submissions): double_map
             hasher(opaque_blake2_256) T::BountyId,
             hasher(opaque_blake2_256) T::BountyId => Option<MilestoneSubmission<T::IpfsReference, BalanceOf<T>, T::AccountId, T::BountyId, MilestoneStatus<T::OrgId, T::VoteId, BankAssociatedId<T>>>>;
     }
