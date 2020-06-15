@@ -78,3 +78,49 @@ pub struct MilestoneSubmissionsStore<T: Bounty> {
 }
 
 // ~~ (Calls, Events) ~~
+
+#[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
+pub struct DirectRegisterFoundationFromExistingBankCall<T: Bounty> {
+    pub registered_organization: <T as Org>::OrgId,
+    pub bank_account: OnChainTreasuryID,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
+pub struct FoundationRegisteredFromOnChainBankEvent<T: Bounty> {
+    pub registered_organization: <T as Org>::OrgId,
+    pub bank_account: OnChainTreasuryID,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
+pub struct DirectCreateBountyCall<T: Bounty> {
+    pub registered_organization: <T as Org>::OrgId,
+    pub description: <T as Org>::IpfsReference,
+    pub bank_account: OnChainTreasuryID,
+    pub amount_reserved_for_bounty: BalanceOf<T>,
+    pub amount_claimed_available: BalanceOf<T>,
+    pub acceptance_committee: ReviewBoard<
+        <T as Org>::OrgId,
+        <T as System>::AccountId,
+        <T as Org>::IpfsReference,
+        ThresholdConfig<<T as Vote>::Signal, Permill>,
+    >,
+    pub supervision_committee: Option<
+        ReviewBoard<
+            <T as Org>::OrgId,
+            <T as System>::AccountId,
+            <T as Org>::IpfsReference,
+            ThresholdConfig<<T as Vote>::Signal, Permill>,
+        >,
+    >,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
+pub struct FoundationPostedBountyEvent<T: Bounty> {
+    pub bounty_creator: <T as System>::AccountId,
+    pub registered_organization: <T as Org>::OrgId,
+    pub bounty_identifier: T::BountyId,
+    pub bank_account: OnChainTreasuryID,
+    pub description: <T as Org>::IpfsReference,
+    pub amount_reserved_for_bounty: BalanceOf<T>,
+    pub amount_claimed_available: BalanceOf<T>,
+}

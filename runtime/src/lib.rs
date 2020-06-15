@@ -338,7 +338,7 @@ impl vote::Trait for Runtime {
 pub use bank;
 parameter_types! {
     // minimum deposit to register an on-chain bank
-    pub const MinimumInitialDeposit: u64 = 5;
+    pub const MinimumInitialDeposit: u128 = 5;
 }
 impl bank::Trait for Runtime {
     type Event = Event;
@@ -349,13 +349,11 @@ impl bank::Trait for Runtime {
 pub use bounty;
 parameter_types! {
     pub const MinimumBountyCollateralRatio: Permill = Permill::from_percent(20);
-    pub const BountyLowerBound: u64 = 10;
+    pub const BountyLowerBound: u128 = 10;
 }
 impl bounty::Trait for Runtime {
     type Event = Event;
-    type Currency = Balances;
     type BountyId = u64;
-    type Bank = Bank;
     type MinimumBountyCollateralRatio = MinimumBountyCollateralRatio;
     type BountyLowerBound = BountyLowerBound;
 }

@@ -26,36 +26,31 @@ use sp_runtime::{
 use sp_std::{fmt::Debug, prelude::*};
 
 use util::{
-    bank::{BankMapID, OnChainTreasuryID},
+    bank::OnChainTreasuryID,
     bounty::{
         ApplicationState, BountyInformation, BountyMapID, GrantApplication, MilestoneStatus,
         MilestoneSubmission, ReviewBoard, TeamID,
     }, //BountyPaymentTracker
     organization::TermsOfAgreement,
     traits::{
-        ApproveGrant, ApproveWithoutTransfer, CalculateOwnership, CheckBankBalances,
-        CommitAndTransfer, CreateBounty, DepositIntoBank, DepositsAndSpends, ExecuteSpends,
-        GenerateUniqueID, GetTeamOrg, GetVoteOutcome, IDIsAvailable, OnChainBank, OpenVote,
-        RegisterAccount, RegisterFoundation, RegisterOrganization, ReservationMachine,
-        SeededGenerateUniqueID, SetMakeTransfer, SpendApprovedGrant, StartReview,
-        StartTeamConsentPetition, SubmitGrantApplication, SubmitMilestone,
-        SuperviseGrantApplication, TermSheetExit, UseTermsOfAgreement,
+        ApproveGrant, ApproveWithoutTransfer, CommitAndTransfer, CreateBounty, GenerateUniqueID,
+        GetTeamOrg, GetVoteOutcome, IDIsAvailable, OpenVote, RegisterAccount, RegisterFoundation,
+        RegisterOrganization, ReservationMachine, SeededGenerateUniqueID, SetMakeTransfer,
+        SpendApprovedGrant, StartReview, StartTeamConsentPetition, SubmitGrantApplication,
+        SubmitMilestone, SuperviseGrantApplication, UseTermsOfAgreement,
     }, // UpdateVoteTopic, VoteOnProposal
     vote::{ThresholdConfig, VoteOutcome},
 };
 
 /// The balances type for this module
 pub type BalanceOf<T> =
-    <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
+    <<T as bank::Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 /// The associate identifier for the bank module
-pub type BankAssociatedId<T> = <<T as Trait>::Bank as OnChainBank>::AssociatedId;
+pub type BankAssociatedId<T> = <T as bank::Trait>::BankAssociatedId;
 
-pub trait Trait: frame_system::Trait + org::Trait + vote::Trait {
+pub trait Trait: frame_system::Trait + org::Trait + vote::Trait + bank::Trait {
     /// The overarching event type
     type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
-
-    /// The currency type for on-chain transactions
-    type Currency: Currency<Self::AccountId>;
 
     /// The bounty identifier in this module
     type BountyId: Parameter
@@ -69,22 +64,6 @@ pub trait Trait: frame_system::Trait + org::Trait + vote::Trait {
         + PartialOrd
         + PartialEq
         + Zero;
-
-    /// The bank module
-    type Bank: IDIsAvailable<OnChainTreasuryID>
-        + IDIsAvailable<(OnChainTreasuryID, BankMapID, BankAssociatedId<Self>)>
-        + GenerateUniqueID<OnChainTreasuryID>
-        + SeededGenerateUniqueID<BankAssociatedId<Self>, (OnChainTreasuryID, BankMapID)>
-        + OnChainBank
-        + RegisterAccount<Self::OrgId, Self::AccountId, BalanceOf<Self>>
-        + CalculateOwnership<Self::OrgId, Self::AccountId, BalanceOf<Self>, Permill>
-        + DepositsAndSpends<BalanceOf<Self>>
-        + CheckBankBalances<BalanceOf<Self>>
-        + DepositIntoBank<Self::OrgId, Self::AccountId, BalanceOf<Self>, Self::IpfsReference>
-        + ReservationMachine<Self::OrgId, Self::AccountId, BalanceOf<Self>, Self::IpfsReference>
-        + ExecuteSpends<Self::OrgId, Self::AccountId, BalanceOf<Self>, Self::IpfsReference>
-        + CommitAndTransfer<Self::OrgId, Self::AccountId, BalanceOf<Self>, Self::IpfsReference>
-        + TermSheetExit<Self::AccountId, BalanceOf<Self>>;
 
     /// This is the minimum percent of the total bounty that must be reserved as collateral
     type MinimumBountyCollateralRatio: Get<Permill>;
@@ -416,11 +395,7 @@ impl<T: Trait> RegisterFoundation<T::OrgId, BalanceOf<T>, T::AccountId> for Modu
     }
     fn register_foundation_from_existing_bank(org: T::OrgId, bank: Self::BankId) -> DispatchResult {
         ensure!(
-            <<T as Trait>::Bank as RegisterAccount<
-                T::OrgId,
-                T::AccountId,
-                BalanceOf<T>,
-            >>::verify_owner(bank.into(), org),
+            <bank::Module<T>>::verify_owner(bank.into(), org),
             Error::<T>::CannotRegisterFoundationFromOrgBankRelationshipThatDNE
         );
         <RegisteredFoundations<T>>::insert(org, bank, true);
@@ -489,12 +464,7 @@ impl<T: Trait>
         );
 
         // reserve `amount_reserved_for_bounty` here by calling into `bank-onchain`
-        let spend_reservation_id = <<T as Trait>::Bank as ReservationMachine<
-            T::OrgId,
-            T::AccountId,
-            BalanceOf<T>,
-            T::IpfsReference,
-        >>::reserve_for_spend(
+        let spend_reservation_id = <bank::Module<T>>::reserve_for_spend(
             bank_account.into(),
             description.clone(),
             amount_reserved_for_bounty,
@@ -878,12 +848,7 @@ impl<T: Trait>
         // commit reserved spend for transfer before vote begins
         // -> this sets funds aside in case of a positive outcome,
         // it is not _optimistic_, it is fair to add this commitment
-        <<T as Trait>::Bank as ReservationMachine<
-            T::OrgId,
-            T::AccountId,
-            BalanceOf<T>,
-            T::IpfsReference,
-        >>::commit_reserved_spend_for_transfer(
+        <bank::Module<T>>::commit_reserved_spend_for_transfer(
             bounty_info.bank_account().into(),
             bounty_info.spend_reservation(),
             milestone_submission.amount(),
@@ -937,12 +902,7 @@ impl<T: Trait>
             .ok_or(Error::<T>::SubmissionIsNotReadyForReview)?;
 
         // commit and transfer control over capital in the same step
-        let new_transfer_id = <<T as Trait>::Bank as CommitAndTransfer<
-            T::OrgId,
-            T::AccountId,
-            BalanceOf<T>,
-            T::IpfsReference,
-        >>::commit_and_transfer_spending_power(
+        let new_transfer_id = <bank::Module<T>>::commit_and_transfer_spending_power(
             bounty_info.bank_account().into(),
             bounty_info.spend_reservation(),
             milestone_submission.submission(), // reason = hash of milestone submission
@@ -987,12 +947,7 @@ impl<T: Trait>
                             application.spend_approved_grant(milestone_submission.amount())
                         {
                             // make the transfer
-                            let transfer_id = <<T as Trait>::Bank as ReservationMachine<
-                                T::OrgId,
-                                T::AccountId,
-                                BalanceOf<T>,
-                                T::IpfsReference,
-                            >>::transfer_spending_power(
+                            let transfer_id = <bank::Module<T>>::transfer_spending_power(
                                 bounty_info.bank_account().into(),
                                 milestone_submission.submission(), // reason = hash of milestone submission
                                 bounty_info.spend_reservation(),
@@ -1031,12 +986,7 @@ impl<T: Trait>
                             application.spend_approved_grant(milestone_submission.amount())
                         {
                             // make the transfer
-                            let transfer_id = <<T as Trait>::Bank as ReservationMachine<
-                                T::OrgId,
-                                T::AccountId,
-                                BalanceOf<T>,
-                                T::IpfsReference,
-                            >>::transfer_spending_power(
+                            let transfer_id = <bank::Module<T>>::transfer_spending_power(
                                 bounty_info.bank_account().into(),
                                 milestone_submission.submission(), // reason = hash of milestone submission
                                 bounty_info.spend_reservation(),
@@ -1078,12 +1028,7 @@ impl<T: Trait>
                     application.spend_approved_grant(milestone_submission.amount())
                 {
                     // make the transfer
-                    let transfer_id = <<T as Trait>::Bank as ReservationMachine<
-                        T::OrgId,
-                        T::AccountId,
-                        BalanceOf<T>,
-                        T::IpfsReference,
-                    >>::transfer_spending_power(
+                    let transfer_id = <bank::Module<T>>::transfer_spending_power(
                         bounty_info.bank_account().into(),
                         milestone_submission.submission(), // reason = hash of milestone submission
                         bounty_info.spend_reservation(),
