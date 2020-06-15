@@ -31,7 +31,7 @@ pub trait Bank: System + Org + Vote {
         + Zero;
 
     /// The currency type for on-chain transactions
-    type Currency: Currency<<Self as System>::AccountId>;
+    type Currency: Currency<<Self as System>::AccountId> + Clone + Default + Codec + Send + 'static;
 }
 
 // ~~ Values (Constants) ~~
