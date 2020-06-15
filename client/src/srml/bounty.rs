@@ -1,17 +1,22 @@
 use crate::srml::{
-    bank::{Bank, BankEventsDecoder},
+    bank::{BalanceOf, Bank, BankEventsDecoder},
     org::{Org, OrgEventsDecoder},
     vote::{Vote, VoteEventsDecoder},
 };
 use codec::{Codec, Decode, Encode};
 use frame_support::Parameter;
-use sp_runtime::traits::{AtLeast32Bit, MaybeSerializeDeserialize, Member, Zero};
+use sp_runtime::{
+    traits::{AtLeast32Bit, MaybeSerializeDeserialize, Member, Zero},
+    Permill,
+};
 use std::fmt::Debug;
 use substrate_subxt::system::{System, SystemEventsDecoder};
-//use util::bounty::{};
+// use util::{
+//     // bounty::{},
+// };
 
 #[module]
-pub trait Bounty: System + Org + Vote {
+pub trait Bounty: System + Org + Vote + Bank {
     /// Identifier for bounty-related maps and submaps
     type BountyId: Parameter
         + Member
@@ -26,18 +31,14 @@ pub trait Bounty: System + Org + Vote {
         + Zero;
 }
 
-// // The Bank module inherited as an associated type
-// type Bank: IDIsAvailable<OnChainTreasuryID>
-// + IDIsAvailable<(OnChainTreasuryID, BankMapID, BankAssociatedId<Self>)>
-// + GenerateUniqueID<OnChainTreasuryID>
-// + SeededGenerateUniqueID<BankAssociatedId<Self>, (OnChainTreasuryID, BankMapID)>
-// + OnChainBank
-// + RegisterAccount<Self::OrgId, Self::AccountId, BalanceOf<Self>>
-// + CalculateOwnership<Self::OrgId, Self::AccountId, BalanceOf<Self>, Permill>
-// + DepositsAndSpends<BalanceOf<Self>>
-// + CheckBankBalances<BalanceOf<Self>>
-// + DepositIntoBank<Self::OrgId, Self::AccountId, BalanceOf<Self>, Self::IpfsReference>
-// + ReservationMachine<Self::OrgId, Self::AccountId, BalanceOf<Self>, Self::IpfsReference>
-// + ExecuteSpends<Self::OrgId, Self::AccountId, BalanceOf<Self>, Self::IpfsReference>
-// + CommitAndTransfer<Self::OrgId, Self::AccountId, BalanceOf<Self>, Self::IpfsReference>
-// + TermSheetExit<Self::AccountId, BalanceOf<Self>>;
+// ~~ Constants ~~
+
+#[derive(Clone, Debug, Eq, PartialEq, Encode)]
+pub struct MinimumBountyCollateralRatioConstant {
+    pub get: Permill,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Encode)]
+pub struct BountyLowerBoundConstant<T: Bounty> {
+    pub get: BalanceOf<T>,
+}
