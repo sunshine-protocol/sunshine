@@ -15,7 +15,7 @@ use utils_identity::cid::CidBytes;
 pub struct SunClient {
     client: Client,
     keystore: KeyStore,
-    ipld: BlockBuilder<Store, Codec>,
+    pub ipld: BlockBuilder<Store, Codec>,
 }
 
 impl SunClient {
