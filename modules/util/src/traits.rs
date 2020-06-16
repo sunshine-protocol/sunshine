@@ -662,7 +662,7 @@ pub trait SubmitMilestone<OrgId, AccountId, BountyId, Hash, Currency, VoteId, Ba
         + SetMakeTransfer<BankId, TransferId>;
     type MilestoneState;
     fn submit_milestone(
-        caller: AccountId, // must be from the team, maybe check sudo || flat_org_member
+        caller: AccountId,
         bounty_id: BountyId,
         application_id: BountyId,
         submission_reference: Hash,
@@ -682,4 +682,29 @@ pub trait SubmitMilestone<OrgId, AccountId, BountyId, Hash, Currency, VoteId, Ba
         bounty_id: BountyId,
         milestone_id: BountyId,
     ) -> Result<Self::MilestoneState, DispatchError>;
+}
+
+// We could remove`can_submit_grant_app` or `can_submit_milestone` because both of these paths log the submitter
+// in the associated state anyway so we might as well pass the caller into the methods that do this logic and
+// perform any context-based authentication there, but readability is more important at this point
+pub trait BountyPermissions<OrgId, TermsOfAgreement, AccountId, BountyId>:
+    UseTermsOfAgreement<OrgId, TermsOfAgreement>
+{
+    fn can_create_bounty(who: &AccountId, hosting_org: OrgId) -> bool;
+    fn can_submit_grant_app(who: &AccountId, terms: TermsOfAgreement) -> bool;
+    fn can_trigger_grant_app_review(
+        who: &AccountId,
+        bounty_id: BountyId,
+    ) -> Result<bool, DispatchError>;
+    fn can_poll_grant_app(who: &AccountId, bounty_id: BountyId) -> Result<bool, DispatchError>;
+    fn can_submit_milestone(
+        who: &AccountId,
+        bounty_id: BountyId,
+        application_id: BountyId,
+    ) -> Result<bool, DispatchError>;
+    fn can_poll_milestone(who: &AccountId, bounty_id: BountyId) -> Result<bool, DispatchError>;
+    fn can_trigger_milestone_review(
+        who: &AccountId,
+        bounty_id: BountyId,
+    ) -> Result<bool, DispatchError>;
 }

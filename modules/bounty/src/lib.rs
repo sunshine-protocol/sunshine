@@ -7,6 +7,13 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 //! The bounty module allows registered organizations with on-chain bank accounts to
 //! register as a foundation to post bounties and supervise ongoing grant pursuits.
+//!
+//! # (Id, Id) Design Justification
+//! "WHY so many double_maps in storage with (BountyId, BountyId)?"
+//! -> the prefix is the identifier for the `BountyId` for the bounty in question and the suffix
+//! `BountyId` is the unique identifier for this particular object associated with the bounty
+//! ...we use this structure for efficient clean up via double_map.remove_prefix() once
+//! a bounty needs to be removed from the storage state so that we can efficiently remove all associated state
 
 mod tests;
 
@@ -33,11 +40,12 @@ use util::{
     }, //BountyPaymentTracker
     organization::TermsOfAgreement,
     traits::{
-        ApproveGrant, ApproveWithoutTransfer, CommitAndTransfer, CreateBounty, GenerateUniqueID,
-        GetTeamOrg, GetVoteOutcome, IDIsAvailable, OpenVote, RegisterAccount, RegisterFoundation,
-        RegisterOrganization, ReservationMachine, SeededGenerateUniqueID, SetMakeTransfer,
-        SpendApprovedGrant, StartReview, StartTeamConsentPetition, SubmitGrantApplication,
-        SubmitMilestone, SuperviseGrantApplication, UseTermsOfAgreement,
+        ApproveGrant, ApproveWithoutTransfer, BountyPermissions, CommitAndTransfer, CreateBounty,
+        GenerateUniqueID, GetTeamOrg, GetVoteOutcome, GroupMembership, IDIsAvailable, OpenVote,
+        RegisterAccount, RegisterFoundation, RegisterOrganization, ReservationMachine,
+        SeededGenerateUniqueID, SetMakeTransfer, SpendApprovedGrant, StartReview,
+        StartTeamConsentPetition, SubmitGrantApplication, SubmitMilestone,
+        SuperviseGrantApplication, UseTermsOfAgreement,
     }, // UpdateVoteTopic, VoteOnProposal
     vote::{ThresholdConfig, VoteOutcome},
 };
@@ -119,7 +127,9 @@ decl_error! {
         CannotSudoApproveIfBountyDNE,
         CannotSudoApproveAppIfNotAssignedSudo,
         CannotSudoApproveIfGrantAppDNE,
+        CannotSubmitMilestoneIfBountyDNE,
         CannotSubmitMilestoneIfApplicationDNE,
+        CannotSubmitMilestoneIfApplicationNotApprovedAndLive,
         CannotTriggerMilestoneReviewIfBountyDNE,
         CannotTriggerMilestoneReviewUnlessMember,
         CannotSudoApproveMilestoneIfNotAssignedSudo,
@@ -135,7 +145,13 @@ decl_error! {
         ApplicationMustBeSubmittedAwaitingResponseToTriggerReview,
         ApplicationMustApprovedAndLiveWithTeamIDMatchingInput,
         MilestoneSubmissionRequestExceedsApprovedApplicationsLimit,
+        AccountNotAuthorizedToCreateBounty,
+        NotAuthorizedToSubmitGrantApplication,
         AccountNotAuthorizedToTriggerApplicationReview,
+        AccountNotAuthorizedToPollApplication,
+        AccountNotAuthorizedToSubmitMilestone,
+        AccountNotAuthorizedToPollMilestone,
+        AccountNotAuthorizedToTriggerMilestoneReview,
         ReviewBoardWeightedShapeDoesntSupportPetitionReview,
         ReviewBoardFlatShapeDoesntSupportThresholdReview,
         ApplicationMustBeUnderReviewToPoll,
@@ -211,7 +227,10 @@ decl_module! {
             supervision_committee: Option<ReviewBoard<T::OrgId, T::AccountId, T::IpfsReference, ThresholdConfig<T::Signal, Permill>>>,
         ) -> DispatchResult {
             let bounty_creator = ensure_signed(origin)?;
-            // TODO: AUTH
+            // auth
+            let authentication = Self::can_create_bounty(&bounty_creator, registered_organization);
+            ensure!(authentication, Error::<T>::AccountNotAuthorizedToCreateBounty);
+            // state machine execution
             let bounty_identifier = Self::create_bounty(
                 registered_organization,
                 bank_account,
@@ -241,6 +260,10 @@ decl_module! {
             terms_of_agreement: TermsOfAgreement<T::AccountId, T::Shares, T::IpfsReference>,
         ) -> DispatchResult {
             let submitter = ensure_signed(origin)?;
+            // auth
+            let authentication = Self::can_submit_grant_app(&submitter, terms_of_agreement.clone());
+            ensure!(authentication, Error::<T>::NotAuthorizedToSubmitGrantApplication);
+            // state machine execution
             let new_grant_app_id = Self::submit_grant_application(submitter.clone(), bounty_id, description.clone(), total_amount, terms_of_agreement)?;
             Self::deposit_event(RawEvent::GrantApplicationSubmittedForBounty(submitter, bounty_id, new_grant_app_id, description, total_amount));
             Ok(())
@@ -252,6 +275,10 @@ decl_module! {
             application_id: T::BountyId,
         ) -> DispatchResult {
             let trigger = ensure_signed(origin)?;
+            // auth
+            let authentication = Self::can_trigger_grant_app_review(&trigger, bounty_id)?;
+            ensure!(authentication, Error::<T>::AccountNotAuthorizedToTriggerApplicationReview);
+            // state machine execution
             let application_state = Self::trigger_application_review(bounty_id, application_id)?;
             Self::deposit_event(RawEvent::ApplicationReviewTriggered(trigger, bounty_id, application_id, application_state));
             Ok(())
@@ -273,7 +300,11 @@ decl_module! {
             bounty_id: T::BountyId,
             application_id: T::BountyId,
         ) -> DispatchResult {
-            let _ = ensure_signed(origin)?;
+            let poller = ensure_signed(origin)?;
+            // auth
+            let authentication = Self::can_poll_grant_app(&poller, bounty_id)?;
+            ensure!(authentication, Error::<T>::AccountNotAuthorizedToPollApplication);
+            // state machine execution
             let app_state = Self::poll_application(bounty_id, application_id)?;
             Self::deposit_event(RawEvent::ApplicationPolled(bounty_id, application_id, app_state));
             Ok(())
@@ -287,6 +318,10 @@ decl_module! {
             amount_requested: BalanceOf<T>,
         ) -> DispatchResult {
             let submitter = ensure_signed(origin)?;
+            // auth
+            let authentication = Self::can_submit_milestone(&submitter, bounty_id, application_id)?;
+            ensure!(authentication, Error::<T>::AccountNotAuthorizedToSubmitMilestone);
+            // state machine execution
             let new_milestone_id = Self::submit_milestone(submitter.clone(), bounty_id, application_id, submission_reference, amount_requested)?;
             Self::deposit_event(RawEvent::MilestoneSubmitted(submitter, bounty_id, application_id, new_milestone_id));
             Ok(())
@@ -298,6 +333,10 @@ decl_module! {
             milestone_id: T::BountyId,
         ) -> DispatchResult {
             let trigger = ensure_signed(origin)?;
+            // auth
+            let authentication = Self::can_trigger_milestone_review(&trigger, bounty_id)?;
+            ensure!(authentication, Error::<T>::AccountNotAuthorizedToTriggerMilestoneReview);
+            // state machine execution
             let milestone_state = Self::trigger_milestone_review(bounty_id, milestone_id)?;
             Self::deposit_event(RawEvent::MilestoneReviewTriggered(trigger, bounty_id, milestone_id, milestone_state));
             Ok(())
@@ -320,6 +359,10 @@ decl_module! {
             milestone_id: T::BountyId,
         ) -> DispatchResult {
             let poller = ensure_signed(origin)?;
+            // auth
+            let authentication = Self::can_poll_milestone(&poller, bounty_id)?;
+            ensure!(authentication, Error::<T>::AccountNotAuthorizedToPollMilestone);
+            // state machine execution
             let milestone_state = Self::poll_milestone(bounty_id, milestone_id)?;
             Self::deposit_event(RawEvent::MilestonePolled(poller, bounty_id, milestone_id, milestone_state));
             Ok(())
@@ -1056,5 +1099,107 @@ impl<T: Trait>
             }
             _ => Ok(milestone_submission.state()),
         }
+    }
+}
+
+/// Default permissions logic, could save some lookups by putting this with module
+/// logic in the other traits impls but this is more readable
+impl<T: Trait>
+    BountyPermissions<
+        T::OrgId,
+        TermsOfAgreement<T::AccountId, T::Shares, T::IpfsReference>,
+        T::AccountId,
+        T::BountyId,
+    > for Module<T>
+{
+    // TODO: consider adding `can_register_foundation`
+    fn can_create_bounty(who: &T::AccountId, hosting_org: T::OrgId) -> bool {
+        // any member of the foundation can post a bounty
+        <org::Module<T>>::is_member_of_group(hosting_org, who)
+    }
+    fn can_submit_grant_app(
+        who: &T::AccountId,
+        terms: TermsOfAgreement<T::AccountId, T::Shares, T::IpfsReference>,
+    ) -> bool {
+        // ensure that the submitter is one of the accounts in the terms of agreement
+        terms
+            .weighted()
+            .into_iter()
+            .any(|(account, _)| &account == who)
+    }
+    fn can_trigger_grant_app_review(
+        who: &T::AccountId,
+        bounty_id: T::BountyId,
+    ) -> Result<bool, DispatchError> {
+        let bounty_info = <FoundationSponsoredBounties<T>>::get(bounty_id)
+            .ok_or(Error::<T>::CannotReviewApplicationIfBountyDNE)?;
+        // ensure that the who is a member of the bounty supervising committee
+        Ok(<org::Module<T>>::is_member_of_group(
+            bounty_info.acceptance_committee().org(),
+            who,
+        ))
+        // && ensure not a member of the applying team? That's an interesting check to at least add for demonstration purposes
+    }
+    fn can_poll_grant_app(
+        who: &T::AccountId,
+        bounty_id: T::BountyId,
+    ) -> Result<bool, DispatchError> {
+        let bounty_info = <FoundationSponsoredBounties<T>>::get(bounty_id)
+            .ok_or(Error::<T>::CannotReviewApplicationIfBountyDNE)?;
+        // ensure that the who is a member of the bounty supervising committee
+        Ok(<org::Module<T>>::is_member_of_group(
+            bounty_info.acceptance_committee().org(),
+            who,
+        ))
+        // || ensure not a member of the applying team? That's an interesting loosening to at least add for demonstration purposes
+    }
+    // save a lookup by passing in the object instead of the identifier to get the object from storage
+    fn can_submit_milestone(
+        who: &T::AccountId,
+        bounty_id: T::BountyId,
+        application_id: T::BountyId,
+    ) -> Result<bool, DispatchError> {
+        let _ = <FoundationSponsoredBounties<T>>::get(bounty_id)
+            .ok_or(Error::<T>::CannotSubmitMilestoneIfBountyDNE)?;
+        let team_org = <BountyApplications<T>>::get(bounty_id, application_id)
+            .ok_or(Error::<T>::CannotSubmitMilestoneIfApplicationDNE)?
+            .state()
+            .approved_and_live()
+            .ok_or(Error::<T>::CannotSubmitMilestoneIfApplicationNotApprovedAndLive)?;
+        Ok(<org::Module<T>>::is_member_of_group(team_org.org(), who))
+    }
+    fn can_poll_milestone(
+        who: &T::AccountId,
+        bounty_id: T::BountyId,
+    ) -> Result<bool, DispatchError> {
+        let bounty_info = <FoundationSponsoredBounties<T>>::get(bounty_id)
+            .ok_or(Error::<T>::CannotReviewApplicationIfBountyDNE)?;
+        let milestone_review_board = if let Some(board) = bounty_info.supervision_committee() {
+            board
+        } else {
+            bounty_info.acceptance_committee()
+        };
+        // ensure that the who is a member of the review board
+        Ok(<org::Module<T>>::is_member_of_group(
+            milestone_review_board.org(),
+            who,
+        ))
+    }
+    fn can_trigger_milestone_review(
+        who: &T::AccountId,
+        bounty_id: T::BountyId,
+    ) -> Result<bool, DispatchError> {
+        let bounty_info = <FoundationSponsoredBounties<T>>::get(bounty_id)
+            .ok_or(Error::<T>::CannotReviewApplicationIfBountyDNE)?;
+        let milestone_review_board = if let Some(board) = bounty_info.supervision_committee() {
+            board
+        } else {
+            bounty_info.acceptance_committee()
+        };
+        // ensure that the who is a member of the review board
+        Ok(<org::Module<T>>::is_member_of_group(
+            milestone_review_board.org(),
+            who,
+        ))
     }
 }
