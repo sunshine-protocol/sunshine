@@ -47,15 +47,6 @@ pub trait GetGroupSize<OrgId> {
 pub trait GroupMembership<OrgId, AccountId>: GetGroupSize<OrgId> {
     fn is_member_of_group(org_id: OrgId, who: &AccountId) -> bool;
 }
-
-/// All changes to the organizational membership are infallible
-pub trait ChangeGroupMembership<OrgId, AccountId>: GroupMembership<OrgId, AccountId> {
-    fn add_member_to_org(org_id: OrgId, new_member: AccountId, batch: bool) -> DispatchResult;
-    fn remove_member_from_org(org_id: OrgId, old_member: AccountId, batch: bool) -> DispatchResult;
-    /// WARNING: the vector fed as inputs to the following methods must have NO duplicates
-    fn batch_add_members_to_org(org_id: OrgId, new_members: Vec<AccountId>) -> DispatchResult;
-    fn batch_remove_members_from_org(org_id: OrgId, old_members: Vec<AccountId>) -> DispatchResult;
-}
 pub trait GetGroup<OrgId, AccountId> {
     fn get_group(organization: OrgId) -> Option<Vec<AccountId>>;
 }
@@ -277,28 +268,28 @@ pub trait OnChainBank {
     type TreasuryId: Clone + From<OnChainTreasuryID>;
     type AssociatedId: Codec + Copy + PartialEq + From<u32> + Zero;
 }
-pub trait RegisterAccount<OrgId, AccountId, GovernanceConfig, Currency>: OnChainBank {
+pub trait RegisterAccount<OrgId, AccountId, Currency>: OnChainBank {
     // requires a deposit of some size above the minimum and returns the OnChainTreasuryID
     fn register_account(
         owners: OrgId,
         from: AccountId,
         amount: Currency,
-        owner_s: GovernanceConfig,
+        operators: Option<OrgId>,
     ) -> Result<Self::TreasuryId, DispatchError>;
     fn verify_owner(bank_id: Self::TreasuryId, org: OrgId) -> bool;
 } // people should be eventually able to solicit loans from others to SEED a bank account but they cede some or all of the control...
 
-pub trait CalculateOwnership<OrgId, AccountId, GovernanceConfig, Currency, FineArithmetic>:
-    RegisterAccount<OrgId, AccountId, GovernanceConfig, Currency>
+pub trait CalculateOwnership<OrgId, AccountId, Currency, FineArithmetic>:
+    RegisterAccount<OrgId, AccountId, Currency>
 {
     fn calculate_proportion_ownership_for_account(
         account: AccountId,
-        group: GovernanceConfig,
+        group: OrgId,
     ) -> Result<FineArithmetic, DispatchError>;
     fn calculate_proportional_amount_for_account(
         amount: Currency,
         account: AccountId,
-        group: GovernanceConfig,
+        group: OrgId,
     ) -> Result<Currency, DispatchError>;
 }
 
@@ -345,8 +336,8 @@ pub trait CheckBankBalances<Currency>: OnChainBank + DepositsAndSpends<Currency>
     fn calculate_total_bank_balance_from_balances(bank_id: Self::TreasuryId) -> Option<Currency>;
 }
 
-pub trait DepositIntoBank<OrgId, AccountId, GovernanceConfig, Currency, Hash>:
-    RegisterAccount<OrgId, AccountId, GovernanceConfig, Currency> + DepositsAndSpends<Currency>
+pub trait DepositIntoBank<OrgId, AccountId, Currency, Hash>:
+    RegisterAccount<OrgId, AccountId, Currency> + DepositsAndSpends<Currency>
 {
     // get the bank corresponding to bank_id call infallible deposit
     // - only fails if `from` doesn't have enough Currency
@@ -358,14 +349,11 @@ pub trait DepositIntoBank<OrgId, AccountId, GovernanceConfig, Currency, Hash>:
     ) -> Result<Self::AssociatedId, DispatchError>; // returns DepositId
 }
 
-pub trait DefaultBankPermissions<OrgId, AccountId, Currency, WithdrawalPermissions>:
+pub trait DefaultBankPermissions<OrgId, AccountId, Currency>:
     DepositsAndSpends<Currency> + OnChainBank
 {
     fn can_register_account(account: AccountId, on_behalf_of: OrgId) -> bool;
-    fn withdrawal_permissions_satisfy_org_standards(
-        org: OrgId,
-        withdrawal_permissions: WithdrawalPermissions,
-    ) -> bool;
+    fn operator_satisfies_requirements(org: OrgId, operator: OrgId) -> bool;
     fn can_reserve_for_spend(
         account: AccountId,
         bank: Self::TreasuryId,
@@ -395,7 +383,7 @@ pub trait DefaultBankPermissions<OrgId, AccountId, Currency, WithdrawalPermissio
 // One good question here might be, why are we passing the caller into this
 // method and doing authentication in this method instead of doing it in the
 // runtime method and just limiting where this is called to places where
-// authenticaton occurs before it. The answer is that we're using objects in
+// authentication occurs before it. The answer is that we're using objects in
 // runtime storage to authenticate the call so we need to pass the caller
 // into the method -- if we don't do this, we'll require two storage calls
 // instead of one because we'll authenticate outside of this method by getting
@@ -403,15 +391,15 @@ pub trait DefaultBankPermissions<OrgId, AccountId, Currency, WithdrawalPermissio
 // get the storage item in this method (because we don't pass it in and I
 // struggle to see a clean design in which we pass it in but don't
 // encourage/enable unsafe puts)
-pub trait ReservationMachine<OrgId, AccountId, GovernanceConfig, Currency, Hash>:
-    RegisterAccount<OrgId, AccountId, GovernanceConfig, Currency>
+pub trait ReservationMachine<OrgId, AccountId, Currency, Hash>:
+    RegisterAccount<OrgId, AccountId, Currency>
 {
     fn reserve_for_spend(
         bank_id: Self::TreasuryId,
         reason: Hash,
         amount: Currency,
         // acceptance committee for approving set aside spends below the amount
-        controller: GovernanceConfig,
+        controller: OrgId,
     ) -> Result<Self::AssociatedId, DispatchError>;
     fn commit_reserved_spend_for_transfer(
         bank_id: Self::TreasuryId,
@@ -438,12 +426,12 @@ pub trait ReservationMachine<OrgId, AccountId, GovernanceConfig, Currency, Hash>
         reservation_id: Self::AssociatedId,
         amount: Currency,
         // move control of funds to new outer group which can reserve or withdraw directly
-        new_controller: GovernanceConfig,
+        new_controller: OrgId,
     ) -> Result<Self::AssociatedId, DispatchError>; // returns transfer_id
 }
 
-pub trait CommitAndTransfer<OrgId, AccountId, GovernanceConfig, Currency, Hash>:
-    ReservationMachine<OrgId, AccountId, GovernanceConfig, Currency, Hash>
+pub trait CommitAndTransfer<OrgId, AccountId, Currency, Hash>:
+    ReservationMachine<OrgId, AccountId, Currency, Hash>
 {
     // in one step
     fn commit_and_transfer_spending_power(
@@ -451,12 +439,12 @@ pub trait CommitAndTransfer<OrgId, AccountId, GovernanceConfig, Currency, Hash>:
         reservation_id: Self::AssociatedId,
         reason: Hash,
         amount: Currency,
-        new_controller: GovernanceConfig,
+        new_controller: OrgId,
     ) -> Result<Self::AssociatedId, DispatchError>;
 }
 
-pub trait ExecuteSpends<OrgId, AccountId, GovernanceConfig, Currency, Hash>:
-    OnChainBank + ReservationMachine<OrgId, AccountId, GovernanceConfig, Currency, Hash>
+pub trait ExecuteSpends<OrgId, AccountId, Currency, Hash>:
+    OnChainBank + ReservationMachine<OrgId, AccountId, Currency, Hash>
 {
     fn spend_from_free(
         from_bank_id: Self::TreasuryId,
@@ -674,7 +662,7 @@ pub trait SubmitMilestone<OrgId, AccountId, BountyId, Hash, Currency, VoteId, Ba
         + SetMakeTransfer<BankId, TransferId>;
     type MilestoneState;
     fn submit_milestone(
-        caller: AccountId, // must be from the team, maybe check sudo || flat_org_member
+        caller: AccountId,
         bounty_id: BountyId,
         application_id: BountyId,
         submission_reference: Hash,
@@ -694,4 +682,29 @@ pub trait SubmitMilestone<OrgId, AccountId, BountyId, Hash, Currency, VoteId, Ba
         bounty_id: BountyId,
         milestone_id: BountyId,
     ) -> Result<Self::MilestoneState, DispatchError>;
+}
+
+// We could remove`can_submit_grant_app` or `can_submit_milestone` because both of these paths log the submitter
+// in the associated state anyway so we might as well pass the caller into the methods that do this logic and
+// perform any context-based authentication there, but readability is more important at this point
+pub trait BountyPermissions<OrgId, TermsOfAgreement, AccountId, BountyId>:
+    UseTermsOfAgreement<OrgId, TermsOfAgreement>
+{
+    fn can_create_bounty(who: &AccountId, hosting_org: OrgId) -> bool;
+    fn can_submit_grant_app(who: &AccountId, terms: TermsOfAgreement) -> bool;
+    fn can_trigger_grant_app_review(
+        who: &AccountId,
+        bounty_id: BountyId,
+    ) -> Result<bool, DispatchError>;
+    fn can_poll_grant_app(who: &AccountId, bounty_id: BountyId) -> Result<bool, DispatchError>;
+    fn can_submit_milestone(
+        who: &AccountId,
+        bounty_id: BountyId,
+        application_id: BountyId,
+    ) -> Result<bool, DispatchError>;
+    fn can_poll_milestone(who: &AccountId, bounty_id: BountyId) -> Result<bool, DispatchError>;
+    fn can_trigger_milestone_review(
+        who: &AccountId,
+        bounty_id: BountyId,
+    ) -> Result<bool, DispatchError>;
 }

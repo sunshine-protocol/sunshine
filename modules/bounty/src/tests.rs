@@ -101,9 +101,7 @@ parameter_types! {
 }
 impl Trait for TestRuntime {
     type Event = TestEvent;
-    type Currency = Balances;
     type BountyId = u64;
-    type Bank = Bank;
     type MinimumBountyCollateralRatio = MinimumBountyCollateralRatio;
     type BountyLowerBound = BountyLowerBound;
 }

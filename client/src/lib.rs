@@ -3,6 +3,9 @@
 #[macro_use]
 extern crate substrate_subxt;
 
+#[macro_use]
+extern crate derive_new;
+
 mod error;
 #[cfg(feature = "light-client")]
 mod light_client;
@@ -13,4 +16,5 @@ mod sunshine;
 pub use error::Error;
 #[cfg(feature = "light-client")]
 pub use light_client::ChainType;
-pub use sunshine::Sunshine;
+pub use runtime::{ClientBuilder, Runtime};
+pub use sunshine::SunClient;

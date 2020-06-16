@@ -7,6 +7,13 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 //! The bounty module allows registered organizations with on-chain bank accounts to
 //! register as a foundation to post bounties and supervise ongoing grant pursuits.
+//!
+//! # (Id, Id) Design Justification
+//! "WHY so many double_maps in storage with (BountyId, BountyId)?"
+//! -> the prefix is the identifier for the `BountyId` for the bounty in question and the suffix
+//! `BountyId` is the unique identifier for this particular object associated with the bounty
+//! ...we use this structure for efficient clean up via double_map.remove_prefix() once
+//! a bounty needs to be removed from the storage state so that we can efficiently remove all associated state
 
 mod tests;
 
@@ -26,36 +33,32 @@ use sp_runtime::{
 use sp_std::{fmt::Debug, prelude::*};
 
 use util::{
-    bank::{BankMapID, OnChainTreasuryID, WithdrawalPermissions},
+    bank::OnChainTreasuryID,
     bounty::{
         ApplicationState, BountyInformation, BountyMapID, GrantApplication, MilestoneStatus,
         MilestoneSubmission, ReviewBoard, TeamID,
     }, //BountyPaymentTracker
     organization::TermsOfAgreement,
     traits::{
-        ApproveGrant, ApproveWithoutTransfer, CalculateOwnership, CheckBankBalances,
-        CommitAndTransfer, CreateBounty, DepositIntoBank, DepositsAndSpends, ExecuteSpends,
-        GenerateUniqueID, GetTeamOrg, GetVoteOutcome, IDIsAvailable, OnChainBank, OpenVote,
+        ApproveGrant, ApproveWithoutTransfer, BountyPermissions, CommitAndTransfer, CreateBounty,
+        GenerateUniqueID, GetTeamOrg, GetVoteOutcome, GroupMembership, IDIsAvailable, OpenVote,
         RegisterAccount, RegisterFoundation, RegisterOrganization, ReservationMachine,
         SeededGenerateUniqueID, SetMakeTransfer, SpendApprovedGrant, StartReview,
         StartTeamConsentPetition, SubmitGrantApplication, SubmitMilestone,
-        SuperviseGrantApplication, TermSheetExit, UseTermsOfAgreement,
+        SuperviseGrantApplication, UseTermsOfAgreement,
     }, // UpdateVoteTopic, VoteOnProposal
     vote::{ThresholdConfig, VoteOutcome},
 };
 
 /// The balances type for this module
 pub type BalanceOf<T> =
-    <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
+    <<T as bank::Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 /// The associate identifier for the bank module
-pub type BankAssociatedId<T> = <<T as Trait>::Bank as OnChainBank>::AssociatedId;
+pub type BankAssociatedId<T> = <T as bank::Trait>::BankAssociatedId;
 
-pub trait Trait: frame_system::Trait + org::Trait + vote::Trait {
+pub trait Trait: frame_system::Trait + org::Trait + vote::Trait + bank::Trait {
     /// The overarching event type
     type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
-
-    /// The currency type for on-chain transactions
-    type Currency: Currency<Self::AccountId>;
 
     /// The bounty identifier in this module
     type BountyId: Parameter
@@ -69,51 +72,6 @@ pub trait Trait: frame_system::Trait + org::Trait + vote::Trait {
         + PartialOrd
         + PartialEq
         + Zero;
-
-    /// The bank module
-    type Bank: IDIsAvailable<OnChainTreasuryID>
-        + IDIsAvailable<(OnChainTreasuryID, BankMapID, BankAssociatedId<Self>)>
-        + GenerateUniqueID<OnChainTreasuryID>
-        + SeededGenerateUniqueID<BankAssociatedId<Self>, (OnChainTreasuryID, BankMapID)>
-        + OnChainBank
-        + RegisterAccount<
-            Self::OrgId,
-            Self::AccountId,
-            WithdrawalPermissions<Self::OrgId, Self::AccountId>,
-            BalanceOf<Self>,
-        > + CalculateOwnership<
-            Self::OrgId,
-            Self::AccountId,
-            WithdrawalPermissions<Self::OrgId, Self::AccountId>,
-            BalanceOf<Self>,
-            Permill,
-        > + DepositsAndSpends<BalanceOf<Self>>
-        + CheckBankBalances<BalanceOf<Self>>
-        + DepositIntoBank<
-            Self::OrgId,
-            Self::AccountId,
-            WithdrawalPermissions<Self::OrgId, Self::AccountId>,
-            BalanceOf<Self>,
-            Self::IpfsReference,
-        > + ReservationMachine<
-            Self::OrgId,
-            Self::AccountId,
-            WithdrawalPermissions<Self::OrgId, Self::AccountId>,
-            BalanceOf<Self>,
-            Self::IpfsReference,
-        > + ExecuteSpends<
-            Self::OrgId,
-            Self::AccountId,
-            WithdrawalPermissions<Self::OrgId, Self::AccountId>,
-            BalanceOf<Self>,
-            Self::IpfsReference,
-        > + CommitAndTransfer<
-            Self::OrgId,
-            Self::AccountId,
-            WithdrawalPermissions<Self::OrgId, Self::AccountId>,
-            BalanceOf<Self>,
-            Self::IpfsReference,
-        > + TermSheetExit<Self::AccountId, BalanceOf<Self>>;
 
     /// This is the minimum percent of the total bounty that must be reserved as collateral
     type MinimumBountyCollateralRatio: Get<Permill>;
@@ -136,15 +94,15 @@ decl_event!(
     {
         FoundationRegisteredFromOnChainBank(OrgId, OnChainTreasuryID),
         FoundationPostedBounty(AccountId, OrgId, BountyId, OnChainTreasuryID, IpfsReference, Currency, Currency),
-        // BountyId, Application Id (u32s)
+        // BountyId, Application Id
         GrantApplicationSubmittedForBounty(AccountId, BountyId, BountyId, IpfsReference, Currency),
-        // BountyId, Application Id (u32s)
+        // BountyId, Application Id
         ApplicationReviewTriggered(AccountId, BountyId, BountyId, ApplicationState<TeamID<OrgId, AccountId>, VoteId>),
         SudoApprovedApplication(AccountId, BountyId, BountyId, ApplicationState<TeamID<OrgId, AccountId>, VoteId>),
         ApplicationPolled(BountyId, BountyId, ApplicationState<TeamID<OrgId, AccountId>, VoteId>),
-        // BountyId, ApplicationId, MilestoneId (u32s)
+        // BountyId, ApplicationId, MilestoneId
         MilestoneSubmitted(AccountId, BountyId, BountyId, BountyId),
-        // BountyId, MilestoneId (u32s)
+        // BountyId, MilestoneId
         MilestoneReviewTriggered(AccountId, BountyId, BountyId, MilestoneStatus<OrgId, VoteId, BankAssociatedId>),
         SudoApprovedMilestone(AccountId, BountyId, BountyId, MilestoneStatus<OrgId, VoteId, BankAssociatedId>),
         MilestonePolled(AccountId, BountyId, BountyId, MilestoneStatus<OrgId, VoteId, BankAssociatedId>),
@@ -169,7 +127,9 @@ decl_error! {
         CannotSudoApproveIfBountyDNE,
         CannotSudoApproveAppIfNotAssignedSudo,
         CannotSudoApproveIfGrantAppDNE,
+        CannotSubmitMilestoneIfBountyDNE,
         CannotSubmitMilestoneIfApplicationDNE,
+        CannotSubmitMilestoneIfApplicationNotApprovedAndLive,
         CannotTriggerMilestoneReviewIfBountyDNE,
         CannotTriggerMilestoneReviewUnlessMember,
         CannotSudoApproveMilestoneIfNotAssignedSudo,
@@ -185,7 +145,13 @@ decl_error! {
         ApplicationMustBeSubmittedAwaitingResponseToTriggerReview,
         ApplicationMustApprovedAndLiveWithTeamIDMatchingInput,
         MilestoneSubmissionRequestExceedsApprovedApplicationsLimit,
+        AccountNotAuthorizedToCreateBounty,
+        NotAuthorizedToSubmitGrantApplication,
         AccountNotAuthorizedToTriggerApplicationReview,
+        AccountNotAuthorizedToPollApplication,
+        AccountNotAuthorizedToSubmitMilestone,
+        AccountNotAuthorizedToPollMilestone,
+        AccountNotAuthorizedToTriggerMilestoneReview,
         ReviewBoardWeightedShapeDoesntSupportPetitionReview,
         ReviewBoardFlatShapeDoesntSupportThresholdReview,
         ApplicationMustBeUnderReviewToPoll,
@@ -203,12 +169,12 @@ decl_storage! {
             hasher(opaque_blake2_256) BountyMapID => T::BountyId;
 
         /// Unordered set for tracking foundations as relationships b/t OrgId and OnChainTreasuryID
-        RegisteredFoundations get(fn registered_foundations): double_map
+        pub RegisteredFoundations get(fn registered_foundations): double_map
             hasher(blake2_128_concat) T::OrgId,
             hasher(blake2_128_concat) OnChainTreasuryID => bool;
 
         /// Posted bounty details
-        FoundationSponsoredBounties get(fn foundation_sponsored_bounties): map
+        pub FoundationSponsoredBounties get(fn foundation_sponsored_bounties): map
             hasher(opaque_blake2_256) T::BountyId => Option<
                 BountyInformation<
                     T::OrgId,
@@ -220,12 +186,12 @@ decl_storage! {
             >;
 
         /// All bounty applications
-        BountyApplications get(fn bounty_applications): double_map
+        pub BountyApplications get(fn bounty_applications): double_map
             hasher(opaque_blake2_256) T::BountyId,
             hasher(opaque_blake2_256) T::BountyId => Option<GrantApplication<T::AccountId, T::Shares, BalanceOf<T>, T::IpfsReference, ApplicationState<TeamID<T::OrgId, T::AccountId>, T::VoteId>>>;
 
         /// All milestone submissions
-        MilestoneSubmissions get(fn milestone_submissions): double_map
+        pub MilestoneSubmissions get(fn milestone_submissions): double_map
             hasher(opaque_blake2_256) T::BountyId,
             hasher(opaque_blake2_256) T::BountyId => Option<MilestoneSubmission<T::IpfsReference, BalanceOf<T>, T::AccountId, T::BountyId, MilestoneStatus<T::OrgId, T::VoteId, BankAssociatedId<T>>>>;
     }
@@ -261,7 +227,10 @@ decl_module! {
             supervision_committee: Option<ReviewBoard<T::OrgId, T::AccountId, T::IpfsReference, ThresholdConfig<T::Signal, Permill>>>,
         ) -> DispatchResult {
             let bounty_creator = ensure_signed(origin)?;
-            // TODO: AUTH
+            // auth
+            let authentication = Self::can_create_bounty(&bounty_creator, registered_organization);
+            ensure!(authentication, Error::<T>::AccountNotAuthorizedToCreateBounty);
+            // state machine execution
             let bounty_identifier = Self::create_bounty(
                 registered_organization,
                 bank_account,
@@ -291,6 +260,10 @@ decl_module! {
             terms_of_agreement: TermsOfAgreement<T::AccountId, T::Shares, T::IpfsReference>,
         ) -> DispatchResult {
             let submitter = ensure_signed(origin)?;
+            // auth
+            let authentication = Self::can_submit_grant_app(&submitter, terms_of_agreement.clone());
+            ensure!(authentication, Error::<T>::NotAuthorizedToSubmitGrantApplication);
+            // state machine execution
             let new_grant_app_id = Self::submit_grant_application(submitter.clone(), bounty_id, description.clone(), total_amount, terms_of_agreement)?;
             Self::deposit_event(RawEvent::GrantApplicationSubmittedForBounty(submitter, bounty_id, new_grant_app_id, description, total_amount));
             Ok(())
@@ -302,6 +275,10 @@ decl_module! {
             application_id: T::BountyId,
         ) -> DispatchResult {
             let trigger = ensure_signed(origin)?;
+            // auth
+            let authentication = Self::can_trigger_grant_app_review(&trigger, bounty_id)?;
+            ensure!(authentication, Error::<T>::AccountNotAuthorizedToTriggerApplicationReview);
+            // state machine execution
             let application_state = Self::trigger_application_review(bounty_id, application_id)?;
             Self::deposit_event(RawEvent::ApplicationReviewTriggered(trigger, bounty_id, application_id, application_state));
             Ok(())
@@ -323,7 +300,11 @@ decl_module! {
             bounty_id: T::BountyId,
             application_id: T::BountyId,
         ) -> DispatchResult {
-            let _ = ensure_signed(origin)?;
+            let poller = ensure_signed(origin)?;
+            // auth
+            let authentication = Self::can_poll_grant_app(&poller, bounty_id)?;
+            ensure!(authentication, Error::<T>::AccountNotAuthorizedToPollApplication);
+            // state machine execution
             let app_state = Self::poll_application(bounty_id, application_id)?;
             Self::deposit_event(RawEvent::ApplicationPolled(bounty_id, application_id, app_state));
             Ok(())
@@ -337,6 +318,10 @@ decl_module! {
             amount_requested: BalanceOf<T>,
         ) -> DispatchResult {
             let submitter = ensure_signed(origin)?;
+            // auth
+            let authentication = Self::can_submit_milestone(&submitter, bounty_id, application_id)?;
+            ensure!(authentication, Error::<T>::AccountNotAuthorizedToSubmitMilestone);
+            // state machine execution
             let new_milestone_id = Self::submit_milestone(submitter.clone(), bounty_id, application_id, submission_reference, amount_requested)?;
             Self::deposit_event(RawEvent::MilestoneSubmitted(submitter, bounty_id, application_id, new_milestone_id));
             Ok(())
@@ -348,6 +333,10 @@ decl_module! {
             milestone_id: T::BountyId,
         ) -> DispatchResult {
             let trigger = ensure_signed(origin)?;
+            // auth
+            let authentication = Self::can_trigger_milestone_review(&trigger, bounty_id)?;
+            ensure!(authentication, Error::<T>::AccountNotAuthorizedToTriggerMilestoneReview);
+            // state machine execution
             let milestone_state = Self::trigger_milestone_review(bounty_id, milestone_id)?;
             Self::deposit_event(RawEvent::MilestoneReviewTriggered(trigger, bounty_id, milestone_id, milestone_state));
             Ok(())
@@ -370,6 +359,10 @@ decl_module! {
             milestone_id: T::BountyId,
         ) -> DispatchResult {
             let poller = ensure_signed(origin)?;
+            // auth
+            let authentication = Self::can_poll_milestone(&poller, bounty_id)?;
+            ensure!(authentication, Error::<T>::AccountNotAuthorizedToPollMilestone);
+            // state machine execution
             let milestone_state = Self::poll_milestone(bounty_id, milestone_id)?;
             Self::deposit_event(RawEvent::MilestonePolled(poller, bounty_id, milestone_id, milestone_state));
             Ok(())
@@ -445,12 +438,7 @@ impl<T: Trait> RegisterFoundation<T::OrgId, BalanceOf<T>, T::AccountId> for Modu
     }
     fn register_foundation_from_existing_bank(org: T::OrgId, bank: Self::BankId) -> DispatchResult {
         ensure!(
-            <<T as Trait>::Bank as RegisterAccount<
-                T::OrgId,
-                T::AccountId,
-                WithdrawalPermissions<T::OrgId, T::AccountId>,
-                BalanceOf<T>,
-            >>::verify_owner(bank.into(), org),
+            <bank::Module<T>>::verify_owner(bank, org),
             Error::<T>::CannotRegisterFoundationFromOrgBankRelationshipThatDNE
         );
         <RegisteredFoundations<T>>::insert(org, bank, true);
@@ -519,17 +507,11 @@ impl<T: Trait>
         );
 
         // reserve `amount_reserved_for_bounty` here by calling into `bank-onchain`
-        let spend_reservation_id = <<T as Trait>::Bank as ReservationMachine<
-            T::OrgId,
-            T::AccountId,
-            WithdrawalPermissions<T::OrgId, T::AccountId>,
-            BalanceOf<T>,
-            T::IpfsReference,
-        >>::reserve_for_spend(
-            bank_account.into(),
+        let spend_reservation_id = <bank::Module<T>>::reserve_for_spend(
+            bank_account,
             description.clone(),
             amount_reserved_for_bounty,
-            acceptance_committee.clone().into(), // converts ReviewBoard Into WithdrawalPermissions
+            acceptance_committee.org(), // reserved for who? should be the ultimate recipient?
         )?;
         // form the bounty_info
         let new_bounty_info = BountyInformation::new(
@@ -909,14 +891,8 @@ impl<T: Trait>
         // commit reserved spend for transfer before vote begins
         // -> this sets funds aside in case of a positive outcome,
         // it is not _optimistic_, it is fair to add this commitment
-        <<T as Trait>::Bank as ReservationMachine<
-            T::OrgId,
-            T::AccountId,
-            WithdrawalPermissions<T::OrgId, T::AccountId>,
-            BalanceOf<T>,
-            T::IpfsReference,
-        >>::commit_reserved_spend_for_transfer(
-            bounty_info.bank_account().into(),
+        <bank::Module<T>>::commit_reserved_spend_for_transfer(
+            bounty_info.bank_account(),
             bounty_info.spend_reservation(),
             milestone_submission.amount(),
         )?;
@@ -969,18 +945,12 @@ impl<T: Trait>
             .ok_or(Error::<T>::SubmissionIsNotReadyForReview)?;
 
         // commit and transfer control over capital in the same step
-        let new_transfer_id = <<T as Trait>::Bank as CommitAndTransfer<
-            T::OrgId,
-            T::AccountId,
-            WithdrawalPermissions<T::OrgId, T::AccountId>,
-            BalanceOf<T>,
-            T::IpfsReference,
-        >>::commit_and_transfer_spending_power(
-            bounty_info.bank_account().into(),
+        let new_transfer_id = <bank::Module<T>>::commit_and_transfer_spending_power(
+            bounty_info.bank_account(),
             bounty_info.spend_reservation(),
             milestone_submission.submission(), // reason = hash of milestone submission
             milestone_submission.amount(),
-            WithdrawalPermissions::JointOrgAccount(team_org_id),
+            team_org_id,
         )?;
         let new_milestone_submission = milestone_submission
             .set_make_transfer(bounty_info.bank_account(), new_transfer_id)
@@ -1020,18 +990,12 @@ impl<T: Trait>
                             application.spend_approved_grant(milestone_submission.amount())
                         {
                             // make the transfer
-                            let transfer_id = <<T as Trait>::Bank as ReservationMachine<
-                                T::OrgId,
-                                T::AccountId,
-                                WithdrawalPermissions<T::OrgId, T::AccountId>,
-                                BalanceOf<T>,
-                                T::IpfsReference,
-                            >>::transfer_spending_power(
-                                bounty_info.bank_account().into(),
+                            let transfer_id = <bank::Module<T>>::transfer_spending_power(
+                                bounty_info.bank_account(),
                                 milestone_submission.submission(), // reason = hash of milestone submission
                                 bounty_info.spend_reservation(),
                                 milestone_submission.amount(),
-                                WithdrawalPermissions::JointOrgAccount(org_id), // uses the weighted share issuance by default to enforce payout structure
+                                org_id, // uses the weighted share issuance by default to enforce payout structure
                             )?;
                             // insert updated application into storage
                             <BountyApplications<T>>::insert(
@@ -1065,18 +1029,12 @@ impl<T: Trait>
                             application.spend_approved_grant(milestone_submission.amount())
                         {
                             // make the transfer
-                            let transfer_id = <<T as Trait>::Bank as ReservationMachine<
-                                T::OrgId,
-                                T::AccountId,
-                                WithdrawalPermissions<T::OrgId, T::AccountId>,
-                                BalanceOf<T>,
-                                T::IpfsReference,
-                            >>::transfer_spending_power(
-                                bounty_info.bank_account().into(),
+                            let transfer_id = <bank::Module<T>>::transfer_spending_power(
+                                bounty_info.bank_account(),
                                 milestone_submission.submission(), // reason = hash of milestone submission
                                 bounty_info.spend_reservation(),
                                 milestone_submission.amount(),
-                                WithdrawalPermissions::JointOrgAccount(org_id), // uses the weighted share issuance by default to enforce payout structure
+                                org_id, // uses the weighted share issuance by default to enforce payout structure
                             )?;
                             // insert updated application into storage
                             <BountyApplications<T>>::insert(
@@ -1113,18 +1071,12 @@ impl<T: Trait>
                     application.spend_approved_grant(milestone_submission.amount())
                 {
                     // make the transfer
-                    let transfer_id = <<T as Trait>::Bank as ReservationMachine<
-                        T::OrgId,
-                        T::AccountId,
-                        WithdrawalPermissions<T::OrgId, T::AccountId>,
-                        BalanceOf<T>,
-                        T::IpfsReference,
-                    >>::transfer_spending_power(
-                        bounty_info.bank_account().into(),
+                    let transfer_id = <bank::Module<T>>::transfer_spending_power(
+                        bounty_info.bank_account(),
                         milestone_submission.submission(), // reason = hash of milestone submission
                         bounty_info.spend_reservation(),
                         milestone_submission.amount(),
-                        WithdrawalPermissions::JointOrgAccount(org_id),
+                        org_id,
                     )?;
                     let new_milestone_submission = milestone_submission
                         .set_make_transfer(bounty_info.bank_account(), transfer_id)
@@ -1147,5 +1099,107 @@ impl<T: Trait>
             }
             _ => Ok(milestone_submission.state()),
         }
+    }
+}
+
+/// Default permissions logic, could save some lookups by putting this with module
+/// logic in the other traits impls but this is more readable
+impl<T: Trait>
+    BountyPermissions<
+        T::OrgId,
+        TermsOfAgreement<T::AccountId, T::Shares, T::IpfsReference>,
+        T::AccountId,
+        T::BountyId,
+    > for Module<T>
+{
+    // TODO: consider adding `can_register_foundation`
+    fn can_create_bounty(who: &T::AccountId, hosting_org: T::OrgId) -> bool {
+        // any member of the foundation can post a bounty
+        <org::Module<T>>::is_member_of_group(hosting_org, who)
+    }
+    fn can_submit_grant_app(
+        who: &T::AccountId,
+        terms: TermsOfAgreement<T::AccountId, T::Shares, T::IpfsReference>,
+    ) -> bool {
+        // ensure that the submitter is one of the accounts in the terms of agreement
+        terms
+            .weighted()
+            .into_iter()
+            .any(|(account, _)| &account == who)
+    }
+    fn can_trigger_grant_app_review(
+        who: &T::AccountId,
+        bounty_id: T::BountyId,
+    ) -> Result<bool, DispatchError> {
+        let bounty_info = <FoundationSponsoredBounties<T>>::get(bounty_id)
+            .ok_or(Error::<T>::CannotReviewApplicationIfBountyDNE)?;
+        // ensure that the who is a member of the bounty supervising committee
+        Ok(<org::Module<T>>::is_member_of_group(
+            bounty_info.acceptance_committee().org(),
+            who,
+        ))
+        // && ensure not a member of the applying team? That's an interesting check to at least add for demonstration purposes
+    }
+    fn can_poll_grant_app(
+        who: &T::AccountId,
+        bounty_id: T::BountyId,
+    ) -> Result<bool, DispatchError> {
+        let bounty_info = <FoundationSponsoredBounties<T>>::get(bounty_id)
+            .ok_or(Error::<T>::CannotReviewApplicationIfBountyDNE)?;
+        // ensure that the who is a member of the bounty supervising committee
+        Ok(<org::Module<T>>::is_member_of_group(
+            bounty_info.acceptance_committee().org(),
+            who,
+        ))
+        // || ensure not a member of the applying team? That's an interesting loosening to at least add for demonstration purposes
+    }
+    // save a lookup by passing in the object instead of the identifier to get the object from storage
+    fn can_submit_milestone(
+        who: &T::AccountId,
+        bounty_id: T::BountyId,
+        application_id: T::BountyId,
+    ) -> Result<bool, DispatchError> {
+        let _ = <FoundationSponsoredBounties<T>>::get(bounty_id)
+            .ok_or(Error::<T>::CannotSubmitMilestoneIfBountyDNE)?;
+        let team_org = <BountyApplications<T>>::get(bounty_id, application_id)
+            .ok_or(Error::<T>::CannotSubmitMilestoneIfApplicationDNE)?
+            .state()
+            .approved_and_live()
+            .ok_or(Error::<T>::CannotSubmitMilestoneIfApplicationNotApprovedAndLive)?;
+        Ok(<org::Module<T>>::is_member_of_group(team_org.org(), who))
+    }
+    fn can_poll_milestone(
+        who: &T::AccountId,
+        bounty_id: T::BountyId,
+    ) -> Result<bool, DispatchError> {
+        let bounty_info = <FoundationSponsoredBounties<T>>::get(bounty_id)
+            .ok_or(Error::<T>::CannotReviewApplicationIfBountyDNE)?;
+        let milestone_review_board = if let Some(board) = bounty_info.supervision_committee() {
+            board
+        } else {
+            bounty_info.acceptance_committee()
+        };
+        // ensure that the who is a member of the review board
+        Ok(<org::Module<T>>::is_member_of_group(
+            milestone_review_board.org(),
+            who,
+        ))
+    }
+    fn can_trigger_milestone_review(
+        who: &T::AccountId,
+        bounty_id: T::BountyId,
+    ) -> Result<bool, DispatchError> {
+        let bounty_info = <FoundationSponsoredBounties<T>>::get(bounty_id)
+            .ok_or(Error::<T>::CannotReviewApplicationIfBountyDNE)?;
+        let milestone_review_board = if let Some(board) = bounty_info.supervision_committee() {
+            board
+        } else {
+            bounty_info.acceptance_committee()
+        };
+        // ensure that the who is a member of the review board
+        Ok(<org::Module<T>>::is_member_of_group(
+            milestone_review_board.org(),
+            who,
+        ))
     }
 }

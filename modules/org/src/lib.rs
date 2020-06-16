@@ -12,10 +12,10 @@ use util::{
     organization::{Organization, OrganizationSource},
     share::{ShareProfile, SimpleShareGenesis},
     traits::{
-        AccessGenesis, ChainSudoPermissions, ChangeGroupMembership, GenerateUniqueID, GetGroup,
-        GetGroupSize, GroupMembership, IDIsAvailable, LockProfile,
-        OrganizationSupervisorPermissions, RegisterOrganization, RemoveOrganization,
-        ReserveProfile, ShareInformation, ShareIssuance, VerifyShape,
+        AccessGenesis, ChainSudoPermissions, GenerateUniqueID, GetGroup, GetGroupSize,
+        GroupMembership, IDIsAvailable, LockProfile, OrganizationSupervisorPermissions,
+        RegisterOrganization, RemoveOrganization, ReserveProfile, ShareInformation, ShareIssuance,
+        VerifyShape,
     }, // AccessProfile, SeededGenerateUniqueID
 };
 
@@ -114,11 +114,8 @@ decl_error! {
     pub enum Error for Module<T: Trait> {
         UnAuthorizedSwapSudoRequest,
         NoExistingSudoKey,
-        NotAuthorizedToChangeMembership,
         OrganizationMustExistToClearSupervisor,
         OrganizationMustExistToPutSupervisor,
-        CannotAddAnExistingMemberToOrg,
-        CannotRemoveNonMemberFromOrg,
         CannotBurnMoreThanTotalIssuance,
         NotEnoughSharesToSatisfyBurnRequest,
         IssuanceCannotGoNegative,
@@ -159,23 +156,23 @@ decl_storage! {
         OrgIdNonce get(fn org_id_counter): T::OrgId;
 
         /// The total number of organizations registered at any given time
-        OrganizationCounter get(fn organization_counter): u32;
+        pub OrganizationCounter get(fn organization_counter): u32;
 
         /// The main storage item for Organization registration
-        OrganizationStates get(fn organization_states): map
+        pub OrganizationStates get(fn organization_states): map
             hasher(blake2_128_concat) T::OrgId => Option<Organization<T::AccountId, T::OrgId, T::IpfsReference>>;
 
         /// The map to track organizational membership
-        Members get(fn members): double_map
+        pub Members get(fn members): double_map
             hasher(blake2_128_concat) T::OrgId,
             hasher(blake2_128_concat) T::AccountId => Option<ShareProfile<T::Shares>>;
 
         /// Total number of outstanding shares that express relative ownership in group
-        TotalIssuance get(fn total_issuance): map
+        pub TotalIssuance get(fn total_issuance): map
             hasher(opaque_blake2_256) T::OrgId => T::Shares;
 
         /// The size for each organization
-        OrganizationSize get(fn organization_size): map hasher(opaque_blake2_256) T::OrgId => u32;
+        pub OrganizationSize get(fn organization_size): map hasher(opaque_blake2_256) T::OrgId => u32;
     }
     add_extra_genesis {
         config(first_organization_supervisor): T::AccountId;
@@ -234,63 +231,6 @@ decl_module! {
                 Self::register_organization(OrganizationSource::AccountsWeighted(weighted_members), sudo, constitution.clone())?
             };
             Self::deposit_event(RawEvent::NewWeightedOrganizationRegistered(caller, new_id, constitution, wm_cpy.total()));
-            Ok(())
-        }
-        #[weight = 0]
-        fn add_new_member_to_org(
-            origin,
-            organization: T::OrgId,
-            new_member: T::AccountId,
-            shares_issued: T::Shares,
-        ) -> DispatchResult {
-            let caller = ensure_signed(origin)?;
-            let authentication: bool = Self::is_sudo_key(&caller) || Self::is_organization_supervisor(organization, &caller);
-            ensure!(authentication, Error::<T>::NotAuthorizedToChangeMembership);
-
-            Self::add_member_to_org(organization, new_member.clone(), false)?;
-            Self::deposit_event(RawEvent::NewMemberAddedToOrg(organization, new_member, T::Shares::zero()));
-            Ok(())
-        }
-        #[weight = 0]
-        fn remove_old_member_from_org(
-            origin,
-            organization: T::OrgId,
-            old_member: T::AccountId,
-        ) -> DispatchResult {
-            let caller = ensure_signed(origin)?;
-            let authentication: bool = Self::is_sudo_key(&caller) || Self::is_organization_supervisor(organization, &caller);
-            ensure!(authentication, Error::<T>::NotAuthorizedToChangeMembership);
-
-            Self::remove_member_from_org(organization, old_member.clone(), false)?;
-            Self::deposit_event(RawEvent::OldMemberRemovedFromOrg(organization, old_member, T::Shares::zero()));
-            Ok(())
-        }
-        #[weight = 0]
-        fn add_new_members_to_org(
-            origin,
-            organization: T::OrgId,
-            new_members: Vec<T::AccountId>,
-        ) -> DispatchResult {
-            let caller = ensure_signed(origin)?;
-            let authentication: bool = Self::is_sudo_key(&caller) || Self::is_organization_supervisor(organization, &caller);
-            ensure!(authentication, Error::<T>::NotAuthorizedToChangeMembership);
-
-            Self::batch_add_members_to_org(organization, new_members)?;
-            Self::deposit_event(RawEvent::BatchMemberAdditionForOrg(caller, organization, T::Shares::zero()));
-            Ok(())
-        }
-        #[weight = 0]
-        fn remove_old_members_from_org(
-            origin,
-            organization: T::OrgId,
-            old_members: Vec<T::AccountId>,
-        ) -> DispatchResult {
-            let caller = ensure_signed(origin)?;
-            let authentication: bool = Self::is_sudo_key(&caller) || Self::is_organization_supervisor(organization, &caller);
-            ensure!(authentication, Error::<T>::NotAuthorizedToChangeMembership);
-
-            Self::batch_remove_members_from_org(organization, old_members)?;
-            Self::deposit_event(RawEvent::BatchMemberRemovalForOrg(caller, organization, T::Shares::zero()));
             Ok(())
         }
         /// Share Issuance Runtime Methods
@@ -409,8 +349,8 @@ decl_module! {
                                     || unreserver == who;
             ensure!(authentication, Error::<T>::NotAuthorizedToUnReserveShares);
 
-            let amount_reserved = Self::unreserve(organization, &who, None)?;
-            Self::deposit_event(RawEvent::SharesUnReserved(organization, who, amount_reserved));
+            let amount_unreserved = Self::unreserve(organization, &who, None)?;
+            Self::deposit_event(RawEvent::SharesUnReserved(organization, who, amount_unreserved));
             Ok(())
         }
     }
@@ -507,7 +447,11 @@ impl<T: Trait> RegisterOrganization<T::OrgId, T::AccountId, T::IpfsReference> fo
         match src {
             OrganizationSource::Accounts(accounts) => {
                 // batch_add (flat membership group)
-                Self::batch_add_members_to_org(org_id, accounts)?;
+                let weighted_acc = accounts
+                    .into_iter()
+                    .map(|acc| (acc, 1u32.into()))
+                    .collect::<Vec<(T::AccountId, T::Shares)>>();
+                Self::batch_issue(org_id, weighted_acc.into())?;
                 Ok(Organization::new(supervisor, parent_id, value_constitution))
             }
             OrganizationSource::AccountsWeighted(weighted_accounts) => {
@@ -571,76 +515,6 @@ impl<T: Trait> RemoveOrganization<T::OrgId> for Module<T> {
     }
     fn recursive_remove_organization(_id: T::OrgId) -> DispatchResult {
         todo!()
-    }
-}
-
-impl<T: Trait> ChangeGroupMembership<T::OrgId, T::AccountId> for Module<T> {
-    fn add_member_to_org(
-        org_id: T::OrgId,
-        new_member: T::AccountId,
-        batch: bool,
-    ) -> DispatchResult {
-        // prevent adding duplicate members
-        ensure!(
-            <Members<T>>::get(org_id, &new_member).is_none(),
-            Error::<T>::CannotAddAnExistingMemberToOrg
-        );
-        if !batch {
-            let new_organization_size = <OrganizationSize<T>>::get(org_id) + 1u32;
-            <OrganizationSize<T>>::insert(org_id, new_organization_size);
-        }
-        // default 0 share profile inserted for this method
-        <Members<T>>::insert(org_id, new_member, ShareProfile::default());
-        Ok(())
-    }
-    fn remove_member_from_org(
-        org_id: T::OrgId,
-        old_member: T::AccountId,
-        batch: bool,
-    ) -> DispatchResult {
-        // prevent removal of non-member
-        let current_profile = <Members<T>>::get(org_id, &old_member)
-            .ok_or(Error::<T>::CannotRemoveNonMemberFromOrg)?;
-        // update issuance if it changes due to this removal
-        if current_profile.total() > T::Shares::zero() {
-            let new_issuance = <TotalIssuance<T>>::get(org_id)
-                .checked_sub(&current_profile.total())
-                .ok_or(Error::<T>::IssuanceGoesNegativeWhileRemovingMember)?;
-            <TotalIssuance<T>>::insert(org_id, new_issuance);
-        }
-        if !batch {
-            let new_organization_size = <OrganizationSize<T>>::get(org_id).saturating_sub(1u32);
-            <OrganizationSize<T>>::insert(org_id, new_organization_size);
-        }
-        <Members<T>>::remove(org_id, old_member);
-        Ok(())
-    }
-    // WARNING: the vector fed as inputs to the following methods must have NO duplicates
-    fn batch_add_members_to_org(
-        org_id: T::OrgId,
-        new_members: Vec<T::AccountId>,
-    ) -> DispatchResult {
-        let size_increase: u32 = new_members.len() as u32;
-        let new_organization_size: u32 =
-            <OrganizationSize<T>>::get(org_id).saturating_add(size_increase);
-        <OrganizationSize<T>>::insert(org_id, new_organization_size);
-        new_members
-            .into_iter()
-            .map(|member| Self::add_member_to_org(org_id, member, true))
-            .collect::<DispatchResult>()
-    }
-    fn batch_remove_members_from_org(
-        org_id: T::OrgId,
-        old_members: Vec<T::AccountId>,
-    ) -> DispatchResult {
-        let size_decrease: u32 = old_members.len() as u32;
-        let new_organization_size: u32 =
-            <OrganizationSize<T>>::get(org_id).saturating_sub(size_decrease);
-        <OrganizationSize<T>>::insert(org_id, new_organization_size);
-        old_members
-            .into_iter()
-            .map(|member| Self::remove_member_from_org(org_id, member, true))
-            .collect::<DispatchResult>()
     }
 }
 

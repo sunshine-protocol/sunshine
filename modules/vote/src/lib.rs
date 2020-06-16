@@ -160,13 +160,13 @@ decl_module! {
             origin,
             topic: Option<T::IpfsReference>,
             organization: T::OrgId,
-            ends: Option<T::BlockNumber>,
+            duration: Option<T::BlockNumber>,
         ) -> DispatchResult {
             let vote_creator = ensure_signed(origin)?;
             // default authentication is organization supervisor or sudo key
             let authentication: bool = <org::Module<T>>::is_organization_supervisor(organization, &vote_creator) || <org::Module<T>>::is_sudo_key(&vote_creator);
             ensure!(authentication, Error::<T>::NotAuthorizedToCreateVoteForOrganization);
-            let new_vote_id = Self::open_unanimous_consent(topic, organization, ends)?;
+            let new_vote_id = Self::open_unanimous_consent(topic, organization, duration)?;
             // emit event
             Self::deposit_event(RawEvent::NewVoteStarted(vote_creator, organization, new_vote_id));
             Ok(())

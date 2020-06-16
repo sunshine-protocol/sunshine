@@ -10,15 +10,21 @@ use sp_runtime::{
 use std::marker::PhantomData;
 use substrate_subxt::{
     balances::{AccountData, Balances},
-    system::System,
-    CheckEra, CheckGenesis, CheckNonce, CheckSpecVersion, CheckTxVersion, CheckWeight, SignedExtra,
+    system::System, //sp_core::crypto::Pair,
+    CheckEra,
+    CheckGenesis,
+    CheckNonce,
+    CheckSpecVersion,
+    CheckTxVersion,
+    CheckWeight,
+    SignedExtra,
 };
 use utils_identity::cid::CidBytes;
 
 pub type Pair = sp_core::sr25519::Pair;
 pub type ClientBuilder = substrate_subxt::ClientBuilder<Runtime, MultiSignature, RuntimeExtra>;
 pub type Client = substrate_subxt::Client<Runtime, MultiSignature, RuntimeExtra>;
-//pub type XtBuilder = substrate_subxt::XtBuilder<Runtime, Pair, MultiSignature, RuntimeExtra>;
+pub type PairSigner = substrate_subxt::PairSigner<Runtime, MultiSignature, RuntimeExtra, Pair>;
 
 /// Concrete type definitions compatible w/ sunshine's runtime aka `suntime`
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -30,7 +36,7 @@ impl System for Runtime {
     type Hash = sp_core::H256;
     type Hashing = BlakeTwo256;
     type AccountId = <<MultiSignature as Verify>::Signer as IdentifyAccount>::AccountId;
-    type Address = pallet_indices::address::Address<Self::AccountId, u32>;
+    type Address = pallet_indices::address::Address<Self::AccountId, u64>;
     type Header = Header<Self::BlockNumber, BlakeTwo256>;
     type Extrinsic = OpaqueExtrinsic;
     type AccountData = AccountData<<Self as Balances>::Balance>;
