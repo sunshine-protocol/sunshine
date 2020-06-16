@@ -86,15 +86,15 @@ decl_event!(
     {
         FoundationRegisteredFromOnChainBank(OrgId, OnChainTreasuryID),
         FoundationPostedBounty(AccountId, OrgId, BountyId, OnChainTreasuryID, IpfsReference, Currency, Currency),
-        // BountyId, Application Id (u32s)
+        // BountyId, Application Id
         GrantApplicationSubmittedForBounty(AccountId, BountyId, BountyId, IpfsReference, Currency),
-        // BountyId, Application Id (u32s)
+        // BountyId, Application Id
         ApplicationReviewTriggered(AccountId, BountyId, BountyId, ApplicationState<TeamID<OrgId, AccountId>, VoteId>),
         SudoApprovedApplication(AccountId, BountyId, BountyId, ApplicationState<TeamID<OrgId, AccountId>, VoteId>),
         ApplicationPolled(BountyId, BountyId, ApplicationState<TeamID<OrgId, AccountId>, VoteId>),
-        // BountyId, ApplicationId, MilestoneId (u32s)
+        // BountyId, ApplicationId, MilestoneId
         MilestoneSubmitted(AccountId, BountyId, BountyId, BountyId),
-        // BountyId, MilestoneId (u32s)
+        // BountyId, MilestoneId
         MilestoneReviewTriggered(AccountId, BountyId, BountyId, MilestoneStatus<OrgId, VoteId, BankAssociatedId>),
         SudoApprovedMilestone(AccountId, BountyId, BountyId, MilestoneStatus<OrgId, VoteId, BankAssociatedId>),
         MilestonePolled(AccountId, BountyId, BountyId, MilestoneStatus<OrgId, VoteId, BankAssociatedId>),

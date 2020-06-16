@@ -17,6 +17,7 @@ use util::{
         ApplicationState, BountyInformation, GrantApplication, MilestoneStatus,
         MilestoneSubmission, ReviewBoard, TeamID,
     },
+    organization::TermsOfAgreement,
     vote::ThresholdConfig,
 };
 
@@ -123,4 +124,127 @@ pub struct FoundationPostedBountyEvent<T: Bounty> {
     pub description: <T as Org>::IpfsReference,
     pub amount_reserved_for_bounty: BalanceOf<T>,
     pub amount_claimed_available: BalanceOf<T>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
+pub struct DirectSubmitGrantApplicationCall<T: Bounty> {
+    pub bounty_id: T::BountyId,
+    pub description: <T as Org>::IpfsReference,
+    pub total_amount: BalanceOf<T>,
+    pub terms_of_agreement:
+        TermsOfAgreement<<T as System>::AccountId, <T as Org>::Shares, <T as Org>::IpfsReference>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
+pub struct GrantApplicationSubmittedForBountyEvent<T: Bounty> {
+    pub submitter: <T as System>::AccountId,
+    pub bounty_id: T::BountyId,
+    pub new_grant_app_id: T::BountyId,
+    pub description: <T as Org>::IpfsReference,
+    pub total_amount: BalanceOf<T>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
+pub struct DirectTriggerApplicationReviewCall<T: Bounty> {
+    pub bounty_id: T::BountyId,
+    pub application_id: T::BountyId,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
+pub struct ApplicationReviewTriggeredEvent<T: Bounty> {
+    pub trigger: <T as System>::AccountId,
+    pub bounty_id: T::BountyId,
+    pub application_id: T::BountyId,
+    pub application_state:
+        ApplicationState<TeamID<<T as Org>::OrgId, <T as System>::AccountId>, <T as Vote>::VoteId>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
+pub struct DirectSudoApproveApplicationCall<T: Bounty> {
+    pub bounty_id: T::BountyId,
+    pub application_id: T::BountyId,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
+pub struct SudoApprovedApplicationEvent<T: Bounty> {
+    pub purported_sudo: <T as System>::AccountId,
+    pub bounty_id: T::BountyId,
+    pub application_id: T::BountyId,
+    pub application_state:
+        ApplicationState<TeamID<<T as Org>::OrgId, <T as System>::AccountId>, <T as Vote>::VoteId>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
+pub struct AnyAccPollApplicationCall<T: Bounty> {
+    pub bounty_id: T::BountyId,
+    pub application_id: T::BountyId,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
+pub struct ApplicationPolledEvent<T: Bounty> {
+    pub bounty_id: T::BountyId,
+    pub application_id: T::BountyId,
+    pub application_state:
+        ApplicationState<TeamID<<T as Org>::OrgId, <T as System>::AccountId>, <T as Vote>::VoteId>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
+pub struct DirectSubmitMilestoneCall<T: Bounty> {
+    pub bounty_id: T::BountyId,
+    pub application_id: T::BountyId,
+    pub submission_reference: <T as Org>::IpfsReference,
+    pub amount_requested: BalanceOf<T>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
+pub struct MilestoneSubmittedEvent<T: Bounty> {
+    pub submitter: <T as System>::AccountId,
+    pub bounty_id: T::BountyId,
+    pub application_id: T::BountyId,
+    pub new_milestone_id: T::BountyId,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
+pub struct DirectTriggerMilestoneReviewCall<T: Bounty> {
+    pub bounty_id: T::BountyId,
+    pub milestone_id: T::BountyId,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
+pub struct MilestoneReviewTriggeredEvent<T: Bounty> {
+    pub trigger: <T as System>::AccountId,
+    pub bounty_id: T::BountyId,
+    pub milestone_id: T::BountyId,
+    pub milestone_state:
+        MilestoneStatus<<T as Org>::OrgId, <T as Vote>::VoteId, <T as Bank>::BankAssociatedId>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
+pub struct DirectSudoApprovesMilestoneCall<T: Bounty> {
+    pub bounty_id: T::BountyId,
+    pub milestone_id: T::BountyId,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
+pub struct SudoApprovedMilestoneEvent<T: Bounty> {
+    pub purported_sudo: <T as System>::AccountId,
+    pub bounty_id: T::BountyId,
+    pub milestone_id: T::BountyId,
+    pub milestone_state:
+        MilestoneStatus<<T as Org>::OrgId, <T as Vote>::VoteId, <T as Bank>::BankAssociatedId>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
+pub struct DirectPollMilestoneCall<T: Bounty> {
+    pub bounty_id: T::BountyId,
+    pub milestone_id: T::BountyId,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
+pub struct MilestonePolledEvent<T: Bounty> {
+    pub poller: <T as System>::AccountId,
+    pub bounty_id: T::BountyId,
+    pub milestone_id: T::BountyId,
+    pub milestone_state:
+        MilestoneStatus<<T as Org>::OrgId, <T as Vote>::VoteId, <T as Bank>::BankAssociatedId>,
 }
