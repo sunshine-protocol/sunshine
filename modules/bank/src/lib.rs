@@ -179,9 +179,9 @@ decl_module! {
         ) -> DispatchResult {
             let seeder = ensure_signed(origin)?;
             let authentication = Self::can_register_account(seeder.clone(), hosting_org) &&
-                if let Some(op) = bank_operator { Self::operator_satisfies_requirements(hosting_org, op.clone()) } else {true};
+                if let Some(op) = bank_operator { Self::operator_satisfies_requirements(hosting_org, op) } else {true};
             ensure!(authentication, Error::<T>::CannotRegisterBankAccountBCPermissionsCheckFails);
-            let new_bank_id = Self::register_account(hosting_org, seeder.clone(), seed, bank_operator.clone())?;
+            let new_bank_id = Self::register_account(hosting_org, seeder.clone(), seed, bank_operator)?;
             Self::deposit_event(RawEvent::RegisteredNewOnChainBank(seeder, new_bank_id, seed, hosting_org, bank_operator));
             Ok(())
         }
@@ -196,7 +196,7 @@ decl_module! {
             let reserver = ensure_signed(origin)?;
             let authentication = Self::can_reserve_for_spend(reserver.clone(), bank_id)?;
             ensure!(authentication, Error::<T>::CannotReserveSpendBCPermissionsCheckFails);
-            let new_reservation_id = Self::reserve_for_spend(bank_id, reason.clone(), amount, controller.clone())?;
+            let new_reservation_id = Self::reserve_for_spend(bank_id, reason.clone(), amount, controller)?;
             Self::deposit_event(RawEvent::SpendReservedForBankAccount(reserver, bank_id, new_reservation_id, reason, amount, controller));
             Ok(())
         }
@@ -255,7 +255,7 @@ decl_module! {
             let qualified_spend_reservation_controller = ensure_signed(origin)?;
             let authentication = Self::can_transfer_spending_power(qualified_spend_reservation_controller.clone(), bank_id)?;
             ensure!(authentication, Error::<T>::CannotTransferSpendingPowerBCPermissionsCheckFails);
-            Self::transfer_spending_power(bank_id, reason.clone(), reservation_id, amount, committed_controller.clone())?;
+            Self::transfer_spending_power(bank_id, reason.clone(), reservation_id, amount, committed_controller)?;
             Self::deposit_event(RawEvent::InternalTransferExecutedAndSpendingPowerDoledOutToController(qualified_spend_reservation_controller, bank_id, reason, reservation_id, amount, committed_controller));
             Ok(())
         }

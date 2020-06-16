@@ -438,7 +438,7 @@ impl<T: Trait> RegisterFoundation<T::OrgId, BalanceOf<T>, T::AccountId> for Modu
     }
     fn register_foundation_from_existing_bank(org: T::OrgId, bank: Self::BankId) -> DispatchResult {
         ensure!(
-            <bank::Module<T>>::verify_owner(bank.into(), org),
+            <bank::Module<T>>::verify_owner(bank, org),
             Error::<T>::CannotRegisterFoundationFromOrgBankRelationshipThatDNE
         );
         <RegisteredFoundations<T>>::insert(org, bank, true);
@@ -508,7 +508,7 @@ impl<T: Trait>
 
         // reserve `amount_reserved_for_bounty` here by calling into `bank-onchain`
         let spend_reservation_id = <bank::Module<T>>::reserve_for_spend(
-            bank_account.into(),
+            bank_account,
             description.clone(),
             amount_reserved_for_bounty,
             acceptance_committee.org(), // reserved for who? should be the ultimate recipient?
@@ -892,7 +892,7 @@ impl<T: Trait>
         // -> this sets funds aside in case of a positive outcome,
         // it is not _optimistic_, it is fair to add this commitment
         <bank::Module<T>>::commit_reserved_spend_for_transfer(
-            bounty_info.bank_account().into(),
+            bounty_info.bank_account(),
             bounty_info.spend_reservation(),
             milestone_submission.amount(),
         )?;
@@ -946,7 +946,7 @@ impl<T: Trait>
 
         // commit and transfer control over capital in the same step
         let new_transfer_id = <bank::Module<T>>::commit_and_transfer_spending_power(
-            bounty_info.bank_account().into(),
+            bounty_info.bank_account(),
             bounty_info.spend_reservation(),
             milestone_submission.submission(), // reason = hash of milestone submission
             milestone_submission.amount(),
@@ -991,7 +991,7 @@ impl<T: Trait>
                         {
                             // make the transfer
                             let transfer_id = <bank::Module<T>>::transfer_spending_power(
-                                bounty_info.bank_account().into(),
+                                bounty_info.bank_account(),
                                 milestone_submission.submission(), // reason = hash of milestone submission
                                 bounty_info.spend_reservation(),
                                 milestone_submission.amount(),
@@ -1030,7 +1030,7 @@ impl<T: Trait>
                         {
                             // make the transfer
                             let transfer_id = <bank::Module<T>>::transfer_spending_power(
-                                bounty_info.bank_account().into(),
+                                bounty_info.bank_account(),
                                 milestone_submission.submission(), // reason = hash of milestone submission
                                 bounty_info.spend_reservation(),
                                 milestone_submission.amount(),
@@ -1072,7 +1072,7 @@ impl<T: Trait>
                 {
                     // make the transfer
                     let transfer_id = <bank::Module<T>>::transfer_spending_power(
-                        bounty_info.bank_account().into(),
+                        bounty_info.bank_account(),
                         milestone_submission.submission(), // reason = hash of milestone submission
                         bounty_info.spend_reservation(),
                         milestone_submission.amount(),

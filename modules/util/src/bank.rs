@@ -82,7 +82,7 @@ impl<OrgId: Codec + PartialEq + Zero + From<u32> + Copy, Currency: Zero + AtLeas
         org == self.owners
     }
     pub fn is_operator(&self, org: OrgId) -> bool {
-        if let Some(op) = self.operators.clone() {
+        if let Some(op) = self.operators {
             op == org
         } else {
             false
