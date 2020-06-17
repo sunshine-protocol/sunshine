@@ -9,9 +9,8 @@ description = 'Sunshine substrate node.'
 homepage = 'https://joinsunshine.com'
 repository = 'https://github.com/sunshine-protocol/sunshine-node'
 
-[build-dependencies.substrate-build-script-utils]
-git = 'https://github.com/paritytech/substrate.git'
-version = '2.0.0-rc3'
+[build-dependencies]
+substrate-build-script-utils = "2.0.0-rc3"
 
 [dependencies]
 futures = "0.3.5"
