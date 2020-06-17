@@ -1,0 +1,20 @@
+[package]
+name = "keystore-ffi"
+version = "0.1.0"
+authors = ["Amar Singh <asinghchrony@protonmail.com>, Shady Khalifa <shekohex@gmail.com>"]
+edition = "2018"
+
+[lib]
+crate-type = ["cdylib", "staticlib"]
+
+[dependencies]
+ffi_helpers = "0.1.0"
+ipfs-embed = "0.1.0"
+ipld-block-builder = "0.3.0"
+sled = "0.32.0-rc1"
+keystore = {package = "keybase-keystore", git = "https://github.com/sunshine-protocol/substrate-identity"}
+keystore-ffi = {package = "keystore-ffi", git = "https://github.com/sunshine-protocol/substrate-identity"}
+client = { package = "sunshine-client", path = "../client" }
+
+[build-dependencies]
+cbindgen = "0.14.0"
