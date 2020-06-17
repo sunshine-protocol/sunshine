@@ -14,7 +14,7 @@ use sunshine_client::{ClientBuilder, Error, Runtime, SunClient};
 async fn main() -> Result<(), Error> {
     env_logger::init();
     let subxt = ClientBuilder::new().build().await.unwrap();
-    let db = sled::open("tmp/db")?;
+    let db = sled::open("/tmp/db")?;
     let ipld_tree = db.open_tree("ipld_tree")?;
     let config = Config::from_tree(ipld_tree);
     let store = Store::new(config)?;
