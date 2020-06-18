@@ -21,12 +21,6 @@ pub enum Error {
     InvalidSuri,
     #[error("Invalid ss58 encoded account id.")]
     InvalidSs58,
-    #[error("Failed to decode transfer event.")]
-    TransferEventDecode,
-    #[error("Failed to find transfer event.")]
-    TransferEventFind,
-    #[error("Failed to find an account associated with key.")]
-    NoAccount,
     #[error("Device key is already configured. Use `--force` if you want to overwrite it.")]
     HasDeviceKey,
     #[error("Password too short.")]

@@ -1,5 +1,5 @@
 use crate::error::Error;
-use crate::runtime::{AccountId, IpfsReference, OrgId, Shares};
+use crate::runtime::{AccountId, OrgId, Shares};
 use clap::Clap;
 use std::path::PathBuf;
 use std::str::FromStr;
