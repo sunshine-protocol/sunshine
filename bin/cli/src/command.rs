@@ -136,7 +136,7 @@ impl TryInto<u64> for Identifier {
         match self {
             Identifier::Org(org_id) => Ok(org_id),
             Identifier::Shares(shares) => Ok(shares),
-            _ => Err(Error::UnparsedIdentifier), //TODO: custom error
+            _ => Err(Error::IdentifierConversionFailed),
         }
     }
 }

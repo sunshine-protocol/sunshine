@@ -27,6 +27,10 @@ pub enum Error {
     PasswordTooShort,
     #[error("Invalid paperkey.")]
     InvalidMnemonic,
+    #[error("Passed in identifier cannot be made into u64.")]
+    IdentifierConversionFailed,
+    #[error("Passed in account identifier cannot be formed into AccountId type.")]
+    AccountIdConversionFailed,
     #[error("Identifier cannot be parsed.")]
     UnparsedIdentifier,
 }

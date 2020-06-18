@@ -108,7 +108,8 @@ async fn run() -> Result<(), Error> {
                 shares,
             }) => {
                 let org: OrgId = organization.try_into()?;
-                let recipient: AccountId = who.into_account().ok_or(Error::UnparsedIdentifier)?; // TODO custom error
+                let recipient: AccountId =
+                    who.into_account().ok_or(Error::AccountIdConversionFailed)?;
                 let new_shares_minted: Shares = shares.try_into()?;
                 let event = client
                     .issue_shares(org, recipient, new_shares_minted)
@@ -121,7 +122,7 @@ async fn run() -> Result<(), Error> {
             WalletSubCommand::ReserveShares(WalletReserveSharesCommand { organization, who }) => {
                 let org: OrgId = organization.try_into()?;
                 let owner_of_reserved_shares: AccountId =
-                    who.into_account().ok_or(Error::UnparsedIdentifier)?; // TODO custom error
+                    who.into_account().ok_or(Error::AccountIdConversionFailed)?;
                 let event = client
                     .reserve_shares(org, &owner_of_reserved_shares)
                     .await?;
@@ -133,7 +134,7 @@ async fn run() -> Result<(), Error> {
             WalletSubCommand::LockShares(WalletLockSharesCommand { organization, who }) => {
                 let org: OrgId = organization.try_into()?;
                 let owner_of_locked_shares: AccountId =
-                    who.into_account().ok_or(Error::UnparsedIdentifier)?; // TODO custom error
+                    who.into_account().ok_or(Error::AccountIdConversionFailed)?;
                 let event = client.lock_shares(org, &owner_of_locked_shares).await?;
                 println!(
                     "shares locked for {} account in {} org",
