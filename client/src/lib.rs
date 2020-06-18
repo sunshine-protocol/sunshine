@@ -16,5 +16,6 @@ mod sunshine;
 pub use error::Error;
 #[cfg(feature = "light-client")]
 pub use light_client::ChainType;
-pub use runtime::{ClientBuilder, Runtime};
+pub use runtime::{Runtime, RuntimeExtra};
+pub use srml::org::Org;
 pub use sunshine::SunClient;

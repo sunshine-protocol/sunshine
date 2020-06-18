@@ -1,0 +1,23 @@
+[package]
+name = "sunshine-cli"
+version = "0.1.0"
+authors = ["David Craven <david@craven.ch>, Amar Singh <asinghchrony@protonmail.com>"]
+edition = "2018"
+
+[dependencies]
+async-std = { version = "=1.5.0", features = ["attributes"] }
+exitfailure = "0.5.1"
+clap = "3.0.0-beta.1"
+sunshine-client = { package = "sunshine-client", path = "../../client" }
+dirs = "2.0.2"
+env_logger = "0.7.1"
+ipfs-embed = "0.1.0"
+ipld-block-builder = "0.3.0"
+keybase-keystore = {package = "keybase-keystore", git = "https://github.com/sunshine-protocol/substrate-identity"}
+qr2term = "0.2.1"
+rpassword = "4.0.5"
+sp-keyring = "2.0.0-rc2"
+substrate-subxt = "0.8.0"
+textwrap = { version = "0.11.0", features = ["term_size"] }
+thiserror = "1.0.19"
+utils-identity = { version = "0.1.0", path = "../../utils" }
