@@ -174,7 +174,6 @@ decl_module! {
             origin,
             vote_id: T::VoteId,
             direction: VoterView,
-            magnitude: Option<T::Signal>,
             justification: Option<T::IpfsReference>,
         ) -> DispatchResult {
             let voter = ensure_signed(origin)?;
