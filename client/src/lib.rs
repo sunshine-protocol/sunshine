@@ -1,4 +1,6 @@
 #![recursion_limit = "256"]
+#![allow(clippy::type_complexity)]
+#![allow(clippy::too_many_arguments)]
 
 #[macro_use]
 extern crate substrate_subxt;

@@ -1,6 +1,5 @@
 use crate::command::*;
 use crate::error::Error;
-use crate::runtime::{AccountId, OrgId, Runtime, RuntimeExtra, Shares, Signature};
 use clap::Clap;
 use core::convert::TryInto;
 use exitfailure::ExitDisplay;
@@ -8,14 +7,15 @@ use ipfs_embed::{Config, Store};
 use ipld_block_builder::{BlockBuilder, Codec};
 use keybase_keystore::bip39::{Language, Mnemonic};
 use keybase_keystore::{DeviceKey, KeyStore, Password};
-use sp_keyring::AccountKeyring;
+use sp_core::crypto::Pair;
 use std::path::PathBuf;
 use substrate_subxt::sp_core::sr25519;
 use substrate_subxt::ClientBuilder;
+use substrate_subxt::{sp_core, sp_runtime};
+use sunshine_client::{Extra as ExtraWrapper, Runtime};
 
 mod command;
 mod error;
-mod runtime;
 
 #[async_std::main]
 async fn main() -> Result<(), ExitDisplay<Error>> {
@@ -47,6 +47,8 @@ impl Paths {
     }
 }
 
+type Signature = sp_runtime::MultiSignature;
+type RuntimeExtra = ExtraWrapper<Runtime>;
 type Client = sunshine_client::SunClient<Runtime, Signature, RuntimeExtra, sr25519::Pair, Store>;
 
 async fn run() -> Result<(), Error> {
@@ -56,7 +58,10 @@ async fn run() -> Result<(), Error> {
     let paths = Paths::new(opts.path)?;
     let keystore = KeyStore::new(&paths.keystore);
     // initialize keystore with alice's keys
-    let alice_seed: [u8; 32] = AccountKeyring::Alice.into();
+    let alice_seed: [u8; 32] = sr25519::Pair::from_string_with_seed("//Alice", None)
+        .unwrap()
+        .1
+        .unwrap();
     keystore.initialize(
         &DeviceKey::from_seed(alice_seed),
         &Password::from("password".to_string()),
@@ -88,12 +93,10 @@ async fn run() -> Result<(), Error> {
                 let dk = if paperkey {
                     let mnemonic = ask_for_phrase("Please enter your backup phrase:").await?;
                     DeviceKey::from_mnemonic(&mnemonic).map_err(|_| Error::InvalidMnemonic)?
+                } else if let Some(suri) = &suri {
+                    DeviceKey::from_seed(suri.0)
                 } else {
-                    if let Some(suri) = &suri {
-                        DeviceKey::from_seed(suri.0)
-                    } else {
-                        DeviceKey::generate()
-                    }
+                    DeviceKey::generate()
                 };
                 let account_id = client.set_device_key(&dk, &password, force)?;
                 let account_id_str = account_id.to_string();
@@ -165,7 +168,7 @@ async fn ask_for_phrase(prompt: &str) -> Result<Mnemonic, Error> {
             words.push(word.trim().to_string());
         }
     }
-    println!("");
+    println!();
     Ok(Mnemonic::from_phrase(&words.join(" "), Language::English)
         .map_err(|_| Error::InvalidMnemonic)?)
 }

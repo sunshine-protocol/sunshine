@@ -2,20 +2,19 @@ use crate::error::{Error, Result};
 #[cfg(feature = "light-client")]
 use crate::light_client::ChainType;
 use crate::srml::org::*;
+use codec::{Decode, Encode};
+use core::marker::PhantomData;
 use ipld_block_builder::{BlockBuilder, Codec};
 use keystore::{DeviceKey, KeyStore, Password};
 use libipld::store::Store;
-// use std::path::Path;
-use codec::{Decode, Encode};
-use core::marker::PhantomData;
 use sp_runtime::traits::{IdentifyAccount, SignedExtension, Verify};
 use substrate_subxt::sp_core::crypto::{Pair, Ss58Codec};
-use substrate_subxt::{system::System, Client, PairSigner, SignedExtra}; //Signer
+use substrate_subxt::{system::System, Client, PairSigner, SignedExtra};
 
 #[derive(new)]
 pub struct SunClient<T, S, E, P, I>
 where
-    T: Org + Send + Sync + 'static, // runtime
+    T: Org + Send + Sync + 'static,
     <T as System>::AccountId: Into<<T as System>::Address> + Ss58Codec,
     S: Decode + Encode + From<P::Signature> + Verify + Send + Sync + 'static,
     <S as Verify>::Signer: From<P::Public> + IdentifyAccount<AccountId = <T as System>::AccountId>,
@@ -34,7 +33,7 @@ where
 
 impl<T, S, E, P, I> SunClient<T, S, E, P, I>
 where
-    T: Org + Send + Sync + 'static, // runtime
+    T: Org + Send + Sync + 'static,
     <T as System>::AccountId: Into<<T as System>::Address> + Ss58Codec,
     S: Decode + Encode + From<P::Signature> + Verify + Send + Sync + 'static,
     <S as Verify>::Signer: From<P::Public> + IdentifyAccount<AccountId = <T as System>::AccountId>,
@@ -85,7 +84,7 @@ where
             .register_flat_org_and_watch(&signer, sudo, parent_org, constitution, members)
             .await?
             .new_flat_organization_registered()
-            .map_err(|e| substrate_subxt::Error::Codec(e))?
+            .map_err(substrate_subxt::Error::Codec)?
             .ok_or(Error::EventNotFound)
     }
     /// Register weighted organization
@@ -108,7 +107,7 @@ where
             )
             .await?
             .new_weighted_organization_registered()
-            .map_err(|e| substrate_subxt::Error::Codec(e))?
+            .map_err(substrate_subxt::Error::Codec)?
             .ok_or(Error::EventNotFound)
     }
     /// Issue shares
@@ -123,7 +122,7 @@ where
             .issue_shares_and_watch(&signer, organization, &who, shares)
             .await?
             .shares_issued()
-            .map_err(|e| substrate_subxt::Error::Codec(e))?
+            .map_err(substrate_subxt::Error::Codec)?
             .ok_or(Error::EventNotFound)
     }
     /// Burn shares
@@ -139,7 +138,7 @@ where
             .burn_shares_and_watch(&signer, organization, &who, shares)
             .await?
             .shares_burned()
-            .map_err(|e| substrate_subxt::Error::Codec(e))?
+            .map_err(substrate_subxt::Error::Codec)?
             .ok_or(Error::EventNotFound)
     }
     /// Batch issue shares
@@ -154,7 +153,7 @@ where
             .batch_issue_shares_and_watch(&signer, organization, new_accounts)
             .await?
             .shares_batch_issued()
-            .map_err(|e| substrate_subxt::Error::Codec(e))?
+            .map_err(substrate_subxt::Error::Codec)?
             .ok_or(Error::EventNotFound)
     }
     /// Batch burn shares
@@ -169,7 +168,7 @@ where
             .batch_burn_shares_and_watch(&signer, organization, old_accounts)
             .await?
             .shares_batch_burned()
-            .map_err(|e| substrate_subxt::Error::Codec(e))?
+            .map_err(substrate_subxt::Error::Codec)?
             .ok_or(Error::EventNotFound)
     }
     /// Reserves shares for alice
@@ -184,7 +183,7 @@ where
             .reserve_shares_and_watch(&signer, org, who)
             .await?
             .shares_reserved()
-            .map_err(|e| substrate_subxt::Error::Codec(e))?
+            .map_err(substrate_subxt::Error::Codec)?
             .ok_or(Error::EventNotFound)
     }
     /// Reserves shares for alice
@@ -199,7 +198,7 @@ where
             .unreserve_shares_and_watch(&signer, org, who)
             .await?
             .shares_un_reserved()
-            .map_err(|e| substrate_subxt::Error::Codec(e))?
+            .map_err(substrate_subxt::Error::Codec)?
             .ok_or(Error::EventNotFound)
     }
     /// Lock shares for alice
@@ -214,7 +213,7 @@ where
             .lock_shares_and_watch(&signer, org, who)
             .await?
             .shares_locked()
-            .map_err(|e| substrate_subxt::Error::Codec(e))?
+            .map_err(substrate_subxt::Error::Codec)?
             .ok_or(Error::EventNotFound)
     }
     /// Unlock shares for alice
@@ -229,7 +228,7 @@ where
             .unlock_shares_and_watch(&signer, org, who)
             .await?
             .shares_unlocked()
-            .map_err(|e| substrate_subxt::Error::Codec(e))?
+            .map_err(substrate_subxt::Error::Codec)?
             .ok_or(Error::EventNotFound)
     }
 }

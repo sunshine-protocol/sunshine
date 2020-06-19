@@ -1,10 +1,17 @@
 use crate::error::Error;
-use crate::runtime::{AccountId, OrgId, Shares};
 use clap::Clap;
 use std::path::PathBuf;
 use std::str::FromStr;
 use substrate_subxt::sp_core::crypto::Ss58Codec;
 use substrate_subxt::sp_core::{sr25519, Pair};
+use substrate_subxt::sp_runtime::{
+    traits::{IdentifyAccount, Verify},
+    MultiSignature,
+};
+
+pub type AccountId = <<MultiSignature as Verify>::Signer as IdentifyAccount>::AccountId;
+pub type OrgId = u64;
+pub type Shares = u64;
 
 #[derive(Clone, Debug, Clap)]
 pub struct Opts {

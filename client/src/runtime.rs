@@ -15,7 +15,6 @@ use substrate_subxt::{
 };
 use utils_identity::cid::CidBytes;
 
-/// Concrete type definitions compatible w/ sunshine's runtime aka `suntime`
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Runtime;
 
@@ -40,8 +39,6 @@ impl Org for Runtime {
     type OrgId = u64;
     type Shares = u64;
 }
-
-// pub type RuntimeExtra = Extra<Runtime>;
 
 #[derive(Encode, Decode, Clone, Eq, PartialEq, Debug)]
 pub struct Extra<T: System> {
