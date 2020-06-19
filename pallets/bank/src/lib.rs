@@ -205,7 +205,6 @@ decl_module! {
             origin,
             bank_id: OnChainTreasuryID,
             reservation_id: T::BankAssociatedId,
-            reason: T::IpfsReference,
             amount: BalanceOf<T>,
         ) -> DispatchResult {
             let committer = ensure_signed(origin)?;
