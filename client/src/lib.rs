@@ -1,4 +1,6 @@
 #![recursion_limit = "256"]
+#![allow(clippy::type_complexity)]
+#![allow(clippy::too_many_arguments)]
 
 #[macro_use]
 extern crate substrate_subxt;
@@ -16,5 +18,6 @@ mod sunshine;
 pub use error::Error;
 #[cfg(feature = "light-client")]
 pub use light_client::ChainType;
-pub use runtime::{ClientBuilder, Runtime};
+pub use runtime::{Extra, Runtime};
+pub use srml::org::Org;
 pub use sunshine::SunClient;

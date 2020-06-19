@@ -3,15 +3,15 @@ panic = "unwind"
 
 [workspace]
 members = [
-    "modules/util",
-    "modules/org",
-    "modules/vote",
-    "modules/bank",
-    "modules/bounty",
-    "runtime",
+    "bin/node",
+    "bin/cli",
+    "pallets/util",
+    "pallets/org",
+    "pallets/vote",
+    "pallets/bank",
+    "pallets/bounty",
     "utils",
     "client",
-    "node",
 ]
 
 [patch.crates-io]

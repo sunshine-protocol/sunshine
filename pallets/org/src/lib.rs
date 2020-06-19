@@ -12,10 +12,9 @@ use util::{
     organization::{Organization, OrganizationSource},
     share::{ShareProfile, SimpleShareGenesis},
     traits::{
-        AccessGenesis, ChainSudoPermissions, GenerateUniqueID, GetGroup, GetGroupSize,
-        GroupMembership, IDIsAvailable, LockProfile, OrganizationSupervisorPermissions,
-        RegisterOrganization, RemoveOrganization, ReserveProfile, ShareInformation, ShareIssuance,
-        VerifyShape,
+        AccessGenesis, GenerateUniqueID, GetGroup, GetGroupSize, GroupMembership, IDIsAvailable,
+        LockProfile, OrganizationSupervisorPermissions, RegisterOrganization, RemoveOrganization,
+        ReserveProfile, ShareInformation, ShareIssuance, VerifyShape,
     }, // AccessProfile, SeededGenerateUniqueID
 };
 
@@ -149,9 +148,6 @@ decl_error! {
 
 decl_storage! {
     trait Store for Module<T: Trait> as Org {
-        /// The account that can set all the organization supervisors, should be replaced by committee-based governance from Org0
-        SudoKey get(fn sudo_key): Option<T::AccountId>;
-
         /// Identity nonce for registering organizations
         OrgIdNonce get(fn org_id_counter): T::OrgId;
 
@@ -240,8 +236,7 @@ decl_module! {
             // first check is that the organization exists
             ensure!(!Self::id_is_available(organization), Error::<T>::OrganizationMustBeRegisteredToIssueShares);
             // second check is that this is an authorized party for issuance (the supervisor or the module's sudo account)
-            let authentication: bool = Self::is_sudo_key(&issuer)
-                                    || Self::is_organization_supervisor(organization, &issuer);
+            let authentication: bool = Self::is_organization_supervisor(organization, &issuer);
             ensure!(authentication, Error::<T>::NotAuthorizedToIssueShares);
 
             Self::issue(organization, who.clone(), shares, false)?;
@@ -254,8 +249,7 @@ decl_module! {
             // first check is that the organization exists
             ensure!(!Self::id_is_available(organization), Error::<T>::OrganizationMustBeRegisteredToBurnShares);
             // second check is that this is an authorized party for burning
-            let authentication: bool = Self::is_sudo_key(&burner)
-                                    || Self::is_organization_supervisor(organization, &burner);
+            let authentication: bool = Self::is_organization_supervisor(organization, &burner);
             ensure!(authentication, Error::<T>::NotAuthorizedToBurnShares);
 
             Self::burn(organization, who.clone(), Some(shares), false)?;
@@ -268,8 +262,7 @@ decl_module! {
             // first check is that the organization exists
             ensure!(!Self::id_is_available(organization), Error::<T>::OrganizationMustBeRegisteredToIssueShares);
             // second check is that this is an authorized party for issuance
-            let authentication: bool = Self::is_sudo_key(&issuer)
-                                    || Self::is_organization_supervisor(organization, &issuer);
+            let authentication: bool = Self::is_organization_supervisor(organization, &issuer);
             ensure!(authentication, Error::<T>::NotAuthorizedToIssueShares);
             let genesis: SimpleShareGenesis<T::AccountId, T::Shares> = new_accounts.into();
             let total_new_shares_minted = genesis.total();
@@ -283,8 +276,7 @@ decl_module! {
             // first check is that the organization exists
             ensure!(!Self::id_is_available(organization), Error::<T>::OrganizationMustBeRegisteredToIssueShares);
             // second check is that this is an authorized party for burning
-            let authentication: bool = Self::is_sudo_key(&issuer)
-                                    || Self::is_organization_supervisor(organization, &issuer);
+            let authentication: bool = Self::is_organization_supervisor(organization, &issuer);
             ensure!(authentication, Error::<T>::NotAuthorizedToBurnShares);
             let genesis: SimpleShareGenesis<T::AccountId, T::Shares> = old_accounts.into();
             let total_new_shares_burned = genesis.total();
@@ -298,8 +290,7 @@ decl_module! {
             // first check is that the organization exists
             ensure!(!Self::id_is_available(organization), Error::<T>::OrganizationMustBeRegisteredToLockShares);
             // second check is that this is an authorized party for locking shares
-            let authentication: bool = Self::is_sudo_key(&locker)
-                                    || Self::is_organization_supervisor(organization, &locker)
+            let authentication: bool = Self::is_organization_supervisor(organization, &locker)
                                     || locker == who;
             ensure!(authentication, Error::<T>::NotAuthorizedToLockShares);
 
@@ -313,8 +304,7 @@ decl_module! {
             // first check is that the organization exists
             ensure!(!Self::id_is_available(organization), Error::<T>::OrganizationMustBeRegisteredToUnLockShares);
             // second check is that this is an authorized party for unlocking shares
-            let authentication: bool = Self::is_sudo_key(&unlocker)
-                                    || Self::is_organization_supervisor(organization, &unlocker)
+            let authentication: bool = Self::is_organization_supervisor(organization, &unlocker)
                                     || unlocker == who;
             ensure!(authentication, Error::<T>::NotAuthorizedToUnLockShares);
 
@@ -328,8 +318,7 @@ decl_module! {
             // first check is that the organization exists
             ensure!(!Self::id_is_available(organization), Error::<T>::OrganizationMustBeRegisteredToReserveShares);
             // second check is that this is an authorized party for unlocking shares
-            let authentication: bool = Self::is_sudo_key(&reserver)
-                                    || Self::is_organization_supervisor(organization, &reserver)
+            let authentication: bool = Self::is_organization_supervisor(organization, &reserver)
                                     || reserver == who;
             ensure!(authentication, Error::<T>::NotAuthorizedToReserveShares);
 
@@ -344,8 +333,7 @@ decl_module! {
             // first check is that the organization exists
             ensure!(!Self::id_is_available(organization), Error::<T>::OrganizationMustBeRegisteredToUnReserveShares);
             // second check is that this is an authorized party for unlocking shares
-            let authentication: bool = Self::is_sudo_key(&unreserver)
-                                    || Self::is_organization_supervisor(organization, &unreserver)
+            let authentication: bool = Self::is_organization_supervisor(organization, &unreserver)
                                     || unreserver == who;
             ensure!(authentication, Error::<T>::NotAuthorizedToUnReserveShares);
 
@@ -383,29 +371,6 @@ impl<T: Trait> GenerateUniqueID<T::OrgId> for Module<T> {
         }
         <OrgIdNonce<T>>::put(id_counter);
         id_counter
-    }
-}
-
-impl<T: Trait> ChainSudoPermissions<T::AccountId> for Module<T> {
-    fn is_sudo_key(who: &T::AccountId) -> bool {
-        if let Some(okey) = <SudoKey<T>>::get() {
-            return who == &okey;
-        }
-        false
-    }
-    fn put_sudo_key(who: T::AccountId) {
-        <SudoKey<T>>::put(who);
-    }
-    // only the sudo key can swap the sudo key (todo experiment: key recovery from some number of supervisors?)
-    fn set_sudo_key(old_key: &T::AccountId, new_key: T::AccountId) -> DispatchResult {
-        if let Some(okey) = <SudoKey<T>>::get() {
-            if old_key == &okey {
-                <SudoKey<T>>::put(new_key);
-                return Ok(());
-            }
-            return Err(Error::<T>::UnAuthorizedSwapSudoRequest.into());
-        }
-        Err(Error::<T>::NoExistingSudoKey.into())
     }
 }
 

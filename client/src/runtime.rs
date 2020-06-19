@@ -10,23 +10,11 @@ use sp_runtime::{
 use std::marker::PhantomData;
 use substrate_subxt::{
     balances::{AccountData, Balances},
-    system::System, //sp_core::crypto::Pair,
-    CheckEra,
-    CheckGenesis,
-    CheckNonce,
-    CheckSpecVersion,
-    CheckTxVersion,
-    CheckWeight,
-    SignedExtra,
+    system::System,
+    CheckEra, CheckGenesis, CheckNonce, CheckSpecVersion, CheckTxVersion, CheckWeight, SignedExtra,
 };
 use utils_identity::cid::CidBytes;
 
-pub type Pair = sp_core::sr25519::Pair;
-pub type ClientBuilder = substrate_subxt::ClientBuilder<Runtime, MultiSignature, RuntimeExtra>;
-pub type Client = substrate_subxt::Client<Runtime, MultiSignature, RuntimeExtra>;
-pub type PairSigner = substrate_subxt::PairSigner<Runtime, MultiSignature, RuntimeExtra, Pair>;
-
-/// Concrete type definitions compatible w/ sunshine's runtime aka `suntime`
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Runtime;
 
@@ -51,8 +39,6 @@ impl Org for Runtime {
     type OrgId = u64;
     type Shares = u64;
 }
-
-pub type RuntimeExtra = Extra<Runtime>;
 
 #[derive(Encode, Decode, Clone, Eq, PartialEq, Debug)]
 pub struct Extra<T: System> {
