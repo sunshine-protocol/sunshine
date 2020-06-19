@@ -149,141 +149,136 @@ fn organization_registration() {
     });
 }
 
-// #[test]
-// fn share_reservation() {
-//     new_test_ext().execute_with(|| {
-//         let one = Origin::signed(1);
-//         assert_ok!(Org::reserve_shares(one.clone(), 1, 1, 1));
-//         let profile = Org::members(1, 1).unwrap();
-//         let first_times_reserved = profile.times_reserved();
-//         // // check that method calculates correctly
-//         assert_eq!(first_times_reserved, 1);
-//         assert_ok!(AtomicShares::reserve_shares(one.clone(), 1, 1, 1));
-//         let second_profile = AtomicShares::profile(prefix_key, 1).unwrap();
-//         let second_times_reserved = second_profile.times_reserved();
-//         assert_eq!(second_times_reserved, 2);
-//         let mut n = 0u32;
-//         while n < 20 {
-//             assert_ok!(AtomicShares::reserve_shares(one.clone(), 1, 1, 1));
-//             n += 1;
-//         }
-//         let n_profile = AtomicShares::profile(prefix_key, 1).unwrap();
-//         let n_times_reserved = n_profile.times_reserved();
-//         assert_eq!(n_times_reserved, 22);
+#[test]
+fn share_reservation() {
+    new_test_ext().execute_with(|| {
+        let one = Origin::signed(1);
+        assert_ok!(Org::reserve_shares(one.clone(), 1, 1));
+        let profile = Org::members(1, 1).unwrap();
+        let first_times_reserved = profile.times_reserved();
+        // // check that method calculates correctly
+        assert_eq!(first_times_reserved, 1);
+        assert_ok!(Org::reserve_shares(one.clone(), 1, 1));
+        let second_profile = Org::members(1, 1).unwrap();
+        let second_times_reserved = second_profile.times_reserved();
+        assert_eq!(second_times_reserved, 2);
+        let mut n = 0u32;
+        while n < 20 {
+            assert_ok!(Org::reserve_shares(one.clone(), 1, 1));
+            n += 1;
+        }
+        let n_profile = Org::members(1, 1).unwrap();
+        let n_times_reserved = n_profile.times_reserved();
+        assert_eq!(n_times_reserved, 22);
 
-//         // check same logic with another member of the first group
-//         assert_ok!(AtomicShares::reserve_shares(one.clone(), 1, 1, 2));
-//         let a_profile = AtomicShares::profile(prefix_key, 2).unwrap();
-//         let a_first_times_reserved = a_profile.times_reserved();
-//         // // check that method calculates correctly
-//         assert_eq!(a_first_times_reserved, 1);
-//         assert_ok!(AtomicShares::reserve_shares(one.clone(), 1, 1, 2));
-//         let a_second_profile = AtomicShares::profile(prefix_key, 2).unwrap();
-//         let a_second_times_reserved = a_second_profile.times_reserved();
-//         assert_eq!(a_second_times_reserved, 2);
-//         let mut a_n = 0u32;
-//         while a_n < 20 {
-//             assert_ok!(AtomicShares::reserve_shares(one.clone(), 1, 1, 2));
-//             a_n += 1;
-//         }
-//         let a_n_profile = AtomicShares::profile(prefix_key, 2).unwrap();
-//         let a_n_times_reserved = a_n_profile.times_reserved();
-//         assert_eq!(a_n_times_reserved, 22);
-//     });
-// }
+        // check same logic with another member of the first group
+        assert_ok!(Org::reserve_shares(one.clone(), 1, 2));
+        let a_profile = Org::members(1, 2).unwrap();
+        let a_first_times_reserved = a_profile.times_reserved();
+        // // check that method calculates correctly
+        assert_eq!(a_first_times_reserved, 1);
+        assert_ok!(Org::reserve_shares(one.clone(), 1, 2));
+        let a_second_profile = Org::members(1, 2).unwrap();
+        let a_second_times_reserved = a_second_profile.times_reserved();
+        assert_eq!(a_second_times_reserved, 2);
+        let mut a_n = 0u32;
+        while a_n < 20 {
+            assert_ok!(Org::reserve_shares(one.clone(), 1, 2));
+            a_n += 1;
+        }
+        let a_n_profile = Org::members(1, 2).unwrap();
+        let a_n_times_reserved = a_n_profile.times_reserved();
+        assert_eq!(a_n_times_reserved, 22);
+    });
+}
 
-// #[test]
-// fn share_unreservation() {
-//     new_test_ext().execute_with(|| {
-//         let one = Origin::signed(1);
-//         assert_ok!(AtomicShares::reserve_shares(one.clone(), 1, 1, 1));
-//         let prefix_key = UUID2::new(1, 1);
-//         let profile = AtomicShares::profile(prefix_key, 1).unwrap();
-//         let first_times_reserved = profile.times_reserved();
-//         // // check that method calculates correctly
-//         assert_eq!(first_times_reserved, 1);
-//         assert_ok!(AtomicShares::unreserve_shares(one.clone(), 1, 1, 1));
-//         let un_profile = AtomicShares::profile(prefix_key, 1).unwrap();
-//         let first_times_un_reserved = un_profile.times_reserved();
-//         // // check that method calculates correctly
-//         assert_eq!(first_times_un_reserved, 0);
-//     });
-// }
+#[test]
+fn share_unreservation() {
+    new_test_ext().execute_with(|| {
+        let one = Origin::signed(1);
+        assert_ok!(Org::reserve_shares(one.clone(), 1, 1));
+        let profile = Org::members(1, 1).unwrap();
+        let first_times_reserved = profile.times_reserved();
+        // // check that method calculates correctly
+        assert_eq!(first_times_reserved, 1);
+        assert_ok!(Org::unreserve_shares(one.clone(), 1, 1));
+        let un_profile = Org::members(1, 1).unwrap();
+        let first_times_un_reserved = un_profile.times_reserved();
+        // // check that method calculates correctly
+        assert_eq!(first_times_un_reserved, 0);
+    });
+}
 
-// #[test]
-// fn share_lock() {
-//     new_test_ext().execute_with(|| {
-//         let one = Origin::signed(1);
-//         let prefix_key = UUID2::new(1, 1);
-//         let profile = AtomicShares::profile(prefix_key, 1).unwrap();
-//         let unlocked = profile.is_unlocked();
-//         assert_eq!(unlocked, true);
-//         assert_ok!(AtomicShares::lock_shares(one.clone(), 1, 1, 1));
-//         let locked_profile = AtomicShares::profile(prefix_key, 1).unwrap();
-//         let locked = !locked_profile.is_unlocked();
-//         assert_eq!(locked, true);
-//     });
-// }
+#[test]
+fn share_lock() {
+    new_test_ext().execute_with(|| {
+        let one = Origin::signed(1);
+        let profile = Org::members(1, 1).unwrap();
+        let unlocked = profile.is_unlocked();
+        assert_eq!(unlocked, true);
+        assert_ok!(Org::lock_shares(one.clone(), 1, 1));
+        let locked_profile = Org::members(1, 1).unwrap();
+        let locked = !locked_profile.is_unlocked();
+        assert_eq!(locked, true);
+    });
+}
 
-// #[test]
-// fn share_unlock() {
-//     new_test_ext().execute_with(|| {
-//         let one = Origin::signed(1);
-//         let prefix_key = UUID2::new(1, 1);
-//         let profile = AtomicShares::profile(prefix_key, 1).unwrap();
-//         let unlocked = profile.is_unlocked();
-//         assert_eq!(unlocked, true);
-//         assert_ok!(AtomicShares::lock_shares(one.clone(), 1, 1, 1));
-//         let locked_profile = AtomicShares::profile(prefix_key, 1).unwrap();
-//         let locked = !locked_profile.is_unlocked();
-//         assert_eq!(locked, true);
-//         assert_ok!(AtomicShares::unlock_shares(one.clone(), 1, 1, 1));
-//         let unlocked_profile = AtomicShares::profile(prefix_key, 1).unwrap();
-//         let is_unlocked = unlocked_profile.is_unlocked();
-//         assert_eq!(is_unlocked, true);
-//     });
-// }
+#[test]
+fn share_unlock() {
+    new_test_ext().execute_with(|| {
+        let one = Origin::signed(1);
+        let profile = Org::members(1, 1).unwrap();
+        let unlocked = profile.is_unlocked();
+        assert_eq!(unlocked, true);
+        assert_ok!(Org::lock_shares(one.clone(), 1, 1));
+        let locked_profile = Org::members(1, 1).unwrap();
+        let locked = !locked_profile.is_unlocked();
+        assert_eq!(locked, true);
+        assert_ok!(Org::unlock_shares(one.clone(), 1, 1));
+        let unlocked_profile = Org::members(1, 1).unwrap();
+        let is_unlocked = unlocked_profile.is_unlocked();
+        assert_eq!(is_unlocked, true);
+    });
+}
 
-// #[test]
-// fn share_issuance() {
-//     new_test_ext().execute_with(|| {
-//         let one = Origin::signed(1);
-//         let prefix_key = UUID2::new(1, 1);
-//         let pre_profile = AtomicShares::profile(prefix_key, 10).unwrap();
-//         let pre_shares = pre_profile.total();
+#[test]
+fn share_issuance() {
+    new_test_ext().execute_with(|| {
+        let one = Origin::signed(1);
+        let pre_profile = Org::members(1, 1).unwrap();
+        let pre_shares = pre_profile.total();
 
-//         assert_eq!(pre_shares, 10);
-//         // issue 10 new shares to 7
-//         assert_ok!(AtomicShares::issue_shares(one.clone(), 1, 1, 10, 10));
+        assert_eq!(pre_shares, 1);
+        // issue 10 new shares to member 1
+        assert_ok!(Org::issue_shares(one.clone(), 1, 1, 10));
 
-//         let post_profile = AtomicShares::profile(prefix_key, 10).unwrap();
-//         let post_shares = post_profile.total();
+        let post_profile = Org::members(1, 1).unwrap();
+        let post_shares = post_profile.total();
 
-//         assert_eq!(post_shares, 20);
-//     });
-// }
+        assert_eq!(post_shares, 11);
+    });
+}
 
-// #[test]
-// fn share_burn() {
-//     new_test_ext().execute_with(|| {
-//         let one = Origin::signed(1);
-//         let prefix_key = UUID2::new(1, 1);
-//         let pre_profile = AtomicShares::profile(prefix_key, 10).unwrap();
-//         let pre_shares = pre_profile.total();
+#[test]
+fn share_burn() {
+    new_test_ext().execute_with(|| {
+        let one = Origin::signed(1);
+        let pre_profile = Org::members(1, 1).unwrap();
+        let pre_shares = pre_profile.total();
 
-//         assert_eq!(pre_shares, 10);
-//         // issue 10 new shares to 10
-//         assert_ok!(AtomicShares::issue_shares(one.clone(), 1, 1, 10, 10));
+        assert_eq!(pre_shares, 1);
+        // issue 10 new shares to 10
+        assert_ok!(Org::issue_shares(one.clone(), 1, 1, 10));
 
-//         let pre_pre_profile = AtomicShares::profile(prefix_key, 10).unwrap();
-//         let pre_pre_shares = pre_pre_profile.total();
+        let pre_pre_profile = Org::members(1, 1).unwrap();
+        let pre_pre_shares = pre_pre_profile.total();
 
-//         assert_eq!(pre_pre_shares, 20);
-//         // burn 10 new shares for 10
-//         assert_ok!(AtomicShares::burn_shares(one.clone(), 1, 1, 10, 10));
-//         let post_profile = AtomicShares::profile(prefix_key, 10).unwrap();
-//         let post_shares = post_profile.total();
+        assert_eq!(pre_pre_shares, 11);
+        // burn 10 new shares for 10
+        assert_ok!(Org::burn_shares(one.clone(), 1, 1, 5));
+        let post_profile = Org::members(1, 1).unwrap();
+        let post_shares = post_profile.total();
 
-//         assert_eq!(post_shares, 10);
-//     });
-// }
+        assert_eq!(post_shares, 6);
+    });
+}
