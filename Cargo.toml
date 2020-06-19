@@ -5,7 +5,7 @@ panic = "unwind"
 members = [
     "bin/node",
     "bin/cli",
-    "pallets/util",
+    "pallets-util",
     "pallets/org",
     "pallets/vote",
     "pallets/bank",
