@@ -1,6 +1,6 @@
 use crate::command::*;
 use crate::error::Error;
-use crate::runtime::{AccountId, Extra, OrgId, Runtime, Shares, Signature};
+use crate::runtime::{AccountId, OrgId, Runtime, RuntimeExtra, Shares, Signature};
 use clap::Clap;
 use core::convert::TryInto;
 use exitfailure::ExitDisplay;
@@ -47,7 +47,7 @@ impl Paths {
     }
 }
 
-type Client = sunshine_client::SunClient<Runtime, Signature, Extra, sr25519::Pair, Store>;
+type Client = sunshine_client::SunClient<Runtime, Signature, RuntimeExtra, sr25519::Pair, Store>;
 
 async fn run() -> Result<(), Error> {
     env_logger::init();
@@ -61,7 +61,9 @@ async fn run() -> Result<(), Error> {
         &DeviceKey::from_seed(alice_seed),
         &Password::from("password".to_string()),
     )?;
-    let subxt = ClientBuilder::<Runtime>::new().build().await?;
+    let subxt = ClientBuilder::<Runtime, Signature, RuntimeExtra>::new()
+        .build()
+        .await?;
     let config = Config::from_path(&paths.db).map_err(ipfs_embed::Error::Sled)?;
     let store = Store::new(config)?;
     let codec = Codec::new();

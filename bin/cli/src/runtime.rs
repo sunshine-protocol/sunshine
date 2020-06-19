@@ -2,12 +2,12 @@ use substrate_subxt::balances::{AccountData, Balances};
 use substrate_subxt::sp_runtime::traits::{IdentifyAccount, Verify};
 use substrate_subxt::system::System;
 use substrate_subxt::{sp_core, sp_runtime};
-use sunshine_client::Org;
+use sunshine_client::{Extra as ExtraWrapper, Org};
 use utils_identity::cid::CidBytes;
 
-pub type AccountId = <<sp_runtime::MultiSignature as Verify>::Signer as IdentifyAccount>::AccountId;
 pub type Signature = sp_runtime::MultiSignature;
-pub type Extra = substrate_subxt::DefaultExtra<Runtime>;
+pub type AccountId = <<Signature as Verify>::Signer as IdentifyAccount>::AccountId;
+pub type RuntimeExtra = ExtraWrapper<Runtime>;
 pub type OrgId = u64;
 pub type Shares = u64;
 pub type IpfsReference = CidBytes;

@@ -14,7 +14,7 @@ use sunshine_client::{Error, Runtime, SunClient};
 #[async_std::main]
 async fn main() -> Result<(), Error> {
     env_logger::init();
-    let subxt = ClientBuilder::<Runtime>::new().build().await.unwrap();
+    //let subxt = ClientBuilder::<Runtime>::new().build().await?;
     let db = sled::open("/tmp/db")?;
     let ipld_tree = db.open_tree("ipld_tree")?;
     let config = Config::from_tree(ipld_tree);
@@ -27,9 +27,10 @@ async fn main() -> Result<(), Error> {
         &DeviceKey::from_seed(alice_seed),
         &Password::from("password".to_string()),
     )?;
-    let client = SunClient::<_, _, _, Pair, _>::new(keystore, subxt, ipld);
+    //let client = SunClient::<_, _, _, Pair, _>::new(keystore, subxt, ipld);
     let account_id = sp_keyring::AccountKeyring::Alice.to_account_id();
-    client.issue_shares(1u64, account_id, 10u64).await?;
+    println!("{}", account_id);
+    //client.issue_shares(1u64, account_id, 10u64).await?;
 
     // println!(
     //     "Account {:?} was issued {:?} shares for organization {:?}",

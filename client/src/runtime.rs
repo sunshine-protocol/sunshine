@@ -41,7 +41,7 @@ impl Org for Runtime {
     type Shares = u64;
 }
 
-pub type RuntimeExtra = Extra<Runtime>;
+// pub type RuntimeExtra = Extra<Runtime>;
 
 #[derive(Encode, Decode, Clone, Eq, PartialEq, Debug)]
 pub struct Extra<T: System> {
