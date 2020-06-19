@@ -20,7 +20,7 @@ use util::{
         MoveFundsOutCommittedOnly, MoveFundsOutUnCommittedOnly, OnChainBank,
         OrganizationSupervisorPermissions, RegisterAccount, ReservationMachine,
         SeededGenerateUniqueID, ShareInformation, ShareIssuance, TermSheetExit,
-    }, // ChainSudoPermissions, GetGroupSize
+    }, // GetGroupSize
 };
 
 use codec::Codec;

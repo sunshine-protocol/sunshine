@@ -20,10 +20,9 @@ use sp_runtime::{
 use sp_std::{fmt::Debug, prelude::*};
 use util::{
     traits::{
-        AccessGenesis, Apply, ApplyVote, Approved, ChainSudoPermissions, CheckVoteStatus,
-        GenerateUniqueID, GetGroup, GetVoteOutcome, IDIsAvailable, MintableSignal, OpenVote,
-        OrganizationSupervisorPermissions, Revert, ShareInformation, UpdateVoteTopic,
-        VoteOnProposal, VoteVector,
+        AccessGenesis, Apply, ApplyVote, Approved, CheckVoteStatus, GenerateUniqueID, GetGroup,
+        GetVoteOutcome, IDIsAvailable, MintableSignal, OpenVote, OrganizationSupervisorPermissions,
+        Revert, ShareInformation, UpdateVoteTopic, VoteOnProposal, VoteVector,
     },
     vote::{ThresholdConfig, Vote, VoteOutcome, VoteState, VoterView},
 };
@@ -125,8 +124,7 @@ decl_module! {
         ) -> DispatchResult {
             let vote_creator = ensure_signed(origin)?;
             // default authentication is organization supervisor or sudo key
-            let authentication: bool = <org::Module<T>>::is_organization_supervisor(organization, &vote_creator) ||
-                <org::Module<T>>::is_sudo_key(&vote_creator);
+            let authentication: bool = <org::Module<T>>::is_organization_supervisor(organization, &vote_creator);
             ensure!(authentication, Error::<T>::NotAuthorizedToCreateVoteForOrganization);
             let threshold_config = ThresholdConfig::new_percentage_threshold(passage_threshold_pct, turnout_threshold_pct);
             // share weighted percentage threshold vote started
@@ -146,7 +144,7 @@ decl_module! {
         ) -> DispatchResult {
             let vote_creator = ensure_signed(origin)?;
             // default authentication is organization supervisor or sudo key
-            let authentication: bool = <org::Module<T>>::is_organization_supervisor(organization, &vote_creator) || <org::Module<T>>::is_sudo_key(&vote_creator);
+            let authentication: bool = <org::Module<T>>::is_organization_supervisor(organization, &vote_creator);
             ensure!(authentication, Error::<T>::NotAuthorizedToCreateVoteForOrganization);
             let threshold_config = ThresholdConfig::new_signal_count_threshold(support_requirement, turnout_requirement);
             // share weighted count threshold vote started
@@ -164,7 +162,7 @@ decl_module! {
         ) -> DispatchResult {
             let vote_creator = ensure_signed(origin)?;
             // default authentication is organization supervisor or sudo key
-            let authentication: bool = <org::Module<T>>::is_organization_supervisor(organization, &vote_creator) || <org::Module<T>>::is_sudo_key(&vote_creator);
+            let authentication: bool = <org::Module<T>>::is_organization_supervisor(organization, &vote_creator);
             ensure!(authentication, Error::<T>::NotAuthorizedToCreateVoteForOrganization);
             let new_vote_id = Self::open_unanimous_consent(topic, organization, duration)?;
             // emit event

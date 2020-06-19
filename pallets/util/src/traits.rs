@@ -22,14 +22,6 @@ pub trait Increment: Sized {
 
 // ====== Permissions ACL ======
 
-pub trait ChainSudoPermissions<AccountId> {
-    fn is_sudo_key(who: &AccountId) -> bool;
-    // infallible, unguarded
-    fn put_sudo_key(who: AccountId);
-    // fallible, cas by default
-    fn set_sudo_key(old_key: &AccountId, new_key: AccountId) -> DispatchResult;
-}
-
 pub trait OrganizationSupervisorPermissions<OrgId, AccountId> {
     fn is_organization_supervisor(org: OrgId, who: &AccountId) -> bool;
     // removes any existing sudo and places None

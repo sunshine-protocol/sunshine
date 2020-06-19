@@ -1,15 +1,10 @@
-use sp_keyring::AccountKeyring;
-//#[cfg(feature = "light-client")]
-//use sunshine_client::ChainType;
 use ipfs_embed::{Config, Store};
 use ipld_block_builder::{BlockBuilder, Codec};
 use keystore::{DeviceKey, KeyStore, Password};
 use sp_core::sr25519::Pair;
+use sp_core::Pair as _;
 use substrate_subxt::{sp_runtime, ClientBuilder};
 use sunshine_client::{Error, Extra, Runtime, SunClient};
-// use libipld::cid::{Cid, Codec};
-// use libipld::multihash::Sha2_256;
-// use utils_identity::cid::CidBytes;
 
 pub type RuntimeExtra = Extra<Runtime>;
 
@@ -26,7 +21,10 @@ async fn main() -> Result<(), Error> {
     let codec = Codec::new();
     let ipld = BlockBuilder::new(store, codec);
     let keystore = KeyStore::new("/tmp/keystore");
-    let alice_seed: [u8; 32] = AccountKeyring::Alice.into();
+    let alice_seed: [u8; 32] = Pair::from_string_with_seed("//Alice", None)
+        .unwrap()
+        .1
+        .unwrap();
     let _ = keystore.initialize(
         &DeviceKey::from_seed(alice_seed),
         &Password::from("password".to_string()),
