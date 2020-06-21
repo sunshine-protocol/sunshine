@@ -31,12 +31,9 @@ pub trait OrganizationSupervisorPermissions<OrgId, AccountId> {
 }
 
 // ---------- Membership Logic ----------
-pub trait GetGroupSize<OrgId> {
-    fn get_size_of_group(org_id: OrgId) -> u32;
-}
 
 /// Checks that the `AccountId` is a member of a share group in an organization
-pub trait GroupMembership<OrgId, AccountId>: GetGroupSize<OrgId> {
+pub trait GroupMembership<OrgId, AccountId> {
     fn is_member_of_group(org_id: OrgId, who: &AccountId) -> bool;
 }
 pub trait GetGroup<OrgId, AccountId> {

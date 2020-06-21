@@ -14,4 +14,5 @@ pub mod organization;
 pub mod proposal;
 pub mod share;
 pub mod traits;
+pub mod version;
 pub mod vote;
