@@ -33,7 +33,7 @@ sp-inherents = { version = "2.0.0-rc3", default-features = false }
 sp-runtime = { version = "2.0.0-rc3", default-features = false }
 sp-transaction-pool = { version = "2.0.0-rc3", default-features = false }
 suntime = { path = "runtime" }
-utils-identity = { version = "0.1.0", default-features = false, path = "../../utils"}
+utils-identity = { git = "https://github.com/sunshine-protocol/sunshine-identity/", default-features=false }
 structopt = { version = "0.3.14", optional = true }
 
 [features]

@@ -32,7 +32,7 @@ derive-new = {version = "0.5", default-features=false}
 sunshine-node = { path = "../bin/node", default-features = false, optional = true }
 keystore = {package = "keybase-keystore", git = "https://github.com/sunshine-protocol/substrate-identity"}
 # local deps
-utils-identity = { version = "0.1.0", path = "../utils" }
+utils-identity = {git = "https://github.com/sunshine-protocol/substrate-identity", default-features=false}
 util = { package = "sunshine-util", path = "../pallets-util", default-features = false }
 org = {package = "sunshine-org", path = "../pallets/org", default-features=false }
 vote = { package = "sunshine-vote", path = "../pallets/vote", default-features=false}
