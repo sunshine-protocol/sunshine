@@ -49,7 +49,7 @@ parameter_types! {
 }
 impl org::Trait for Test {
     type Event = TestEvent;
-    type IpfsReference = u32; // TODO: replace with utils_identity::Cid
+    type IpfsReference = u32;
     type OrgId = u64;
     type Shares = u64;
     type ReservationLimit = ReservationLimit;
@@ -146,3 +146,71 @@ fn vote_creation_works() {
         assert_eq!(get_last_event(), RawEvent::NewVoteStarted(1, 1, 2));
     });
 }
+
+// #[test]
+// fn vote_threshold_works() {
+//     new_test_ext().execute_with(|| {
+//         let one = Origin::signed(1);
+//         // unanimous consent
+//         assert_ok!(
+//             VoteThreshold::create_unanimous_consent_approval_vote(
+//                 one.clone(),
+//                 None,
+//                 1,
+//                 None,
+//             )
+//         );
+//         let mut n = 1u64;
+//         for i in 1u64..3u64 {
+//             let i_origin = Origin::signed(i);
+//             assert_ok!(VoteThreshold::submit_vote(i_origin, 1, VoterView::InFavor, None));
+//         }
+//         // check that the vote has not passed
+//         let outcome_almost_passed = VoteThreshold::get_vote_outcome(1).unwrap();
+//         assert_eq!(outcome_almost_passed, VoteOutcome::Voting);
+//         let six = Origin::signed(6);
+//         assert_ok!(VoteThreshold::submit_vote(six, 1, VoterView::InFavor, None));
+//         // check that the vote has passed
+//         let outcome_has_passed = VoteThreshold::get_vote_outcome(1).unwrap();
+//         assert_eq!(outcome_has_passed, VoteOutcome::ApprovedAndNotExpired);
+//         // count threshold
+//         assert_ok!(
+//             VoteThreshold::create_weighted_count_threshold_approval_vote(
+//                 one.clone(),
+//                 None,
+//                 1,
+//                 3,
+//                 3,
+//                 None
+//             )
+//         );
+//         // percentage threshold
+//         assert_ok!(
+//             VoteThreshold::create_weighted_percentage_threshold_approval_vote(
+//                 one.clone(),
+//                 None,
+//                 1,
+//                 Permill::from_percent(10),
+//                 Permill::from_percent(5),
+//                 None
+//             )
+//         );
+//     });
+// }
+
+// #[test]
+// fn changing_votes_works() {
+//     new_test_ext().execute_with(|| {
+//         let one = Origin::signed(1);
+//         assert_ok!(
+//             VoteThreshold::create_weighted_percentage_threshold_approval_vote(
+//                 one.clone(),
+//                 None,
+//                 1,
+//                 Permill::from_percent(10),
+//                 Permill::from_percent(5),
+//                 None
+//             )
+//         );
+//     });
+// }

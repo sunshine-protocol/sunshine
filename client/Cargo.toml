@@ -19,7 +19,7 @@ libipld = { version = "0.3.0", features = ["dag-json"] }
 serde = { version = "1.0.111", features = ["derive"] }
 sled = "0.32.0-rc1"
 serde_json = "1.0.53"
-ipfs-embed = "0.1.0"
+ipfs-embed = "0.1.1"
 substrate-subxt = "0.8.0"
 surf = "1.0.3"
 thiserror = "1.0.19"
@@ -32,8 +32,8 @@ derive-new = {version = "0.5", default-features=false}
 sunshine-node = { path = "../bin/node", default-features = false, optional = true }
 keystore = {package = "keybase-keystore", git = "https://github.com/sunshine-protocol/substrate-identity"}
 # local deps
-utils-identity = { version = "0.1.0", path = "../utils" }
-util = { package = "sunshine-util", path = "../pallets/util", default-features = false }
+utils-identity = {git = "https://github.com/sunshine-protocol/substrate-identity", default-features=false}
+util = { package = "sunshine-util", path = "../pallets-util", default-features = false }
 org = {package = "sunshine-org", path = "../pallets/org", default-features=false }
 vote = { package = "sunshine-vote", path = "../pallets/vote", default-features=false}
 bank = { package = "sunshine-bank", path = "../pallets/bank", default-features=false}

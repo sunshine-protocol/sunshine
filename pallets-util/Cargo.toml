@@ -6,8 +6,8 @@ edition = "2018"
 
 license = "GPL-3.0"
 repository = "https://github.com/sunshine-protocol/sunshine-node"
-description = "sunshine governance framework objects and relationships"
-keywords = ["sunshine", "substrate", "blockchain"]
+description = "objects and relationships for sunshine pallets"
+keywords = ["sunshine", "substrate", "voting"]
 
 [dependencies]
 derive-new = {version = "0.5", default-features=false}

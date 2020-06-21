@@ -12,10 +12,10 @@ use util::{
     organization::{Organization, OrganizationSource},
     share::{ShareProfile, SimpleShareGenesis},
     traits::{
-        AccessGenesis, GenerateUniqueID, GetGroup, GetGroupSize, GroupMembership, IDIsAvailable,
-        LockProfile, OrganizationSupervisorPermissions, RegisterOrganization, RemoveOrganization,
+        AccessGenesis, GenerateUniqueID, GetGroup, GroupMembership, IDIsAvailable, LockProfile,
+        OrganizationSupervisorPermissions, RegisterOrganization, RemoveOrganization,
         ReserveProfile, ShareInformation, ShareIssuance, VerifyShape,
-    }, // AccessProfile, SeededGenerateUniqueID
+    },
 };
 
 use codec::Codec;
@@ -166,9 +166,6 @@ decl_storage! {
         /// Total number of outstanding shares that express relative ownership in group
         pub TotalIssuance get(fn total_issuance): map
             hasher(opaque_blake2_256) T::OrgId => T::Shares;
-
-        /// The size for each organization
-        pub OrganizationSize get(fn organization_size): map hasher(opaque_blake2_256) T::OrgId => u32;
     }
     add_extra_genesis {
         config(first_organization_supervisor): T::AccountId;
@@ -341,12 +338,6 @@ decl_module! {
             Self::deposit_event(RawEvent::SharesUnReserved(organization, who, amount_unreserved));
             Ok(())
         }
-    }
-}
-
-impl<T: Trait> GetGroupSize<T::OrgId> for Module<T> {
-    fn get_size_of_group(org_id: T::OrgId) -> u32 {
-        <OrganizationSize<T>>::get(org_id)
     }
 }
 

@@ -11,7 +11,7 @@ clap = "3.0.0-beta.1"
 sunshine-client = { package = "sunshine-client", path = "../../client" }
 dirs = "2.0.2"
 env_logger = "0.7.1"
-ipfs-embed = "0.1.0"
+ipfs-embed = "0.1.1"
 ipld-block-builder = "0.3.0"
 keybase-keystore = {package = "keybase-keystore", git = "https://github.com/sunshine-protocol/substrate-identity"}
 qr2term = "0.2.1"
@@ -22,4 +22,4 @@ sp-core = "2.0.0-rc3"
 substrate-subxt = "0.8.0"
 # textwrap = { version = "0.11.0", features = ["term_size"] }
 thiserror = "1.0.19"
-utils-identity = { version = "0.1.0", path = "../../utils" }
+utils-identity = { package = "utils-identity", git = "https://github.com/sunshine-protocol/sunshine-identity/" }

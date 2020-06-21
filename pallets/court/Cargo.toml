@@ -18,7 +18,7 @@ sp-runtime = { version = "2.0.0-rc3", default-features = false }
 frame-support = { version = "2.0.0-rc3", default-features = false }
 frame-system = { version = "2.0.0-rc3", default-features = false }
 pallet-balances = { version = "2.0.0-rc3", default-features = false }
-util = { package = "sunshine-util", path = "../util", default-features=false}
+util = { package = "sunshine-util", path = "../../pallets-util", default-features=false}
 clear_on_drop = { version = "0.2.4", features = ["no_cc"] }	# https://github.com/paritytech/substrate/issues/4179
 
 [dev-dependencies]
