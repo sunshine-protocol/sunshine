@@ -11,7 +11,7 @@ clap = "3.0.0-beta.1"
 sunshine-client = { package = "sunshine-client", path = "../../client" }
 dirs = "2.0.2"
 env_logger = "0.7.1"
-ipfs-embed = "0.1.0"
+ipfs-embed = "0.1.1"
 ipld-block-builder = "0.3.0"
 keybase-keystore = {package = "keybase-keystore", git = "https://github.com/sunshine-protocol/substrate-identity"}
 qr2term = "0.2.1"
