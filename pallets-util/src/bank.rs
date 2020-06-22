@@ -78,9 +78,9 @@ impl<
     pub fn is_org(&self, org: OrgId) -> bool {
         org == self.org()
     }
-    pub fn is_controller(&self, purported_sudo: AccountId) -> bool {
+    pub fn is_controller(&self, purported_sudo: &AccountId) -> bool {
         if let Some(op) = self.controller() {
-            op == purported_sudo
+            &op == purported_sudo
         } else {
             false
         }
@@ -187,8 +187,36 @@ impl<
 #[derive(new, Clone, Copy, Eq, PartialEq, Encode, Decode, sp_runtime::RuntimeDebug)]
 pub struct TransferInformation<AccountId, OrgId, Currency> {
     sender: Sender<AccountId, OrgId>,
-    recipient: OrgId,
     amount_transferred: Currency,
     // amt that references this transfer for withdrawal
     amount_claimed: Currency,
+}
+
+impl<
+        AccountId: Clone + PartialEq,
+        OrgId: Codec + PartialEq + Zero + From<u32> + Copy,
+        Currency: Zero + AtLeast32Bit + Clone,
+    > TransferInformation<AccountId, OrgId, Currency>
+{
+    pub fn sender(&self) -> Sender<AccountId, OrgId> {
+        self.sender.clone()
+    }
+    pub fn amount_transferred(&self) -> Currency {
+        self.amount_transferred.clone()
+    }
+    pub fn amount_claimed(&self) -> Currency {
+        self.amount_claimed.clone()
+    }
+    pub fn claim_amount(&self, amount: Currency) -> Option<Self> {
+        let condition: bool = (self.amount_transferred() - self.amount_claimed()) >= amount;
+        if condition {
+            let new_amount_claimed = self.amount_claimed() + amount;
+            Some(TransferInformation {
+                amount_claimed: new_amount_claimed,
+                ..self.clone()
+            })
+        } else {
+            None
+        }
+    }
 }

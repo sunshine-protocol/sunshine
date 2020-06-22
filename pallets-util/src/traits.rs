@@ -268,9 +268,7 @@ pub trait RegisterAccount<OrgId, AccountId, Currency>: OnChainBank {
     fn verify_owner(bank_id: Self::TreasuryId, org: OrgId) -> bool;
 } // people should be eventually able to solicit loans from others to SEED a bank account but they cede some or all of the control...
 
-pub trait CalculateOwnership<OrgId, AccountId, Currency, FineArithmetic>:
-    RegisterAccount<OrgId, AccountId, Currency>
-{
+pub trait CalculateOwnership<OrgId, AccountId, Currency, FineArithmetic> {
     fn calculate_proportion_ownership_for_account(
         account: AccountId,
         group: OrgId,
