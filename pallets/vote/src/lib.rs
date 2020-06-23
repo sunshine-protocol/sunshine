@@ -22,7 +22,7 @@ use util::{
     traits::{
         AccessGenesis, Apply, ApplyVote, CheckVoteStatus, GenerateUniqueID, GetGroup,
         GetVoteOutcome, IDIsAvailable, MintableSignal, OpenVote, OrganizationSupervisorPermissions,
-        Revert, ShareInformation, UpdateVoteTopic, VoteOnProposal, VoteVector,
+        ShareInformation, UpdateVoteTopic, VoteOnProposal, VoteVector,
     },
     vote::{ThresholdConfig, Vote, VoteOutcome, VoteState, VoterView},
 };
@@ -84,6 +84,8 @@ decl_error! {
         CannotUpdateVoteTopicIfVoteStateDNE,
         // the turnout threshold must be less than the support threshold
         ThresholdInputDoesNotSatisfySupportGEQTurnoutNorms,
+        // i.e. changing from any non-NoVote view to NoVote (some vote changes aren't allowed to simplify assumptions)
+        VoteChangeNotSupported,
     }
 }
 
@@ -246,7 +248,7 @@ impl<T: Trait> OpenVote<T::OrgId, ThresholdConfig<T::Signal>, T::BlockNumber, T:
         // generate new vote_id
         let new_vote_id = Self::generate_unique_id();
         // mints 1 signal per participant
-        let total_possible_turnout = Self::batch_mint_signal(new_vote_id, organization)?;
+        let total_possible_turnout = Self::batch_mint_equal_signal(new_vote_id, organization)?;
         // instantiate new VoteState for unanimous consent
         let new_vote_state =
             VoteState::new_unanimous_consent(topic, total_possible_turnout, now, ends);
@@ -303,8 +305,9 @@ impl<T: Trait>
     ) -> Result<T::Signal, DispatchError> {
         let new_vote_group = <org::Module<T>>::get_group(organization)
             .ok_or(Error::<T>::CannotMintSignalBecauseGroupMembershipDNE)?;
-        let total_minted: T::Signal = (new_vote_group.len() as u32).into();
-        new_vote_group.into_iter().for_each(|who| {
+        // 1 person 1 vote despite any weightings in org
+        let total_minted: T::Signal = (new_vote_group.0.len() as u32).into();
+        new_vote_group.0.into_iter().for_each(|who| {
             let minted_signal: T::Signal = 1u32.into();
             let new_vote = Vote::new(minted_signal, VoterView::NoVote, None);
             <VoteLogger<T>>::insert(vote_id, who, new_vote);
@@ -343,16 +346,10 @@ impl<T: Trait> ApplyVote<T::IpfsReference> for Module<T> {
     fn apply_vote(
         state: Self::State,
         vote_magnitude: T::Signal,
-        new_vote_view: Self::Direction,
         old_vote_view: Self::Direction,
-    ) -> Self::State {
-        let dummy_old_vote_vector: Vote<T::Signal, T::IpfsReference> =
-            Vote::new(vote_magnitude, old_vote_view, None);
-        let dummy_new_vote_vector: Vote<T::Signal, T::IpfsReference> =
-            Vote::new(vote_magnitude, new_vote_view, None);
-        state
-            .revert(dummy_old_vote_vector)
-            .apply(dummy_new_vote_vector)
+        new_vote_view: Self::Direction,
+    ) -> Option<Self::State> {
+        state.apply(vote_magnitude, old_vote_view, new_vote_view)
     }
 }
 
@@ -386,6 +383,7 @@ impl<T: Trait>
         let vote_state =
             <VoteStates<T>>::get(vote_id).ok_or(Error::<T>::NoVoteStateForVoteRequest)?;
         // TODO: add permissioned method for adding time to the vote state because of this restriction but this is a legitimate restriction
+        // -> every standard vote has a recognized end to establish when the decision must be made based on collected input
         ensure!(
             !Self::check_vote_expired(&vote_state),
             Error::<T>::VotePastExpirationTimeSoVotesNotAccepted
@@ -399,9 +397,10 @@ impl<T: Trait>
         let new_state = Self::apply_vote(
             vote_state,
             old_vote.magnitude(),
-            direction,
             old_vote.direction(),
-        );
+            direction,
+        )
+        .ok_or(Error::<T>::VoteChangeNotSupported)?;
         // set the new vote for the voter's profile
         <VoteLogger<T>>::insert(vote_id, voter, new_vote);
         // commit new vote state to storage

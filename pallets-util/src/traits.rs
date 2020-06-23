@@ -36,8 +36,9 @@ pub trait OrganizationSupervisorPermissions<OrgId, AccountId> {
 pub trait GroupMembership<OrgId, AccountId> {
     fn is_member_of_group(org_id: OrgId, who: &AccountId) -> bool;
 }
+use orml_utilities::OrderedSet;
 pub trait GetGroup<OrgId, AccountId> {
-    fn get_group(organization: OrgId) -> Option<Vec<AccountId>>;
+    fn get_group(organization: OrgId) -> Option<OrderedSet<AccountId>>;
 }
 /// Checks that the `total` field is correct by summing all assigned share quantities
 pub trait VerifyShape {
@@ -183,11 +184,8 @@ pub trait Approved {
 pub trait Rejected {
     fn rejected(&self) -> Option<bool>;
 }
-pub trait Apply<Vote>: Sized {
-    fn apply(&self, vote: Vote) -> Self;
-}
-pub trait Revert<Vote>: Sized {
-    fn revert(&self, vote: Vote) -> Self;
+pub trait Apply<Signal, View>: Sized {
+    fn apply(&self, magnitude: Signal, old_direction: View, new_direction: View) -> Option<Self>;
 }
 
 pub trait VoteVector<Signal, Direction, Hash> {
@@ -200,13 +198,13 @@ pub trait ApplyVote<Hash> {
     type Signal;
     type Direction;
     type Vote: VoteVector<Self::Signal, Self::Direction, Hash>;
-    type State: Approved + Apply<Self::Vote> + Revert<Self::Vote>;
+    type State: Approved + Apply<Self::Signal, Self::Direction>;
     fn apply_vote(
         state: Self::State,
         vote_magnitude: Self::Signal,
-        new_vote_view: Self::Direction,
         old_vote_view: Self::Direction,
-    ) -> Self::State;
+        new_vote_view: Self::Direction,
+    ) -> Option<Self::State>;
 }
 
 pub trait CheckVoteStatus<Hash, VoteId>: ApplyVote<Hash> + GetVoteOutcome<VoteId> {

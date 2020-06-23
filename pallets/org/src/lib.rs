@@ -26,6 +26,7 @@ use frame_support::{
     Parameter,
 };
 use frame_system::{self as system, ensure_signed};
+use orml_utilities::OrderedSet;
 use sp_runtime::{
     traits::{AtLeast32Bit, CheckedAdd, CheckedSub, MaybeSerializeDeserialize, Member, Zero},
     DispatchError, DispatchResult, Permill,
@@ -476,14 +477,15 @@ impl<T: Trait> RemoveOrganization<T::OrgId> for Module<T> {
 }
 
 impl<T: Trait> GetGroup<T::OrgId, T::AccountId> for Module<T> {
-    fn get_group(organization: T::OrgId) -> Option<Vec<T::AccountId>> {
+    fn get_group(organization: T::OrgId) -> Option<OrderedSet<T::AccountId>> {
         if !Self::id_is_available(organization) {
             Some(
                 // is this the same performance as a get() with Key=Vec<AccountId>
                 <Members<T>>::iter()
                     .filter(|(org, _, _)| *org == organization)
                     .map(|(_, account, _)| account)
-                    .collect::<Vec<_>>(),
+                    .collect::<Vec<_>>()
+                    .into(),
             )
         } else {
             None

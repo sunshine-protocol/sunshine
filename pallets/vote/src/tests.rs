@@ -142,7 +142,7 @@ fn vote_threshold_works() {
             1,
             None,
         ));
-        for i in 1u64..5u64 {
+        for i in 1u64..6u64 {
             let i_origin = Origin::signed(i);
             assert_ok!(VoteThreshold::submit_vote(
                 i_origin,

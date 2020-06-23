@@ -1,6 +1,5 @@
 use crate::traits::{
-    Apply, Approved, ConsistentThresholdStructure, DeriveThresholdRequirement, Rejected, Revert,
-    VoteVector,
+    Apply, Approved, ConsistentThresholdStructure, DeriveThresholdRequirement, Rejected, VoteVector,
 };
 use codec::{Decode, Encode};
 use frame_support::Parameter;
@@ -88,17 +87,17 @@ impl<Signal: PartialOrd + Copy> ThresholdConfig<Signal> {
             })
         }
     }
-    pub fn support_threshold(&self) -> Signal {
-        self.support_required
-    }
-    pub fn turnout_threshold(&self) -> Option<Signal> {
-        self.turnout_required
-    }
     pub fn new_support_threshold(support_required: Signal) -> Self {
         ThresholdConfig {
             support_required,
             turnout_required: None,
         }
+    }
+    pub fn support_threshold(&self) -> Signal {
+        self.support_required
+    }
+    pub fn turnout_threshold(&self) -> Option<Signal> {
+        self.turnout_required
     }
 }
 
@@ -128,7 +127,8 @@ pub struct VoteState<Signal, BlockNumber, Hash> {
 }
 
 impl<
-        Signal: Copy
+        Signal: Parameter
+            + Copy
             + From<u32>
             + Default
             + sp_std::ops::Add<Output = Signal>
@@ -154,7 +154,8 @@ impl<
 }
 
 impl<
-        Signal: Copy
+        Signal: Parameter
+            + Copy
             + From<u32>
             + Default
             + sp_std::ops::Add<Output = Signal>
@@ -195,7 +196,6 @@ impl<
             topic,
             all_possible_turnout,
             passage_threshold: unanimous_passage_threshold,
-            rejection_threshold: None,
             initialized,
             expires,
             outcome: VoteOutcome::Voting,
@@ -229,56 +229,6 @@ impl<
     pub fn outcome(&self) -> VoteOutcome {
         self.outcome
     }
-    pub fn add_in_favor_vote(&self, magnitude: Signal) -> Self {
-        let new_turnout = self.turnout() + magnitude;
-        let new_in_favor = self.in_favor() + magnitude;
-        VoteState {
-            in_favor: new_in_favor,
-            turnout: new_turnout,
-            ..self.clone()
-        }
-    }
-    pub fn add_against_vote(&self, magnitude: Signal) -> Self {
-        let new_turnout = self.turnout() + magnitude;
-        let new_against = self.against() + magnitude;
-        VoteState {
-            against: new_against,
-            turnout: new_turnout,
-            ..self.clone()
-        }
-    }
-    pub fn add_abstention(&self, magnitude: Signal) -> Self {
-        let new_turnout = self.turnout() + magnitude;
-        VoteState {
-            turnout: new_turnout,
-            ..self.clone()
-        }
-    }
-    pub fn remove_in_favor_vote(&self, magnitude: Signal) -> Self {
-        let new_turnout = self.turnout() - magnitude;
-        let new_in_favor = self.in_favor() - magnitude;
-        VoteState {
-            in_favor: new_in_favor,
-            turnout: new_turnout,
-            ..self.clone()
-        }
-    }
-    pub fn remove_against_vote(&self, magnitude: Signal) -> Self {
-        let new_turnout = self.turnout() - magnitude;
-        let new_against = self.against() - magnitude;
-        VoteState {
-            against: new_against,
-            turnout: new_turnout,
-            ..self.clone()
-        }
-    }
-    pub fn remove_abstention(&self, magnitude: Signal) -> Self {
-        let new_turnout = self.turnout() - magnitude;
-        VoteState {
-            turnout: new_turnout,
-            ..self.clone()
-        }
-    }
     pub fn update_topic_and_clear_state(&self, new_topic: Hash) -> Self {
         VoteState {
             in_favor: 0u32.into(),
@@ -294,11 +244,24 @@ impl<
             ..self.clone()
         }
     }
-    // private method for setting the outcome, only accessible in the scope of this module
-    fn set_outcome(&self, new_outcome: VoteOutcome) -> Self {
-        VoteState {
-            outcome: new_outcome,
-            ..self.clone()
+    fn set_outcome(&self) -> Self {
+        let rejected = if let Some(rejection_outcome) = self.rejected() {
+            rejection_outcome
+        } else {
+            false
+        };
+        if self.approved() {
+            VoteState {
+                outcome: VoteOutcome::Approved,
+                ..self.clone()
+            }
+        } else if rejected {
+            VoteState {
+                outcome: VoteOutcome::Rejected,
+                ..self.clone()
+            }
+        } else {
+            self.clone()
         }
     }
 }
@@ -316,12 +279,14 @@ impl<
     > Approved for VoteState<Signal, BlockNumber, Hash>
 {
     fn approved(&self) -> bool {
-        self.in_favor() > self.passage_threshold().support_threshold()
-            && if let Some(turnout_threshold) = self.passage_threshold().turnout_threshold() {
-                turnout_threshold > self.turnout()
+        let turnout_exceeds_turnout_threshold =
+            if let Some(turnout_threshold) = self.passage_threshold().turnout_threshold() {
+                self.turnout() >= turnout_threshold
             } else {
-                true
-            }
+                true // vacuously true if left unset
+            };
+        self.in_favor() >= self.passage_threshold().support_threshold()
+            && turnout_exceeds_turnout_threshold
     }
 }
 
@@ -340,10 +305,10 @@ impl<
     fn rejected(&self) -> Option<bool> {
         if let Some(rejection_threshold_set) = self.rejection_threshold() {
             Some(
-                self.against() > rejection_threshold_set.support_threshold()
+                self.against() >= rejection_threshold_set.support_threshold()
                     && if let Some(turnout_threshold) = rejection_threshold_set.turnout_threshold()
                     {
-                        turnout_threshold > self.turnout()
+                        self.turnout() >= turnout_threshold
                     } else {
                         true
                     },
@@ -365,62 +330,97 @@ impl<
             + PartialOrd,
         Hash: Clone,
         BlockNumber: Parameter + Copy + Default,
-    > Apply<Vote<Signal, Hash>> for VoteState<Signal, BlockNumber, Hash>
+    > Apply<Signal, VoterView> for VoteState<Signal, BlockNumber, Hash>
 {
-    fn apply(&self, vote: Vote<Signal, Hash>) -> VoteState<Signal, BlockNumber, Hash> {
-        let new_vote_state = match vote.direction() {
-            VoterView::InFavor => self.add_in_favor_vote(vote.magnitude()),
-            VoterView::Against => self.add_against_vote(vote.magnitude()),
-            VoterView::Abstain => self.add_abstention(vote.magnitude()),
-            _ => self.clone(),
-        };
-        let rejected = if let Some(rejection_outcome) = new_vote_state.rejected() {
-            rejection_outcome
-        } else {
-            false
-        }; // vacuously false
-           // update outcome based on new vote state and return it
-        if new_vote_state.approved() {
-            new_vote_state.set_outcome(VoteOutcome::Approved)
-        } else if rejected {
-            new_vote_state.set_outcome(VoteOutcome::Rejected)
-        } else {
-            new_vote_state
-        }
-    }
-}
-
-impl<
-        Signal: Parameter
-            + Copy
-            + From<u32>
-            + Default
-            + sp_std::ops::Add<Output = Signal>
-            + sp_std::ops::Sub<Output = Signal>
-            + PartialOrd,
-        Hash: Clone,
-        BlockNumber: Parameter + Copy + Default,
-    > Revert<Vote<Signal, Hash>> for VoteState<Signal, BlockNumber, Hash>
-{
-    fn revert(&self, vote: Vote<Signal, Hash>) -> VoteState<Signal, BlockNumber, Hash> {
-        let new_vote_state = match vote.direction() {
-            VoterView::InFavor => self.remove_in_favor_vote(vote.magnitude()),
-            VoterView::Against => self.remove_against_vote(vote.magnitude()),
-            VoterView::Abstain => self.remove_abstention(vote.magnitude()),
-            _ => self.clone(),
-        };
-        let rejected = if let Some(rejection_outcome) = new_vote_state.rejected() {
-            rejection_outcome
-        } else {
-            false
-        }; // vacuously false
-           // update outcome based on new vote state and return it
-        if new_vote_state.approved() {
-            new_vote_state.set_outcome(VoteOutcome::Approved)
-        } else if rejected {
-            new_vote_state.set_outcome(VoteOutcome::Rejected)
-        } else {
-            new_vote_state
+    fn apply(
+        &self,
+        magnitude: Signal,
+        old_direction: VoterView,
+        new_direction: VoterView,
+    ) -> Option<VoteState<Signal, BlockNumber, Hash>> {
+        match (old_direction, new_direction) {
+            (VoterView::NoVote, VoterView::InFavor) => {
+                let new_turnout = self.turnout() + magnitude;
+                let new_in_favor = self.in_favor() + magnitude;
+                let new_vote_state = VoteState {
+                    in_favor: new_in_favor,
+                    turnout: new_turnout,
+                    ..self.clone()
+                };
+                Some(new_vote_state.set_outcome())
+            }
+            (VoterView::NoVote, VoterView::Against) => {
+                let new_turnout = self.turnout() + magnitude;
+                let new_against = self.against() + magnitude;
+                let new_vote_state = VoteState {
+                    against: new_against,
+                    turnout: new_turnout,
+                    ..self.clone()
+                };
+                Some(new_vote_state.set_outcome())
+            }
+            (VoterView::NoVote, VoterView::Abstain) => {
+                let new_turnout = self.turnout() + magnitude;
+                let new_vote_state = VoteState {
+                    turnout: new_turnout,
+                    ..self.clone()
+                };
+                Some(new_vote_state.set_outcome())
+            }
+            (VoterView::InFavor, VoterView::Against) => {
+                let new_in_favor = self.in_favor() - magnitude;
+                let new_against = self.against() + magnitude;
+                let new_vote_state = VoteState {
+                    in_favor: new_in_favor,
+                    against: new_against,
+                    ..self.clone()
+                };
+                Some(new_vote_state.set_outcome())
+            }
+            (VoterView::InFavor, VoterView::Abstain) => {
+                let new_in_favor = self.in_favor() - magnitude;
+                let new_vote_state = VoteState {
+                    in_favor: new_in_favor,
+                    ..self.clone()
+                };
+                Some(new_vote_state.set_outcome())
+            }
+            (VoterView::Against, VoterView::InFavor) => {
+                let new_against = self.against() - magnitude;
+                let new_in_favor = self.in_favor() + magnitude;
+                let new_vote_state = VoteState {
+                    in_favor: new_in_favor,
+                    against: new_against,
+                    ..self.clone()
+                };
+                Some(new_vote_state.set_outcome())
+            }
+            (VoterView::Against, VoterView::Abstain) => {
+                let new_against = self.against() - magnitude;
+                let new_vote_state = VoteState {
+                    against: new_against,
+                    ..self.clone()
+                };
+                Some(new_vote_state.set_outcome())
+            }
+            (VoterView::Abstain, VoterView::InFavor) => {
+                let new_in_favor = self.in_favor() + magnitude;
+                let new_vote_state = VoteState {
+                    in_favor: new_in_favor,
+                    ..self.clone()
+                };
+                Some(new_vote_state.set_outcome())
+            }
+            (VoterView::Abstain, VoterView::Against) => {
+                let new_against = self.against() + magnitude;
+                let new_vote_state = VoteState {
+                    against: new_against,
+                    ..self.clone()
+                };
+                Some(new_vote_state.set_outcome())
+            }
+            // either no changes or not a supported vote change
+            _ => None,
         }
     }
 }
