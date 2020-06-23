@@ -228,6 +228,15 @@ impl<T: Trait> Module<T> {
     pub fn account_id(id: OnChainTreasuryID) -> T::AccountId {
         id.into_account()
     }
+    fn calculate_proportional_amount_for_account(
+        amount: BalanceOf<T>,
+        account: T::AccountId,
+        group: T::OrgId,
+    ) -> Result<BalanceOf<T>, DispatchError> {
+        let proportion_due =
+            <org::Module<T>>::calculate_proportion_ownership_for_account(account, group)?;
+        Ok(proportion_due * amount)
+    }
 }
 
 impl<T: Trait> IDIsAvailable<OnChainTreasuryID> for Module<T> {
@@ -261,28 +270,5 @@ impl<T: Trait> SeededGenerateUniqueID<T::TransferId, OnChainTreasuryID> for Modu
         }
         <TransferNonceMap<T>>::insert(seed, transfer_nonce);
         transfer_nonce
-    }
-}
-
-impl<T: Trait> CalculateOwnership<T::OrgId, T::AccountId, BalanceOf<T>, Permill> for Module<T> {
-    fn calculate_proportion_ownership_for_account(
-        account: T::AccountId,
-        group: T::OrgId,
-    ) -> Result<Permill, DispatchError> {
-        let issuance = <org::Module<T>>::total_issuance(group);
-        let acc_ownership = <org::Module<T>>::get_share_profile(group, &account)
-            .ok_or(Error::<T>::AccountHasNoOwnershipInOrg)?;
-        Ok(Permill::from_rational_approximation(
-            acc_ownership.total(),
-            issuance,
-        ))
-    }
-    fn calculate_proportional_amount_for_account(
-        amount: BalanceOf<T>,
-        account: T::AccountId,
-        group: T::OrgId,
-    ) -> Result<BalanceOf<T>, DispatchError> {
-        let proportion_due = Self::calculate_proportion_ownership_for_account(account, group)?;
-        Ok(proportion_due * amount)
     }
 }

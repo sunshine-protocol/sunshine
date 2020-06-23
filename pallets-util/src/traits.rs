@@ -210,7 +210,6 @@ pub trait ApplyVote<Hash> {
 }
 
 pub trait CheckVoteStatus<Hash, VoteId>: ApplyVote<Hash> + GetVoteOutcome<VoteId> {
-    fn check_vote_outcome(state: Self::State) -> Option<Self::Outcome>;
     fn check_vote_expired(state: &Self::State) -> bool;
 }
 
@@ -268,16 +267,11 @@ pub trait RegisterAccount<OrgId, AccountId, Currency>: OnChainBank {
     fn verify_owner(bank_id: Self::TreasuryId, org: OrgId) -> bool;
 } // people should be eventually able to solicit loans from others to SEED a bank account but they cede some or all of the control...
 
-pub trait CalculateOwnership<OrgId, AccountId, Currency, FineArithmetic> {
+pub trait CalculateOwnership<OrgId, AccountId, FineArithmetic> {
     fn calculate_proportion_ownership_for_account(
         account: AccountId,
         group: OrgId,
     ) -> Result<FineArithmetic, DispatchError>;
-    fn calculate_proportional_amount_for_account(
-        amount: Currency,
-        account: AccountId,
-        group: OrgId,
-    ) -> Result<Currency, DispatchError>;
 }
 
 pub trait FreeToReserved<Currency>: Sized {

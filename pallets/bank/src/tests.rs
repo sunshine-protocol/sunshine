@@ -3,12 +3,28 @@ use frame_support::{assert_noop, assert_ok};
 use frame_support::{impl_outer_event, impl_outer_origin, parameter_types, weights::Weight};
 use sp_core::H256;
 use sp_runtime::{testing::Header, traits::IdentityLookup, Perbill};
+use util::{organization::Organization, traits::GroupMembership};
 
+// type aliases
 pub type AccountId = u64;
 pub type BlockNumber = u64;
 
 impl_outer_origin! {
     pub enum Origin for Test where system = frame_system {}
+}
+
+mod bank {
+    pub use super::super::*;
+}
+
+impl_outer_event! {
+    pub enum TestEvent for Test {
+        system<T>,
+        pallet_balances<T>,
+        org<T>,
+        vote<T>,
+        bank<T>,
+    }
 }
 
 #[derive(Clone, Eq, PartialEq)]
@@ -18,6 +34,7 @@ parameter_types! {
     pub const MaximumBlockWeight: Weight = 1024;
     pub const MaximumBlockLength: u32 = 2 * 1024;
     pub const AvailableBlockRatio: Perbill = Perbill::one();
+    pub const ReservationLimit: u32 = 10000;
 }
 impl frame_system::Trait for Test {
     type Origin = Origin;
@@ -45,42 +62,44 @@ impl frame_system::Trait for Test {
     type OnKilledAccount = ();
 }
 parameter_types! {
-    pub const ReservationLimit: u32 = 10000;
+    pub const ExistentialDeposit: u64 = 1;
+}
+impl pallet_balances::Trait for Test {
+    type Balance = u64;
+    type Event = TestEvent;
+    type DustRemoval = ();
+    type ExistentialDeposit = ExistentialDeposit;
+    type AccountStore = System;
 }
 impl org::Trait for Test {
     type Event = TestEvent;
-    type IpfsReference = u32;
+    type IpfsReference = u32; // TODO: replace with utils_identity::Cid
     type OrgId = u64;
     type Shares = u64;
     type ReservationLimit = ReservationLimit;
 }
+parameter_types! {
+    pub const MinimumTransfer: u64 = 10;
+    pub const MinimumInitialDeposit: u64 = 20;
+}
 impl Trait for Test {
     type Event = TestEvent;
-    type VoteId = u64;
-    type Signal = u64;
-}
-
-mod vote {
-    pub use crate::Event;
-}
-
-impl_outer_event! {
-    pub enum TestEvent for Test {
-        system<T>,
-        org<T>,
-        vote<T>,
-    }
+    type TransferId = u64;
+    type Currency = Balances;
+    type MinimumTransfer = MinimumTransfer;
+    type MinimumInitialDeposit = MinimumInitialDeposit;
 }
 pub type System = system::Module<Test>;
-// pub type Organization = org::Module<Test>;
-pub type VoteThreshold = Module<Test>;
+pub type Balances = pallet_balances::Module<Test>;
+pub type Org = org::Module<Test>;
+pub type Bank = Module<Test>;
 
-fn get_last_event() -> RawEvent<u64, u64, u64> {
+fn get_last_event() -> RawEvent<u64, u64, u32, u64, u64> {
     System::events()
         .into_iter()
         .map(|r| r.event)
         .filter_map(|e| {
-            if let TestEvent::vote(inner) = e {
+            if let TestEvent::bank(inner) = e {
                 Some(inner)
             } else {
                 None
@@ -94,6 +113,11 @@ fn new_test_ext() -> sp_io::TestExternalities {
     let mut t = frame_system::GenesisConfig::default()
         .build_storage::<Test>()
         .unwrap();
+    pallet_balances::GenesisConfig::<Test> {
+        balances: vec![(1, 100), (2, 98), (3, 200), (4, 75), (5, 10), (6, 69)],
+    }
+    .assimilate_storage(&mut t)
+    .unwrap();
     org::GenesisConfig::<Test> {
         first_organization_supervisor: 1,
         first_organization_value_constitution: 1738,
@@ -107,57 +131,16 @@ fn new_test_ext() -> sp_io::TestExternalities {
 }
 
 #[test]
-fn vote_creation_works() {
+fn genesis_config_works() {
     new_test_ext().execute_with(|| {
-        let one = Origin::signed(1);
-        let twentytwo = Origin::signed(22);
-        assert_noop!(
-            VoteThreshold::create_threshold_approval_vote(twentytwo, None, 1, 4, None, None),
-            Error::<Test>::NotAuthorizedToCreateVoteForOrganization
-        );
-        assert_noop!(
-            VoteThreshold::create_threshold_approval_vote(one.clone(), None, 1, 4, Some(3), None),
-            Error::<Test>::ThresholdInputDoesNotSatisfySupportGEQTurnoutNorms
-        );
-        assert_ok!(VoteThreshold::create_threshold_approval_vote(
-            one.clone(),
-            None,
-            1,
-            4,
-            Some(5),
-            None
-        ));
-        assert_eq!(get_last_event(), RawEvent::NewVoteStarted(1, 1, 1));
-    });
-}
-
-#[test]
-fn vote_threshold_works() {
-    new_test_ext().execute_with(|| {
-        let one = Origin::signed(1);
-        // unanimous consent
-        assert_ok!(VoteThreshold::create_unanimous_consent_approval_vote(
-            one.clone(),
-            None,
-            1,
-            None,
-        ));
-        for i in 1u64..5u64 {
-            let i_origin = Origin::signed(i);
-            assert_ok!(VoteThreshold::submit_vote(
-                i_origin,
-                1,
-                VoterView::InFavor,
-                None
-            ));
+        assert_eq!(Org::organization_counter(), 1);
+        let constitution = 1738;
+        let expected_organization = Organization::new(Some(1), None, constitution);
+        let org_in_storage = Org::organization_states(1u64).unwrap();
+        assert_eq!(expected_organization, org_in_storage);
+        for i in 1u64..7u64 {
+            assert!(Org::is_member_of_group(1u64, &i));
         }
-        // check that the vote has not passed
-        let outcome_almost_passed = VoteThreshold::get_vote_outcome(1).unwrap();
-        assert_eq!(outcome_almost_passed, VoteOutcome::Voting);
-        let six = Origin::signed(6);
-        assert_ok!(VoteThreshold::submit_vote(six, 1, VoterView::InFavor, None));
-        // check that the vote has passed
-        let outcome_has_passed = VoteThreshold::get_vote_outcome(1).unwrap();
-        assert_eq!(outcome_has_passed, VoteOutcome::Approved);
+        assert!(System::events().is_empty());
     });
 }

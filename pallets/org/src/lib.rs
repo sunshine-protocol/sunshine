@@ -12,9 +12,9 @@ use util::{
     organization::{Organization, OrganizationSource},
     share::{ShareProfile, SimpleShareGenesis},
     traits::{
-        AccessGenesis, GenerateUniqueID, GetGroup, GroupMembership, IDIsAvailable, LockProfile,
-        OrganizationSupervisorPermissions, RegisterOrganization, RemoveOrganization,
-        ReserveProfile, ShareInformation, ShareIssuance, VerifyShape,
+        AccessGenesis, CalculateOwnership, GenerateUniqueID, GetGroup, GroupMembership,
+        IDIsAvailable, LockProfile, OrganizationSupervisorPermissions, RegisterOrganization,
+        RemoveOrganization, ReserveProfile, ShareInformation, ShareIssuance, VerifyShape,
     },
 };
 
@@ -28,7 +28,7 @@ use frame_support::{
 use frame_system::{self as system, ensure_signed};
 use sp_runtime::{
     traits::{AtLeast32Bit, CheckedAdd, CheckedSub, MaybeSerializeDeserialize, Member, Zero},
-    DispatchError, DispatchResult,
+    DispatchError, DispatchResult, Permill,
 };
 use sp_std::{fmt::Debug, prelude::*};
 
@@ -143,6 +143,7 @@ decl_error! {
         NotAuthorizedToIssueShares,
         NotAuthorizedToBurnShares,
         OrganizationCannotBeRemovedIfInputIdIsAvailable,
+        AccountHasNoOwnershipInOrg,
     }
 }
 
@@ -692,5 +693,20 @@ impl<T: Trait> LockProfile<T::OrgId, T::AccountId> for Module<T> {
         let new_profile = old_profile.unlock();
         <Members<T>>::insert(organization, who, new_profile);
         Ok(())
+    }
+}
+
+impl<T: Trait> CalculateOwnership<T::OrgId, T::AccountId, Permill> for Module<T> {
+    fn calculate_proportion_ownership_for_account(
+        account: T::AccountId,
+        group: T::OrgId,
+    ) -> Result<Permill, DispatchError> {
+        let issuance = <TotalIssuance<T>>::get(group);
+        let acc_ownership =
+            <Members<T>>::get(group, &account).ok_or(Error::<T>::AccountHasNoOwnershipInOrg)?;
+        Ok(Permill::from_rational_approximation(
+            acc_ownership.total(),
+            issuance,
+        ))
     }
 }
