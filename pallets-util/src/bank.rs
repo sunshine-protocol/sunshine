@@ -1,23 +1,14 @@
-use crate::{
-    share::SimpleShareGenesis,
-    traits::{
-        AccessGenesis, CommitSpendReservation, DepositSpendOps, FreeToReserved, GetBalance,
-        Increment, MoveFundsOutCommittedOnly, MoveFundsOutUnCommittedOnly,
-    },
-};
+use crate::traits::{DepositSpendOps, FreeToReserved, GetBalance, Increment};
 use codec::{Codec, Decode, Encode};
 use sp_core::TypeId;
-use sp_runtime::{
-    traits::{AtLeast32Bit, Member, Zero},
-    Permill,
-};
+use sp_runtime::traits::{AtLeast32Bit, Zero};
 use sp_std::prelude::*;
 
 /// An on-chain treasury identifier, exactly like `ModuleId`
 #[derive(Clone, Copy, Eq, PartialEq, Default, Encode, Decode, sp_runtime::RuntimeDebug)]
 pub struct OnChainTreasuryID(pub [u8; 8]);
 
-impl crate::traits::Increment for OnChainTreasuryID {
+impl Increment for OnChainTreasuryID {
     fn increment(self) -> OnChainTreasuryID {
         let old_inner = u64::from_be_bytes(self.0);
         let new_inner = old_inner.saturating_add(1u64);

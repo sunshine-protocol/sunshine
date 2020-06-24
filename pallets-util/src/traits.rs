@@ -140,19 +140,6 @@ pub trait GetVoteOutcome<VoteId> {
     fn get_vote_outcome(vote_id: VoteId) -> Result<Self::Outcome, DispatchError>;
 }
 
-/// Derives the threshold requirement from turnout (for `ThresholdConfig`)
-pub trait DeriveThresholdRequirement<Signal> {
-    fn derive_threshold_requirement(&self, turnout: Signal) -> Signal;
-    fn derive_turnout_requirement(&self, turnout: Signal) -> Signal;
-}
-
-/// Checks that the `ThresholdConfig` that impls this method has both fields with the same `ThresholdType` variant
-pub trait ConsistentThresholdStructure {
-    fn is_percentage_threshold(&self) -> bool;
-    fn is_count_threshold(&self) -> bool;
-    fn has_consistent_structure(&self) -> bool;
-}
-
 /// Open a new vote for the organization, share_id and a custom threshold requirement
 pub trait OpenVote<OrgId, Threshold, BlockNumber, Hash> {
     type VoteIdentifier;

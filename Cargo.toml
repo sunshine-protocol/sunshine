@@ -8,6 +8,7 @@ members = [
     "pallets-util",
     "pallets/org",
     "pallets/vote",
+    "pallets/court",
     "pallets/bank",
     "pallets/bounty",
     "client",

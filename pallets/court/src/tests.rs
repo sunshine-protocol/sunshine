@@ -82,19 +82,26 @@ parameter_types! {
     pub const MinimumTransfer: u64 = 10;
     pub const MinimumInitialDeposit: u64 = 20;
 }
+impl vote::Trait for TestRuntime {
+    type Event = TestEvent;
+    type VoteId = u64;
+    type Signal = u64;
+}
+parameter_types!{
+    pub const MinimumDisputeAmount: u64 = 10;
+}
 impl Trait for Test {
     type Event = TestEvent;
-    type TransferId = u64;
     type Currency = Balances;
-    type MinimumTransfer = MinimumTransfer;
-    type MinimumInitialDeposit = MinimumInitialDeposit;
+    type DisputeId = u64;
+    type MinimumDisputeAmount = MinimumDisputeAmount;
 }
 pub type System = system::Module<Test>;
 pub type Balances = pallet_balances::Module<Test>;
 pub type Org = org::Module<Test>;
-pub type Bank = Module<Test>;
+pub type Court = Module<Test>;
 
-fn get_last_event() -> RawEvent<u64, u64, u32, u64, u64> {
+fn get_last_event() -> RawEvent<u64, u64, u64, u64, u64> {
     System::events()
         .into_iter()
         .map(|r| r.event)

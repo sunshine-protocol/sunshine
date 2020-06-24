@@ -2,43 +2,92 @@ use codec::{Decode, Encode};
 use sp_runtime::RuntimeDebug;
 use sp_std::prelude::*;
 
-#[derive(PartialEq, Eq, Default, Clone, Encode, Decode, RuntimeDebug)]
-pub struct Evidence<AccountId, Hash> {
-    poster: AccountId,
-    evidence: Hash,
-    acknowledge_by_all_parties: bool,
+#[derive(new, PartialEq, Eq, Default, Clone, Encode, Decode, RuntimeDebug)]
+pub struct Dispute<AccountId, Currency, BlockNumber, VoteMetadata, State> {
+    locker: AccountId,
+    locked_funds: Currency,
+    dispute_raiser: AccountId,
+    resolution_metadata: VoteMetadata,
+    state: State,
+    expiry: Option<BlockNumber>,
 }
 
-impl<AccountId, Hash> Evidence<AccountId, Hash> {
-    pub fn new(poster: AccountId, evidence: Hash) -> Evidence<AccountId, Hash> {
-        Evidence {
-            poster,
-            evidence,
-            acknowledge_by_all_parties: false,
+impl<
+        AccountId: Clone + PartialEq,
+        Currency: Clone,
+        BlockNumber: Copy,
+        VoteMetadata: Clone,
+        State: Copy,
+    > Dispute<AccountId, Currency, BlockNumber, VoteMetadata, State>
+{
+    pub fn locker(&self) -> AccountId {
+        self.locker.clone()
+    }
+    pub fn locked_funds(&self) -> Currency {
+        self.locked_funds.clone()
+    }
+    pub fn dispute_raiser(&self) -> AccountId {
+        self.dispute_raiser.clone()
+    }
+    pub fn can_raise_dispute(&self, who: &AccountId) -> bool {
+        &self.dispute_raiser() == who
+    }
+    pub fn resolution_metadata(&self) -> VoteMetadata {
+        self.resolution_metadata.clone()
+    }
+    pub fn state(&self) -> State {
+        self.state
+    }
+    pub fn expiry(&self) -> Option<BlockNumber> {
+        self.expiry.clone()
+    }
+    // TODO: change this to trait impl for state transitions so we don't match in the runtime on the state to enforce valid transitions and instead depend on calls to the logic here
+    pub fn set_state(&self, state: State) -> Self {
+        Self {
+            state,
+            ..self.clone()
         }
     }
-    pub fn was_acknowledged_by_all_parties(&self) -> bool {
-        self.acknowledge_by_all_parties
+}
+
+#[derive(new, PartialEq, Eq, Default, Clone, Encode, Decode, RuntimeDebug)]
+pub struct ResolutionMetadata<OrgId, Threshold, BlockNumber> {
+    org: OrgId,
+    passage_threshold: Threshold,
+    rejection_threshold: Option<Threshold>,
+    duration: Option<BlockNumber>,
+}
+
+impl<OrgId: Copy, Threshold: Clone, BlockNumber: Copy>
+    ResolutionMetadata<OrgId, Threshold, BlockNumber>
+{
+    pub fn org(&self) -> OrgId {
+        self.org
+    }
+    pub fn passage_threshold(&self) -> Threshold {
+        self.passage_threshold.clone()
+    }
+    pub fn rejection_threshold(&self) -> Option<Threshold> {
+        self.rejection_threshold.clone()
+    }
+    pub fn duration(&self) -> Option<BlockNumber> {
+        self.duration
     }
 }
 
 #[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug)]
-pub enum ExternalDisputeTypes<AccountId> {
-    /// Invoked by a reviewer during review
-    Veto(AccountId),
-    /// Contract cancelled
-    ContractCancelled,
+pub enum DisputeState<VoteId> {
+    DisputeNotRaised,
+    /// Dispute raised and vote dispatched without outcome
+    DisputeRaisedAndVoteDispatched(VoteId),
+    /// Outcome and time last checked and outcome updated
+    DisputeRaisedAndAccepted(VoteId),
+    /// Outcome and time last checked and outcome updated
+    DisputeRaisedAndRejected(VoteId),
 }
 
-#[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug)]
-pub enum MilestoneTeamResponse<Hash> {
-    /// The team is claiming that the new deliverable meets the feedback that resulted in the dispute being raised
-    UpdateSubmissionForFeedback(Hash),
-    /// Propose a milestone adjustment which can be approved but is currently initiated by
-    /// the supervisor's supervisor (which should be governance eventually but is a sudo key now)
-    ProposeMilestoneAdjustment(Hash),
-    /// Despite the supervisor not approving the deliverable, the team is claiming they delivered
-    /// - a chain explorer might collect all complaints for each organization and post that metadata in the
-    /// UI for the freelance developers
-    ClaimDeliverableMeetsRequirements,
+impl<VoteId> Default for DisputeState<VoteId> {
+    fn default() -> DisputeState<VoteId> {
+        DisputeState::DisputeNotRaised
+    }
 }

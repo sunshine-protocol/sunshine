@@ -92,7 +92,7 @@ decl_error! {
 decl_storage! {
     trait Store for Module<T: Trait> as Vote {
         /// The nonce for unique vote id generation
-        pub VoteIdCounter get(fn vote_id_counter): T::VoteId;
+        VoteIdCounter get(fn vote_id_counter): T::VoteId;
 
         /// The number of open votes
         pub OpenVoteCounter get(fn open_vote_counter): u32;

@@ -1,9 +1,6 @@
-use crate::traits::{
-    Apply, Approved, ConsistentThresholdStructure, DeriveThresholdRequirement, Rejected, VoteVector,
-};
+use crate::traits::{Apply, Approved, Rejected, VoteVector};
 use codec::{Decode, Encode};
 use frame_support::Parameter;
-use sp_runtime::PerThing;
 use sp_std::prelude::*;
 
 #[derive(Clone, Copy, PartialEq, Eq, Encode, Decode, sp_runtime::RuntimeDebug)]

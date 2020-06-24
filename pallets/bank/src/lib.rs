@@ -4,11 +4,13 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 //! This bank module is for gradually streaming capital from sender { AccountId, Org } to recipient { Org } so that withdrawal rules respect/enforce the ownership structure of the Org
 
+#[cfg(test)]
+mod tests;
+
 use codec::Codec;
 use frame_support::{
     decl_error, decl_event, decl_module, decl_storage, ensure,
-    traits::ExistenceRequirement,
-    traits::{Currency, Get},
+    traits::{Currency, ExistenceRequirement, Get},
     Parameter,
 };
 use frame_system::{self as system, ensure_signed};
