@@ -234,6 +234,19 @@ pub trait VoteOnProposal<AccountId, OrgId, Threshold, BlockNumber, VoteId, Hash>
     ) -> DispatchResult;
 }
 
+// ====== Court Logic ======
+
+pub trait RegisterDisputeType<AccountId, Currency, VoteMetadata, BlockNumber> {
+    type DisputeIdentifier;
+    fn register_dispute_type(
+        locker: AccountId,
+        amount_to_lock: Currency,
+        dispute_raiser: AccountId,
+        resolution_path: VoteMetadata,
+        expiry: Option<BlockNumber>,
+    ) -> Result<Self::DisputeIdentifier, DispatchError>;
+}
+
 // ~~~~~~~~ Bank Module ~~~~~~~~
 use crate::bank::OnChainTreasuryID;
 use codec::Codec;

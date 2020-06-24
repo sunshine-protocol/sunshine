@@ -19,7 +19,7 @@ use sp_runtime::{
 use sp_std::{fmt::Debug, prelude::*};
 use util::{
     court::{Dispute, DisputeState, ResolutionMetadata},
-    traits::{GenerateUniqueID, GetVoteOutcome, IDIsAvailable, OpenVote},
+    traits::{GenerateUniqueID, GetVoteOutcome, IDIsAvailable, OpenVote, RegisterDisputeType},
     vote::{ThresholdConfig, VoteOutcome},
 };
 
@@ -126,24 +126,15 @@ decl_module! {
             expiry: Option<T::BlockNumber>,
         ) -> DispatchResult {
             let locker = ensure_signed(origin)?;
-            ensure!(amount_to_lock >= T::MinimumDisputeAmount::get(), Error::<T>::DisputeMustExceedModuleMinimum);
-            // lock the amount in question
-            T::Currency::reserve(&locker, amount_to_lock)?;
             // get court org before new dispute state consumes resolution metadata
             let court_org = resolution_metadata.org();
-            // form the dispute state
-            let new_dispute_state = Dispute::new(
+            let new_dispute_id = Self::register_dispute_type(
                 locker.clone(),
                 amount_to_lock,
                 dispute_raiser.clone(),
                 resolution_metadata,
-                DisputeState::DisputeNotRaised,
                 expiry,
-            );
-            // generate unique dispute identifier
-            let new_dispute_id = Self::generate_unique_id();
-            // insert the dispute state
-            <DisputeStates<T>>::insert(new_dispute_id, new_dispute_state);
+            )?;
             // emit the event with the DisputeId
             Self::deposit_event(RawEvent::RegisteredDisputeWithResolutionPath(new_dispute_id, locker, amount_to_lock, dispute_raiser, court_org));
             Ok(())
@@ -238,5 +229,44 @@ impl<T: Trait> GenerateUniqueID<T::DisputeId> for Module<T> {
         }
         <DisputeIdCounter<T>>::put(id_counter);
         id_counter
+    }
+}
+
+impl<T: Trait>
+    RegisterDisputeType<
+        T::AccountId,
+        BalanceOf<T>,
+        ResolutionMetadata<T::OrgId, ThresholdConfig<Signal<T>>, T::BlockNumber>,
+        T::BlockNumber,
+    > for Module<T>
+{
+    type DisputeIdentifier = T::DisputeId;
+    fn register_dispute_type(
+        locker: T::AccountId,
+        amount_to_lock: BalanceOf<T>,
+        dispute_raiser: T::AccountId,
+        resolution_path: ResolutionMetadata<T::OrgId, ThresholdConfig<Signal<T>>, T::BlockNumber>,
+        expiry: Option<T::BlockNumber>,
+    ) -> Result<Self::DisputeIdentifier, DispatchError> {
+        ensure!(
+            amount_to_lock >= T::MinimumDisputeAmount::get(),
+            Error::<T>::DisputeMustExceedModuleMinimum
+        );
+        // lock the amount in question
+        T::Currency::reserve(&locker, amount_to_lock)?;
+        // form the dispute state
+        let new_dispute_state = Dispute::new(
+            locker.clone(),
+            amount_to_lock,
+            dispute_raiser.clone(),
+            resolution_path,
+            DisputeState::DisputeNotRaised,
+            expiry,
+        );
+        // generate unique dispute identifier
+        let new_dispute_id = Self::generate_unique_id();
+        // insert the dispute state
+        <DisputeStates<T>>::insert(new_dispute_id, new_dispute_state);
+        Ok(new_dispute_id)
     }
 }

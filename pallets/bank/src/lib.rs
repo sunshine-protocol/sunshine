@@ -2,7 +2,9 @@
 #![allow(clippy::redundant_closure_call)]
 #![allow(clippy::type_complexity)]
 #![cfg_attr(not(feature = "std"), no_std)]
-//! This bank module is for gradually streaming capital from sender { AccountId, Org } to recipient { Org } so that withdrawal rules respect/enforce the ownership structure of the Org
+//! This bank module is for gradually streaming capital from sender { AccountId, Org }
+//! to recipient { Org } so that withdrawal rules respect/enforce the
+//! ownership structure of the Org
 
 #[cfg(test)]
 mod tests;
