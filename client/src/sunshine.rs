@@ -1,15 +1,42 @@
-use crate::error::{Error, Result};
 #[cfg(feature = "light-client")]
 use crate::light_client::ChainType;
-use crate::srml::org::*;
-use codec::{Decode, Encode};
+use crate::{
+    error::{
+        Error,
+        Result,
+    },
+    srml::org::*,
+};
+use codec::{
+    Decode,
+    Encode,
+};
 use core::marker::PhantomData;
-use ipld_block_builder::{BlockBuilder, Codec};
-use keystore::{DeviceKey, KeyStore, Password};
+use ipld_block_builder::{
+    BlockBuilder,
+    Codec,
+};
+use keystore::{
+    DeviceKey,
+    KeyStore,
+    Password,
+};
 use libipld::store::Store;
-use sp_runtime::traits::{IdentifyAccount, SignedExtension, Verify};
-use substrate_subxt::sp_core::crypto::{Pair, Ss58Codec};
-use substrate_subxt::{system::System, Client, PairSigner, SignedExtra};
+use sp_runtime::traits::{
+    IdentifyAccount,
+    SignedExtension,
+    Verify,
+};
+use substrate_subxt::{
+    sp_core::crypto::{
+        Pair,
+        Ss58Codec,
+    },
+    system::System,
+    Client,
+    PairSigner,
+    SignedExtra,
+};
 
 #[derive(new)]
 pub struct SunClient<T, S, E, P, I>
@@ -17,9 +44,11 @@ where
     T: Org + Send + Sync + 'static,
     <T as System>::AccountId: Into<<T as System>::Address> + Ss58Codec,
     S: Decode + Encode + From<P::Signature> + Verify + Send + Sync + 'static,
-    <S as Verify>::Signer: From<P::Public> + IdentifyAccount<AccountId = <T as System>::AccountId>,
+    <S as Verify>::Signer:
+        From<P::Public> + IdentifyAccount<AccountId = <T as System>::AccountId>,
     E: SignedExtra<T> + SignedExtension + Send + Sync + 'static,
-    <<E as SignedExtra<T>>::Extra as SignedExtension>::AdditionalSigned: Send + Sync,
+    <<E as SignedExtra<T>>::Extra as SignedExtension>::AdditionalSigned:
+        Send + Sync,
     P: Pair,
     <P as Pair>::Public: Into<<T as System>::AccountId>,
     <P as Pair>::Seed: From<[u8; 32]>,
@@ -36,9 +65,11 @@ where
     T: Org + Send + Sync + 'static,
     <T as System>::AccountId: Into<<T as System>::Address> + Ss58Codec,
     S: Decode + Encode + From<P::Signature> + Verify + Send + Sync + 'static,
-    <S as Verify>::Signer: From<P::Public> + IdentifyAccount<AccountId = <T as System>::AccountId>,
+    <S as Verify>::Signer:
+        From<P::Public> + IdentifyAccount<AccountId = <T as System>::AccountId>,
     E: SignedExtra<T> + SignedExtension + Send + Sync + 'static,
-    <<E as SignedExtra<T>>::Extra as SignedExtension>::AdditionalSigned: Send + Sync,
+    <<E as SignedExtra<T>>::Extra as SignedExtension>::AdditionalSigned:
+        Send + Sync,
     P: Pair,
     <P as Pair>::Public: Into<<T as System>::AccountId>,
     <P as Pair>::Seed: From<[u8; 32]>,
@@ -56,7 +87,7 @@ where
         force: bool,
     ) -> Result<<T as System>::AccountId> {
         if self.keystore.is_initialized() && !force {
-            return Err(Error::KeystoreInitialized);
+            return Err(Error::KeystoreInitialized)
         }
         let pair = P::from_seed(&P::Seed::from(*dk.expose_secret()));
         self.keystore.initialize(&dk, &password)?;
@@ -81,7 +112,13 @@ where
         let signer = self.signer()?;
         self.subxt
             .clone()
-            .register_flat_org_and_watch(&signer, sudo, parent_org, constitution, members)
+            .register_flat_org_and_watch(
+                &signer,
+                sudo,
+                parent_org,
+                constitution,
+                members,
+            )
             .await?
             .new_flat_organization_registered()
             .map_err(substrate_subxt::Error::Codec)?

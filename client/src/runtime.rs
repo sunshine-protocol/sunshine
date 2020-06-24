@@ -1,17 +1,38 @@
 use crate::srml::org::Org;
-use codec::{Decode, Encode};
+use codec::{
+    Decode,
+    Encode,
+};
 use core::fmt::Debug;
 use sp_runtime::{
-    generic::{Era, Header},
-    traits::{BlakeTwo256, IdentifyAccount, SignedExtension, Verify},
+    generic::{
+        Era,
+        Header,
+    },
+    traits::{
+        BlakeTwo256,
+        IdentifyAccount,
+        SignedExtension,
+        Verify,
+    },
     transaction_validity::TransactionValidityError,
-    MultiSignature, OpaqueExtrinsic,
+    MultiSignature,
+    OpaqueExtrinsic,
 };
 use std::marker::PhantomData;
 use substrate_subxt::{
-    balances::{AccountData, Balances},
+    balances::{
+        AccountData,
+        Balances,
+    },
     system::System,
-    CheckEra, CheckGenesis, CheckNonce, CheckSpecVersion, CheckTxVersion, CheckWeight, SignedExtra,
+    CheckEra,
+    CheckGenesis,
+    CheckNonce,
+    CheckSpecVersion,
+    CheckTxVersion,
+    CheckWeight,
+    SignedExtra,
 };
 use utils_identity::cid::CidBytes;
 
@@ -23,7 +44,8 @@ impl System for Runtime {
     type BlockNumber = u32;
     type Hash = sp_core::H256;
     type Hashing = BlakeTwo256;
-    type AccountId = <<MultiSignature as Verify>::Signer as IdentifyAccount>::AccountId;
+    type AccountId =
+        <<MultiSignature as Verify>::Signer as IdentifyAccount>::AccountId;
     type Address = pallet_indices::address::Address<Self::AccountId, u64>;
     type Header = Header<Self::BlockNumber, BlakeTwo256>;
     type Extrinsic = OpaqueExtrinsic;
@@ -48,7 +70,9 @@ pub struct Extra<T: System> {
     genesis_hash: T::Hash,
 }
 
-impl<T: System + Balances + Clone + Debug + Eq + Send + Sync> SignedExtra<T> for Extra<T> {
+impl<T: System + Balances + Clone + Debug + Eq + Send + Sync> SignedExtra<T>
+    for Extra<T>
+{
     type Extra = (
         CheckSpecVersion<T>,
         CheckTxVersion<T>,
@@ -58,7 +82,12 @@ impl<T: System + Balances + Clone + Debug + Eq + Send + Sync> SignedExtra<T> for
         CheckWeight<T>,
     );
 
-    fn new(spec_version: u32, tx_version: u32, nonce: T::Index, genesis_hash: T::Hash) -> Self {
+    fn new(
+        spec_version: u32,
+        tx_version: u32,
+        nonce: T::Index,
+        genesis_hash: T::Hash,
+    ) -> Self {
         Self {
             spec_version,
             tx_version,
@@ -79,14 +108,19 @@ impl<T: System + Balances + Clone + Debug + Eq + Send + Sync> SignedExtra<T> for
     }
 }
 
-impl<T: System + Balances + Clone + Debug + Eq + Send + Sync> SignedExtension for Extra<T> {
+impl<T: System + Balances + Clone + Debug + Eq + Send + Sync> SignedExtension
+    for Extra<T>
+{
     const IDENTIFIER: &'static str = "DefaultExtra";
     type AccountId = T::AccountId;
     type Call = ();
-    type AdditionalSigned = <<Self as SignedExtra<T>>::Extra as SignedExtension>::AdditionalSigned;
+    type AdditionalSigned =
+        <<Self as SignedExtra<T>>::Extra as SignedExtension>::AdditionalSigned;
     type Pre = ();
 
-    fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
+    fn additional_signed(
+        &self,
+    ) -> Result<Self::AdditionalSigned, TransactionValidityError> {
         self.extra().additional_signed()
     }
 }

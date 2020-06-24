@@ -1,4 +1,7 @@
-use sc_cli::{RunCmd, Subcommand};
+use sc_cli::{
+    RunCmd,
+    Subcommand,
+};
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]

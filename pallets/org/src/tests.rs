@@ -1,10 +1,19 @@
 #![cfg(test)]
 
 use super::*;
-use frame_support::assert_ok;
-use frame_support::{impl_outer_event, impl_outer_origin, parameter_types, weights::Weight};
+use frame_support::{
+    assert_ok,
+    impl_outer_event,
+    impl_outer_origin,
+    parameter_types,
+    weights::Weight,
+};
 use sp_core::H256;
-use sp_runtime::{testing::Header, traits::IdentityLookup, Perbill};
+use sp_runtime::{
+    testing::Header,
+    traits::IdentityLookup,
+    Perbill,
+};
 
 pub type AccountId = u64;
 pub type BlockNumber = u64;
@@ -104,7 +113,8 @@ fn genesis_config_works() {
     new_test_ext().execute_with(|| {
         assert_eq!(Org::organization_counter(), 1);
         let constitution = 1738;
-        let expected_organization = Organization::new(Some(1), None, constitution);
+        let expected_organization =
+            Organization::new(Some(1), None, constitution);
         let org_in_storage = Org::organization_states(1u64).unwrap();
         assert_eq!(expected_organization, org_in_storage);
         for i in 1u64..7u64 {
@@ -132,7 +142,8 @@ fn organization_registration() {
             get_last_event(),
             RawEvent::NewFlatOrganizationRegistered(1, 2, constitution, 5),
         );
-        let third_org_accounts = vec![(1, 10), (2, 10), (3, 10), (9, 10), (10, 10)];
+        let third_org_accounts =
+            vec![(1, 10), (2, 10), (3, 10), (9, 10), (10, 10)];
         let third_org_constitution = 9669;
         assert_ok!(Org::register_weighted_org(
             one.clone(),
@@ -144,7 +155,12 @@ fn organization_registration() {
         assert_eq!(Org::organization_counter(), 3);
         assert_eq!(
             get_last_event(),
-            RawEvent::NewWeightedOrganizationRegistered(1, 3, third_org_constitution, 50,),
+            RawEvent::NewWeightedOrganizationRegistered(
+                1,
+                3,
+                third_org_constitution,
+                50,
+            ),
         );
     });
 }

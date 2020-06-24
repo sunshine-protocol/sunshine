@@ -21,7 +21,9 @@ pub enum Error {
     InvalidSuri,
     #[error("Invalid ss58 encoded account id.")]
     InvalidSs58,
-    #[error("Device key is already configured. Use `--force` if you want to overwrite it.")]
+    #[error(
+        "Device key is already configured. Use `--force` if you want to overwrite it."
+    )]
     HasDeviceKey,
     #[error("Password too short.")]
     PasswordTooShort,
@@ -29,7 +31,9 @@ pub enum Error {
     InvalidMnemonic,
     #[error("Passed in identifier cannot be made into u64.")]
     IdentifierConversionFailed,
-    #[error("Passed in account identifier cannot be formed into AccountId type.")]
+    #[error(
+        "Passed in account identifier cannot be formed into AccountId type."
+    )]
     AccountIdConversionFailed,
     #[error("Identifier cannot be parsed.")]
     UnparsedIdentifier,

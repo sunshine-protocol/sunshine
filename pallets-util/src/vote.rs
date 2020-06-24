@@ -1,9 +1,19 @@
-use crate::traits::{Apply, Approved, Rejected, VoteVector};
-use codec::{Decode, Encode};
+use crate::traits::{
+    Apply,
+    Approved,
+    Rejected,
+    VoteVector,
+};
+use codec::{
+    Decode,
+    Encode,
+};
 use frame_support::Parameter;
 use sp_std::prelude::*;
 
-#[derive(Clone, Copy, PartialEq, Eq, Encode, Decode, sp_runtime::RuntimeDebug)]
+#[derive(
+    Clone, Copy, PartialEq, Eq, Encode, Decode, sp_runtime::RuntimeDebug,
+)]
 /// The voter options (direction)
 pub enum VoterView {
     /// Not yet voted
@@ -16,7 +26,9 @@ pub enum VoterView {
     Abstain,
 }
 
-#[derive(new, Clone, Copy, PartialEq, Eq, Encode, Decode, sp_runtime::RuntimeDebug)]
+#[derive(
+    new, Clone, Copy, PartialEq, Eq, Encode, Decode, sp_runtime::RuntimeDebug,
+)]
 /// Binary vote to express for/against with magnitude
 /// ~ vectors have direction and magnitude, not to be confused with `Vec`
 pub struct Vote<Signal, Hash> {
@@ -44,7 +56,9 @@ impl<Signal: Copy, Hash: Clone> Vote<Signal, Hash> {
     }
 }
 
-impl<Signal: Copy, Hash: Clone> VoteVector<Signal, VoterView, Hash> for Vote<Signal, Hash> {
+impl<Signal: Copy, Hash: Clone> VoteVector<Signal, VoterView, Hash>
+    for Vote<Signal, Hash>
+{
     fn magnitude(&self) -> Signal {
         self.magnitude
     }
@@ -56,7 +70,16 @@ impl<Signal: Copy, Hash: Clone> VoteVector<Signal, VoterView, Hash> for Vote<Sig
     }
 }
 
-#[derive(Clone, Copy, Default, PartialEq, Eq, Encode, Decode, sp_runtime::RuntimeDebug)]
+#[derive(
+    Clone,
+    Copy,
+    Default,
+    PartialEq,
+    Eq,
+    Encode,
+    Decode,
+    sp_runtime::RuntimeDebug,
+)]
 /// This is the threshold configuration
 /// - evaluates passage of vote state
 pub struct ThresholdConfig<Signal> {
@@ -67,7 +90,10 @@ pub struct ThresholdConfig<Signal> {
 }
 
 impl<Signal: PartialOrd + Copy> ThresholdConfig<Signal> {
-    pub fn new(support_required: Signal, turnout_required: Option<Signal>) -> Option<Self> {
+    pub fn new(
+        support_required: Signal,
+        turnout_required: Option<Signal>,
+    ) -> Option<Self> {
         if let Some(turnout_threshold) = turnout_required {
             if support_required < turnout_threshold {
                 Some(ThresholdConfig {
@@ -276,12 +302,13 @@ impl<
     > Approved for VoteState<Signal, BlockNumber, Hash>
 {
     fn approved(&self) -> bool {
-        let turnout_exceeds_turnout_threshold =
-            if let Some(turnout_threshold) = self.passage_threshold().turnout_threshold() {
-                self.turnout() >= turnout_threshold
-            } else {
-                true // vacuously true if left unset
-            };
+        let turnout_exceeds_turnout_threshold = if let Some(turnout_threshold) =
+            self.passage_threshold().turnout_threshold()
+        {
+            self.turnout() >= turnout_threshold
+        } else {
+            true // vacuously true if left unset
+        };
         self.in_favor() >= self.passage_threshold().support_threshold()
             && turnout_exceeds_turnout_threshold
     }
@@ -303,7 +330,8 @@ impl<
         if let Some(rejection_threshold_set) = self.rejection_threshold() {
             Some(
                 self.against() >= rejection_threshold_set.support_threshold()
-                    && if let Some(turnout_threshold) = rejection_threshold_set.turnout_threshold()
+                    && if let Some(turnout_threshold) =
+                        rejection_threshold_set.turnout_threshold()
                     {
                         self.turnout() >= turnout_threshold
                     } else {
@@ -422,7 +450,9 @@ impl<
     }
 }
 
-#[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
+#[derive(
+    PartialEq, Eq, Copy, Clone, Encode, Decode, sp_runtime::RuntimeDebug,
+)]
 #[non_exhaustive]
 /// The vote's state and outcome
 pub enum VoteOutcome {

@@ -8,17 +8,34 @@
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
 use codec::Encode;
-use pallet_grandpa::fg_primitives;
-use pallet_grandpa::{AuthorityId, AuthorityList as GrandpaAuthorityList};
+use pallet_grandpa::{
+    fg_primitives,
+    AuthorityId,
+    AuthorityList as GrandpaAuthorityList,
+};
 use sp_api::impl_runtime_apis;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
-use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
-use sp_runtime::traits::{
-    BlakeTwo256, Block as BlockT, IdentifyAccount, NumberFor, Saturating, StaticLookup, Verify,
+use sp_core::{
+    crypto::KeyTypeId,
+    OpaqueMetadata,
 };
 use sp_runtime::{
-    create_runtime_str, generic, impl_opaque_keys, transaction_validity::TransactionValidity,
-    ApplyExtrinsicResult, MultiSignature, SaturatedConversion,
+    create_runtime_str,
+    generic,
+    impl_opaque_keys,
+    traits::{
+        BlakeTwo256,
+        Block as BlockT,
+        IdentifyAccount,
+        NumberFor,
+        Saturating,
+        StaticLookup,
+        Verify,
+    },
+    transaction_validity::TransactionValidity,
+    ApplyExtrinsicResult,
+    MultiSignature,
+    SaturatedConversion,
 };
 use sp_std::prelude::*;
 #[cfg(feature = "std")]
@@ -28,11 +45,22 @@ use utils_identity::cid::CidBytes;
 
 // A few exports that help ease life for downstream crates.
 pub use frame_support::{
-    construct_runtime, debug, parameter_types,
-    traits::{KeyOwnerProofSystem, Randomness},
+    construct_runtime,
+    debug,
+    parameter_types,
+    traits::{
+        KeyOwnerProofSystem,
+        Randomness,
+    },
     weights::{
-        constants::{BlockExecutionWeight, ExtrinsicBaseWeight, RocksDbWeight, WEIGHT_PER_SECOND},
-        IdentityFee, Weight,
+        constants::{
+            BlockExecutionWeight,
+            ExtrinsicBaseWeight,
+            RocksDbWeight,
+            WEIGHT_PER_SECOND,
+        },
+        IdentityFee,
+        Weight,
     },
     StorageValue,
 };
@@ -40,7 +68,11 @@ pub use pallet_balances::Call as BalancesCall;
 pub use pallet_timestamp::Call as TimestampCall;
 #[cfg(any(feature = "std", test))]
 pub use sp_runtime::BuildStorage;
-pub use sp_runtime::{traits, Perbill, Permill};
+pub use sp_runtime::{
+    traits,
+    Perbill,
+    Permill,
+};
 
 /// An index to a block.
 pub type BlockNumber = u32;
@@ -50,7 +82,8 @@ pub type Signature = MultiSignature;
 
 /// Some way of identifying an account on the chain. We intentionally make it equivalent
 /// to the public key of our transaction signing scheme.
-pub type AccountId = <<Signature as Verify>::Signer as IdentifyAccount>::AccountId;
+pub type AccountId =
+    <<Signature as Verify>::Signer as IdentifyAccount>::AccountId;
 
 /// The type for looking up accounts. We don't expect more than 4 billion of them, but you
 /// never know...
@@ -92,11 +125,14 @@ pub mod opaque {
     }
 }
 
-impl<LocalCall> frame_system::offchain::CreateSignedTransaction<LocalCall> for Runtime
+impl<LocalCall> frame_system::offchain::CreateSignedTransaction<LocalCall>
+    for Runtime
 where
     Call: From<LocalCall>,
 {
-    fn create_transaction<C: frame_system::offchain::AppCrypto<Self::Public, Self::Signature>>(
+    fn create_transaction<
+        C: frame_system::offchain::AppCrypto<Self::Public, Self::Signature>,
+    >(
         call: Call,
         public: <Signature as traits::Verify>::Signer,
         account: AccountId,
@@ -119,7 +155,10 @@ where
             frame_system::CheckSpecVersion::<Runtime>::new(),
             frame_system::CheckTxVersion::<Runtime>::new(),
             frame_system::CheckGenesis::<Runtime>::new(),
-            frame_system::CheckEra::<Runtime>::from(generic::Era::mortal(period, current_block)),
+            frame_system::CheckEra::<Runtime>::from(generic::Era::mortal(
+                period,
+                current_block,
+            )),
             frame_system::CheckNonce::<Runtime>::from(nonce),
             frame_system::CheckWeight::<Runtime>::new(),
         );
@@ -128,7 +167,8 @@ where
                 debug::warn!("Unable to create signed payload: {:?}", e);
             })
             .ok()?;
-        let signature = raw_payload.using_encoded(|payload| C::sign(payload, public))?;
+        let signature =
+            raw_payload.using_encoded(|payload| C::sign(payload, public))?;
         let address = Indices::unlookup(account);
         let (call, extra, _) = raw_payload.deconstruct();
         Some((call, (address, signature, extra)))
@@ -256,13 +296,15 @@ impl pallet_grandpa::Trait for Runtime {
 
     type KeyOwnerProofSystem = ();
 
-    type KeyOwnerProof =
-        <Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(KeyTypeId, AuthorityId)>>::Proof;
+    type KeyOwnerProof = <Self::KeyOwnerProofSystem as KeyOwnerProofSystem<
+        (KeyTypeId, AuthorityId),
+    >>::Proof;
 
-    type KeyOwnerIdentification = <Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(
-        KeyTypeId,
-        AuthorityId,
-    )>>::IdentificationTuple;
+    type KeyOwnerIdentification =
+        <Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(
+            KeyTypeId,
+            AuthorityId,
+        )>>::IdentificationTuple;
 
     type HandleEquivocation = ();
 }
@@ -401,11 +443,13 @@ pub type SignedExtra = (
     frame_system::CheckWeight<Runtime>,
 );
 /// Unchecked extrinsic type as expected by this runtime.
-pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<Address, Call, Signature, SignedExtra>;
+pub type UncheckedExtrinsic =
+    generic::UncheckedExtrinsic<Address, Call, Signature, SignedExtra>;
 /// The payload being signed in transactions.
 pub type SignedPayload = generic::SignedPayload<Call, SignedExtra>;
 /// Extrinsic type that has already been checked.
-pub type CheckedExtrinsic = generic::CheckedExtrinsic<AccountId, Call, SignedExtra>;
+pub type CheckedExtrinsic =
+    generic::CheckedExtrinsic<AccountId, Call, SignedExtra>;
 /// Executive: handles dispatch to the various modules.
 pub type Executive = frame_executive::Executive<
     Runtime,

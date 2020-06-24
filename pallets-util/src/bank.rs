@@ -1,11 +1,32 @@
-use crate::traits::{DepositSpendOps, FreeToReserved, GetBalance, Increment};
-use codec::{Codec, Decode, Encode};
+use crate::traits::{
+    DepositSpendOps,
+    FreeToReserved,
+    GetBalance,
+    Increment,
+};
+use codec::{
+    Codec,
+    Decode,
+    Encode,
+};
 use sp_core::TypeId;
-use sp_runtime::traits::{AtLeast32Bit, Zero};
+use sp_runtime::traits::{
+    AtLeast32Bit,
+    Zero,
+};
 use sp_std::prelude::*;
 
 /// An on-chain treasury identifier, exactly like `ModuleId`
-#[derive(Clone, Copy, Eq, PartialEq, Default, Encode, Decode, sp_runtime::RuntimeDebug)]
+#[derive(
+    Clone,
+    Copy,
+    Eq,
+    PartialEq,
+    Default,
+    Encode,
+    Decode,
+    sp_runtime::RuntimeDebug,
+)]
 pub struct OnChainTreasuryID(pub [u8; 8]);
 
 impl Increment for OnChainTreasuryID {
@@ -20,7 +41,9 @@ impl TypeId for OnChainTreasuryID {
     const TYPE_ID: [u8; 4] = *b"bank";
 }
 
-#[derive(Clone, Copy, Eq, PartialEq, Encode, Decode, sp_runtime::RuntimeDebug)]
+#[derive(
+    Clone, Copy, Eq, PartialEq, Encode, Decode, sp_runtime::RuntimeDebug,
+)]
 pub enum Sender<AccountId, OrgId> {
     Account(AccountId),
     Org(OrgId),
@@ -29,7 +52,11 @@ pub enum Sender<AccountId, OrgId> {
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
 /// This is the state for an OnChainBankId, associated with each bank registered in the runtime
-pub struct BankState<AccountId, OrgId: Codec + PartialEq + Zero + From<u32> + Copy, Currency> {
+pub struct BankState<
+    AccountId,
+    OrgId: Codec + PartialEq + Zero + From<u32> + Copy,
+    Currency,
+> {
     // Registered organization identifier
     org: OrgId,
     // Free capital, available for spends
@@ -46,7 +73,11 @@ impl<
         Currency: Zero + AtLeast32Bit + Clone,
     > BankState<AccountId, OrgId, Currency>
 {
-    pub fn new_from_deposit(org: OrgId, amount: Currency, controller: Option<AccountId>) -> Self {
+    pub fn new_from_deposit(
+        org: OrgId,
+        amount: Currency,
+        controller: Option<AccountId>,
+    ) -> Self {
         BankState {
             org,
             free: amount,
@@ -175,7 +206,9 @@ impl<
     }
 }
 
-#[derive(new, Clone, Copy, Eq, PartialEq, Encode, Decode, sp_runtime::RuntimeDebug)]
+#[derive(
+    new, Clone, Copy, Eq, PartialEq, Encode, Decode, sp_runtime::RuntimeDebug,
+)]
 pub struct TransferInformation<AccountId, OrgId, Currency> {
     sender: Sender<AccountId, OrgId>,
     amount_transferred: Currency,
@@ -199,7 +232,8 @@ impl<
         self.amount_claimed.clone()
     }
     pub fn claim_amount(&self, amount: Currency) -> Option<Self> {
-        let condition: bool = (self.amount_transferred() - self.amount_claimed()) >= amount;
+        let condition: bool =
+            (self.amount_transferred() - self.amount_claimed()) >= amount;
         if condition {
             let new_amount_claimed = self.amount_claimed() + amount;
             Some(TransferInformation {

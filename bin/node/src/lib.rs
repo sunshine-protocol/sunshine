@@ -12,7 +12,10 @@ mod command;
 pub use command::run as run_cli;
 
 pub use chain_spec::ChainSpec;
-pub use service::{new_full, new_light};
+pub use service::{
+    new_full,
+    new_light,
+};
 
 pub const IMPL_NAME: &str = "Sunshine Node";
 pub const IMPL_VERSION: &str = env!("CARGO_PKG_VERSION");

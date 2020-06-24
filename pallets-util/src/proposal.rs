@@ -1,4 +1,7 @@
-use codec::{Decode, Encode};
+use codec::{
+    Decode,
+    Encode,
+};
 use sp_runtime::RuntimeDebug;
 
 #[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug)]

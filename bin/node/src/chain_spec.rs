@@ -1,11 +1,27 @@
 use sc_service::ChainType;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
-use sp_core::{sr25519, Pair, Public};
+use sp_core::{
+    sr25519,
+    Pair,
+    Public,
+};
 use sp_finality_grandpa::AuthorityId as GrandpaId;
-use sp_runtime::traits::{IdentifyAccount, Verify};
+use sp_runtime::traits::{
+    IdentifyAccount,
+    Verify,
+};
 use suntime::{
-    AccountId, AuraConfig, BalancesConfig, GenesisConfig, GrandpaConfig, IndicesConfig, OrgConfig,
-    Signature, SudoConfig, SystemConfig, WASM_BINARY,
+    AccountId,
+    AuraConfig,
+    BalancesConfig,
+    GenesisConfig,
+    GrandpaConfig,
+    IndicesConfig,
+    OrgConfig,
+    Signature,
+    SudoConfig,
+    SystemConfig,
+    WASM_BINARY,
 };
 use utils_identity::cid::CidBytes;
 
@@ -13,7 +29,9 @@ use utils_identity::cid::CidBytes;
 pub type ChainSpec = sc_service::GenericChainSpec<GenesisConfig>;
 
 /// Helper function to generate a crypto pair from seed
-pub fn get_from_seed<TPublic: Public>(seed: &str) -> <TPublic::Pair as Pair>::Public {
+pub fn get_from_seed<TPublic: Public>(
+    seed: &str,
+) -> <TPublic::Pair as Pair>::Public {
     TPublic::Pair::from_string(&format!("//{}", seed), None)
         .expect("static values are valid; qed")
         .public()
@@ -94,10 +112,14 @@ pub fn local_testnet_config() -> ChainSpec {
                     get_account_id_from_seed::<sr25519::Public>("Ferdie"),
                     get_account_id_from_seed::<sr25519::Public>("Alice//stash"),
                     get_account_id_from_seed::<sr25519::Public>("Bob//stash"),
-                    get_account_id_from_seed::<sr25519::Public>("Charlie//stash"),
+                    get_account_id_from_seed::<sr25519::Public>(
+                        "Charlie//stash",
+                    ),
                     get_account_id_from_seed::<sr25519::Public>("Dave//stash"),
                     get_account_id_from_seed::<sr25519::Public>("Eve//stash"),
-                    get_account_id_from_seed::<sr25519::Public>("Ferdie//stash"),
+                    get_account_id_from_seed::<sr25519::Public>(
+                        "Ferdie//stash",
+                    ),
                 ],
                 // first org value constitution
                 CidBytes::default(),
@@ -148,7 +170,10 @@ pub fn testnet_genesis(
             first_organization_flat_membership: first_org_flat_membership,
         }),
         pallet_aura: Some(AuraConfig {
-            authorities: initial_authorities.iter().map(|x| (x.0.clone())).collect(),
+            authorities: initial_authorities
+                .iter()
+                .map(|x| (x.0.clone()))
+                .collect(),
         }),
         pallet_grandpa: Some(GrandpaConfig {
             authorities: initial_authorities

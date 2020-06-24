@@ -1,8 +1,18 @@
 use super::*;
-use frame_support::{assert_noop, assert_ok};
-use frame_support::{impl_outer_event, impl_outer_origin, parameter_types, weights::Weight};
+use frame_support::{
+    assert_noop,
+    assert_ok,
+    impl_outer_event,
+    impl_outer_origin,
+    parameter_types,
+    weights::Weight,
+};
 use sp_core::H256;
-use sp_runtime::{testing::Header, traits::IdentityLookup, Perbill};
+use sp_runtime::{
+    testing::Header,
+    traits::IdentityLookup,
+    Perbill,
+};
 
 pub type AccountId = u64;
 pub type BlockNumber = u64;
@@ -112,11 +122,20 @@ fn vote_creation_works() {
         let one = Origin::signed(1);
         let twentytwo = Origin::signed(22);
         assert_noop!(
-            VoteThreshold::create_threshold_approval_vote(twentytwo, None, 1, 4, None, None),
+            VoteThreshold::create_threshold_approval_vote(
+                twentytwo, None, 1, 4, None, None
+            ),
             Error::<Test>::NotAuthorizedToCreateVoteForOrganization
         );
         assert_noop!(
-            VoteThreshold::create_threshold_approval_vote(one.clone(), None, 1, 4, Some(3), None),
+            VoteThreshold::create_threshold_approval_vote(
+                one.clone(),
+                None,
+                1,
+                4,
+                Some(3),
+                None
+            ),
             Error::<Test>::ThresholdInputDoesNotSatisfySupportGEQTurnoutNorms
         );
         assert_ok!(VoteThreshold::create_threshold_approval_vote(
@@ -155,7 +174,12 @@ fn vote_threshold_works() {
         let outcome_almost_passed = VoteThreshold::get_vote_outcome(1).unwrap();
         assert_eq!(outcome_almost_passed, VoteOutcome::Voting);
         let six = Origin::signed(6);
-        assert_ok!(VoteThreshold::submit_vote(six, 1, VoterView::InFavor, None));
+        assert_ok!(VoteThreshold::submit_vote(
+            six,
+            1,
+            VoterView::InFavor,
+            None
+        ));
         // check that the vote has passed
         let outcome_has_passed = VoteThreshold::get_vote_outcome(1).unwrap();
         assert_eq!(outcome_has_passed, VoteOutcome::Approved);

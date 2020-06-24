@@ -7,25 +7,60 @@
 
 use codec::Codec;
 use frame_support::{
-    decl_error, decl_event, decl_module, decl_storage, ensure,
-    traits::{Currency, ExistenceRequirement, Get, ReservableCurrency},
+    decl_error,
+    decl_event,
+    decl_module,
+    decl_storage,
+    ensure,
+    traits::{
+        Currency,
+        ExistenceRequirement,
+        Get,
+        ReservableCurrency,
+    },
     Parameter,
 };
-use frame_system::{self as system, ensure_signed};
-use sp_runtime::{
-    traits::{AtLeast32Bit, MaybeSerializeDeserialize, Member, Zero},
-    DispatchError, DispatchResult,
+use frame_system::{
+    self as system,
+    ensure_signed,
 };
-use sp_std::{fmt::Debug, prelude::*};
+use sp_runtime::{
+    traits::{
+        AtLeast32Bit,
+        MaybeSerializeDeserialize,
+        Member,
+        Zero,
+    },
+    DispatchError,
+    DispatchResult,
+};
+use sp_std::{
+    fmt::Debug,
+    prelude::*,
+};
 use util::{
-    court::{Dispute, DisputeState, ResolutionMetadata},
-    traits::{GenerateUniqueID, GetVoteOutcome, IDIsAvailable, OpenVote, RegisterDisputeType},
-    vote::{ThresholdConfig, VoteOutcome},
+    court::{
+        Dispute,
+        DisputeState,
+        ResolutionMetadata,
+    },
+    traits::{
+        GenerateUniqueID,
+        GetVoteOutcome,
+        IDIsAvailable,
+        OpenVote,
+        RegisterDisputeType,
+    },
+    vote::{
+        ThresholdConfig,
+        VoteOutcome,
+    },
 };
 
 /// The balances type for this module
-type BalanceOf<T> =
-    <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
+type BalanceOf<T> = <<T as Trait>::Currency as Currency<
+    <T as frame_system::Trait>::AccountId,
+>>::Balance;
 /// The vote identifier for the vote module
 type VoteId<T> = <T as vote::Trait>::VoteId;
 /// The signal type for the vote module
@@ -37,7 +72,8 @@ pub trait Trait: frame_system::Trait + org::Trait + vote::Trait {
 
     /// The currency type
     /// - TODO: consider switching Reservable for Lockable?
-    type Currency: Currency<Self::AccountId> + ReservableCurrency<Self::AccountId>;
+    type Currency: Currency<Self::AccountId>
+        + ReservableCurrency<Self::AccountId>;
 
     /// The identifier for disputes
     type DisputeId: Parameter
@@ -236,7 +272,11 @@ impl<T: Trait>
     RegisterDisputeType<
         T::AccountId,
         BalanceOf<T>,
-        ResolutionMetadata<T::OrgId, ThresholdConfig<Signal<T>>, T::BlockNumber>,
+        ResolutionMetadata<
+            T::OrgId,
+            ThresholdConfig<Signal<T>>,
+            T::BlockNumber,
+        >,
         T::BlockNumber,
     > for Module<T>
 {
@@ -245,7 +285,11 @@ impl<T: Trait>
         locker: T::AccountId,
         amount_to_lock: BalanceOf<T>,
         dispute_raiser: T::AccountId,
-        resolution_path: ResolutionMetadata<T::OrgId, ThresholdConfig<Signal<T>>, T::BlockNumber>,
+        resolution_path: ResolutionMetadata<
+            T::OrgId,
+            ThresholdConfig<Signal<T>>,
+            T::BlockNumber,
+        >,
         expiry: Option<T::BlockNumber>,
     ) -> Result<Self::DisputeIdentifier, DispatchError> {
         ensure!(

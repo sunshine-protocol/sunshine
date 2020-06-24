@@ -11,20 +11,58 @@
 mod tests;
 
 use codec::Codec;
-use frame_support::{decl_error, decl_event, decl_module, decl_storage, ensure, Parameter};
-use frame_system::{self as system, ensure_signed};
-use sp_runtime::{
-    traits::{AtLeast32Bit, CheckedSub, MaybeSerializeDeserialize, Member, Zero},
-    DispatchError, DispatchResult,
+use frame_support::{
+    decl_error,
+    decl_event,
+    decl_module,
+    decl_storage,
+    ensure,
+    Parameter,
 };
-use sp_std::{fmt::Debug, prelude::*};
+use frame_system::{
+    self as system,
+    ensure_signed,
+};
+use sp_runtime::{
+    traits::{
+        AtLeast32Bit,
+        CheckedSub,
+        MaybeSerializeDeserialize,
+        Member,
+        Zero,
+    },
+    DispatchError,
+    DispatchResult,
+};
+use sp_std::{
+    fmt::Debug,
+    prelude::*,
+};
 use util::{
     traits::{
-        AccessGenesis, Apply, ApplyVote, CheckVoteStatus, GenerateUniqueID, GetGroup,
-        GetVoteOutcome, IDIsAvailable, MintableSignal, OpenVote, OrganizationSupervisorPermissions,
-        ShareInformation, UpdateVoteTopic, VoteOnProposal, VoteVector,
+        AccessGenesis,
+        Apply,
+        ApplyVote,
+        CheckVoteStatus,
+        GenerateUniqueID,
+        GetGroup,
+        GetVoteOutcome,
+        IDIsAvailable,
+        MintableSignal,
+        OpenVote,
+        OrganizationSupervisorPermissions,
+        ShareInformation,
+        UpdateVoteTopic,
+        VoteOnProposal,
+        VoteVector,
     },
-    vote::{ThresholdConfig, Vote, VoteOutcome, VoteState, VoterView},
+    vote::{
+        ThresholdConfig,
+        Vote,
+        VoteOutcome,
+        VoteState,
+        VoterView,
+    },
 };
 
 pub trait Trait: frame_system::Trait + org::Trait {
@@ -188,15 +226,22 @@ impl<T: Trait> GenerateUniqueID<T::VoteId> for Module<T> {
 
 impl<T: Trait> GetVoteOutcome<T::VoteId> for Module<T> {
     type Outcome = VoteOutcome;
-    fn get_vote_outcome(vote_id: T::VoteId) -> Result<Self::Outcome, DispatchError> {
-        let vote_state =
-            <VoteStates<T>>::get(vote_id).ok_or(Error::<T>::NoVoteStateForOutcomeQuery)?;
+    fn get_vote_outcome(
+        vote_id: T::VoteId,
+    ) -> Result<Self::Outcome, DispatchError> {
+        let vote_state = <VoteStates<T>>::get(vote_id)
+            .ok_or(Error::<T>::NoVoteStateForOutcomeQuery)?;
         Ok(vote_state.outcome())
     }
 }
 
-impl<T: Trait> OpenVote<T::OrgId, ThresholdConfig<T::Signal>, T::BlockNumber, T::IpfsReference>
-    for Module<T>
+impl<T: Trait>
+    OpenVote<
+        T::OrgId,
+        ThresholdConfig<T::Signal>,
+        T::BlockNumber,
+        T::IpfsReference,
+    > for Module<T>
 {
     type VoteIdentifier = T::VoteId;
     fn open_vote(
@@ -216,7 +261,8 @@ impl<T: Trait> OpenVote<T::OrgId, ThresholdConfig<T::Signal>, T::BlockNumber, T:
         // generate new vote_id
         let new_vote_id = Self::generate_unique_id();
         // by default, this call mints signal based on weighted ownership in group
-        let total_possible_turnout = Self::batch_mint_signal(new_vote_id, organization)?;
+        let total_possible_turnout =
+            Self::batch_mint_signal(new_vote_id, organization)?;
         // instantiate new VoteState with threshold and temporal metadata
         let new_vote_state = VoteState::new(
             topic,
@@ -248,10 +294,15 @@ impl<T: Trait> OpenVote<T::OrgId, ThresholdConfig<T::Signal>, T::BlockNumber, T:
         // generate new vote_id
         let new_vote_id = Self::generate_unique_id();
         // mints 1 signal per participant
-        let total_possible_turnout = Self::batch_mint_equal_signal(new_vote_id, organization)?;
+        let total_possible_turnout =
+            Self::batch_mint_equal_signal(new_vote_id, organization)?;
         // instantiate new VoteState for unanimous consent
-        let new_vote_state =
-            VoteState::new_unanimous_consent(topic, total_possible_turnout, now, ends);
+        let new_vote_state = VoteState::new_unanimous_consent(
+            topic,
+            total_possible_turnout,
+            now,
+            ends,
+        );
         // insert the VoteState
         <VoteStates<T>>::insert(new_vote_id, new_vote_state);
         // increment open vote count
@@ -267,8 +318,8 @@ impl<T: Trait> UpdateVoteTopic<T::VoteId, T::IpfsReference> for Module<T> {
         new_topic: T::IpfsReference,
         clear_previous_vote_state: bool,
     ) -> DispatchResult {
-        let old_vote_state =
-            <VoteStates<T>>::get(vote_id).ok_or(Error::<T>::CannotUpdateVoteTopicIfVoteStateDNE)?;
+        let old_vote_state = <VoteStates<T>>::get(vote_id)
+            .ok_or(Error::<T>::CannotUpdateVoteTopicIfVoteStateDNE)?;
         let new_vote_state = if clear_previous_vote_state {
             old_vote_state.update_topic_and_clear_state(new_topic)
         } else {
@@ -292,7 +343,11 @@ impl<T: Trait>
     /// Mints a custom amount of signal
     /// - may be useful for resetting voting rights
     /// - should be heavily guarded and not public facing
-    fn mint_custom_signal_for_account(vote_id: T::VoteId, who: &T::AccountId, signal: T::Signal) {
+    fn mint_custom_signal_for_account(
+        vote_id: T::VoteId,
+        who: &T::AccountId,
+        signal: T::Signal,
+    ) {
         let new_vote = Vote::new(signal, VoterView::NoVote, None);
         <VoteLogger<T>>::insert(vote_id, who, new_vote);
     }
@@ -320,18 +375,19 @@ impl<T: Trait>
         vote_id: T::VoteId,
         organization: T::OrgId,
     ) -> Result<T::Signal, DispatchError> {
-        let new_vote_group = <org::Module<T>>::get_membership_with_shape(organization)
-            .ok_or(Error::<T>::CannotMintSignalBecauseMembershipShapeDNE)?;
+        let new_vote_group =
+            <org::Module<T>>::get_membership_with_shape(organization)
+                .ok_or(Error::<T>::CannotMintSignalBecauseMembershipShapeDNE)?;
         // total issuance
         let total_minted: T::Signal = new_vote_group.total().into();
-        new_vote_group
-            .account_ownership()
-            .into_iter()
-            .for_each(|(who, shares)| {
+        new_vote_group.account_ownership().into_iter().for_each(
+            |(who, shares)| {
                 let minted_signal: T::Signal = shares.into();
-                let new_vote = Vote::new(minted_signal, VoterView::NoVote, None);
+                let new_vote =
+                    Vote::new(minted_signal, VoterView::NoVote, None);
                 <VoteLogger<T>>::insert(vote_id, who, new_vote);
-            });
+            },
+        );
         <TotalSignalIssuance<T>>::insert(vote_id, total_minted);
         Ok(total_minted)
     }
@@ -357,7 +413,7 @@ impl<T: Trait> CheckVoteStatus<T::IpfsReference, T::VoteId> for Module<T> {
     fn check_vote_expired(state: &Self::State) -> bool {
         let now = system::Module::<T>::block_number();
         if let Some(n) = state.expires() {
-            return n < now;
+            return n < now
         }
         false
     }
@@ -380,8 +436,8 @@ impl<T: Trait>
         justification: Option<T::IpfsReference>,
     ) -> DispatchResult {
         // get the vote state
-        let vote_state =
-            <VoteStates<T>>::get(vote_id).ok_or(Error::<T>::NoVoteStateForVoteRequest)?;
+        let vote_state = <VoteStates<T>>::get(vote_id)
+            .ok_or(Error::<T>::NoVoteStateForVoteRequest)?;
         // TODO: add permissioned method for adding time to the vote state because of this restriction but this is a legitimate restriction
         // -> every standard vote has a recognized end to establish when the decision must be made based on collected input
         ensure!(
@@ -391,9 +447,9 @@ impl<T: Trait>
         // get the organization associated with this vote_state
         let old_vote = <VoteLogger<T>>::get(vote_id, voter.clone())
             .ok_or(Error::<T>::SignalNotMintedForVoter)?;
-        let new_vote = old_vote
-            .set_new_view(direction, justification)
-            .ok_or(Error::<T>::OldVoteDirectionEqualsNewVoteDirectionSoNoChange)?;
+        let new_vote = old_vote.set_new_view(direction, justification).ok_or(
+            Error::<T>::OldVoteDirectionEqualsNewVoteDirectionSoNoChange,
+        )?;
         let new_state = Self::apply_vote(
             vote_state,
             old_vote.magnitude(),

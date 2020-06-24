@@ -1,15 +1,26 @@
 use crate::error::Error;
 use clap::Clap;
-use std::path::PathBuf;
-use std::str::FromStr;
-use substrate_subxt::sp_core::crypto::Ss58Codec;
-use substrate_subxt::sp_core::{sr25519, Pair};
-use substrate_subxt::sp_runtime::{
-    traits::{IdentifyAccount, Verify},
-    MultiSignature,
+use std::{
+    path::PathBuf,
+    str::FromStr,
+};
+use substrate_subxt::{
+    sp_core::{
+        crypto::Ss58Codec,
+        sr25519,
+        Pair,
+    },
+    sp_runtime::{
+        traits::{
+            IdentifyAccount,
+            Verify,
+        },
+        MultiSignature,
+    },
 };
 
-pub type AccountId = <<MultiSignature as Verify>::Signer as IdentifyAccount>::AccountId;
+pub type AccountId =
+    <<MultiSignature as Verify>::Signer as IdentifyAccount>::AccountId;
 pub type OrgId = u64;
 pub type Shares = u64;
 
@@ -101,8 +112,8 @@ impl FromStr for Suri {
     type Err = Error;
 
     fn from_str(string: &str) -> Result<Self, Self::Err> {
-        let (_, seed) =
-            sr25519::Pair::from_string_with_seed(string, None).map_err(|_| Error::InvalidSuri)?;
+        let (_, seed) = sr25519::Pair::from_string_with_seed(string, None)
+            .map_err(|_| Error::InvalidSuri)?;
         Ok(Self(seed.unwrap()))
     }
 }

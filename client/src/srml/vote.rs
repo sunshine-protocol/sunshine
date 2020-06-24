@@ -1,13 +1,32 @@
-use crate::srml::org::{Org, OrgEventsDecoder};
-use codec::{Codec, Decode, Encode};
+use crate::srml::org::{
+    Org,
+    OrgEventsDecoder,
+};
+use codec::{
+    Codec,
+    Decode,
+    Encode,
+};
 use frame_support::Parameter;
 use sp_runtime::{
-    traits::{AtLeast32Bit, MaybeSerializeDeserialize, Member, Zero},
+    traits::{
+        AtLeast32Bit,
+        MaybeSerializeDeserialize,
+        Member,
+        Zero,
+    },
     Permill,
 };
 use std::fmt::Debug;
-use substrate_subxt::system::{System, SystemEventsDecoder};
-use util::vote::{Vote as VoteVector, VoteState, VoterView};
+use substrate_subxt::system::{
+    System,
+    SystemEventsDecoder,
+};
+use util::vote::{
+    Vote as VoteVector,
+    VoteState,
+    VoterView,
+};
 
 /// The subset of the `vote::Trait` that a client must implement.
 #[module]
