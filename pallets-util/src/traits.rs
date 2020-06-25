@@ -375,10 +375,6 @@ pub trait UseTermsOfAgreement<OrgId, TermsOfAgreement> {
     ) -> Result<(Self::TeamIdentifier, Self::VoteIdentifier)>;
 }
 
-pub trait GetTeamOrg<OrgId>: Sized {
-    fn get_team_org(&self) -> Option<OrgId>;
-}
-
 pub trait StartReview<VoteIdentifier>: Sized {
     fn start_review(&self, vote_id: VoteIdentifier) -> Option<Self>;
     fn get_review_id(&self) -> Option<VoteIdentifier>;
@@ -398,19 +394,17 @@ pub trait SetMakeTransfer<BankId, TransferId>: Sized {
     fn get_transfer_id(&self) -> Option<TransferId>;
 }
 
-pub trait StartTeamConsentPetition<Id, VoteIdentifier>: Sized {
+pub trait StartTeamConsentPetition<VoteIdentifier>: Sized {
     fn start_team_consent_petition(
         &self,
-        team_id: Id,
         vote_id: VoteIdentifier,
     ) -> Option<Self>;
-    fn get_team_consent_id(&self) -> Option<VoteIdentifier>;
-    fn get_team_id(&self) -> Option<Id>;
+    fn get_team_consent_vote_id(&self) -> Option<VoteIdentifier>;
 }
 
-pub trait ApproveGrant<TeamIdentifier>: Sized {
-    fn approve_grant(&self, team_id: TeamIdentifier) -> Self;
-    fn get_full_team_id(&self) -> Option<TeamIdentifier>;
+pub trait ApproveGrant: Sized {
+    fn approve_grant(&self) -> Self;
+    fn grant_approved(&self) -> bool;
 }
 // TODO: RevokeApprovedGrant<VoteID> => vote to take away the team's grant and clean storage
 
@@ -430,8 +424,8 @@ pub trait SubmitGrantApplication<
     + UseTermsOfAgreement<OrgId, TermsOfAgreement>
 {
     type GrantApp: StartReview<Self::VoteIdentifier>
-        + StartTeamConsentPetition<Self::TeamIdentifier, Self::VoteIdentifier>
-        + ApproveGrant<Self::TeamIdentifier>;
+        + StartTeamConsentPetition<Self::VoteIdentifier>
+        + ApproveGrant;
     fn form_grant_application(
         caller: AccountId,
         bounty_id: Self::BountyId,
@@ -441,10 +435,10 @@ pub trait SubmitGrantApplication<
     ) -> Result<Self::GrantApp>;
     fn submit_grant_application(
         caller: AccountId,
+        team_org: OrgId,
         bounty_id: Self::BountyId,
         description: Hash,
         total_amount: Currency,
-        terms_of_agreement: TermsOfAgreement,
     ) -> Result<Self::BountyId>; // returns application identifier
 }
 
@@ -480,8 +474,7 @@ pub trait SubmitMilestone<
     TransferId,
 >
 {
-    type Milestone: GetTeamOrg<OrgId>
-        + StartReview<VoteId>
+    type Milestone: StartReview<VoteId>
         + ApproveWithoutTransfer
         + SetMakeTransfer<BankId, TransferId>;
     type MilestoneState;
@@ -491,12 +484,12 @@ pub trait SubmitMilestone<
         application_id: BountyId,
         submission_reference: Hash,
         amount_requested: Currency,
-    ) -> Result<BountyId>; // returns milestone_id
+    ) -> Result<BountyId>; // returns milestone identifier
     fn trigger_milestone_review(
         bounty_id: BountyId,
         milestone_id: BountyId,
     ) -> Result<Self::MilestoneState>;
-    // someone can try to call this and only the sudo can push things through at whim
+    // someone can try to call this and only the sudo can push things through without triggering a review
     fn sudo_approves_milestone(
         caller: AccountId,
         bounty_id: BountyId,
