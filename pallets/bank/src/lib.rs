@@ -137,6 +137,18 @@ decl_error! {
         CannotUnreserveSpendReservationThatDNE,
         CannotUnreserveSpendReservationIfBankStoreDNE,
         CannotUnreserveSpendReservationIfBankReservedIsLessThanAmtToUnreserve,
+        CannotTransferFromOrgToOrgIfBankForTransferReferenceDNE,
+        CannotTransferFromOrgToOrgIfReferenceTransferDNE,
+        CannotTransferFromOrgToOrgIfInWrongStateOrNotEnoughFunds,
+        CannotTransferFromOrgToAccountIfBankForTransferReferenceDNE,
+        CannotTransferFromOrgToAccountIfReferenceTransferDNE,
+        CannotTransferFromOrgToAccountIfInWrongStateOrNotEnoughFunds,
+        TransferFailsIfDestBankDNE,
+        TransferReservedFailsIfSrcBankDNE,
+        TransferReservedFailsIfSrcBankReservedLessThanRequest,
+        TransferReservedFailsIfSpendReservationDNE,
+        TransferReservedFailsIfSpendReservationAmtIsLessThanRequest,
+
     }
 }
 
@@ -157,9 +169,9 @@ decl_storage! {
             Option<TransferInformation<Sender<T::AccountId, T::OrgId>, BalanceOf<T>, TransferState>>;
 
         /// The store for organizational bank accounts
-        /// -> keyset acts as canonical set for unique `OnChainTreasuryID`s
+        /// -> keyset acts as canonical set for unique `OnChainTreasuryID`s (note the cryptographic hash function)
         pub BankStores get(fn bank_stores): map
-            hasher(blake2_128_concat) OnChainTreasuryID =>
+            hasher(opaque_blake2_256) OnChainTreasuryID =>
             Option<BankState<T::AccountId, T::OrgId, BalanceOf<T>>>;
 
         /// Bank spend reservations
@@ -250,6 +262,9 @@ decl_module! {
 impl<T: Trait> Module<T> {
     pub fn account_id(id: OnChainTreasuryID) -> T::AccountId {
         id.into_account()
+    }
+    pub fn is_bank(id: OnChainTreasuryID) -> bool {
+        !Self::id_is_available(id)
     }
     fn calculate_proportional_amount_for_account(
         amount: BalanceOf<T>,
@@ -435,13 +450,78 @@ impl<T: Trait>
         dest_bank_id: OnChainTreasuryID,
         amt: BalanceOf<T>,
     ) -> Result<FullBankId<T::AssociatedId>, DispatchError> {
-        todo!()
+        // check for safety, it is too confusing of a user error to debug if we remove this check
+        ensure!(
+            Self::is_bank(dest_bank_id),
+            Error::<T>::TransferFailsIfDestBankDNE
+        );
+        // this reassignment improves readability && nothing else
+        let (src_bank_id, transfer_sub_identifier) =
+            (transfer_id.id, transfer_id.sub_id);
+        let src_bank = <BankStores<T>>::get(src_bank_id).ok_or(
+            Error::<T>::CannotTransferFromOrgToOrgIfBankForTransferReferenceDNE,
+        )?;
+        let updated_transfer_info = <TransferInfo<T>>::get(src_bank_id, transfer_sub_identifier)
+            .ok_or(Error::<T>::CannotTransferFromOrgToOrgIfReferenceTransferDNE)?
+            .spend(amt)
+            .ok_or(Error::<T>::CannotTransferFromOrgToOrgIfInWrongStateOrNotEnoughFunds)?;
+        // execute the transfer
+        T::Currency::transfer(
+            &Self::account_id(src_bank_id),
+            &Self::account_id(dest_bank_id),
+            amt,
+            ExistenceRequirement::KeepAlive,
+        )?;
+        // form new org to org transfer
+        let new_transfer: TransferInformation<
+            Sender<T::AccountId, T::OrgId>,
+            BalanceOf<T>,
+            TransferState,
+        > = TransferInformation::new(Sender::Org(src_bank.org()), amt);
+        // generate unique transfer id
+        let new_transfer_id = Self::seeded_generate_unique_id((
+            dest_bank_id,
+            BankMapId::Transfer,
+        ));
+        // update referenced src transfer
+        <TransferInfo<T>>::insert(
+            src_bank_id,
+            transfer_sub_identifier,
+            updated_transfer_info,
+        );
+        // insert new transfer
+        <TransferInfo<T>>::insert(dest_bank_id, new_transfer_id, new_transfer);
+        // return new transfer
+        Ok(FullBankId::new(dest_bank_id, new_transfer_id))
     }
     fn direct_transfer_to_account(
         transfer_id: FullBankId<T::AssociatedId>,
         dest_acc: T::AccountId,
         amt: BalanceOf<T>,
     ) -> Result<(), DispatchError> {
+        // this reassignment improves readability && nothing else
+        let (src_bank_id, transfer_sub_identifier) =
+            (transfer_id.id, transfer_id.sub_id);
+        let src_bank = <BankStores<T>>::get(src_bank_id).ok_or(
+            Error::<T>::CannotTransferFromOrgToAccountIfBankForTransferReferenceDNE,
+        )?;
+        let updated_transfer_info = <TransferInfo<T>>::get(src_bank_id, transfer_sub_identifier)
+            .ok_or(Error::<T>::CannotTransferFromOrgToAccountIfReferenceTransferDNE)?
+            .spend(amt)
+            .ok_or(Error::<T>::CannotTransferFromOrgToAccountIfInWrongStateOrNotEnoughFunds)?;
+        // execute the transfer
+        T::Currency::transfer(
+            &Self::account_id(src_bank_id),
+            &dest_acc,
+            amt,
+            ExistenceRequirement::KeepAlive,
+        )?;
+        // update referenced src transfer
+        <TransferInfo<T>>::insert(
+            src_bank_id,
+            transfer_sub_identifier,
+            updated_transfer_info,
+        );
         Ok(())
     }
     fn transfer_reserved_spend_to_org(
@@ -449,13 +529,80 @@ impl<T: Trait>
         dest_bank_id: OnChainTreasuryID,
         amt: BalanceOf<T>,
     ) -> Result<FullBankId<T::AssociatedId>, DispatchError> {
-        todo!()
+        // check for safety, it is too confusing of a user error to debug if we remove this check
+        ensure!(
+            Self::is_bank(dest_bank_id),
+            Error::<T>::TransferFailsIfDestBankDNE
+        );
+        let (src_bank_id, reservation_sub_identifier) =
+            (reservation_id.id, reservation_id.sub_id);
+        let src_bank = <BankStores<T>>::get(src_bank_id)
+            .ok_or(Error::<T>::TransferReservedFailsIfSrcBankDNE)?
+            .subtract_reserved(amt)
+            .ok_or(Error::<T>::TransferReservedFailsIfSrcBankReservedLessThanRequest)?;
+        let updated_spend_reservation = <SpendReservations<T>>::get(src_bank_id, reservation_sub_identifier)
+            .ok_or(Error::<T>::TransferReservedFailsIfSpendReservationDNE)?
+            .spend(amt)
+            .ok_or(Error::<T>::TransferReservedFailsIfSpendReservationAmtIsLessThanRequest)?;
+        // execute transfer
+        T::Currency::transfer(
+            &Self::account_id(src_bank_id),
+            &Self::account_id(dest_bank_id),
+            amt,
+            ExistenceRequirement::KeepAlive,
+        )?;
+        // form new transfer object
+        let new_transfer: TransferInformation<
+            Sender<T::AccountId, T::OrgId>,
+            BalanceOf<T>,
+            TransferState,
+        > = TransferInformation::new(Sender::Org(src_bank.org()), amt);
+        // generate unique transfer identifier
+        let new_transfer_id = Self::seeded_generate_unique_id((
+            dest_bank_id,
+            BankMapId::Transfer,
+        ));
+        // insert new transfer
+        <TransferInfo<T>>::insert(dest_bank_id, new_transfer_id, new_transfer);
+        // update src bank storage item
+        <BankStores<T>>::insert(src_bank_id, src_bank);
+        // update src reservation
+        <SpendReservations<T>>::insert(
+            src_bank_id,
+            reservation_sub_identifier,
+            updated_spend_reservation,
+        );
+        Ok(FullBankId::new(dest_bank_id, new_transfer_id))
     }
     fn transfer_reserved_spend_to_account(
         reservation_id: FullBankId<T::AssociatedId>,
         dest_acc: T::AccountId,
         amt: BalanceOf<T>,
     ) -> Result<(), DispatchError> {
+        let (src_bank_id, reservation_sub_identifier) =
+            (reservation_id.id, reservation_id.sub_id);
+        let src_bank = <BankStores<T>>::get(src_bank_id)
+            .ok_or(Error::<T>::TransferReservedFailsIfSrcBankDNE)?
+            .subtract_reserved(amt)
+            .ok_or(Error::<T>::TransferReservedFailsIfSrcBankReservedLessThanRequest)?;
+        let updated_spend_reservation = <SpendReservations<T>>::get(src_bank_id, reservation_sub_identifier)
+            .ok_or(Error::<T>::TransferReservedFailsIfSpendReservationDNE)?
+            .spend(amt)
+            .ok_or(Error::<T>::TransferReservedFailsIfSpendReservationAmtIsLessThanRequest)?;
+        // execute transfer
+        T::Currency::transfer(
+            &Self::account_id(src_bank_id),
+            &dest_acc,
+            amt,
+            ExistenceRequirement::KeepAlive,
+        )?;
+        // insert updated storage items
+        <BankStores<T>>::insert(src_bank_id, src_bank);
+        <SpendReservations<T>>::insert(
+            src_bank_id,
+            reservation_sub_identifier,
+            updated_spend_reservation,
+        );
         Ok(())
     }
 }
