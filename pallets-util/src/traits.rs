@@ -292,87 +292,94 @@ pub trait RegisterOrgAccount<OrgId, AccountId, Currency> {
         controller: Option<AccountId>,
     );
 }
-pub trait PostTransfer<BankId, AccountId, Currency> {
+pub trait PostUserTransfer<BankId, AccountId, Currency> {
     type TransferId;
-    fn post_transfer(
+    fn post_user_transfer(
         sender: AccountId,
-        on_behalf_of: Option<BankId>,
-        bank_id: BankId,
+        dest_bank_id: BankId,
         amt: Currency,
     ) -> Result<Self::TransferId>;
 }
-
-pub trait FreeToReserved<Currency>: Sized {
-    // fallible, requires enough in `free`
-    fn move_from_free_to_reserved(&self, amount: Currency) -> Option<Self>;
+// sets aside some funds from a transfer aside for spending later from the org account
+pub trait ReserveOrgSpend<BankTransfer, AccountId, Currency> {
+    fn reserve_org_spend(
+        transfer_id: BankTransfer,
+        recipient: AccountId,
+        amt: Currency,
+    ) -> Result<BankTransfer>; // reservation_id is same structure as BankTransfer
+    fn unreserve_org_spend(
+        reservation_id: BankTransfer, // see comment immediately above^
+    ) -> Result<Currency>;
 }
-
-pub trait GetBalance<Currency>: Sized {
-    fn total_free_funds(&self) -> Currency;
-    fn total_reserved_funds(&self) -> Currency;
-    fn total_funds(&self) -> Currency;
+pub trait PostOrgTransfer<BankReservation, BankId, AccountId, Currency>:
+    PostUserTransfer<BankId, AccountId, Currency>
+{
+    fn direct_transfer_to_org(
+        transfer_id: BankReservation,
+        dest_bank_id: BankId,
+        amt: Currency,
+    ) -> Result<Self::TransferId>;
+    fn direct_transfer_to_account(
+        transfer_id: BankReservation,
+        dest_acc: AccountId,
+        amt: Currency,
+    ) -> Result<()>;
+    fn transfer_reserved_spend_to_org(
+        reservation_id: BankReservation,
+        dest_bank_id: BankId,
+        amt: Currency,
+    ) -> Result<Self::TransferId>;
+    fn transfer_reserved_spend_to_account(
+        reservation_id: BankReservation,
+        dest_acc: AccountId,
+        amt: Currency,
+    ) -> Result<()>;
 }
-
-pub trait DepositSpendOps<Currency>: Sized {
-    // infallible
-    fn deposit_into_free(&self, amount: Currency) -> Self;
-    fn deposit_into_reserved(&self, amount: Currency) -> Self;
-    // fallible, not enough capital in relative account
-    fn spend_from_free(&self, amount: Currency) -> Option<Self>;
-    fn spend_from_reserved(&self, amount: Currency) -> Option<Self>;
+pub trait StopSpendsStartWithdrawals<BankTransfer> {
+    // this method changes the state of the transfer object such that spends and reservations are no longer allowed
+    // and withdrawals by members can commence (with limits based on ownership rights)
+    fn stop_spends_start_withdrawals(transfer_id: BankTransfer) -> Result<()>;
+}
+pub trait WithdrawFromOrg<BankTransfer, AccountId, Currency> {
+    fn claim_due_amount(
+        transfer_id: BankTransfer,
+        for_acc: AccountId,
+    ) -> Result<Currency>;
+}
+// for TransferInformation object
+pub trait SpendWithdrawOps<Currency>: Sized {
+    fn spend(&self, amt: Currency) -> Option<Self>;
+    fn withdraw(&self, amt: Currency) -> Option<Self>;
 }
 
 // ~~~~~~~~ Bounty Module ~~~~~~~~
 
-pub trait RegisterFoundation<OrgId, Currency, AccountId> {
-    type BankId;
-    // should still be some minimum enforced in bank
-    fn register_foundation_from_deposit(
-        from: AccountId,
-        for_org: OrgId,
-        amount: Currency,
-    ) -> Result<Self::BankId>;
-    fn register_foundation_from_existing_bank(
-        org: OrgId,
-        bank: Self::BankId,
-    ) -> DispatchResult;
-}
-
-pub trait CreateBounty<OrgId, Currency, AccountId, Hash, ReviewCommittee>:
-    RegisterFoundation<OrgId, Currency, AccountId>
+pub trait PostBounty<
+    AccountId,
+    OrgId,
+    BankTransfer,
+    Currency,
+    Hash,
+    ReviewCommittee,
+>
 {
     type BountyInfo;
     type BountyId;
-    // helper to screen, prepare and form bounty information object
-    fn screen_bounty_creation(
-        foundation: OrgId,
-        bank_account: Self::BankId,
+    fn post_bounty(
+        poster: AccountId,
+        on_behalf_of: Option<BankTransfer>,
         description: Hash,
-        amount_reserved_for_bounty: Currency, // collateral requirement
-        amount_claimed_available: Currency, /* claimed available amount, not necessarily liquid */
-        acceptance_committee: ReviewCommittee,
-        supervision_committee: Option<ReviewCommittee>,
-    ) -> Result<Self::BountyInfo>;
-    // call should be an authenticated member of the OrgId
-    // - requirement might be the inner shares of an organization for example
-    fn create_bounty(
-        foundation: OrgId, // registered OrgId
-        bank_account: Self::BankId,
-        description: Hash,
-        amount_reserved_for_bounty: Currency, // collateral requirement
-        amount_claimed_available: Currency, /* claimed available amount, not necessarily liquid */
+        amount_reserved_for_bounty: Currency,
         acceptance_committee: ReviewCommittee,
         supervision_committee: Option<ReviewCommittee>,
     ) -> Result<Self::BountyId>;
 }
 
-pub trait UseTermsOfAgreement<OrgId, TermsOfAgreement> {
+pub trait UseTermsOfAgreement<OrgId> {
     type VoteIdentifier;
-    type TeamIdentifier;
     fn request_consent_on_terms_of_agreement(
-        bounty_org: OrgId,
-        terms: TermsOfAgreement,
-    ) -> Result<(Self::TeamIdentifier, Self::VoteIdentifier)>;
+        team_org: OrgId,
+    ) -> Result<Self::VoteIdentifier>;
 }
 
 pub trait StartReview<VoteIdentifier>: Sized {
@@ -413,29 +420,22 @@ pub trait SpendApprovedGrant<Currency>: Sized {
 }
 
 pub trait SubmitGrantApplication<
-    OrgId,
-    Currency,
     AccountId,
+    OrgId,
+    BankId,
+    Currency,
     Hash,
     ReviewCommittee,
-    TermsOfAgreement,
 >:
-    CreateBounty<OrgId, Currency, AccountId, Hash, ReviewCommittee>
-    + UseTermsOfAgreement<OrgId, TermsOfAgreement>
+    PostBounty<AccountId, OrgId, BankId, Currency, Hash, ReviewCommittee>
+    + UseTermsOfAgreement<OrgId>
 {
     type GrantApp: StartReview<Self::VoteIdentifier>
         + StartTeamConsentPetition<Self::VoteIdentifier>
         + ApproveGrant;
-    fn form_grant_application(
-        caller: AccountId,
-        bounty_id: Self::BountyId,
-        description: Hash,
-        total_amount: Currency,
-        terms_of_agreement: TermsOfAgreement,
-    ) -> Result<Self::GrantApp>;
     fn submit_grant_application(
-        caller: AccountId,
-        team_org: OrgId,
+        submitter: AccountId,
+        bank: Option<BankId>,
         bounty_id: Self::BountyId,
         description: Hash,
         total_amount: Currency,
@@ -448,15 +448,11 @@ pub trait SuperviseGrantApplication<BountyId, AccountId> {
         bounty_id: BountyId,
         application_id: BountyId,
     ) -> Result<Self::AppState>;
-    // someone can try to call this and only the sudo can push things through at whim
-    // -> notably no sudo deny for demo functionality
     fn sudo_approve_application(
         sudo: AccountId,
         bounty_id: BountyId,
         application_id: BountyId,
     ) -> Result<Self::AppState>;
-    // this returns the AppState but also pushes it along if necessary
-    // - it should be called in on_finalize periodically
     fn poll_application(
         bounty_id: BountyId,
         application_id: BountyId,
@@ -464,7 +460,6 @@ pub trait SuperviseGrantApplication<BountyId, AccountId> {
 }
 
 pub trait SubmitMilestone<
-    OrgId,
     AccountId,
     BountyId,
     Hash,
@@ -479,7 +474,7 @@ pub trait SubmitMilestone<
         + SetMakeTransfer<BankId, TransferId>;
     type MilestoneState;
     fn submit_milestone(
-        caller: AccountId,
+        submitter: AccountId,
         bounty_id: BountyId,
         application_id: BountyId,
         submission_reference: Hash,
@@ -489,7 +484,6 @@ pub trait SubmitMilestone<
         bounty_id: BountyId,
         milestone_id: BountyId,
     ) -> Result<Self::MilestoneState>;
-    // someone can try to call this and only the sudo can push things through without triggering a review
     fn sudo_approves_milestone(
         caller: AccountId,
         bounty_id: BountyId,
@@ -505,7 +499,7 @@ pub trait SubmitMilestone<
 // in the associated state anyway so we might as well pass the caller into the methods that do this logic and
 // perform any context-based authentication there, but readability is more important at this point
 pub trait BountyPermissions<OrgId, TermsOfAgreement, AccountId, BountyId>:
-    UseTermsOfAgreement<OrgId, TermsOfAgreement>
+    UseTermsOfAgreement<OrgId>
 {
     fn can_create_bounty(who: &AccountId, hosting_org: OrgId) -> bool;
     fn can_submit_grant_app(who: &AccountId, terms: TermsOfAgreement) -> bool;

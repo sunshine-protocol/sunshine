@@ -47,7 +47,10 @@ use sp_std::{
     prelude::*,
 };
 use util::{
-    bank::OnChainTreasuryID,
+    bank::{
+        OnChainTreasuryID,
+        Sender,
+    },
     bounty::{
         ApplicationState,
         BountyInformation,
@@ -61,13 +64,12 @@ use util::{
         ApproveGrant,
         ApproveWithoutTransfer,
         BountyPermissions,
-        CreateBounty,
         GenerateUniqueID,
         GetVoteOutcome,
         GroupMembership,
         IDIsAvailable,
         OpenVote,
-        RegisterFoundation,
+        PostBounty,
         RegisterOrgAccount,
         RegisterOrganization,
         SeededGenerateUniqueID,
@@ -241,5 +243,65 @@ impl<T: Trait> GenerateUniqueID<T::BountyId> for Module<T> {
         }
         <BountyNonce<T>>::put(id_counter);
         id_counter
+    }
+}
+
+impl<T: Trait>
+    PostBounty<
+        T::AccountId,
+        T::OrgId,
+        BankTransfer<T::TransferId>,
+        BalanceOf<T>,
+        T::IpfsReference,
+        ResolutionMetadata<
+            T::OrgId,
+            ThresholdConfig<T::Signal>,
+            T::BlockNumber,
+        >,
+    > for Module<T>
+{
+    type BountyInfo = BountyInformation<
+        Sender<T::AccountId, OnChainTreasuryID>,
+        T::IpfsReference,
+        BalanceOf<T>,
+        ResolutionMetadata<
+            T::OrgId,
+            ThresholdConfig<T::Signal>,
+            T::BlockNumber,
+        >,
+    >;
+    type BountyId = T::BountyId;
+    fn post_bounty(
+        poster: AccountId,
+        on_behalf_of: Option<BankTransfer<T::TransferId>>,
+        description: Hash,
+        amount_reserved_for_bounty: Currency,
+        acceptance_committee: ReviewCommittee,
+        supervision_committee: Option<ReviewCommittee>,
+    ) -> Result<Self::BountyId> {
+        let new_poster = if let Some(bank_id) = on_behalf_of {
+            // account is posting on behalf of bank so check org membership || org supervisor
+            let bank = <bank::Module<T>>::bank_stores(bank_id)
+                .ok_or(Error::<T>::CannotPostBountyOnBehalfOfBankThatDNE)?;
+            let authentication =
+                <org::Module<T>>::is_member_of_group(bank.org(), &poster)
+                    || <org::Module<T>>::is_organization_supervisor(
+                        bank.org(),
+                        &poster,
+                    );
+            ensure!(authentication, Error::<T>::CannotPostBountiesOnBehalfOfOrgBasedOnAuthRequirements);
+
+        // check that there is enough unclaimed from the transfer in question to reserve the funds from it by increasing the bank's reserves and increasing the amount claimed in the transfer state
+
+        // reserve the amount officially
+        } else {
+            // TODO: use bank Currency and
+            <T as court::Trait>::Currency::reserve(
+                &poster,
+                amount_reserved_for_bounty,
+            )?;
+            // the poster is posting as an individual
+            Sender::Account(poster.clone())
+        };
     }
 }

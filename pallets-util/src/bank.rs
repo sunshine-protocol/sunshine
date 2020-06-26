@@ -1,8 +1,6 @@
 use crate::traits::{
-    DepositSpendOps,
-    FreeToReserved,
-    GetBalance,
     Increment,
+    SpendWithdrawOps,
 };
 use codec::{
     Codec,
@@ -42,15 +40,41 @@ impl TypeId for OnChainTreasuryID {
 }
 
 #[derive(
+    new, Clone, Copy, Eq, PartialEq, Encode, Decode, sp_runtime::RuntimeDebug,
+)]
+pub struct FullBankId<T> {
+    pub id: OnChainTreasuryID,
+    pub sub_id: T,
+}
+
+#[derive(
+    Clone, Copy, Eq, PartialEq, Encode, Decode, sp_runtime::RuntimeDebug,
+)]
+/// The identifier for the submaps in this module
+pub enum BankMapId {
+    Transfer,
+    ReserveSpend,
+}
+
+#[derive(
     Clone, Copy, Eq, PartialEq, Encode, Decode, sp_runtime::RuntimeDebug,
 )]
 pub enum Sender<AccountId, OrgId> {
     Account(AccountId),
     Org(OrgId),
 }
-// Recipient { OrgId }; //could augment this struct with group governance rules but not immediately
+#[derive(
+    Clone, Copy, Eq, PartialEq, Encode, Decode, sp_runtime::RuntimeDebug,
+)]
+// same object as `Sender`, yes, but not if we need to start adding trait bounds or something and it's just easier to read with different names
+pub enum Recipient<AccountId, BankId> {
+    Account(AccountId),
+    Bank(BankId),
+}
 
-#[derive(PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
+#[derive(
+    new, PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug,
+)]
 /// This is the state for an OnChainBankId, associated with each bank registered in the runtime
 pub struct BankState<
     AccountId,
@@ -59,9 +83,8 @@ pub struct BankState<
 > {
     // Registered organization identifier
     org: OrgId,
-    // Free capital, available for spends
-    free: Currency,
-    // Set aside for future spends, already allocated but can only be _liquidated_ after free == 0?
+    // Sum of all reserved spending that has not been executed
+    // -> free = T::Currency::total_balance(&Self::account_id(bank_id)) - reserved
     reserved: Currency,
     // Sudo, if not set, defaults to Org's sudo and if that's not set, just false
     controller: Option<AccountId>,
@@ -70,26 +93,14 @@ pub struct BankState<
 impl<
         AccountId: Clone + PartialEq,
         OrgId: Codec + PartialEq + Zero + From<u32> + Copy,
-        Currency: Zero + AtLeast32Bit + Clone,
+        Currency: Clone
+            + PartialOrd
+            + sp_std::ops::Sub<Output = Currency>
+            + sp_std::ops::Add<Output = Currency>,
     > BankState<AccountId, OrgId, Currency>
 {
-    pub fn new_from_deposit(
-        org: OrgId,
-        amount: Currency,
-        controller: Option<AccountId>,
-    ) -> Self {
-        BankState {
-            org,
-            free: amount,
-            reserved: Currency::zero(),
-            controller,
-        }
-    }
     pub fn org(&self) -> OrgId {
         self.org
-    }
-    pub fn free(&self) -> Currency {
-        self.free.clone()
     }
     pub fn reserved(&self) -> Currency {
         self.reserved.clone()
@@ -107,101 +118,128 @@ impl<
             false
         }
     }
-}
-
-impl<
-        AccountId: Clone + PartialEq,
-        OrgId: Codec + PartialEq + Zero + From<u32> + Copy,
-        Currency: Zero + AtLeast32Bit + Clone + sp_std::ops::Add + sp_std::ops::Sub,
-    > FreeToReserved<Currency> for BankState<AccountId, OrgId, Currency>
-{
-    fn move_from_free_to_reserved(&self, amount: Currency) -> Option<Self> {
-        if self.free() >= amount {
-            // safe because of above conditional
-            let new_free = self.free() - amount.clone();
-            let new_reserved = self.reserved() + amount;
-            Some(BankState {
-                org: self.org(),
-                free: new_free,
-                reserved: new_reserved,
-                controller: self.controller(),
-            })
-        } else {
-            // failed, not enough in free to make reservation of amount
-            None
-        }
-    }
-}
-
-impl<
-        AccountId: Clone + PartialEq,
-        OrgId: Codec + PartialEq + Zero + From<u32> + Copy,
-        Currency: Zero + AtLeast32Bit + Clone + sp_std::ops::Add,
-    > GetBalance<Currency> for BankState<AccountId, OrgId, Currency>
-{
-    fn total_free_funds(&self) -> Currency {
-        self.free()
-    }
-    fn total_reserved_funds(&self) -> Currency {
-        self.reserved()
-    }
-    fn total_funds(&self) -> Currency {
-        self.free() + self.reserved()
-    }
-}
-
-impl<
-        AccountId: Clone + PartialEq,
-        OrgId: Codec + PartialEq + Zero + From<u32> + Copy,
-        Currency: Zero + AtLeast32Bit + Clone,
-    > DepositSpendOps<Currency> for BankState<AccountId, OrgId, Currency>
-{
-    // infallible
-    fn deposit_into_free(&self, amount: Currency) -> Self {
-        let new_free = self.free() + amount;
+    pub fn add_reserved(&self, amt: Currency) -> Self {
+        let new_amt = self.reserved() + amt;
         BankState {
-            org: self.org(),
-            free: new_free,
-            reserved: self.reserved(),
-            controller: self.controller(),
+            reserved: new_amt,
+            ..self.clone()
         }
     }
-    fn deposit_into_reserved(&self, amount: Currency) -> Self {
-        let new_reserved = self.reserved() + amount;
-        BankState {
-            org: self.org(),
-            free: self.free(),
-            reserved: new_reserved,
-            controller: self.controller(),
-        }
-    }
-    // fallible, not enough capital in relative account
-    fn spend_from_free(&self, amount: Currency) -> Option<Self> {
-        if self.free() >= amount {
-            let new_free = self.free() - amount;
+    pub fn subtract_reserved(&self, amt: Currency) -> Option<Self> {
+        if self.reserved() >= amt {
+            let new_amt = self.reserved() - amt;
             Some(BankState {
-                org: self.org(),
-                free: new_free,
-                reserved: self.reserved(),
-                controller: self.controller(),
+                reserved: new_amt,
+                ..self.clone()
             })
         } else {
-            // not enough capital in account, spend failed
             None
         }
     }
-    fn spend_from_reserved(&self, amount: Currency) -> Option<Self> {
-        if self.reserved() >= amount {
-            let new_reserved = self.reserved() - amount;
-            Some(BankState {
-                org: self.org(),
-                free: self.free(),
-                reserved: new_reserved,
-                controller: self.controller(),
-            })
-        } else {
-            // not enough capital in account, spend failed
-            None
+}
+
+#[derive(
+    Clone, Copy, Eq, PartialEq, Encode, Decode, sp_runtime::RuntimeDebug,
+)]
+pub enum TransferState {
+    /// Locked transfers s.t. payment can be revoked by the sender
+    Locked,
+    /// Free for org related spending or reserving future spends
+    FreeForSpending,
+    /// Remaining funds may be withdrawn by members in proportion to ownership
+    WithdrawableByMembers,
+}
+
+#[derive(
+    Clone, Copy, Eq, PartialEq, Encode, Decode, sp_runtime::RuntimeDebug,
+)]
+pub struct TransferInformation<Sender, Currency, State> {
+    // the sender
+    sender: Sender,
+    // the amount received by the recipient initially
+    initial_amount: Currency,
+    // spent or reserved
+    amount_spent: Currency,
+    // amount withdrawn by members
+    amount_claimed: Currency,
+    // the state which determines what interactions are permitted
+    state: State,
+}
+
+impl<Sender: Clone + PartialEq, Currency: Zero + AtLeast32Bit + Clone>
+    TransferInformation<Sender, Currency, TransferState>
+{
+    pub fn new(sender: Sender, amt: Currency) -> Self {
+        TransferInformation {
+            sender,
+            initial_amount: amt,
+            amount_spent: Currency::zero(),
+            amount_claimed: Currency::zero(),
+            state: TransferState::FreeForSpending,
+        }
+    }
+    pub fn sender(&self) -> Sender {
+        self.sender.clone()
+    }
+    pub fn initial_amount(&self) -> Currency {
+        self.initial_amount.clone()
+    }
+    pub fn amount_spent(&self) -> Currency {
+        self.amount_spent.clone()
+    }
+    pub fn amount_claimed(&self) -> Currency {
+        self.amount_claimed.clone()
+    }
+    // NEVER underflows by construction
+    // (invariant enforced in object interaction; see trait impls further below)
+    pub fn amount_left(&self) -> Currency {
+        self.initial_amount() - self.amount_spent() - self.amount_claimed()
+    }
+    pub fn state(&self) -> TransferState {
+        self.state
+    }
+}
+
+impl<Sender: Clone + PartialEq, Currency: Zero + AtLeast32Bit + Clone>
+    SpendWithdrawOps<Currency>
+    for TransferInformation<Sender, Currency, TransferState>
+{
+    fn spend(
+        &self,
+        amt: Currency,
+    ) -> Option<TransferInformation<Sender, Currency, TransferState>> {
+        match self.state() {
+            TransferState::FreeForSpending => {
+                if self.amount_left() <= amt {
+                    let new_spent_amt = self.amount_spent() + amt;
+                    Some(TransferInformation {
+                        amount_spent: new_spent_amt,
+                        ..self.clone()
+                    })
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
+    }
+    fn withdraw(
+        &self,
+        amt: Currency,
+    ) -> Option<TransferInformation<Sender, Currency, TransferState>> {
+        match self.state() {
+            TransferState::WithdrawableByMembers => {
+                if self.amount_left() <= amt {
+                    let new_claimed_amt = self.amount_claimed() + amt;
+                    Some(TransferInformation {
+                        amount_claimed: new_claimed_amt,
+                        ..self.clone()
+                    })
+                } else {
+                    None
+                }
+            }
+            _ => None,
         }
     }
 }
@@ -209,35 +247,43 @@ impl<
 #[derive(
     new, Clone, Copy, Eq, PartialEq, Encode, Decode, sp_runtime::RuntimeDebug,
 )]
-pub struct TransferInformation<AccountId, OrgId, Currency> {
-    sender: Sender<AccountId, OrgId>,
-    amount_transferred: Currency,
-    // amt that references this transfer for withdrawal
-    amount_claimed: Currency,
+pub struct SpendReservation<Recipient, Currency> {
+    // the intended recipient for this spend reservation
+    recipient: Recipient,
+    // the amount received by the recipient initially
+    amount: Currency,
+    // spent
+    amount_spent: Currency,
 }
 
 impl<
-        AccountId: Clone + PartialEq,
-        OrgId: Codec + PartialEq + Zero + From<u32> + Copy,
-        Currency: Zero + AtLeast32Bit + Clone,
-    > TransferInformation<AccountId, OrgId, Currency>
+        Recipient: Clone + PartialEq,
+        Currency: Clone
+            + PartialOrd
+            + sp_std::ops::Sub<Output = Currency>
+            + sp_std::ops::Add<Output = Currency>,
+    > SpendReservation<Recipient, Currency>
 {
-    pub fn sender(&self) -> Sender<AccountId, OrgId> {
-        self.sender.clone()
+    pub fn recipient(&self) -> Recipient {
+        self.recipient.clone()
     }
-    pub fn amount_transferred(&self) -> Currency {
-        self.amount_transferred.clone()
+    pub fn initial_amount(&self) -> Currency {
+        self.amount.clone()
     }
-    pub fn amount_claimed(&self) -> Currency {
-        self.amount_claimed.clone()
+    pub fn amount_spent(&self) -> Currency {
+        self.amount_spent.clone()
     }
-    pub fn claim_amount(&self, amount: Currency) -> Option<Self> {
-        let condition: bool =
-            (self.amount_transferred() - self.amount_claimed()) >= amount;
-        if condition {
-            let new_amount_claimed = self.amount_claimed() + amount;
-            Some(TransferInformation {
-                amount_claimed: new_amount_claimed,
+    pub fn amount_left(&self) -> Currency {
+        self.initial_amount() - self.amount_spent()
+    }
+    pub fn is_recipient(&self, who: &Recipient) -> bool {
+        &self.recipient == who
+    }
+    pub fn spend(&self, amt: Currency) -> Option<Self> {
+        if self.amount_left() >= amt {
+            let new_amt_spent = self.amount_spent() + amt;
+            Some(SpendReservation {
+                amount_spent: new_amt_spent,
                 ..self.clone()
             })
         } else {

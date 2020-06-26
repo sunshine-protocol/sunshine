@@ -33,35 +33,30 @@ impl Default for BountyMapID {
 }
 
 #[derive(new, PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-pub struct BountyInformation<Hash, BankId, Currency, ReviewBoard> {
+pub struct BountyInformation<Poster, Hash, Currency, ReviewBoard> {
+    // Whoever posts the bounty, must be Into<AccountId> \forall variants of enum
+    poster: Poster,
     // Storage cid
     topic: Hash,
-    // Bank account associated with this bounty
-    bank_account: BankId,
     // Funding reserved for this bounty
     funding_reserved: Currency,
-    // Total funding available (Cap)
-    total_funding_available: Currency,
     // Vote metadata for application approval
     acceptance_committee: ReviewBoard,
     // Vote metadata for milestone approval
     default_supervision_committee: Option<ReviewBoard>,
 }
 
-impl<Hash: Clone, BankId: Copy, Currency: Copy, ReviewBoard: Clone>
-    BountyInformation<Hash, BankId, Currency, ReviewBoard>
+impl<Poster: Clone, Hash: Clone, Currency: Copy, ReviewBoard: Clone>
+    BountyInformation<Poster, Hash, Currency, ReviewBoard>
 {
+    pub fn poster(&self) -> Poster {
+        self.poster.clone()
+    }
     pub fn topic(&self) -> Hash {
         self.topic.clone()
     }
-    pub fn bank_account(&self) -> BankId {
-        self.bank_account
-    }
     pub fn funding_reserved(&self) -> Currency {
         self.funding_reserved
-    }
-    pub fn total_funding_available(&self) -> Currency {
-        self.total_funding_available
     }
     pub fn acceptance_committee(&self) -> ReviewBoard {
         self.acceptance_committee.clone()
@@ -121,15 +116,14 @@ impl<VoteId: Codec + PartialEq + Zero + From<u32> + Copy>
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-pub struct GrantApplication<AccountId, OrgId, Currency, Hash, State> {
+pub struct GrantApplication<AccountId, BankId, Currency, Hash, State> {
     /// The submitter is logged with submission
     submitter: AccountId,
-    /// The org identifier for the team (TermsOfAgreement is deprecated)
-    /// -> this increases priority for cleaning up stale org state in org TODO
-    org: OrgId,
+    /// The bank identifier for this team to receive funds that enforce an ownership structure based on share distribution
+    bank: Option<BankId>,
     /// The IPFS reference to the application information
     description: Hash,
-    /// total amount
+    /// Total amount
     total_amount: Currency,
     /// State of the application
     state: State,
@@ -137,35 +131,41 @@ pub struct GrantApplication<AccountId, OrgId, Currency, Hash, State> {
 
 impl<
         AccountId: Clone,
-        OrgId: Copy,
+        BankId: Copy,
         Currency: Clone,
         Hash: Clone,
         VoteId: Codec + PartialEq + Zero + From<u32> + Copy,
     >
-    GrantApplication<AccountId, OrgId, Currency, Hash, ApplicationState<VoteId>>
+    GrantApplication<
+        AccountId,
+        BankId,
+        Currency,
+        Hash,
+        ApplicationState<VoteId>,
+    >
 {
     pub fn new(
         submitter: AccountId,
-        org: OrgId,
+        bank: Option<BankId>,
         description: Hash,
         total_amount: Currency,
     ) -> GrantApplication<
         AccountId,
-        OrgId,
+        BankId,
         Currency,
         Hash,
         ApplicationState<VoteId>,
     > {
         GrantApplication {
             submitter,
-            org,
+            bank,
             description,
             total_amount,
             state: ApplicationState::SubmittedAwaitingResponse,
         }
     }
-    pub fn org(&self) -> OrgId {
-        self.org
+    pub fn bank(&self) -> Option<BankId> {
+        self.bank
     }
     pub fn state(&self) -> ApplicationState<VoteId> {
         self.state
@@ -177,14 +177,14 @@ impl<
 
 impl<
         AccountId: Clone,
-        OrgId: Copy,
+        BankId: Copy,
         Currency: Clone,
         Hash: Clone,
         VoteId: Codec + PartialEq + Zero + From<u32> + Copy,
     > StartReview<VoteId>
     for GrantApplication<
         AccountId,
-        OrgId,
+        BankId,
         Currency,
         Hash,
         ApplicationState<VoteId>,
@@ -195,7 +195,7 @@ impl<
             ApplicationState::SubmittedAwaitingResponse => {
                 Some(GrantApplication {
                     submitter: self.submitter.clone(),
-                    org: self.org,
+                    bank: self.bank,
                     description: self.description.clone(),
                     total_amount: self.total_amount.clone(),
                     state: ApplicationState::UnderReviewByAcceptanceCommittee(
@@ -218,14 +218,14 @@ impl<
 
 impl<
         AccountId: Clone,
-        OrgId: Copy,
+        BankId: Copy,
         Currency: Clone,
         Hash: Clone,
         VoteId: Codec + PartialEq + Zero + From<u32> + Copy,
     > StartTeamConsentPetition<VoteId>
     for GrantApplication<
         AccountId,
-        OrgId,
+        BankId,
         Currency,
         Hash,
         ApplicationState<VoteId>,
@@ -235,7 +235,7 @@ impl<
         match self.state {
             ApplicationState::UnderReviewByAcceptanceCommittee(_) => Some(GrantApplication {
                 submitter: self.submitter.clone(),
-                org: self.org,
+                bank: self.bank,
                 description: self.description.clone(),
                 total_amount: self.total_amount.clone(),
                 state: ApplicationState::ApprovedByFoundationAwaitingTeamConsent(vote_id),
@@ -255,14 +255,14 @@ impl<
 
 impl<
         AccountId: Clone,
-        OrgId: Copy,
+        BankId: Copy,
         Currency: Clone,
         Hash: Clone,
         VoteId: Codec + PartialEq + Zero + From<u32> + Copy,
     > ApproveGrant
     for GrantApplication<
         AccountId,
-        OrgId,
+        BankId,
         Currency,
         Hash,
         ApplicationState<VoteId>,
@@ -271,7 +271,7 @@ impl<
     fn approve_grant(&self) -> Self {
         GrantApplication {
             submitter: self.submitter.clone(),
-            org: self.org,
+            bank: self.bank,
             description: self.description.clone(),
             total_amount: self.total_amount.clone(),
             state: ApplicationState::ApprovedAndLive,
@@ -287,14 +287,14 @@ impl<
 
 impl<
         AccountId: Clone,
-        OrgId: Copy,
+        BankId: Copy,
         Currency: Copy + sp_std::ops::Sub<Currency, Output = Currency> + PartialOrd,
         Hash: Clone,
         VoteId: Codec + PartialEq + Zero + From<u32> + Copy,
     > SpendApprovedGrant<Currency>
     for GrantApplication<
         AccountId,
-        OrgId,
+        BankId,
         Currency,
         Hash,
         ApplicationState<VoteId>,
@@ -309,7 +309,7 @@ impl<
                     let new_amount = self.total_amount - amount;
                     Some(GrantApplication {
                         submitter: self.submitter.clone(),
-                        org: self.org,
+                        bank: self.bank,
                         description: self.description.clone(),
                         total_amount: new_amount,
                         state: self.state.clone(),

@@ -44,21 +44,29 @@ use sp_std::{
 };
 use util::{
     bank::{
+        BankMapId,
         BankState,
+        FullBankId,
         OnChainTreasuryID,
         Sender,
+        SpendReservation,
         TransferInformation,
+        TransferState,
     },
     traits::{
         CalculateOwnership,
-        DepositSpendOps,
         GenerateUniqueID,
         GroupMembership,
         IDIsAvailable,
         Increment,
-        PostTransfer,
+        PostOrgTransfer,
+        PostUserTransfer,
         RegisterOrgAccount,
+        ReserveOrgSpend,
         SeededGenerateUniqueID,
+        SpendWithdrawOps,
+        StopSpendsStartWithdrawals,
+        WithdrawFromOrg,
     },
 };
 
@@ -71,8 +79,8 @@ pub trait Trait: frame_system::Trait + org::Trait {
     /// The overarching event types
     type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 
-    /// The identifier for transfers, used to limit withdrawals by individual AccountIds from OrgIds by ownership
-    type TransferId: Parameter
+    /// The identifier for transfers and reserves associated with a bank account
+    type AssociatedId: Parameter
         + Member
         + AtLeast32Bit
         + Codec
@@ -99,14 +107,14 @@ decl_event!(
     where
         <T as frame_system::Trait>::AccountId,
         <T as org::Trait>::OrgId,
-        <T as Trait>::TransferId,
+        <T as Trait>::AssociatedId,
         Balance = BalanceOf<T>,
     {
-        AccountOpensOrgBankAccount(AccountId, OnChainTreasuryID, TransferId, Balance, OrgId, Option<AccountId>),
-        AccountToOrgTransfer(TransferId, AccountId, OnChainTreasuryID, Balance),
-        OrgToOrgTransfer(TransferId, AccountId, OnChainTreasuryID, OnChainTreasuryID, Balance),
+        AccountOpensOrgBankAccount(AccountId, OnChainTreasuryID, AssociatedId, Balance, OrgId, Option<AccountId>),
+        AccountToOrgTransfer(AssociatedId, AccountId, OnChainTreasuryID, Balance),
+        OrgToOrgTransfer(AssociatedId, AccountId, OnChainTreasuryID, OnChainTreasuryID, Balance),
         // balance is amount withdrawn
-        WithdrawalFromOrgToAccount(AccountId, OnChainTreasuryID, TransferId, Balance),
+        WithdrawalFromOrgToAccount(AccountId, OnChainTreasuryID, AssociatedId, Balance),
     }
 );
 
@@ -123,6 +131,12 @@ decl_error! {
         RequestExceedsAmountThatCanBeWithdrawnForAccountFromOrg,
         WithdrawalRequestExceedsUnClaimedTransferAmount,
         WithdrawalRequestExceedsFreeOrgBankFunds,
+        CannotReserveOrgSpendIfBankStoreDNE,
+        CannotReserveOrgSpendIfTransferDNE,
+        ReserveOrgSpendExceedsFreeTransferCapital,
+        CannotUnreserveSpendReservationThatDNE,
+        CannotUnreserveSpendReservationIfBankStoreDNE,
+        CannotUnreserveSpendReservationIfBankReservedIsLessThanAmtToUnreserve,
     }
 }
 
@@ -132,14 +146,15 @@ decl_storage! {
         BankIDNonce get(fn bank_id_nonce): OnChainTreasuryID;
 
         /// Counter for transfers to the OnChainTreasuryID
-        TransferNonceMap get(fn transfer_nonce_map): map
-            hasher(blake2_128_concat) OnChainTreasuryID => T::TransferId;
+        AssociatedNonceMap get(fn transfer_nonce_map): double_map
+            hasher(blake2_128_concat) OnChainTreasuryID,
+            hasher(blake2_128_concat) BankMapId => T::AssociatedId;
 
         /// Transfer info, must be referenced for every withdrawal from Org for AccountId
         pub TransferInfo get(fn transfer_info): double_map
             hasher(blake2_128_concat) OnChainTreasuryID,
-            hasher(blake2_128_concat) T::TransferId =>
-            Option<TransferInformation<T::AccountId, T::OrgId, BalanceOf<T>>>;
+            hasher(blake2_128_concat) T::AssociatedId =>
+            Option<TransferInformation<Sender<T::AccountId, T::OrgId>, BalanceOf<T>, TransferState>>;
 
         /// The store for organizational bank accounts
         /// -> keyset acts as canonical set for unique `OnChainTreasuryID`s
@@ -147,10 +162,16 @@ decl_storage! {
             hasher(blake2_128_concat) OnChainTreasuryID =>
             Option<BankState<T::AccountId, T::OrgId, BalanceOf<T>>>;
 
+        /// Bank spend reservations
+        pub SpendReservations get(fn spend_reservations): double_map
+            hasher(blake2_128_concat) OnChainTreasuryID,
+            hasher(blake2_128_concat) T::AssociatedId =>
+            Option<SpendReservation<T::AccountId, BalanceOf<T>>>;
+
         /// Initialized upon first withdrawal request s.t. value contains
         /// amount remaining, if any
         pub Withdrawals get(fn withdrawals): double_map
-            hasher(blake2_128_concat) (OnChainTreasuryID, T::TransferId),
+            hasher(blake2_128_concat) (OnChainTreasuryID, T::AssociatedId),
             hasher(blake2_128_concat) T::AccountId => Option<BalanceOf<T>>;
     }
 }
@@ -170,11 +191,11 @@ decl_module! {
             // register new bank account for org
             let new_treasury_id = Self::generate_unique_id();
             // make transfer from seeder to the new bank account
-            let new_transfer_id = Self::post_transfer(opener.clone(), None, new_treasury_id, deposit_amount)?;
+            let new_transfer_id = Self::post_user_transfer(opener.clone(), new_treasury_id, deposit_amount)?;
             // infallible registration because treasury id was just generated and is unique, qed
             Self::register_org_account(new_treasury_id, org, deposit_amount, controller.clone());
             // event emission
-            Self::deposit_event(RawEvent::AccountOpensOrgBankAccount(opener, new_treasury_id, new_transfer_id, deposit_amount, org, controller));
+            Self::deposit_event(RawEvent::AccountOpensOrgBankAccount(opener, new_treasury_id, new_transfer_id.sub_id, deposit_amount, org, controller));
             Ok(())
         }
         // account to existing org transfer
@@ -182,55 +203,47 @@ decl_module! {
         fn account_to_org_transfer(origin, bank_id: OnChainTreasuryID, transfer_amount: BalanceOf<T>) -> DispatchResult {
             let sender = ensure_signed(origin)?;
             // execute transfer and return new transfer identifier
-            let new_transfer_id = Self::post_transfer(sender.clone(), None, bank_id, transfer_amount)?;
+            let new_transfer_id = Self::post_user_transfer(sender.clone(), bank_id, transfer_amount)?;
             // event emission
-            Self::deposit_event(RawEvent::AccountToOrgTransfer(new_transfer_id, sender, bank_id, transfer_amount));
-            Ok(())
-        }
-        // org to org transfer
-        #[weight = 0]
-        fn org_to_org_transfer(origin, sender_bank_id: OnChainTreasuryID, recipient_bank_id: OnChainTreasuryID, transfer_amount: BalanceOf<T>) -> DispatchResult {
-            let sender = ensure_signed(origin)?;
-            // execute transfer and return new transfer identifier
-            let new_transfer_id = Self::post_transfer(sender.clone(), Some(sender_bank_id), recipient_bank_id, transfer_amount)?;
-            // event emission
-            Self::deposit_event(RawEvent::OrgToOrgTransfer(new_transfer_id, sender, sender_bank_id, recipient_bank_id, transfer_amount));
+            Self::deposit_event(RawEvent::AccountToOrgTransfer(new_transfer_id.sub_id, sender, bank_id, transfer_amount));
             Ok(())
         }
         // withdrawal by account id from org
-        #[weight = 0]
-        fn withdraw_from_org_to_account(origin, bank_id: OnChainTreasuryID, transfer_id: T::TransferId, amount_requested: Option<BalanceOf<T>>) -> DispatchResult {
-            let withdrawer = ensure_signed(origin)?;
-            let bank_account = <BankStores<T>>::get(bank_id).ok_or(Error::<T>::WithdrawalFromOrgToAccountRequiresExistingOrgBankAccount)?;
-            let transfer_info = <TransferInfo<T>>::get(bank_id, transfer_id).ok_or(Error::<T>::WithdrawalFromOrgToAccountRequiresValidTransferReference)?;
-            // check if the account has withdrawn from this path before and, if so, how much is left
-            let amount_left_for_account_to_withdraw = if let Some(left_amt) = <Withdrawals<T>>::get((bank_id, transfer_id), &withdrawer) {
-                // => this call has been made before, here is the amount unclaimed but due
-                left_amt
-            } else {
-                Self::calculate_proportional_amount_for_account(transfer_info.amount_transferred(), withdrawer.clone(), bank_account.org())?
-            };
-            // amount to claim
-            let (amount_to_claim, amount_left_after_withdrawal)  = if let Some(requested_amt) = amount_requested {
-                ensure!(requested_amt >= amount_left_for_account_to_withdraw, Error::<T>::RequestExceedsAmountThatCanBeWithdrawnForAccountFromOrg);
-                let amount_left_after_withdrawal = requested_amt - amount_left_for_account_to_withdraw;
-                (requested_amt, amount_left_after_withdrawal)
-            } else {
-                (amount_left_for_account_to_withdraw, BalanceOf::<T>::zero())
-            };
-            // change transfer_info to claim
-            let new_transfer_info = transfer_info.claim_amount(amount_to_claim).ok_or(Error::<T>::WithdrawalRequestExceedsUnClaimedTransferAmount)?;
-            // change bank to spend from free
-            let new_bank = bank_account.spend_from_free(amount_to_claim).ok_or(Error::<T>::WithdrawalRequestExceedsFreeOrgBankFunds)?;
-            // make the transfer
-            T::Currency::transfer(&withdrawer, &Self::account_id(bank_id), amount_to_claim, ExistenceRequirement::KeepAlive)?;
-            // insert updated state
-            <BankStores<T>>::insert(bank_id, new_bank);
-            <TransferInfo<T>>::insert(bank_id, transfer_id, new_transfer_info);
-            <Withdrawals<T>>::insert((bank_id, transfer_id), withdrawer.clone(), amount_left_after_withdrawal);
-            Self::deposit_event(RawEvent::WithdrawalFromOrgToAccount(withdrawer, bank_id, transfer_id, amount_to_claim));
-            Ok(())
-        }
+        // #[weight = 0]
+        // fn withdraw_from_org_to_account(origin, bank_id: OnChainTreasuryID, transfer_id: T::AssociatedId, amount_requested: Option<BalanceOf<T>>) -> DispatchResult {
+        //     let withdrawer = ensure_signed(origin)?;
+        //     let bank_account = <BankStores<T>>::get(bank_id).ok_or(Error::<T>::WithdrawalFromOrgToAccountRequiresExistingOrgBankAccount)?;
+        //     let transfer_info = <TransferInfo<T>>::get(bank_id, transfer_id).ok_or(Error::<T>::WithdrawalFromOrgToAccountRequiresValidTransferReference)?;
+        //     // check if the account has withdrawn from this path before and, if so, how much is left
+        //     let amount_left_for_account_to_withdraw = if let Some(left_amt) = <Withdrawals<T>>::get((bank_id, transfer_id), &withdrawer) {
+        //         // => this call has been made before, here is the amount unclaimed but
+        //         // this value should be updated using the same method in the other branch...
+        //         left_amt
+        //     } else {
+        //         // should be done with the amount_left but should be done as a check
+        //         Self::calculate_proportional_amount_for_account(transfer_info.amount_transferred(), withdrawer.clone(), bank_account.org())?
+        //     };
+        //     // amount to claim
+        //     let (amount_to_claim, amount_left_after_withdrawal)  = if let Some(requested_amt) = amount_requested {
+        //         ensure!(requested_amt >= amount_left_for_account_to_withdraw, Error::<T>::RequestExceedsAmountThatCanBeWithdrawnForAccountFromOrg);
+        //         let amount_left_after_withdrawal = requested_amt - amount_left_for_account_to_withdraw;
+        //         (requested_amt, amount_left_after_withdrawal)
+        //     } else {
+        //         (amount_left_for_account_to_withdraw, BalanceOf::<T>::zero())
+        //     };
+        //     // change transfer_info to claim
+        //     let new_transfer_info = transfer_info.claim_amount(amount_to_claim).ok_or(Error::<T>::WithdrawalRequestExceedsUnClaimedTransferAmount)?;
+        //     // change bank to spend from free
+        //     let new_bank = bank_account.spend_from_free(amount_to_claim).ok_or(Error::<T>::WithdrawalRequestExceedsFreeOrgBankFunds)?;
+        //     // make the transfer
+        //     T::Currency::transfer(&withdrawer, &Self::account_id(bank_id), amount_to_claim, ExistenceRequirement::KeepAlive)?;
+        //     // insert updated state
+        //     <BankStores<T>>::insert(bank_id, new_bank);
+        //     <TransferInfo<T>>::insert(bank_id, transfer_id, new_transfer_info);
+        //     <Withdrawals<T>>::insert((bank_id, transfer_id), withdrawer.clone(), amount_left_after_withdrawal);
+        //     Self::deposit_event(RawEvent::WithdrawalFromOrgToAccount(withdrawer, bank_id, transfer_id, amount_to_claim));
+        //     Ok(())
+        // }
     }
 }
 
@@ -257,8 +270,10 @@ impl<T: Trait> IDIsAvailable<OnChainTreasuryID> for Module<T> {
     }
 }
 
-impl<T: Trait> IDIsAvailable<(OnChainTreasuryID, T::TransferId)> for Module<T> {
-    fn id_is_available(id: (OnChainTreasuryID, T::TransferId)) -> bool {
+impl<T: Trait> IDIsAvailable<(OnChainTreasuryID, T::AssociatedId)>
+    for Module<T>
+{
+    fn id_is_available(id: (OnChainTreasuryID, T::AssociatedId)) -> bool {
         <TransferInfo<T>>::get(id.0, id.1).is_none()
     }
 }
@@ -274,16 +289,20 @@ impl<T: Trait> GenerateUniqueID<OnChainTreasuryID> for Module<T> {
     }
 }
 
-impl<T: Trait> SeededGenerateUniqueID<T::TransferId, OnChainTreasuryID>
+impl<T: Trait>
+    SeededGenerateUniqueID<T::AssociatedId, (OnChainTreasuryID, BankMapId)>
     for Module<T>
 {
-    fn seeded_generate_unique_id(seed: OnChainTreasuryID) -> T::TransferId {
-        let mut transfer_nonce = <TransferNonceMap<T>>::get(seed) + 1u32.into();
-        while !Self::id_is_available((seed, transfer_nonce)) {
-            transfer_nonce = transfer_nonce + 1u32.into();
+    fn seeded_generate_unique_id(
+        seed: (OnChainTreasuryID, BankMapId),
+    ) -> T::AssociatedId {
+        let mut id_nonce =
+            <AssociatedNonceMap<T>>::get(seed.0, seed.1) + 1u32.into();
+        while !Self::id_is_available((seed.0, id_nonce)) {
+            id_nonce = id_nonce + 1u32.into();
         }
-        <TransferNonceMap<T>>::insert(seed, transfer_nonce);
-        transfer_nonce
+        <AssociatedNonceMap<T>>::insert(seed.0, seed.1, id_nonce);
+        id_nonce
     }
 }
 
@@ -299,66 +318,167 @@ impl<T: Trait> RegisterOrgAccount<T::OrgId, T::AccountId, BalanceOf<T>>
         controller: Option<T::AccountId>,
     ) {
         // create new bank object
-        let new_bank =
-            BankState::new_from_deposit(org, deposit_amount, controller);
+        let new_bank = BankState::new(org, deposit_amount, controller);
         // insert new bank object
         <BankStores<T>>::insert(bank_id, new_bank);
     }
 }
 
-impl<T: Trait> PostTransfer<OnChainTreasuryID, T::AccountId, BalanceOf<T>>
+impl<T: Trait> PostUserTransfer<OnChainTreasuryID, T::AccountId, BalanceOf<T>>
     for Module<T>
 {
-    type TransferId = T::TransferId;
-    // recipient bank_id MUST be valid or funds will be lost
-    fn post_transfer(
+    type TransferId = FullBankId<T::AssociatedId>;
+    // account to org transfer structure
+    fn post_user_transfer(
         sender: T::AccountId,
-        on_behalf_of: Option<OnChainTreasuryID>,
         bank_id: OnChainTreasuryID,
         amt: BalanceOf<T>,
-    ) -> Result<Self::TransferId, DispatchError> {
+    ) -> Result<FullBankId<T::AssociatedId>, DispatchError> {
         ensure!(
             amt >= T::MinimumTransfer::get(),
             Error::<T>::TransferMustExceedModuleMinimum
         );
-        let new_transfer = if let Some(sender_bank_id) = on_behalf_of {
-            let bank = <BankStores<T>>::get(sender_bank_id)
-                .ok_or(Error::<T>::BankAccountMustExistToPostTransfer)?;
-            let authentication =
-                <org::Module<T>>::is_member_of_group(bank.org(), &sender)
-                    || bank.is_controller(&sender);
-            ensure!(
-                authentication,
-                Error::<T>::SignerNotAuthorizedToTransferOnBehalfOfOrg
-            );
-            T::Currency::transfer(
-                &Self::account_id(sender_bank_id),
-                &Self::account_id(bank_id),
-                amt,
-                ExistenceRequirement::KeepAlive,
-            )?;
-            TransferInformation::new(
-                Sender::Org(bank.org()),
-                amt,
-                BalanceOf::<T>::zero(),
-            )
-        } else {
-            T::Currency::transfer(
-                &sender,
-                &Self::account_id(bank_id),
-                amt,
-                ExistenceRequirement::KeepAlive,
-            )?;
-            TransferInformation::new(
-                Sender::Account(sender),
-                amt,
-                BalanceOf::<T>::zero(),
-            )
-        };
+        T::Currency::transfer(
+            &sender,
+            &Self::account_id(bank_id),
+            amt,
+            ExistenceRequirement::KeepAlive,
+        )?;
+        let new_transfer: TransferInformation<
+            Sender<T::AccountId, T::OrgId>,
+            BalanceOf<T>,
+            TransferState,
+        > = TransferInformation::new(Sender::Account(sender), amt);
         // generate unique transfer id
-        let new_transfer_id = Self::seeded_generate_unique_id(bank_id);
+        let new_transfer_id =
+            Self::seeded_generate_unique_id((bank_id, BankMapId::Transfer));
         // insert new transfer
         <TransferInfo<T>>::insert(bank_id, new_transfer_id, new_transfer);
-        Ok(new_transfer_id)
+        Ok(FullBankId::new(bank_id, new_transfer_id))
+    }
+}
+
+impl<T: Trait>
+    ReserveOrgSpend<FullBankId<T::AssociatedId>, T::AccountId, BalanceOf<T>>
+    for Module<T>
+{
+    fn reserve_org_spend(
+        transfer_id: FullBankId<T::AssociatedId>,
+        recipient: T::AccountId,
+        amt: BalanceOf<T>,
+    ) -> Result<FullBankId<T::AssociatedId>, DispatchError> {
+        let bank = <BankStores<T>>::get(transfer_id.id)
+            .ok_or(Error::<T>::CannotReserveOrgSpendIfBankStoreDNE)?;
+        let transfer =
+            <TransferInfo<T>>::get(transfer_id.id, transfer_id.sub_id)
+                .ok_or(Error::<T>::CannotReserveOrgSpendIfTransferDNE)?;
+        // form new/updated storage objects
+        let new_transfer = transfer
+            .spend(amt)
+            .ok_or(Error::<T>::ReserveOrgSpendExceedsFreeTransferCapital)?;
+        let new_bank = bank.add_reserved(amt);
+        let new_spend_reservation =
+            SpendReservation::new(recipient, amt, BalanceOf::<T>::zero());
+        // update storage items
+        let new_reservation_id = Self::seeded_generate_unique_id((
+            transfer_id.id,
+            BankMapId::ReserveSpend,
+        ));
+        <SpendReservations<T>>::insert(
+            transfer_id.id,
+            new_reservation_id,
+            new_spend_reservation,
+        );
+        <TransferInfo<T>>::insert(
+            transfer_id.id,
+            transfer_id.sub_id,
+            new_transfer,
+        );
+        <BankStores<T>>::insert(transfer_id.id, new_bank);
+        Ok(FullBankId::new(transfer_id.id, new_reservation_id))
+    }
+    fn unreserve_org_spend(
+        reservation_id: FullBankId<T::AssociatedId>,
+    ) -> Result<BalanceOf<T>, DispatchError> {
+        let spend_reservation = <SpendReservations<T>>::get(
+            reservation_id.id,
+            reservation_id.sub_id,
+        )
+        .ok_or(Error::<T>::CannotUnreserveSpendReservationThatDNE)?;
+        // these funds are removed from reserves but they DO NOT go back to the previous transfer object (that would introduce race conditions related to the unknown .state() of the transfer object)
+        // -> instead, it is removed from spend reserves
+        // --> in the future, I'd like these funds to be available for liquidating shares by _burning_ them
+        let amount_unreserved = spend_reservation.amount_left();
+        let new_bank = <BankStores<T>>::get(reservation_id.id)
+            .ok_or(Error::<T>::CannotUnreserveSpendReservationIfBankStoreDNE)?
+            .subtract_reserved(amount_unreserved)
+            .ok_or(Error::<T>::CannotUnreserveSpendReservationIfBankReservedIsLessThanAmtToUnreserve)?;
+        <SpendReservations<T>>::remove(
+            reservation_id.id,
+            reservation_id.sub_id,
+        );
+        <BankStores<T>>::insert(reservation_id.id, new_bank);
+        Ok(amount_unreserved)
+    }
+}
+
+impl<T: Trait>
+    PostOrgTransfer<
+        FullBankId<T::AssociatedId>,
+        OnChainTreasuryID,
+        T::AccountId,
+        BalanceOf<T>,
+    > for Module<T>
+{
+    fn direct_transfer_to_org(
+        transfer_id: FullBankId<T::AssociatedId>,
+        dest_bank_id: OnChainTreasuryID,
+        amt: BalanceOf<T>,
+    ) -> Result<FullBankId<T::AssociatedId>, DispatchError> {
+        todo!()
+    }
+    fn direct_transfer_to_account(
+        transfer_id: FullBankId<T::AssociatedId>,
+        dest_acc: T::AccountId,
+        amt: BalanceOf<T>,
+    ) -> Result<(), DispatchError> {
+        Ok(())
+    }
+    fn transfer_reserved_spend_to_org(
+        reservation_id: FullBankId<T::AssociatedId>,
+        dest_bank_id: OnChainTreasuryID,
+        amt: BalanceOf<T>,
+    ) -> Result<FullBankId<T::AssociatedId>, DispatchError> {
+        todo!()
+    }
+    fn transfer_reserved_spend_to_account(
+        reservation_id: FullBankId<T::AssociatedId>,
+        dest_acc: T::AccountId,
+        amt: BalanceOf<T>,
+    ) -> Result<(), DispatchError> {
+        Ok(())
+    }
+}
+
+impl<T: Trait> StopSpendsStartWithdrawals<FullBankId<T::AssociatedId>>
+    for Module<T>
+{
+    // this method changes the state of the transfer object such that spends and reservations are no longer allowed
+    // and withdrawals by members can commence (with limits based on ownership rights)
+    fn stop_spends_start_withdrawals(
+        transfer_id: FullBankId<T::AssociatedId>,
+    ) -> Result<(), DispatchError> {
+        Ok(())
+    }
+}
+impl<T: Trait>
+    WithdrawFromOrg<FullBankId<T::AssociatedId>, T::AccountId, BalanceOf<T>>
+    for Module<T>
+{
+    fn claim_due_amount(
+        transfer_id: FullBankId<T::AssociatedId>,
+        for_acc: T::AccountId,
+    ) -> Result<BalanceOf<T>, DispatchError> {
+        todo!()
     }
 }
