@@ -48,11 +48,13 @@ use sp_std::{
 };
 use util::{
     bank::{
+        BankOrAccount,
+        FullBankId,
         OnChainTreasuryID,
-        Sender,
     },
     bounty::{
         ApplicationState,
+        BankSpend,
         BountyInformation,
         BountyMapID,
         GrantApplication,
@@ -95,7 +97,7 @@ pub type BalanceOf<T> = <<T as bank::Trait>::Currency as Currency<
 >>::Balance;
 
 pub trait Trait:
-    frame_system::Trait + org::Trait + vote::Trait + bank::Trait + court::Trait
+    frame_system::Trait + org::Trait + vote::Trait + bank::Trait
 {
     /// The overarching event type
     type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
@@ -123,6 +125,11 @@ decl_event!(
     where
         <T as frame_system::Trait>::AccountId
     {
+        BountyPosted(),
+        // BountyApplicationSubmitted(),
+        // ApprovedBountyApplication(),
+        // RejectedBountyApplication(),
+        // ApprovedMilestone(),
         PlaceHolder(AccountId),
     }
 );
@@ -130,6 +137,10 @@ decl_event!(
 decl_error! {
     pub enum Error for Module<T: Trait> {
         PlaceHolderError,
+        CannotPostBountyIfBankReferencedDNE,
+        CannotPostBountyOnBehalfOfOrgWithInvalidTransferReference,
+        CannotPostBountyOnBehalfOfOrgWithInvalidSpendReservation,
+        CannotPostBountyIfAmountExceedsAmountLeftFromSpendReference,
     }
 }
 
@@ -144,14 +155,15 @@ decl_storage! {
             hasher(opaque_blake2_256) BountyMapID => T::BountyId;
 
         /// Posted bounty details
-        pub FoundationSponsoredBounties get(fn foundation_sponsored_bounties): map
+        pub LiveBounties get(fn foundation_sponsored_bounties): map
             hasher(opaque_blake2_256) T::BountyId => Option<
                 BountyInformation<
+                    BankOrAccount<OnChainTreasuryID, T::AccountId>,
                     T::IpfsReference,
-                    OnChainTreasuryID,
                     BalanceOf<T>,
                     ResolutionMetadata<
-                        T::OrgId,                  ThresholdConfig<T::Signal>,
+                        T::OrgId,
+                        ThresholdConfig<T::Signal>,
                         T::BlockNumber,
                     >,
                 >
@@ -160,12 +172,28 @@ decl_storage! {
         /// All bounty applications
         pub BountyApplications get(fn bounty_applications): double_map
             hasher(opaque_blake2_256) T::BountyId,
-            hasher(opaque_blake2_256) T::BountyId => Option<GrantApplication<T::AccountId, T::OrgId, BalanceOf<T>, T::IpfsReference, ApplicationState<T::VoteId>>>;
+            hasher(opaque_blake2_256) T::BountyId => Option<
+                GrantApplication<
+                    T::AccountId,
+                    T::OrgId,
+                    BalanceOf<T>,
+                    T::IpfsReference,
+                    ApplicationState<T::VoteId>,
+                >
+            >;
 
         /// All milestone submissions
         pub MilestoneSubmissions get(fn milestone_submissions): double_map
             hasher(opaque_blake2_256) T::BountyId,
-            hasher(opaque_blake2_256) T::BountyId => Option<MilestoneSubmission<T::AccountId, T::BountyId, T::IpfsReference, BalanceOf<T>, MilestoneStatus<T::VoteId, OnChainTreasuryID, T::TransferId>>>;
+            hasher(opaque_blake2_256) T::BountyId => Option<
+                MilestoneSubmission<
+                    T::AccountId,
+                    T::BountyId,
+                    T::IpfsReference,
+                    BalanceOf<T>,
+                    MilestoneStatus<T::VoteId, OnChainTreasuryID, T::BankId>
+                >
+            >;
 
         pub PlaceHolderStorageValue get(fn place_holder_storage_value): u32;
     }
@@ -200,7 +228,7 @@ impl<T: Copy> BIdWrapper<T> {
 
 impl<T: Trait> IDIsAvailable<BIdWrapper<T::BountyId>> for Module<T> {
     fn id_is_available(id: BIdWrapper<T::BountyId>) -> bool {
-        <FoundationSponsoredBounties<T>>::get(id.id).is_none()
+        <LiveBounties<T>>::get(id.id).is_none()
     }
 }
 
@@ -250,7 +278,7 @@ impl<T: Trait>
     PostBounty<
         T::AccountId,
         T::OrgId,
-        BankTransfer<T::TransferId>,
+        BankSpend<FullBankId<T::BankId>>,
         BalanceOf<T>,
         T::IpfsReference,
         ResolutionMetadata<
@@ -261,7 +289,7 @@ impl<T: Trait>
     > for Module<T>
 {
     type BountyInfo = BountyInformation<
-        Sender<T::AccountId, OnChainTreasuryID>,
+        BankOrAccount<OnChainTreasuryID, T::AccountId>,
         T::IpfsReference,
         BalanceOf<T>,
         ResolutionMetadata<
@@ -272,36 +300,62 @@ impl<T: Trait>
     >;
     type BountyId = T::BountyId;
     fn post_bounty(
-        poster: AccountId,
-        on_behalf_of: Option<BankTransfer<T::TransferId>>,
-        description: Hash,
-        amount_reserved_for_bounty: Currency,
-        acceptance_committee: ReviewCommittee,
-        supervision_committee: Option<ReviewCommittee>,
-    ) -> Result<Self::BountyId> {
-        let new_poster = if let Some(bank_id) = on_behalf_of {
-            // account is posting on behalf of bank so check org membership || org supervisor
-            let bank = <bank::Module<T>>::bank_stores(bank_id)
-                .ok_or(Error::<T>::CannotPostBountyOnBehalfOfBankThatDNE)?;
-            let authentication =
-                <org::Module<T>>::is_member_of_group(bank.org(), &poster)
-                    || <org::Module<T>>::is_organization_supervisor(
-                        bank.org(),
-                        &poster,
-                    );
-            ensure!(authentication, Error::<T>::CannotPostBountiesOnBehalfOfOrgBasedOnAuthRequirements);
-
-        // check that there is enough unclaimed from the transfer in question to reserve the funds from it by increasing the bank's reserves and increasing the amount claimed in the transfer state
-
-        // reserve the amount officially
-        } else {
-            // TODO: use bank Currency and
-            <T as court::Trait>::Currency::reserve(
-                &poster,
-                amount_reserved_for_bounty,
-            )?;
-            // the poster is posting as an individual
-            Sender::Account(poster.clone())
-        };
+        poster: T::AccountId,
+        on_behalf_of: Option<BankSpend<FullBankId<T::BankId>>>,
+        description: T::IpfsReference,
+        amount_reserved_for_bounty: BalanceOf<T>,
+        acceptance_committee: ResolutionMetadata<
+            T::OrgId,
+            ThresholdConfig<T::Signal>,
+            T::BlockNumber,
+        >,
+        supervision_committee: Option<
+            ResolutionMetadata<
+                T::OrgId,
+                ThresholdConfig<T::Signal>,
+                T::BlockNumber,
+            >,
+        >,
+    ) -> Result<Self::BountyId, DispatchError> {
+        let bounty_poster: BankOrAccount<OnChainTreasuryID, T::AccountId> =
+            if let Some(bank_spend) = on_behalf_of {
+                match bank_spend {
+                    BankSpend::Transfer(full_transfer_id) => {
+                        ensure!(
+                            <bank::Module<T>>::is_bank(full_transfer_id.id),
+                            Error::<T>::CannotPostBountyIfBankReferencedDNE
+                        );
+                        let transfer_info = <bank::Module<T>>::transfer_info(full_transfer_id.id, full_transfer_id.sub_id).ok_or(Error::<T>::CannotPostBountyOnBehalfOfOrgWithInvalidTransferReference)?;
+                        // ensure amount left is above amount_reserved_for_bounty; this check is aggressive because we don't really need to reserve until an application is approved
+                        ensure!(transfer_info.amount_left() >= amount_reserved_for_bounty, Error::<T>::CannotPostBountyIfAmountExceedsAmountLeftFromSpendReference);
+                        BankOrAccount::Bank(full_transfer_id.id)
+                    }
+                    BankSpend::Reserved(full_reservation_id) => {
+                        ensure!(
+                            <bank::Module<T>>::is_bank(full_reservation_id.id),
+                            Error::<T>::CannotPostBountyIfBankReferencedDNE
+                        );
+                        let spend_reservation = <bank::Module<T>>::spend_reservations(full_reservation_id.id, full_reservation_id.sub_id).ok_or(Error::<T>::CannotPostBountyOnBehalfOfOrgWithInvalidSpendReservation)?;
+                        // ensure amount left is above amount_reserved_for_bounty; this check is aggressive because we don't really need to reserve until an application is approved
+                        ensure!(spend_reservation.amount_left() >= amount_reserved_for_bounty, Error::<T>::CannotPostBountyIfAmountExceedsAmountLeftFromSpendReference);
+                        BankOrAccount::Bank(full_reservation_id.id)
+                    }
+                }
+            } else {
+                BankOrAccount::Account(poster.clone())
+            };
+        // form new bounty post
+        let new_bounty_post = BountyInformation::new(
+            bounty_poster,
+            description,
+            amount_reserved_for_bounty,
+            acceptance_committee,
+            supervision_committee,
+        );
+        // generate unique bounty identifier
+        let new_bounty_id = Self::generate_unique_id();
+        // insert new bounty
+        <LiveBounties<T>>::insert(new_bounty_id, new_bounty_post);
+        Ok(new_bounty_id)
     }
 }

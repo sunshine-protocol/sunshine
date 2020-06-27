@@ -352,7 +352,7 @@ pub trait SpendWithdrawOps<Currency>: Sized {
 pub trait PostBounty<
     AccountId,
     OrgId,
-    BankTransfer,
+    SpendableBank,
     Currency,
     Hash,
     ReviewCommittee,
@@ -362,7 +362,7 @@ pub trait PostBounty<
     type BountyId;
     fn post_bounty(
         poster: AccountId,
-        on_behalf_of: Option<BankTransfer>,
+        on_behalf_of: Option<SpendableBank>,
         description: Hash,
         amount_reserved_for_bounty: Currency,
         acceptance_committee: ReviewCommittee,

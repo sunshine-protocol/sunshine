@@ -59,26 +59,26 @@ pub enum BankMapId {
 #[derive(
     Clone, Copy, Eq, PartialEq, Encode, Decode, sp_runtime::RuntimeDebug,
 )]
-pub enum Sender<AccountId, OrgId> {
-    Account(AccountId),
+pub enum OrgOrAccount<OrgId, AccountId> {
     Org(OrgId),
+    Account(AccountId),
 }
 #[derive(
     Clone, Copy, Eq, PartialEq, Encode, Decode, sp_runtime::RuntimeDebug,
 )]
-// same object as `Sender`, yes, but not if we need to start adding trait bounds or something and it's just easier to read with different names
-pub enum Recipient<AccountId, BankId> {
-    Account(AccountId),
+// same object as `OrgOrAccount`, yes, but not if we need to start adding trait bounds or something and it's just easier to read with different names
+pub enum BankOrAccount<BankId, AccountId> {
     Bank(BankId),
+    Account(AccountId),
 }
 
-impl<AccountId: Clone, OnChainTreasuryID>
-    Recipient<AccountId, OnChainTreasuryID>
+impl<OnChainTreasuryID, AccountId: Clone>
+    BankOrAccount<OnChainTreasuryID, AccountId>
 {
     pub fn bank_id(self) -> Option<OnChainTreasuryID> {
         match self {
-            Recipient::Bank(id) => Some(id),
-            Recipient::Account(_) => None,
+            BankOrAccount::Bank(id) => Some(id),
+            BankOrAccount::Account(_) => None,
         }
     }
 }

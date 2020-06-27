@@ -96,7 +96,7 @@ parameter_types! {
 }
 impl Trait for Test {
     type Event = TestEvent;
-    type AssociatedId = u64;
+    type BankId = u64;
     type Currency = Balances;
     type MinimumTransfer = MinimumTransfer;
     type MinimumInitialDeposit = MinimumInitialDeposit;

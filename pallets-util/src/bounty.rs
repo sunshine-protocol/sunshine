@@ -21,6 +21,15 @@ use sp_runtime::{
 use sp_std::prelude::*;
 
 #[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug)]
+/// This type disambiguates between full bank identifiers representing spendable accounts
+pub enum BankSpend<T> {
+    // transfer identifier
+    Transfer(T),
+    // reserved spend
+    Reserved(T),
+}
+
+#[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug)]
 pub enum BountyMapID {
     ApplicationId,
     MilestoneId,
