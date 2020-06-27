@@ -72,6 +72,17 @@ pub enum Recipient<AccountId, BankId> {
     Bank(BankId),
 }
 
+impl<AccountId: Clone, OnChainTreasuryID>
+    Recipient<AccountId, OnChainTreasuryID>
+{
+    pub fn bank_id(self) -> Option<OnChainTreasuryID> {
+        match self {
+            Recipient::Bank(id) => Some(id),
+            Recipient::Account(_) => None,
+        }
+    }
+}
+
 #[derive(
     new, PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug,
 )]
@@ -197,6 +208,17 @@ impl<Sender: Clone + PartialEq, Currency: Zero + AtLeast32Bit + Clone>
     }
     pub fn state(&self) -> TransferState {
         self.state
+    }
+    pub fn stop_spend_start_withdrawals(&self) -> Option<Self> {
+        match self.state {
+            TransferState::FreeForSpending => {
+                Some(TransferInformation {
+                    state: TransferState::WithdrawableByMembers,
+                    ..self.clone()
+                })
+            }
+            _ => None,
+        }
     }
 }
 

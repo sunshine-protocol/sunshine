@@ -35,7 +35,6 @@ impl_outer_event! {
         system<T>,
         pallet_balances<T>,
         org<T>,
-        vote<T>,
         bank<T>,
     }
 }
@@ -97,7 +96,7 @@ parameter_types! {
 }
 impl Trait for Test {
     type Event = TestEvent;
-    type TransferId = u64;
+    type AssociatedId = u64;
     type Currency = Balances;
     type MinimumTransfer = MinimumTransfer;
     type MinimumInitialDeposit = MinimumInitialDeposit;
@@ -107,7 +106,7 @@ pub type Balances = pallet_balances::Module<Test>;
 pub type Org = org::Module<Test>;
 pub type Bank = Module<Test>;
 
-fn get_last_event() -> RawEvent<u64, u64, u32, u64, u64> {
+fn get_last_event() -> RawEvent<u64, u64, u64, u64> {
     System::events()
         .into_iter()
         .map(|r| r.event)

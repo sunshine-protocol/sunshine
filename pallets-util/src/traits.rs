@@ -301,10 +301,10 @@ pub trait PostUserTransfer<BankId, AccountId, Currency> {
     ) -> Result<Self::TransferId>;
 }
 // sets aside some funds from a transfer aside for spending later from the org account
-pub trait ReserveOrgSpend<BankTransfer, AccountId, Currency> {
+pub trait ReserveOrgSpend<BankTransfer, Recipient, Currency> {
     fn reserve_org_spend(
         transfer_id: BankTransfer,
-        recipient: AccountId,
+        recipient: Recipient,
         amt: Currency,
     ) -> Result<BankTransfer>; // reservation_id is same structure as BankTransfer
     fn unreserve_org_spend(
@@ -314,6 +314,7 @@ pub trait ReserveOrgSpend<BankTransfer, AccountId, Currency> {
 pub trait PostOrgTransfer<BankReservation, BankId, AccountId, Currency>:
     PostUserTransfer<BankId, AccountId, Currency>
 {
+    type Recipient;
     fn direct_transfer_to_org(
         transfer_id: BankReservation,
         dest_bank_id: BankId,
@@ -324,16 +325,10 @@ pub trait PostOrgTransfer<BankReservation, BankId, AccountId, Currency>:
         dest_acc: AccountId,
         amt: Currency,
     ) -> Result<()>;
-    fn transfer_reserved_spend_to_org(
+    fn transfer_reserved_spend(
         reservation_id: BankReservation,
-        dest_bank_id: BankId,
         amt: Currency,
-    ) -> Result<Self::TransferId>;
-    fn transfer_reserved_spend_to_account(
-        reservation_id: BankReservation,
-        dest_acc: AccountId,
-        amt: Currency,
-    ) -> Result<()>;
+    ) -> Result<Self::Recipient>;
 }
 pub trait StopSpendsStartWithdrawals<BankTransfer> {
     // this method changes the state of the transfer object such that spends and reservations are no longer allowed
