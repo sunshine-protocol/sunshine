@@ -349,6 +349,10 @@ pub trait SpendWithdrawOps<Currency>: Sized {
 
 // ~~~~~~~~ Bounty Module ~~~~~~~~
 
+pub trait ReturnsBountyIdentifier {
+    type BountyId;
+}
+
 pub trait PostBounty<
     AccountId,
     OrgId,
@@ -356,10 +360,9 @@ pub trait PostBounty<
     Currency,
     Hash,
     ReviewCommittee,
->
+>: ReturnsBountyIdentifier
 {
     type BountyInfo;
-    type BountyId;
     fn post_bounty(
         poster: AccountId,
         on_behalf_of: Option<SpendableBank>,
@@ -369,12 +372,19 @@ pub trait PostBounty<
         supervision_committee: Option<ReviewCommittee>,
     ) -> Result<Self::BountyId>;
 }
-
+// TODO: make an issue for this and prefer an impl that presents a multisig
 pub trait UseTermsOfAgreement<OrgId> {
     type VoteIdentifier;
     fn request_consent_on_terms_of_agreement(
         team_org: OrgId,
     ) -> Result<Self::VoteIdentifier>;
+}
+pub trait StartTeamConsentPetition<VoteIdentifier>: Sized {
+    fn start_team_consent_petition(
+        &self,
+        vote_id: VoteIdentifier,
+    ) -> Option<Self>;
+    fn get_team_consent_vote_id(&self) -> Option<VoteIdentifier>;
 }
 
 pub trait StartReview<VoteIdentifier>: Sized {
@@ -386,22 +396,9 @@ pub trait ApproveWithoutTransfer: Sized {
     fn approve_without_transfer(&self) -> Option<Self>;
 }
 
-pub trait SetMakeTransfer<BankId, TransferId>: Sized {
-    fn set_make_transfer(
-        &self,
-        bank_id: BankId,
-        transfer_id: TransferId,
-    ) -> Option<Self>;
-    fn get_bank_id(&self) -> Option<BankId>;
-    fn get_transfer_id(&self) -> Option<TransferId>;
-}
-
-pub trait StartTeamConsentPetition<VoteIdentifier>: Sized {
-    fn start_team_consent_petition(
-        &self,
-        vote_id: VoteIdentifier,
-    ) -> Option<Self>;
-    fn get_team_consent_vote_id(&self) -> Option<VoteIdentifier>;
+pub trait SetMakeTransfer<BankId>: Sized {
+    fn set_make_transfer(&self, bank_id: BankId) -> Option<Self>;
+    fn get_transfer_id(&self) -> Option<BankId>;
 }
 
 pub trait ApproveGrant: Sized {
@@ -414,20 +411,10 @@ pub trait SpendApprovedGrant<Currency>: Sized {
     fn spend_approved_grant(&self, amount: Currency) -> Option<Self>;
 }
 
-pub trait SubmitGrantApplication<
-    AccountId,
-    OrgId,
-    BankId,
-    Currency,
-    Hash,
-    ReviewCommittee,
->:
-    PostBounty<AccountId, OrgId, BankId, Currency, Hash, ReviewCommittee>
-    + UseTermsOfAgreement<OrgId>
+pub trait SubmitGrantApplication<AccountId, VoteId, BankId, Currency, Hash>:
+    ReturnsBountyIdentifier
 {
-    type GrantApp: StartReview<Self::VoteIdentifier>
-        + StartTeamConsentPetition<Self::VoteIdentifier>
-        + ApproveGrant;
+    type GrantApp: StartReview<VoteId> + ApproveGrant; //+ StartTeamConsentPetition<VoteId>
     fn submit_grant_application(
         submitter: AccountId,
         bank: Option<BankId>,
@@ -454,19 +441,10 @@ pub trait SuperviseGrantApplication<BountyId, AccountId> {
     ) -> Result<Self::AppState>;
 }
 
-pub trait SubmitMilestone<
-    AccountId,
-    BountyId,
-    Hash,
-    Currency,
-    VoteId,
-    BankId,
-    TransferId,
->
-{
+pub trait SubmitMilestone<AccountId, BountyId, Hash, Currency, VoteId, BankId> {
     type Milestone: StartReview<VoteId>
         + ApproveWithoutTransfer
-        + SetMakeTransfer<BankId, TransferId>;
+        + SetMakeTransfer<BankId>;
     type MilestoneState;
     fn submit_milestone(
         submitter: AccountId,

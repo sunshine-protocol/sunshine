@@ -71,9 +71,11 @@ use util::{
         GroupMembership,
         IDIsAvailable,
         OpenVote,
+        OrganizationSupervisorPermissions,
         PostBounty,
         RegisterOrgAccount,
         RegisterOrganization,
+        ReturnsBountyIdentifier,
         SeededGenerateUniqueID,
         SetMakeTransfer,
         SpendApprovedGrant,
@@ -126,7 +128,7 @@ decl_event!(
         <T as frame_system::Trait>::AccountId
     {
         BountyPosted(),
-        // BountyApplicationSubmitted(),
+        BountyApplicationSubmitted(),
         // ApprovedBountyApplication(),
         // RejectedBountyApplication(),
         // ApprovedMilestone(),
@@ -141,6 +143,20 @@ decl_error! {
         CannotPostBountyOnBehalfOfOrgWithInvalidTransferReference,
         CannotPostBountyOnBehalfOfOrgWithInvalidSpendReservation,
         CannotPostBountyIfAmountExceedsAmountLeftFromSpendReference,
+        GrantApplicationRequestExceedsBountyFundingReserved,
+        GrantApplicationFailsForBountyThatDNE,
+        CannotApplyForBountyWithOrgBankAccountThatDNE,
+        SubmitterNotAuthorizedToSubmitGrantAppForOrg,
+        CannotReviewApplicationIfBountyDNE,
+        CannotReviewApplicationIfApplicationDNE,
+        ApplicationMustBeSubmittedAwaitingResponseToTriggerReview,
+        CannotSudoApproveIfBountyDNE,
+        CannotSudoApproveAppIfNotAssignedSudo,
+        CannotSudoApproveIfGrantAppDNE,
+        AppStateCannotBeSudoApprovedForAGrantFromCurrentState,
+        CannotPollApplicationIfBountyDNE,
+        CannotPollApplicationIfApplicationDNE,
+        CannotSubmitMilestoneIfBaseBountyDNE,
     }
 }
 
@@ -175,7 +191,7 @@ decl_storage! {
             hasher(opaque_blake2_256) T::BountyId => Option<
                 GrantApplication<
                     T::AccountId,
-                    T::OrgId,
+                    OnChainTreasuryID,
                     BalanceOf<T>,
                     T::IpfsReference,
                     ApplicationState<T::VoteId>,
@@ -191,7 +207,7 @@ decl_storage! {
                     T::BountyId,
                     T::IpfsReference,
                     BalanceOf<T>,
-                    MilestoneStatus<T::VoteId, OnChainTreasuryID, T::BankId>
+                    MilestoneStatus<T::VoteId, BankOrAccount<FullBankId<T::BankId>, T::AccountId>>
                 >
             >;
 
@@ -213,6 +229,12 @@ decl_module! {
             Self::deposit_event(RawEvent::PlaceHolder(signer));
             Ok(())
         }
+    }
+}
+
+impl<T: Trait> Module<T> {
+    pub fn is_bounty(id: T::BountyId) -> bool {
+        !Self::id_is_available(BIdWrapper::new(id))
     }
 }
 
@@ -274,6 +296,12 @@ impl<T: Trait> GenerateUniqueID<T::BountyId> for Module<T> {
     }
 }
 
+// this pretty much only exists because if we use direct inheritance for traits
+// with all these generics, it just becomes gross to look at
+impl<T: Trait> ReturnsBountyIdentifier for Module<T> {
+    type BountyId = T::BountyId;
+}
+
 impl<T: Trait>
     PostBounty<
         T::AccountId,
@@ -298,7 +326,6 @@ impl<T: Trait>
             T::BlockNumber,
         >,
     >;
-    type BountyId = T::BountyId;
     fn post_bounty(
         poster: T::AccountId,
         on_behalf_of: Option<BankSpend<FullBankId<T::BankId>>>,
@@ -357,5 +384,255 @@ impl<T: Trait>
         // insert new bounty
         <LiveBounties<T>>::insert(new_bounty_id, new_bounty_post);
         Ok(new_bounty_id)
+    }
+}
+
+impl<T: Trait>
+    SubmitGrantApplication<
+        T::AccountId,
+        T::VoteId,
+        OnChainTreasuryID,
+        BalanceOf<T>,
+        T::IpfsReference,
+    > for Module<T>
+{
+    type GrantApp = GrantApplication<
+        T::AccountId,
+        OnChainTreasuryID,
+        BalanceOf<T>,
+        T::IpfsReference,
+        ApplicationState<T::VoteId>,
+    >;
+    fn submit_grant_application(
+        submitter: T::AccountId,
+        bank: Option<OnChainTreasuryID>,
+        bounty_id: Self::BountyId,
+        description: T::IpfsReference,
+        total_amount: BalanceOf<T>,
+    ) -> Result<Self::BountyId, DispatchError> {
+        // check bounty existence
+        let bounty = <LiveBounties<T>>::get(bounty_id)
+            .ok_or(Error::<T>::GrantApplicationFailsForBountyThatDNE)?;
+        // check that total amount is less than bounty amount
+        ensure!(
+            bounty.funding_reserved() >= total_amount,
+            Error::<T>::GrantApplicationRequestExceedsBountyFundingReserved
+        );
+        // authorize applications on behalf of org
+        if let Some(treasury_id) = bank {
+            let the_bank = <bank::Module<T>>::bank_stores(treasury_id).ok_or(
+                Error::<T>::CannotApplyForBountyWithOrgBankAccountThatDNE,
+            )?;
+            // auth is membership check || supervisor
+            let authentication = <org::Module<T>>::is_member_of_group(
+                the_bank.org(),
+                &submitter,
+            )
+                || <org::Module<T>>::is_organization_supervisor(
+                    the_bank.org(),
+                    &submitter,
+                );
+            ensure!(
+                authentication,
+                Error::<T>::SubmitterNotAuthorizedToSubmitGrantAppForOrg
+            );
+        }
+        // form grant app
+        let new_grant_app: GrantApplication<
+            T::AccountId,
+            OnChainTreasuryID,
+            BalanceOf<T>,
+            T::IpfsReference,
+            ApplicationState<T::VoteId>,
+        > = GrantApplication::new(submitter, bank, description, total_amount);
+        // generate new grant identifier
+        let new_grant_id = Self::seeded_generate_unique_id((
+            bounty_id,
+            BountyMapID::ApplicationId,
+        ));
+        // insert new grant application
+        <BountyApplications<T>>::insert(bounty_id, new_grant_id, new_grant_app);
+        Ok(new_grant_id)
+    }
+}
+
+impl<T: Trait> SuperviseGrantApplication<T::BountyId, T::AccountId>
+    for Module<T>
+{
+    type AppState = ApplicationState<T::VoteId>;
+    fn trigger_application_review(
+        bounty_id: T::BountyId,
+        application_id: T::BountyId,
+    ) -> Result<Self::AppState, DispatchError> {
+        // get the bounty information
+        let bounty_info = <LiveBounties<T>>::get(bounty_id)
+            .ok_or(Error::<T>::CannotReviewApplicationIfBountyDNE)?;
+        let application_to_review =
+            <BountyApplications<T>>::get(bounty_id, application_id)
+                .ok_or(Error::<T>::CannotReviewApplicationIfApplicationDNE)?;
+        // ensure that application is awaiting review (in state from which review can be triggered)
+        ensure!(
+            application_to_review.state() == ApplicationState::SubmittedAwaitingResponse,
+            Error::<T>::ApplicationMustBeSubmittedAwaitingResponseToTriggerReview
+        );
+        let review_board = bounty_info.acceptance_committee();
+        // dispatch vote by acceptance committee
+        let new_vote_id = <vote::Module<T>>::open_vote(
+            Some(application_to_review.submission()),
+            review_board.org(),
+            review_board.passage_threshold(),
+            review_board.rejection_threshold(),
+            review_board.duration(),
+        )?;
+        // change the application status such that review is started
+        let new_application = application_to_review
+            .start_review(new_vote_id)
+            .ok_or(Error::<T>::ApplicationMustBeSubmittedAwaitingResponseToTriggerReview)?;
+        let app_state = new_application.state();
+        // insert new application into relevant map
+        <BountyApplications<T>>::insert(
+            bounty_id,
+            application_id,
+            new_application,
+        );
+        Ok(app_state)
+    }
+    fn sudo_approve_application(
+        caller: T::AccountId,
+        bounty_id: T::BountyId,
+        application_id: T::BountyId,
+    ) -> Result<Self::AppState, DispatchError> {
+        // get the bounty information
+        let bounty_info = <LiveBounties<T>>::get(bounty_id)
+            .ok_or(Error::<T>::CannotSudoApproveIfBountyDNE)?;
+        // verify that the caller is indeed the sudo
+        let authentication = <org::Module<T>>::is_organization_supervisor(
+            bounty_info.acceptance_committee().org(),
+            &caller,
+        );
+        ensure!(
+            authentication,
+            Error::<T>::CannotSudoApproveAppIfNotAssignedSudo
+        );
+        // get the application information
+        let app = <BountyApplications<T>>::get(bounty_id, application_id)
+            .ok_or(Error::<T>::CannotSudoApproveIfGrantAppDNE)?;
+        // check that the state of the application satisfies the requirements for approval
+        ensure!(
+            app.state().awaiting_review(),
+            Error::<T>::AppStateCannotBeSudoApprovedForAGrantFromCurrentState
+        );
+        // approve grant
+        let new_application = app.approve_grant();
+        let ret_state = new_application.state();
+        <BountyApplications<T>>::insert(
+            bounty_id,
+            application_id,
+            new_application,
+        );
+        Ok(ret_state)
+    }
+    fn poll_application(
+        bounty_id: T::BountyId,
+        application_id: T::BountyId,
+    ) -> Result<Self::AppState, DispatchError> {
+        // check bounty existence for safety
+        let _ = <LiveBounties<T>>::get(bounty_id)
+            .ok_or(Error::<T>::CannotPollApplicationIfBountyDNE)?;
+        // get the application information
+        let application_under_review =
+            <BountyApplications<T>>::get(bounty_id, application_id)
+                .ok_or(Error::<T>::CannotPollApplicationIfApplicationDNE)?;
+        match application_under_review.state() {
+            ApplicationState::UnderReviewByAcceptanceCommittee(vote_id) => {
+                // check vote outcome
+                let status = <vote::Module<T>>::get_vote_outcome(vote_id)?;
+                // match on vote outcome
+                match status {
+                    VoteOutcome::Approved => {
+                        // grant is approved
+                        let new_application =
+                            application_under_review.approve_grant();
+                        // insert into map because application.state() changed => application changed
+                        let new_state = new_application.state();
+                        <BountyApplications<T>>::insert(
+                            bounty_id,
+                            application_id,
+                            new_application,
+                        );
+                        Ok(new_state)
+                    }
+                    VoteOutcome::Rejected => {
+                        // remove the application state
+                        <BountyApplications<T>>::remove(
+                            bounty_id,
+                            application_id,
+                        );
+                        Ok(ApplicationState::Closed)
+                    }
+                    _ => Ok(application_under_review.state()),
+                }
+            }
+            // nothing changed
+            _ => Ok(application_under_review.state()),
+        }
+    }
+}
+
+impl<T: Trait>
+    SubmitMilestone<
+        T::AccountId,
+        T::BountyId,
+        T::IpfsReference,
+        BalanceOf<T>,
+        T::VoteId,
+        BankOrAccount<FullBankId<T::BankId>, T::AccountId>,
+    > for Module<T>
+{
+    type Milestone = MilestoneSubmission<
+        T::AccountId,
+        T::BountyId,
+        T::IpfsReference,
+        BalanceOf<T>,
+        MilestoneStatus<
+            T::VoteId,
+            BankOrAccount<FullBankId<T::BankId>, T::AccountId>,
+        >,
+    >;
+    type MilestoneState = MilestoneStatus<
+        T::VoteId,
+        BankOrAccount<FullBankId<T::BankId>, T::AccountId>,
+    >;
+    fn submit_milestone(
+        submitter: T::AccountId,
+        bounty_id: T::BountyId,
+        application_id: T::BountyId,
+        submission_reference: T::IpfsReference,
+        amount_requested: BalanceOf<T>,
+    ) -> Result<T::BountyId, DispatchError> {
+        ensure!(
+            Self::is_bounty(bounty_id),
+            Error::<T>::CannotSubmitMilestoneIfBaseBountyDNE
+        );
+        todo!()
+    }
+    fn trigger_milestone_review(
+        bounty_id: T::BountyId,
+        milestone_id: T::BountyId,
+    ) -> Result<Self::MilestoneState, DispatchError> {
+        todo!()
+    }
+    fn sudo_approves_milestone(
+        caller: T::AccountId,
+        bounty_id: T::BountyId,
+        milestone_id: T::BountyId,
+    ) -> Result<Self::MilestoneState, DispatchError> {
+        todo!()
+    }
+    fn poll_milestone(
+        bounty_id: T::BountyId,
+        milestone_id: T::BountyId,
+    ) -> Result<Self::MilestoneState, DispatchError> {
+        todo!()
     }
 }

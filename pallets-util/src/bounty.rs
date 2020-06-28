@@ -1,13 +1,9 @@
-use crate::{
-    bank::OnChainTreasuryID,
-    traits::{
-        ApproveGrant,
-        ApproveWithoutTransfer,
-        SetMakeTransfer,
-        SpendApprovedGrant,
-        StartReview,
-        StartTeamConsentPetition,
-    },
+use crate::traits::{
+    ApproveGrant,
+    ApproveWithoutTransfer,
+    SetMakeTransfer,
+    SpendApprovedGrant,
+    StartReview,
 };
 use codec::{
     Codec,
@@ -82,7 +78,7 @@ pub enum ApplicationState<VoteId> {
     // wraps a vote_id for the acceptance committee
     UnderReviewByAcceptanceCommittee(VoteId),
     // wraps vote_id for which the team is consenting on this
-    ApprovedByFoundationAwaitingTeamConsent(VoteId),
+    // ApprovedByFoundationAwaitingTeamConsent(VoteId),
     // team is working on this grant now
     ApprovedAndLive,
     // closed for some reason
@@ -108,14 +104,14 @@ impl<VoteId: Codec + PartialEq + Zero + From<u32> + Copy>
             _ => None,
         }
     }
-    pub fn awaiting_team_consent(self) -> Option<VoteId> {
-        match self {
-            ApplicationState::ApprovedByFoundationAwaitingTeamConsent(
-                vote_id,
-            ) => Some(vote_id),
-            _ => None,
-        }
-    }
+    // pub fn awaiting_team_consent(self) -> Option<VoteId> {
+    //     match self {
+    //         ApplicationState::ApprovedByFoundationAwaitingTeamConsent(
+    //             vote_id,
+    //         ) => Some(vote_id),
+    //         _ => None,
+    //     }
+    // }
     pub fn approved_and_live(self) -> bool {
         match self {
             ApplicationState::ApprovedAndLive => true,
@@ -173,6 +169,9 @@ impl<
             state: ApplicationState::SubmittedAwaitingResponse,
         }
     }
+    pub fn submission(&self) -> Hash {
+        self.description.clone()
+    }
     pub fn bank(&self) -> Option<BankId> {
         self.bank
     }
@@ -225,42 +224,42 @@ impl<
     }
 }
 
-impl<
-        AccountId: Clone,
-        BankId: Copy,
-        Currency: Clone,
-        Hash: Clone,
-        VoteId: Codec + PartialEq + Zero + From<u32> + Copy,
-    > StartTeamConsentPetition<VoteId>
-    for GrantApplication<
-        AccountId,
-        BankId,
-        Currency,
-        Hash,
-        ApplicationState<VoteId>,
-    >
-{
-    fn start_team_consent_petition(&self, vote_id: VoteId) -> Option<Self> {
-        match self.state {
-            ApplicationState::UnderReviewByAcceptanceCommittee(_) => Some(GrantApplication {
-                submitter: self.submitter.clone(),
-                bank: self.bank,
-                description: self.description.clone(),
-                total_amount: self.total_amount.clone(),
-                state: ApplicationState::ApprovedByFoundationAwaitingTeamConsent(vote_id),
-            }),
-            _ => None,
-        }
-    }
-    fn get_team_consent_vote_id(&self) -> Option<VoteId> {
-        match self.state() {
-            ApplicationState::ApprovedByFoundationAwaitingTeamConsent(
-                vote_id,
-            ) => Some(vote_id),
-            _ => None,
-        }
-    }
-}
+// impl<
+//         AccountId: Clone,
+//         BankId: Copy,
+//         Currency: Clone,
+//         Hash: Clone,
+//         VoteId: Codec + PartialEq + Zero + From<u32> + Copy,
+//     > StartTeamConsentPetition<VoteId>
+//     for GrantApplication<
+//         AccountId,
+//         BankId,
+//         Currency,
+//         Hash,
+//         ApplicationState<VoteId>,
+//     >
+// {
+//     fn start_team_consent_petition(&self, vote_id: VoteId) -> Option<Self> {
+//         match self.state {
+//             ApplicationState::UnderReviewByAcceptanceCommittee(_) => Some(GrantApplication {
+//                 submitter: self.submitter.clone(),
+//                 bank: self.bank,
+//                 description: self.description.clone(),
+//                 total_amount: self.total_amount.clone(),
+//                 state: ApplicationState::ApprovedByFoundationAwaitingTeamConsent(vote_id),
+//             }),
+//             _ => None,
+//         }
+//     }
+//     fn get_team_consent_vote_id(&self) -> Option<VoteId> {
+//         match self.state() {
+//             ApplicationState::ApprovedByFoundationAwaitingTeamConsent(
+//                 vote_id,
+//             ) => Some(vote_id),
+//             _ => None,
+//         }
+//     }
+// }
 
 impl<
         AccountId: Clone,
@@ -333,21 +332,16 @@ impl<
 }
 
 #[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug)]
-pub enum MilestoneStatus<VoteId, BankId, TransferId> {
+pub enum MilestoneStatus<VoteId, TransferId> {
     SubmittedAwaitingResponse,
     SubmittedReviewStarted(VoteId),
-    // if the milestone is approved but the approved application does not
-    // have enough funds to satisfy milestone requirement, then this is set and we try again later...
     ApprovedButNotTransferred,
-    // wraps Some(transfer_id) (bank_id is proVoteIded for convenient lookup, must equal bounty.bank)
-    // None if the transfer wasn't able to be afforded at the time so it hasn't happened yet
-    ApprovedAndTransferEnabled(BankId, TransferId),
+    // if to an org, it wraps Some(FullBankId) else None because we don't track transfers to individual accounts
+    ApprovedAndTransferExecuted(TransferId),
 }
 
-impl<VoteId, BankId, TransferId> Default
-    for MilestoneStatus<VoteId, BankId, TransferId>
-{
-    fn default() -> MilestoneStatus<VoteId, BankId, TransferId> {
+impl<VoteId, BankId> Default for MilestoneStatus<VoteId, BankId> {
+    fn default() -> MilestoneStatus<VoteId, BankId> {
         MilestoneStatus::SubmittedAwaitingResponse
     }
 }
@@ -375,14 +369,14 @@ impl<
         Hash: Clone,
         Currency: Copy,
         VoteId: Codec + Copy,
-        TransferId: Copy,
+        BankId: Clone,
     >
     MilestoneSubmission<
         AccountId,
         ApplicationId,
         Hash,
         Currency,
-        MilestoneStatus<VoteId, OnChainTreasuryID, TransferId>,
+        MilestoneStatus<VoteId, BankId>,
     >
 {
     pub fn new(
@@ -395,7 +389,7 @@ impl<
         ApplicationId,
         Hash,
         Currency,
-        MilestoneStatus<VoteId, OnChainTreasuryID, TransferId>,
+        MilestoneStatus<VoteId, BankId>,
     > {
         MilestoneSubmission {
             submitter,
@@ -414,10 +408,8 @@ impl<
     pub fn amount(&self) -> Currency {
         self.amount.clone()
     }
-    pub fn state(
-        &self,
-    ) -> MilestoneStatus<VoteId, OnChainTreasuryID, TransferId> {
-        self.state
+    pub fn state(&self) -> MilestoneStatus<VoteId, BankId> {
+        self.state.clone()
     }
     pub fn ready_for_review(&self) -> bool {
         match self.state {
@@ -433,14 +425,14 @@ impl<
         Hash: Clone,
         Currency: Copy,
         VoteId: Codec + Copy,
-        TransferId: Copy,
+        BankId: Clone,
     > StartReview<VoteId>
     for MilestoneSubmission<
         AccountId,
         ApplicationId,
         Hash,
         Currency,
-        MilestoneStatus<VoteId, OnChainTreasuryID, TransferId>,
+        MilestoneStatus<VoteId, BankId>,
     >
 {
     fn start_review(&self, vote_id: VoteId) -> Option<Self> {
@@ -471,14 +463,14 @@ impl<
         Hash: Clone,
         Currency: Copy,
         VoteId: Codec + Copy,
-        TransferId: Copy,
+        BankId: Clone,
     > ApproveWithoutTransfer
     for MilestoneSubmission<
         AccountId,
         ApplicationId,
         Hash,
         Currency,
-        MilestoneStatus<VoteId, OnChainTreasuryID, TransferId>,
+        MilestoneStatus<VoteId, BankId>,
     >
 {
     fn approve_without_transfer(&self) -> Option<Self> {
@@ -503,31 +495,26 @@ impl<
         Hash: Clone,
         Currency: Copy,
         VoteId: Codec + Copy,
-        TransferId: Copy,
-    > SetMakeTransfer<OnChainTreasuryID, TransferId>
+        BankId: Clone,
+    > SetMakeTransfer<BankId>
     for MilestoneSubmission<
         AccountId,
         ApplicationId,
         Hash,
         Currency,
-        MilestoneStatus<VoteId, OnChainTreasuryID, TransferId>,
+        MilestoneStatus<VoteId, BankId>,
     >
 {
-    fn set_make_transfer(
-        &self,
-        bank_id: OnChainTreasuryID,
-        transfer_id: TransferId,
-    ) -> Option<Self> {
-        match self.state {
+    fn set_make_transfer(&self, bank_id: BankId) -> Option<Self> {
+        match &self.state {
             MilestoneStatus::SubmittedReviewStarted(_) => {
                 Some(MilestoneSubmission {
                     submitter: self.submitter.clone(),
                     referenced_application: self.referenced_application,
                     submission: self.submission.clone(),
                     amount: self.amount.clone(),
-                    state: MilestoneStatus::ApprovedAndTransferEnabled(
+                    state: MilestoneStatus::ApprovedAndTransferExecuted(
                         bank_id,
-                        transfer_id,
                     ),
                 })
             }
@@ -537,27 +524,18 @@ impl<
                     referenced_application: self.referenced_application,
                     submission: self.submission.clone(),
                     amount: self.amount.clone(),
-                    state: MilestoneStatus::ApprovedAndTransferEnabled(
+                    state: MilestoneStatus::ApprovedAndTransferExecuted(
                         bank_id,
-                        transfer_id,
                     ),
                 })
             }
             _ => None,
         }
     }
-    fn get_bank_id(&self) -> Option<OnChainTreasuryID> {
-        match self.state {
-            MilestoneStatus::ApprovedAndTransferEnabled(bank_id, _) => {
+    fn get_transfer_id(&self) -> Option<BankId> {
+        match self.state.clone() {
+            MilestoneStatus::ApprovedAndTransferExecuted(bank_id) => {
                 Some(bank_id)
-            }
-            _ => None,
-        }
-    }
-    fn get_transfer_id(&self) -> Option<TransferId> {
-        match self.state {
-            MilestoneStatus::ApprovedAndTransferEnabled(_, transfer_id) => {
-                Some(transfer_id)
             }
             _ => None,
         }
