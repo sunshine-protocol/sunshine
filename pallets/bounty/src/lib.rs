@@ -41,7 +41,6 @@ use sp_runtime::{
     },
     DispatchError,
     DispatchResult,
-    Permill,
 };
 use sp_std::{
     fmt::Debug,
@@ -77,17 +76,14 @@ use util::{
         PostOrgTransfer,
         PostUserTransfer,
         RegisterOrgAccount,
-        RegisterOrganization,
         ReturnsBountyIdentifier,
         SeededGenerateUniqueID,
         SetMakeTransfer,
         SpendApprovedGrant,
         StartReview,
-        StartTeamConsentPetition,
         SubmitGrantApplication,
         SubmitMilestone,
         SuperviseGrantApplication,
-        UseTermsOfAgreement,
     },
     vote::{
         ThresholdConfig,
@@ -124,24 +120,29 @@ pub trait Trait:
     type BountyLowerBound: Get<BalanceOf<Self>>;
 }
 
-// use the court to decide on unachieved milestones...
 decl_event!(
     pub enum Event<T>
     where
-        <T as frame_system::Trait>::AccountId
+        <T as frame_system::Trait>::AccountId,
+        <T as vote::Trait>::VoteId,
+        <T as bank::Trait>::BankId,
+        <T as Trait>::BountyId,
+        Balance = BalanceOf<T>,
     {
-        BountyPosted(),
-        BountyApplicationSubmitted(),
-        // ApprovedBountyApplication(),
-        // RejectedBountyApplication(),
-        // ApprovedMilestone(),
-        PlaceHolder(AccountId),
+        BountyPosted(BountyId, AccountId, Balance),
+        BountyApplicationSubmitted(BountyId, BountyId, AccountId, Option<OnChainTreasuryID>, Balance),
+        SudoApprovedBountyApplication(AccountId, BountyId, BountyId, ApplicationState<VoteId>),
+        ApplicationReviewTriggered(AccountId, BountyId, BountyId, ApplicationState<VoteId>),
+        ApplicationPolled(AccountId, BountyId, BountyId, ApplicationState<VoteId>),
+        MilestoneSubmitted(AccountId, BountyId, BountyId, BountyId, Balance),
+        MilestoneReviewTriggered(AccountId, BountyId, BountyId, MilestoneStatus<VoteId, BankOrAccount<TransferId<BankId>, AccountId>>),
+        SudoApprovedMilestone(AccountId, BountyId, BountyId, MilestoneStatus<VoteId, BankOrAccount<TransferId<BankId>, AccountId>>),
+        MilestonePolled(AccountId, BountyId, BountyId, MilestoneStatus<VoteId, BankOrAccount<TransferId<BankId>, AccountId>>),
     }
 );
 
 decl_error! {
     pub enum Error for Module<T: Trait> {
-        PlaceHolderError,
         CannotPostBountyIfBankReferencedDNE,
         CannotPostBountyOnBehalfOfOrgWithInvalidTransferReference,
         CannotPostBountyOnBehalfOfOrgWithInvalidSpendReservation,
@@ -232,8 +233,6 @@ decl_storage! {
                     MilestoneStatus<T::VoteId, BankOrAccount<TransferId<T::BankId>, T::AccountId>>
                 >
             >;
-
-        pub PlaceHolderStorageValue get(fn place_holder_storage_value): u32;
     }
 }
 
@@ -243,12 +242,225 @@ decl_module! {
         fn deposit_event() = default;
 
         #[weight = 0]
-        fn fake_method(origin) -> DispatchResult {
-            let signer = ensure_signed(origin)?;
-            if PlaceHolderStorageValue::get() == 69u32 {
-                return Err(Error::<T>::PlaceHolderError.into());
-            }
-            Self::deposit_event(RawEvent::PlaceHolder(signer));
+        fn account_posts_bounty(
+            origin,
+            description: T::IpfsReference,
+            amount_reserved_for_bounty: BalanceOf<T>,
+            acceptance_committee: ResolutionMetadata<
+                T::OrgId,
+                ThresholdConfig<T::Signal>,
+                T::BlockNumber,
+            >,
+            supervision_committee: Option<
+                ResolutionMetadata<
+                    T::OrgId,
+                    ThresholdConfig<T::Signal>,
+                    T::BlockNumber,
+                >,
+            >,
+        ) -> DispatchResult {
+            let poster = ensure_signed(origin)?;
+            let new_bounty_id = Self::post_bounty(
+                poster.clone(),
+                None, // not posting on behalf of org
+                description,
+                amount_reserved_for_bounty,
+                acceptance_committee,
+                supervision_committee,
+            )?;
+            Self::deposit_event(RawEvent::BountyPosted(new_bounty_id, poster, amount_reserved_for_bounty));
+            Ok(())
+        }
+        #[weight = 0]
+        fn account_posts_bounty_for_org_with_direct_transfer(
+            origin,
+            transfer_id: TransferId<T::BankId>,
+            description: T::IpfsReference,
+            amount_reserved_for_bounty: BalanceOf<T>,
+            acceptance_committee: ResolutionMetadata<
+                T::OrgId,
+                ThresholdConfig<T::Signal>,
+                T::BlockNumber,
+            >,
+            supervision_committee: Option<
+                ResolutionMetadata<
+                    T::OrgId,
+                    ThresholdConfig<T::Signal>,
+                    T::BlockNumber,
+                >,
+            >,
+        ) -> DispatchResult {
+            let poster = ensure_signed(origin)?;
+            let new_bounty_id = Self::post_bounty(
+                poster.clone(),
+                Some(BankSpend::Transfer(transfer_id)),
+                description,
+                amount_reserved_for_bounty,
+                acceptance_committee,
+                supervision_committee,
+            )?;
+            Self::deposit_event(RawEvent::BountyPosted(new_bounty_id, poster, amount_reserved_for_bounty));
+            Ok(())
+        }
+        #[weight = 0]
+        fn account_posts_bounty_for_org_with_reserved_spend(
+            origin,
+            reservation_id: TransferId<T::BankId>,
+            description: T::IpfsReference,
+            amount_reserved_for_bounty: BalanceOf<T>,
+            acceptance_committee: ResolutionMetadata<
+                T::OrgId,
+                ThresholdConfig<T::Signal>,
+                T::BlockNumber,
+            >,
+            supervision_committee: Option<
+                ResolutionMetadata<
+                    T::OrgId,
+                    ThresholdConfig<T::Signal>,
+                    T::BlockNumber,
+                >,
+            >,
+        ) -> DispatchResult {
+            let poster = ensure_signed(origin)?;
+            let new_bounty_id = Self::post_bounty(
+                poster.clone(),
+                Some(BankSpend::Reserved(reservation_id)),
+                description,
+                amount_reserved_for_bounty,
+                acceptance_committee,
+                supervision_committee,
+            )?;
+            Self::deposit_event(RawEvent::BountyPosted(new_bounty_id, poster, amount_reserved_for_bounty));
+            Ok(())
+        }
+        #[weight = 0]
+        fn account_applies_for_bounty(
+            origin,
+            bounty_id: T::BountyId,
+            description: T::IpfsReference,
+            total_amount: BalanceOf<T>,
+        ) -> DispatchResult {
+            let submitter = ensure_signed(origin)?;
+            let new_grant_app_id = Self::submit_grant_application(
+                submitter.clone(),
+                None, // not applying on behalf of org
+                bounty_id,
+                description,
+                total_amount,
+            )?;
+            Self::deposit_event(RawEvent::BountyApplicationSubmitted(bounty_id, new_grant_app_id, submitter, None, total_amount));
+            Ok(())
+        }
+        #[weight = 0]
+        fn account_applies_for_bounty_on_org_behalf(
+            origin,
+            org_bank: OnChainTreasuryID,
+            bounty_id: T::BountyId,
+            description: T::IpfsReference,
+            total_amount: BalanceOf<T>,
+        ) -> DispatchResult {
+            let submitter = ensure_signed(origin)?;
+            let new_grant_app_id = Self::submit_grant_application(
+                submitter.clone(),
+                Some(org_bank), // not applying on behalf of org
+                bounty_id,
+                description,
+                total_amount,
+            )?;
+            Self::deposit_event(RawEvent::BountyApplicationSubmitted(bounty_id, new_grant_app_id, submitter, Some(org_bank), total_amount));
+            Ok(())
+        }
+        #[weight = 0]
+        fn account_triggers_application_review(
+            origin,
+            bounty_id: T::BountyId,
+            application_id: T::BountyId,
+        ) -> DispatchResult {
+            let trigger = ensure_signed(origin)?;
+            // TODO: add permissions check, rn naked caller auth
+            let app_state = Self::trigger_application_review(
+                bounty_id,
+                application_id,
+            )?;
+            Self::deposit_event(RawEvent::ApplicationReviewTriggered(trigger, bounty_id, application_id, app_state));
+            Ok(())
+        }
+        #[weight = 0]
+        fn account_sudo_approves_application(
+            origin,
+            bounty_id: T::BountyId,
+            application_id: T::BountyId,
+        ) -> DispatchResult {
+            let sudo = ensure_signed(origin)?;
+            let app_state = Self::sudo_approve_application(
+                sudo.clone(),
+                bounty_id,
+                application_id,
+            )?;
+            Self::deposit_event(RawEvent::SudoApprovedBountyApplication(sudo, bounty_id, application_id, app_state));
+            Ok(())
+        }
+        // should be put in on_finalize for prod but this sufficiently demonstrates _callability_
+        #[weight = 0]
+        fn account_poll_application(
+            origin,
+            bounty_id: T::BountyId,
+            application_id: T::BountyId,
+        ) -> DispatchResult {
+            let poller = ensure_signed(origin)?;
+            // TODO: add permissions check, rn naked caller auth
+            let app_state = Self::poll_application(
+                bounty_id,
+                application_id,
+            )?;
+            Self::deposit_event(RawEvent::ApplicationPolled(poller, bounty_id, application_id, app_state));
+            Ok(())
+        }
+        #[weight = 0]
+        fn grantee_submits_milestone(
+            origin,
+            bounty_id: T::BountyId,
+            application_id: T::BountyId,
+            submission_reference: T::IpfsReference,
+            amount_requested: BalanceOf<T>,
+        ) -> DispatchResult {
+            let submitter = ensure_signed(origin)?;
+            let new_milestone_id = Self::submit_milestone(submitter.clone(), bounty_id, application_id, submission_reference, amount_requested)?;
+            Self::deposit_event(RawEvent::MilestoneSubmitted(submitter, bounty_id, application_id, new_milestone_id, amount_requested));
+            Ok(())
+        }
+        #[weight = 0]
+        fn account_triggers_milestone_review(
+            origin,
+            bounty_id: T::BountyId,
+            milestone_id: T::BountyId,
+        ) -> DispatchResult {
+            let trigger = ensure_signed(origin)?;
+            // TODO: add auth here instead of unpermissioned
+            let milestone_status = Self::trigger_milestone_review(bounty_id, milestone_id)?;
+            Self::deposit_event(RawEvent::MilestoneReviewTriggered(trigger, bounty_id, milestone_id, milestone_status));
+            Ok(())
+        }
+        #[weight = 0]
+        fn account_approved_milestone(
+            origin,
+            bounty_id: T::BountyId,
+            milestone_id: T::BountyId,
+        ) -> DispatchResult {
+            let sudo = ensure_signed(origin)?;
+            let milestone_status = Self::sudo_approves_milestone(sudo.clone(), bounty_id, milestone_id)?;
+            Self::deposit_event(RawEvent::SudoApprovedMilestone(sudo, bounty_id, milestone_id, milestone_status));
+            Ok(())
+        }
+        #[weight = 0]
+        fn account_polls_milestone(
+            origin,
+            bounty_id: T::BountyId,
+            milestone_id: T::BountyId,
+        ) -> DispatchResult {
+            let poller = ensure_signed(origin)?;
+            let milestone_status = Self::poll_milestone(bounty_id, milestone_id)?;
+            Self::deposit_event(RawEvent::MilestonePolled(poller, bounty_id, milestone_id, milestone_status));
             Ok(())
         }
     }

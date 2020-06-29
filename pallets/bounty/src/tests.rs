@@ -22,7 +22,7 @@ impl_outer_origin! {
     pub enum Origin for Test where system = frame_system {}
 }
 
-mod bank {
+mod bounty {
     pub use super::super::*;
 }
 
@@ -33,6 +33,7 @@ impl_outer_event! {
         org<T>,
         vote<T>,
         bank<T>,
+        bounty<T>,
     }
 }
 
@@ -95,24 +96,35 @@ impl vote::Trait for Test {
 parameter_types! {
     // minimum deposit to register an on-chain bank
     pub const MinimumInitialDeposit: u64 = 5;
+    pub const MinimumTransfer: u64 = 5;
+}
+impl bank::Trait for Test {
+    type Event = TestEvent;
+    type BankId = u64;
+    type Currency = Balances;
+    type MinimumTransfer = MinimumTransfer;
+    type MinimumInitialDeposit = MinimumInitialDeposit;
+}
+parameter_types! {
+    // minimum deposit to register an on-chain bank
+    pub const BountyLowerBound: u64 = 5;
 }
 impl Trait for Test {
     type Event = TestEvent;
-    type BankAssociatedId = u64;
-    type Currency = Balances;
-    type MinimumInitialDeposit = MinimumInitialDeposit;
+    type BountyId = u64;
+    type BountyLowerBound = BountyLowerBound;
 }
 pub type System = system::Module<Test>;
 pub type Balances = pallet_balances::Module<Test>;
 pub type Org = org::Module<Test>;
-pub type Bank = Module<Test>;
+pub type Bounty = Module<Test>;
 
-fn get_last_event() -> RawEvent<u64, u64, u32, u64, u64> {
+fn get_last_event() -> RawEvent<u64, u64, u64, u64, u64> {
     System::events()
         .into_iter()
         .map(|r| r.event)
         .filter_map(|e| {
-            if let TestEvent::bank(inner) = e {
+            if let TestEvent::bounty(inner) = e {
                 Some(inner)
             } else {
                 None
@@ -141,4 +153,22 @@ fn new_test_ext() -> sp_io::TestExternalities {
     let mut ext: sp_io::TestExternalities = t.into();
     ext.execute_with(|| System::set_block_number(1));
     ext
+}
+
+use util::organization::Organization;
+
+#[test]
+fn genesis_config_works() {
+    new_test_ext().execute_with(|| {
+        assert_eq!(Org::organization_counter(), 1);
+        let constitution = 1738;
+        let expected_organization =
+            Organization::new(Some(1), None, constitution);
+        let org_in_storage = Org::organization_states(1u64).unwrap();
+        assert_eq!(expected_organization, org_in_storage);
+        for i in 1u64..7u64 {
+            assert!(Org::is_member_of_group(1u64, &i));
+        }
+        assert!(System::events().is_empty());
+    });
 }
