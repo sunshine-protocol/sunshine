@@ -57,6 +57,7 @@ use orml_utilities::OrderedSet;
 use sp_runtime::{
     traits::{
         AtLeast32Bit,
+        AtLeast32BitUnsigned,
         CheckedAdd,
         CheckedSub,
         MaybeSerializeDeserialize,
@@ -103,7 +104,8 @@ pub trait Trait: system::Trait {
         + Debug
         + PartialOrd
         + CheckedSub
-        + Zero;
+        + Zero
+        + AtLeast32BitUnsigned;
 
     /// The hard limit on the number of times shares can be reserved
     /// - why? we need to track how much the group check is called and limit it somehow and this is the best I've come up with for now...TODO: make issue and get feedback

@@ -10,29 +10,29 @@ homepage = 'https://joinsunshine.com'
 repository = 'https://github.com/sunshine-protocol/sunshine-node'
 
 [build-dependencies]
-substrate-build-script-utils = "2.0.0-rc3"
+substrate-build-script-utils = "2.0.0-rc4"
 
 [dependencies]
 futures = "0.3.5"
 log = "0.4.8"
-sc-basic-authorship = { version = "0.8.0-rc3", default-features = false }
-sc-cli = { version = "0.8.0-rc3", optional = true, default-features = false }
-sc-consensus = { version = "0.8.0-rc3", default-features = false }
-sc-client-api = { version = "2.0.0-rc3", default-features = false }
-sc-consensus-aura = { version = "0.8.0-rc3", default-features = false }
-sc-executor = { version = "0.8.0-rc3", default-features = false }
-sc-finality-grandpa = { version = "0.8.0-rc3", default-features = false }
-sc-network = { version = "0.8.0-rc3", default-features = false }
-sc-service = { version = "0.8.0-rc3", default-features = false }
-sc-transaction-pool = { version = "2.0.0-rc3", default-features = false }
-sp-consensus = { version = "0.8.0-rc3", default-features = false }
-sp-consensus-aura = { version = "0.8.0-rc3", default-features = false }
-sp-core = { version = "2.0.0-rc3", default-features = false }
-sp-finality-grandpa = { version = "2.0.0-rc3", default-features = false }
-sp-inherents = { version = "2.0.0-rc3", default-features = false }
-sp-runtime = { version = "2.0.0-rc3", default-features = false }
-sp-transaction-pool = { version = "2.0.0-rc3", default-features = false }
-suntime = { path = "runtime" }
+sc-basic-authorship = { version = "0.8.0-rc4", default-features = false }
+sc-cli = { version = "0.8.0-rc4", optional = true, default-features = false }
+sc-consensus = { version = "0.8.0-rc4", default-features = false }
+sc-client-api = { version = "2.0.0-rc4", default-features = false }
+sc-consensus-aura = { version = "0.8.0-rc4", default-features = false }
+sc-executor = { version = "0.8.0-rc4", default-features = false }
+sc-finality-grandpa = { version = "0.8.0-rc4", default-features = false }
+sc-network = { version = "0.8.0-rc4", default-features = false }
+sc-service = { version = "0.8.0-rc4", default-features = false }
+sc-transaction-pool = { version = "2.0.0-rc4", default-features = false }
+sp-consensus = { version = "0.8.0-rc4", default-features = false }
+sp-consensus-aura = { version = "0.8.0-rc4", default-features = false }
+sp-core = { version = "2.0.0-rc4", default-features = false }
+sp-finality-grandpa = { version = "2.0.0-rc4", default-features = false }
+sp-inherents = { version = "2.0.0-rc4", default-features = false }
+sp-runtime = { version = "2.0.0-rc4", default-features = false }
+sp-transaction-pool = { version = "2.0.0-rc4", default-features = false }
+suntime = { path = "../runtime" }
 utils-identity = { git = "https://github.com/sunshine-protocol/sunshine-identity/", default-features=false }
 structopt = { version = "0.3.14", optional = true }
 

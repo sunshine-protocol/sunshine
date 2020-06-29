@@ -53,6 +53,7 @@ impl frame_system::Trait for Test {
     type AccountData = pallet_balances::AccountData<u64>;
     type OnNewAccount = ();
     type OnKilledAccount = ();
+    type BaseCallFilter = ();
 }
 parameter_types! {
     pub const ReservationLimit: u32 = 10000;

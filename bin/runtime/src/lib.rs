@@ -284,6 +284,7 @@ impl frame_system::Trait for Runtime {
     type OnKilledAccount = ();
     /// The data to be stored in an account.
     type AccountData = pallet_balances::AccountData<Balance>;
+    type BaseCallFilter = ();
 }
 
 impl pallet_aura::Trait for Runtime {
@@ -377,26 +378,36 @@ impl vote::Trait for Runtime {
     type VoteId = u64;
     type Signal = u64;
 }
+parameter_types! {
+    pub const MinimumDisputeAmount: u64 = 10;
+}
+pub use court;
+impl court::Trait for Runtime {
+    type Event = Event;
+    type Currency = Balances;
+    type DisputeId = u64;
+    type MinimumDisputeAmount = MinimumDisputeAmount;
+}
 pub use bank;
 parameter_types! {
-    // minimum deposit to register an on-chain bank
-    pub const MinimumInitialDeposit: u128 = 5;
+    pub const MinimumTransfer: u64 = 10;
+    pub const MinimumInitialDeposit: u64 = 20;
 }
 impl bank::Trait for Runtime {
     type Event = Event;
-    type BankAssociatedId = u64;
+    type BankId = u64;
     type Currency = Balances;
+    type MinimumTransfer = MinimumTransfer;
     type MinimumInitialDeposit = MinimumInitialDeposit;
 }
 pub use bounty;
 parameter_types! {
-    pub const MinimumBountyCollateralRatio: Permill = Permill::from_percent(20);
-    pub const BountyLowerBound: u128 = 10;
+    // minimum deposit to register an on-chain bank
+    pub const BountyLowerBound: u64 = 5;
 }
 impl bounty::Trait for Runtime {
     type Event = Event;
     type BountyId = u64;
-    type MinimumBountyCollateralRatio = MinimumBountyCollateralRatio;
     type BountyLowerBound = BountyLowerBound;
 }
 
@@ -415,9 +426,10 @@ construct_runtime!(
         TransactionPayment: pallet_transaction_payment::{Module, Storage},
         Sudo: pallet_sudo::{Module, Call, Config<T>, Storage, Event<T>},
         Indices: pallet_indices::{Module, Call, Storage, Config<T>, Event<T>},
-        // sunshine modules
+        // sunshine-bounty modules
         Org: org::{Module, Call, Config<T>, Storage, Event<T>},
         Vote: vote::{Module, Call, Storage, Event<T>},
+        Court: court::{Module, Call, Storage, Event<T>},
         Bank: bank::{Module, Call, Storage, Event<T>},
         Bounty: bounty::{Module, Call, Storage, Event<T>},
     }

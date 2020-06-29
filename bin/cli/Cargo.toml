@@ -17,8 +17,8 @@ keybase-keystore = {package = "keybase-keystore", git = "https://github.com/suns
 qr2term = "0.2.1"
 rpassword = "4.0.5"
 sp-keyring = "2.0.0-rc2"
-pallet-indices = "2.0.0-rc3"
-sp-core = "2.0.0-rc3"
+pallet-indices = "2.0.0-rc4"
+sp-core = "2.0.0-rc4"
 substrate-subxt = "0.8.0"
 # textwrap = { version = "0.11.0", features = ["term_size"] }
 thiserror = "1.0.19"
