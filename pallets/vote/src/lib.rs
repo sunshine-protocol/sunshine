@@ -11,20 +11,58 @@
 mod tests;
 
 use codec::Codec;
-use frame_support::{decl_error, decl_event, decl_module, decl_storage, ensure, Parameter};
-use frame_system::{self as system, ensure_signed};
-use sp_runtime::{
-    traits::{AtLeast32Bit, CheckedSub, MaybeSerializeDeserialize, Member, Zero},
-    DispatchError, DispatchResult, Permill,
+use frame_support::{
+    decl_error,
+    decl_event,
+    decl_module,
+    decl_storage,
+    ensure,
+    Parameter,
 };
-use sp_std::{fmt::Debug, prelude::*};
+use frame_system::{
+    self as system,
+    ensure_signed,
+};
+use sp_runtime::{
+    traits::{
+        AtLeast32Bit,
+        CheckedSub,
+        MaybeSerializeDeserialize,
+        Member,
+        Zero,
+    },
+    DispatchError,
+    DispatchResult,
+};
+use sp_std::{
+    fmt::Debug,
+    prelude::*,
+};
 use util::{
     traits::{
-        AccessGenesis, Apply, ApplyVote, Approved, CheckVoteStatus, GenerateUniqueID, GetGroup,
-        GetVoteOutcome, IDIsAvailable, MintableSignal, OpenVote, OrganizationSupervisorPermissions,
-        Revert, ShareInformation, UpdateVoteTopic, VoteOnProposal, VoteVector,
+        AccessGenesis,
+        Apply,
+        ApplyVote,
+        CheckVoteStatus,
+        GenerateUniqueID,
+        GetGroup,
+        GetVoteOutcome,
+        IDIsAvailable,
+        MintableSignal,
+        OpenVote,
+        OrganizationSupervisorPermissions,
+        ShareInformation,
+        UpdateVoteTopic,
+        VoteOnProposal,
+        VoteVector,
     },
-    vote::{ThresholdConfig, Vote, VoteOutcome, VoteState, VoterView},
+    vote::{
+        ThresholdConfig,
+        Vote,
+        VoteOutcome,
+        VoteState,
+        VoterView,
+    },
 };
 
 pub trait Trait: frame_system::Trait + org::Trait {
@@ -73,7 +111,7 @@ decl_event!(
 
 decl_error! {
     pub enum Error for Module<T: Trait> {
-        //VotePastExpirationTimeSoVotesNotAccepted,
+        VotePastExpirationTimeSoVotesNotAccepted,
         SignalNotMintedForVoter,
         NotAuthorizedToCreateVoteForOrganization,
         NoVoteStateForOutcomeQuery,
@@ -82,20 +120,24 @@ decl_error! {
         CannotMintSignalBecauseMembershipShapeDNE,
         OldVoteDirectionEqualsNewVoteDirectionSoNoChange,
         CannotUpdateVoteTopicIfVoteStateDNE,
+        // the turnout threshold must be less than the support threshold
+        ThresholdInputDoesNotSatisfySupportGEQTurnoutNorms,
+        // i.e. changing from any non-NoVote view to NoVote (some vote changes aren't allowed to simplify assumptions)
+        VoteChangeNotSupported,
     }
 }
 
 decl_storage! {
     trait Store for Module<T: Trait> as Vote {
         /// The nonce for unique vote id generation
-        pub VoteIdCounter get(fn vote_id_counter): T::VoteId;
+        VoteIdCounter get(fn vote_id_counter): T::VoteId;
 
         /// The number of open votes
         pub OpenVoteCounter get(fn open_vote_counter): u32;
 
         /// The state of a vote
         pub VoteStates get(fn vote_states): map
-            hasher(opaque_blake2_256) T::VoteId => Option<VoteState<T::Signal, Permill, T::BlockNumber, T::IpfsReference>>;
+            hasher(opaque_blake2_256) T::VoteId => Option<VoteState<T::Signal, T::BlockNumber, T::IpfsReference>>;
 
         /// Total signal minted for the vote; sum of all participant signal for the vote
         pub TotalSignalIssuance get(fn total_signal_issuance): map
@@ -114,39 +156,20 @@ decl_module! {
         fn deposit_event() = default;
 
         #[weight = 0]
-        pub fn create_weighted_percentage_threshold_approval_vote(
-            origin,
-            topic: Option<T::IpfsReference>,
-            organization: T::OrgId,
-            passage_threshold_pct: Permill,
-            turnout_threshold_pct: Permill,
-            duration: Option<T::BlockNumber>,
-        ) -> DispatchResult {
-            let vote_creator = ensure_signed(origin)?;
-            // default authentication is organization supervisor or sudo key
-            let authentication: bool = <org::Module<T>>::is_organization_supervisor(organization, &vote_creator);
-            ensure!(authentication, Error::<T>::NotAuthorizedToCreateVoteForOrganization);
-            let threshold_config = ThresholdConfig::new_percentage_threshold(passage_threshold_pct, turnout_threshold_pct);
-            // share weighted percentage threshold vote started
-            let new_vote_id = Self::open_vote(topic, organization, threshold_config, None, duration)?;
-            // emit event
-            Self::deposit_event(RawEvent::NewVoteStarted(vote_creator, organization, new_vote_id));
-            Ok(())
-        }
-        #[weight = 0]
-        pub fn create_weighted_count_threshold_approval_vote(
+        pub fn create_threshold_approval_vote(
             origin,
             topic: Option<T::IpfsReference>,
             organization: T::OrgId,
             support_requirement: T::Signal,
-            turnout_requirement: T::Signal,
+            turnout_requirement: Option<T::Signal>,
             duration: Option<T::BlockNumber>,
         ) -> DispatchResult {
             let vote_creator = ensure_signed(origin)?;
             // default authentication is organization supervisor or sudo key
             let authentication: bool = <org::Module<T>>::is_organization_supervisor(organization, &vote_creator);
             ensure!(authentication, Error::<T>::NotAuthorizedToCreateVoteForOrganization);
-            let threshold_config = ThresholdConfig::new_signal_count_threshold(support_requirement, turnout_requirement);
+            let threshold_config = ThresholdConfig::new(support_requirement, turnout_requirement)
+                .ok_or(Error::<T>::ThresholdInputDoesNotSatisfySupportGEQTurnoutNorms)?;
             // share weighted count threshold vote started
             let new_vote_id = Self::open_vote(topic, organization, threshold_config, None, duration)?;
             // emit event
@@ -203,30 +226,29 @@ impl<T: Trait> GenerateUniqueID<T::VoteId> for Module<T> {
 
 impl<T: Trait> GetVoteOutcome<T::VoteId> for Module<T> {
     type Outcome = VoteOutcome;
-    fn get_vote_outcome(vote_id: T::VoteId) -> Result<Self::Outcome, DispatchError> {
-        let vote_state =
-            <VoteStates<T>>::get(vote_id).ok_or(Error::<T>::NoVoteStateForOutcomeQuery)?;
-        // only updates the vote state's outcome if the outcome changes
-        if let Some(new_outcome) = Self::check_vote_outcome(vote_state.clone()) {
-            let new_vote_state = vote_state.set_outcome(new_outcome);
-            <VoteStates<T>>::insert(vote_id, new_vote_state);
-            Ok(new_outcome)
-        } else {
-            Ok(vote_state.outcome())
-        }
+    fn get_vote_outcome(
+        vote_id: T::VoteId,
+    ) -> Result<Self::Outcome, DispatchError> {
+        let vote_state = <VoteStates<T>>::get(vote_id)
+            .ok_or(Error::<T>::NoVoteStateForOutcomeQuery)?;
+        Ok(vote_state.outcome())
     }
 }
 
 impl<T: Trait>
-    OpenVote<T::OrgId, ThresholdConfig<T::Signal, Permill>, T::BlockNumber, T::IpfsReference>
-    for Module<T>
+    OpenVote<
+        T::OrgId,
+        ThresholdConfig<T::Signal>,
+        T::BlockNumber,
+        T::IpfsReference,
+    > for Module<T>
 {
     type VoteIdentifier = T::VoteId;
     fn open_vote(
         topic: Option<T::IpfsReference>,
         organization: T::OrgId,
-        passage_threshold: ThresholdConfig<T::Signal, Permill>,
-        rejection_threshold: Option<ThresholdConfig<T::Signal, Permill>>,
+        passage_threshold: ThresholdConfig<T::Signal>,
+        rejection_threshold: Option<ThresholdConfig<T::Signal>>,
         duration: Option<T::BlockNumber>,
     ) -> Result<Self::VoteIdentifier, DispatchError> {
         // calculate `initialized` and `expires` fields for vote state
@@ -239,7 +261,8 @@ impl<T: Trait>
         // generate new vote_id
         let new_vote_id = Self::generate_unique_id();
         // by default, this call mints signal based on weighted ownership in group
-        let total_possible_turnout = Self::batch_mint_signal(new_vote_id, organization)?;
+        let total_possible_turnout =
+            Self::batch_mint_signal(new_vote_id, organization)?;
         // instantiate new VoteState with threshold and temporal metadata
         let new_vote_state = VoteState::new(
             topic,
@@ -271,10 +294,15 @@ impl<T: Trait>
         // generate new vote_id
         let new_vote_id = Self::generate_unique_id();
         // mints 1 signal per participant
-        let total_possible_turnout = Self::batch_mint_equal_signal(new_vote_id, organization)?;
+        let total_possible_turnout =
+            Self::batch_mint_equal_signal(new_vote_id, organization)?;
         // instantiate new VoteState for unanimous consent
-        let new_vote_state =
-            VoteState::new_unanimous_consent(topic, total_possible_turnout, now, ends);
+        let new_vote_state = VoteState::new_unanimous_consent(
+            topic,
+            total_possible_turnout,
+            now,
+            ends,
+        );
         // insert the VoteState
         <VoteStates<T>>::insert(new_vote_id, new_vote_state);
         // increment open vote count
@@ -290,8 +318,8 @@ impl<T: Trait> UpdateVoteTopic<T::VoteId, T::IpfsReference> for Module<T> {
         new_topic: T::IpfsReference,
         clear_previous_vote_state: bool,
     ) -> DispatchResult {
-        let old_vote_state =
-            <VoteStates<T>>::get(vote_id).ok_or(Error::<T>::CannotUpdateVoteTopicIfVoteStateDNE)?;
+        let old_vote_state = <VoteStates<T>>::get(vote_id)
+            .ok_or(Error::<T>::CannotUpdateVoteTopicIfVoteStateDNE)?;
         let new_vote_state = if clear_previous_vote_state {
             old_vote_state.update_topic_and_clear_state(new_topic)
         } else {
@@ -306,7 +334,7 @@ impl<T: Trait>
     MintableSignal<
         T::AccountId,
         T::OrgId,
-        ThresholdConfig<T::Signal, Permill>,
+        ThresholdConfig<T::Signal>,
         T::BlockNumber,
         T::VoteId,
         T::IpfsReference,
@@ -315,7 +343,11 @@ impl<T: Trait>
     /// Mints a custom amount of signal
     /// - may be useful for resetting voting rights
     /// - should be heavily guarded and not public facing
-    fn mint_custom_signal_for_account(vote_id: T::VoteId, who: &T::AccountId, signal: T::Signal) {
+    fn mint_custom_signal_for_account(
+        vote_id: T::VoteId,
+        who: &T::AccountId,
+        signal: T::Signal,
+    ) {
         let new_vote = Vote::new(signal, VoterView::NoVote, None);
         <VoteLogger<T>>::insert(vote_id, who, new_vote);
     }
@@ -328,8 +360,9 @@ impl<T: Trait>
     ) -> Result<T::Signal, DispatchError> {
         let new_vote_group = <org::Module<T>>::get_group(organization)
             .ok_or(Error::<T>::CannotMintSignalBecauseGroupMembershipDNE)?;
-        let total_minted: T::Signal = (new_vote_group.len() as u32).into();
-        new_vote_group.into_iter().for_each(|who| {
+        // 1 person 1 vote despite any weightings in org
+        let total_minted: T::Signal = (new_vote_group.0.len() as u32).into();
+        new_vote_group.0.into_iter().for_each(|who| {
             let minted_signal: T::Signal = 1u32.into();
             let new_vote = Vote::new(minted_signal, VoterView::NoVote, None);
             <VoteLogger<T>>::insert(vote_id, who, new_vote);
@@ -342,18 +375,19 @@ impl<T: Trait>
         vote_id: T::VoteId,
         organization: T::OrgId,
     ) -> Result<T::Signal, DispatchError> {
-        let new_vote_group = <org::Module<T>>::get_membership_with_shape(organization)
-            .ok_or(Error::<T>::CannotMintSignalBecauseMembershipShapeDNE)?;
+        let new_vote_group =
+            <org::Module<T>>::get_membership_with_shape(organization)
+                .ok_or(Error::<T>::CannotMintSignalBecauseMembershipShapeDNE)?;
         // total issuance
         let total_minted: T::Signal = new_vote_group.total().into();
-        new_vote_group
-            .account_ownership()
-            .into_iter()
-            .for_each(|(who, shares)| {
+        new_vote_group.account_ownership().into_iter().for_each(
+            |(who, shares)| {
                 let minted_signal: T::Signal = shares.into();
-                let new_vote = Vote::new(minted_signal, VoterView::NoVote, None);
+                let new_vote =
+                    Vote::new(minted_signal, VoterView::NoVote, None);
                 <VoteLogger<T>>::insert(vote_id, who, new_vote);
-            });
+            },
+        );
         <TotalSignalIssuance<T>>::insert(vote_id, total_minted);
         Ok(total_minted)
     }
@@ -363,51 +397,23 @@ impl<T: Trait> ApplyVote<T::IpfsReference> for Module<T> {
     type Signal = T::Signal;
     type Direction = VoterView;
     type Vote = Vote<T::Signal, T::IpfsReference>;
-    type State = VoteState<T::Signal, Permill, T::BlockNumber, T::IpfsReference>;
+    type State = VoteState<T::Signal, T::BlockNumber, T::IpfsReference>;
 
     fn apply_vote(
         state: Self::State,
         vote_magnitude: T::Signal,
-        new_vote_view: Self::Direction,
         old_vote_view: Self::Direction,
-    ) -> Self::State {
-        let dummy_old_vote_vector: Vote<T::Signal, T::IpfsReference> =
-            Vote::new(vote_magnitude, old_vote_view, None);
-        let dummy_new_vote_vector: Vote<T::Signal, T::IpfsReference> =
-            Vote::new(vote_magnitude, new_vote_view, None);
-        state
-            .revert(dummy_old_vote_vector)
-            .apply(dummy_new_vote_vector)
+        new_vote_view: Self::Direction,
+    ) -> Option<Self::State> {
+        state.apply(vote_magnitude, old_vote_view, new_vote_view)
     }
 }
 
 impl<T: Trait> CheckVoteStatus<T::IpfsReference, T::VoteId> for Module<T> {
-    /// Returns Some(VoteOutcome) when the state's outcome changes upon recalculation
-    fn check_vote_outcome(state: Self::State) -> Option<Self::Outcome> {
-        let vote_is_expired = Self::check_vote_expired(&state);
-        // match outcome
-        if state.approved() && !vote_is_expired {
-            if state.outcome() == VoteOutcome::ApprovedAndNotExpired {
-                None
-            } else {
-                // new outcome
-                Some(VoteOutcome::ApprovedAndNotExpired)
-            }
-        } else if state.approved() && vote_is_expired {
-            if state.outcome() == VoteOutcome::ApprovedAndExpired {
-                None
-            } else {
-                // new outcome
-                Some(VoteOutcome::ApprovedAndExpired)
-            }
-        } else {
-            None
-        }
-    }
     fn check_vote_expired(state: &Self::State) -> bool {
         let now = system::Module::<T>::block_number();
         if let Some(n) = state.expires() {
-            return n < now;
+            return n < now
         }
         false
     }
@@ -417,7 +423,7 @@ impl<T: Trait>
     VoteOnProposal<
         T::AccountId,
         T::OrgId,
-        ThresholdConfig<T::Signal, Permill>,
+        ThresholdConfig<T::Signal>,
         T::BlockNumber,
         T::VoteId,
         T::IpfsReference,
@@ -430,25 +436,27 @@ impl<T: Trait>
         justification: Option<T::IpfsReference>,
     ) -> DispatchResult {
         // get the vote state
-        let vote_state =
-            <VoteStates<T>>::get(vote_id).ok_or(Error::<T>::NoVoteStateForVoteRequest)?;
-        // //-> could uncomment if we want to prevent votes after expiry
-        // ensure!(
-        //     !Self::check_vote_expired(vote_state.clone()),
-        //     Error::<T>::VotePastExpirationTimeSoVotesNotAccepted
-        // );
+        let vote_state = <VoteStates<T>>::get(vote_id)
+            .ok_or(Error::<T>::NoVoteStateForVoteRequest)?;
+        // TODO: add permissioned method for adding time to the vote state because of this restriction but this is a legitimate restriction
+        // -> every standard vote has a recognized end to establish when the decision must be made based on collected input
+        ensure!(
+            !Self::check_vote_expired(&vote_state),
+            Error::<T>::VotePastExpirationTimeSoVotesNotAccepted
+        );
         // get the organization associated with this vote_state
         let old_vote = <VoteLogger<T>>::get(vote_id, voter.clone())
             .ok_or(Error::<T>::SignalNotMintedForVoter)?;
-        let new_vote = old_vote
-            .set_new_view(direction, justification)
-            .ok_or(Error::<T>::OldVoteDirectionEqualsNewVoteDirectionSoNoChange)?;
+        let new_vote = old_vote.set_new_view(direction, justification).ok_or(
+            Error::<T>::OldVoteDirectionEqualsNewVoteDirectionSoNoChange,
+        )?;
         let new_state = Self::apply_vote(
             vote_state,
             old_vote.magnitude(),
-            direction,
             old_vote.direction(),
-        );
+            direction,
+        )
+        .ok_or(Error::<T>::VoteChangeNotSupported)?;
         // set the new vote for the voter's profile
         <VoteLogger<T>>::insert(vote_id, voter, new_vote);
         // commit new vote state to storage

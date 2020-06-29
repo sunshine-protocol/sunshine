@@ -1,9 +1,24 @@
-use codec::{Codec, Decode, Encode};
+use codec::{
+    Codec,
+    Decode,
+    Encode,
+};
 use frame_support::Parameter;
-use sp_runtime::traits::{AtLeast32Bit, MaybeSerializeDeserialize, Member, Zero};
+use sp_runtime::traits::{
+    AtLeast32Bit,
+    MaybeSerializeDeserialize,
+    Member,
+    Zero,
+};
 use std::fmt::Debug;
-use substrate_subxt::system::{System, SystemEventsDecoder};
-use util::{organization::Organization, share::ShareProfile};
+use substrate_subxt::system::{
+    System,
+    SystemEventsDecoder,
+};
+use util::{
+    organization::Organization,
+    share::ShareProfile,
+};
 
 /// The subset of the org trait and its inherited traits that the client must inherit
 #[module]

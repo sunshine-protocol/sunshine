@@ -1,13 +1,31 @@
-use crate::error::Error;
-use crate::runtime::{Client, ClientBuilder};
-use sled::transaction::TransactionError;
-use sled::Tree;
-use sp_database::{Change, Database, Transaction};
+use crate::{
+    error::Error,
+    runtime::{
+        Client,
+        ClientBuilder,
+    },
+};
+use sled::{
+    transaction::TransactionError,
+    Tree,
+};
+use sp_database::{
+    Change,
+    Database,
+    Transaction,
+};
 use std::sync::Arc;
-use substrate_subxt_light_client::{DatabaseConfig, LightClient, LightClientConfig};
+use substrate_subxt_light_client::{
+    DatabaseConfig,
+    LightClient,
+    LightClientConfig,
+};
 pub use sunshine_node::ChainType;
 
-pub async fn build_light_client(tree: Tree, chain: ChainType) -> Result<Client, Error> {
+pub async fn build_light_client(
+    tree: Tree,
+    chain: ChainType,
+) -> Result<Client, Error> {
     let config = LightClientConfig {
         impl_name: sunshine_node::IMPL_NAME,
         impl_version: sunshine_node::IMPL_VERSION,
@@ -62,7 +80,10 @@ where
                             tree.remove(Key::key(*col, key))?;
                         }
                         Change::Store(hash, preimage) => {
-                            tree.insert(Key::hash_key(hash.as_ref()), preimage.as_slice())?;
+                            tree.insert(
+                                Key::hash_key(hash.as_ref()),
+                                preimage.as_slice(),
+                            )?;
                         }
                         Change::Release(hash) => {
                             tree.remove(Key::hash_key(hash.as_ref()))?;

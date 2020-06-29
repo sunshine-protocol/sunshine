@@ -1,10 +1,21 @@
-use codec::{Codec, Decode, Encode};
-use sp_runtime::{traits::Zero, RuntimeDebug};
+use codec::{
+    Codec,
+    Decode,
+    Encode,
+};
+use sp_runtime::{
+    traits::Zero,
+    RuntimeDebug,
+};
 use sp_std::prelude::*;
 
 #[derive(new, PartialEq, Eq, Default, Clone, Encode, Decode, RuntimeDebug)]
 /// The struct to track the organization's state
-pub struct Organization<AccountId, Id: Codec + PartialEq + Zero + From<u32> + Copy, Hash> {
+pub struct Organization<
+    AccountId,
+    Id: Codec + PartialEq + Zero + From<u32> + Copy,
+    Hash,
+> {
     /// The default sudo for this organization, optional because not _encouraged_
     sudo: Option<AccountId>,
     /// The parent organization for this organization
@@ -66,11 +77,15 @@ pub enum OrganizationSource<AccountId, Shares> {
 impl<AccountId: PartialEq, Shares> From<Vec<(AccountId, Shares)>>
     for OrganizationSource<AccountId, Shares>
 {
-    fn from(other: Vec<(AccountId, Shares)>) -> OrganizationSource<AccountId, Shares> {
+    fn from(
+        other: Vec<(AccountId, Shares)>,
+    ) -> OrganizationSource<AccountId, Shares> {
         OrganizationSource::AccountsWeighted(other)
     }
 }
-impl<AccountId: PartialEq, Shares> Default for OrganizationSource<AccountId, Shares> {
+impl<AccountId: PartialEq, Shares> Default
+    for OrganizationSource<AccountId, Shares>
+{
     fn default() -> OrganizationSource<AccountId, Shares> {
         OrganizationSource::Accounts(Vec::new())
     }
@@ -87,7 +102,9 @@ pub struct TermsOfAgreement<AccountId, Shares, Hash> {
     share_metadata: Vec<(AccountId, Shares)>,
 }
 
-impl<AccountId: Clone, Shares: Clone, Hash: Clone> TermsOfAgreement<AccountId, Shares, Hash> {
+impl<AccountId: Clone, Shares: Clone, Hash: Clone>
+    TermsOfAgreement<AccountId, Shares, Hash>
+{
     pub fn constitution(&self) -> Hash {
         self.constitution.clone()
     }
@@ -112,7 +129,8 @@ pub struct FullTermsOfAgreement<AccountId, Rules, Decisions, Outcomes> {
     /// The starting state for the group
     basic_terms: Rules,
     /// This represents the metagovernance configuration, how the group can coordinate changes
-    allowed_changes: Vec<(Catalyst<AccountId>, Option<Decisions>, Option<Outcomes>)>,
+    allowed_changes:
+        Vec<(Catalyst<AccountId>, Option<Decisions>, Option<Outcomes>)>,
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
@@ -130,11 +148,25 @@ pub enum Catalyst<AccountId> {
 /// TODO: we have n = 1, 2 so do it with AccountId, up to `12`, one day somehow
 pub enum VoteConfig<AccountId, OrgId, BlockNumber> {
     /// Only one supervisor approval is required but everyone has veto rights, for BlockNumber after approval
-    OneSupervisorApprovalWithFullOrgShareVetoRights(AccountId, OrgId, BlockNumber),
+    OneSupervisorApprovalWithFullOrgShareVetoRights(
+        AccountId,
+        OrgId,
+        BlockNumber,
+    ),
     /// Two supervisor approvals is required but everyone has veto rights, for BlockNumber after approval
-    TwoSupervisorsApprovalWithFullOrgShareVetoRights(AccountId, AccountId, OrgId, BlockNumber),
+    TwoSupervisorsApprovalWithFullOrgShareVetoRights(
+        AccountId,
+        AccountId,
+        OrgId,
+        BlockNumber,
+    ),
     /// Only one supervisor approval is required but everyone can vote to veto must reach threshold, for BlockNumber after approval
-    OneSupervisorApprovalWith1P1VCountThresholdVetoRights(AccountId, OrgId, u32, BlockNumber),
+    OneSupervisorApprovalWith1P1VCountThresholdVetoRights(
+        AccountId,
+        OrgId,
+        u32,
+        BlockNumber,
+    ),
     /// Two supervisor approvals is required but everyone can vote to veto must reach threshold, for BlockNumber after approval
     TwoSupervisorsApprovalWith1P1VCountThresholdVetoRights(
         AccountId,
@@ -144,7 +176,12 @@ pub enum VoteConfig<AccountId, OrgId, BlockNumber> {
         BlockNumber,
     ),
     /// Only one supervisor approval is required but everyone can vote to veto must reach share weighted threshold, for BlockNumber after approval
-    OneSupervisorApprovalWithShareWeightedVetoRights(AccountId, OrgId, u32, BlockNumber),
+    OneSupervisorApprovalWithShareWeightedVetoRights(
+        AccountId,
+        OrgId,
+        u32,
+        BlockNumber,
+    ),
     /// Two supervisor approvals is required but everyone can vote to veto must reach share weighted threshold, for BlockNumber after approval
     TwoSupervisorsApprovalWithShareWeightedVetoRights(
         AccountId,
@@ -154,7 +191,12 @@ pub enum VoteConfig<AccountId, OrgId, BlockNumber> {
         BlockNumber,
     ),
     /// Warning: Dictatorial and Centralized Governance, some say _practical_
-    OnePersonOneVoteThresholdWithOneSupervisorVetoRights(OrgId, u32, AccountId, BlockNumber),
+    OnePersonOneVoteThresholdWithOneSupervisorVetoRights(
+        OrgId,
+        u32,
+        AccountId,
+        BlockNumber,
+    ),
     OnePersonOneVoteThresholdWithTwoSupervisorsVetoRights(
         OrgId,
         u32,
@@ -162,7 +204,12 @@ pub enum VoteConfig<AccountId, OrgId, BlockNumber> {
         AccountId,
         BlockNumber,
     ),
-    ShareWeightedVoteThresholdWithOneSupervisorVetoRights(OrgId, u32, AccountId, BlockNumber),
+    ShareWeightedVoteThresholdWithOneSupervisorVetoRights(
+        OrgId,
+        u32,
+        AccountId,
+        BlockNumber,
+    ),
     ShareWeightedVoteThresholdWithTwoSupervisorsVetoRights(
         OrgId,
         u32,
@@ -171,13 +218,31 @@ pub enum VoteConfig<AccountId, OrgId, BlockNumber> {
         BlockNumber,
     ),
     /// 1 person 1 vote, u32 threshold for approval, but everyone has veto rights, for BlockNumber after approval
-    OnePersonOneVoteThresholdWithFullOrgShareVetoRights(OrgId, u32, BlockNumber),
+    OnePersonOneVoteThresholdWithFullOrgShareVetoRights(
+        OrgId,
+        u32,
+        BlockNumber,
+    ),
     /// 1 person 1 vote, u32 threshold; only the second share group has veto rights (also must be flat!), for BlockNumber after approval
-    OnePersonOneVoteThresholdANDVetoEnabledGroup(OrgId, u32, OrgId, BlockNumber),
+    OnePersonOneVoteThresholdANDVetoEnabledGroup(
+        OrgId,
+        u32,
+        OrgId,
+        BlockNumber,
+    ),
     /// ShareWeighted vote, u32 threshold for approval, but everyone has veto rights, for BlockNumber after approval
-    ShareWeightedVoteThresholdWithFullOrgShareVetoRights(OrgId, u32, BlockNumber),
+    ShareWeightedVoteThresholdWithFullOrgShareVetoRights(
+        OrgId,
+        u32,
+        BlockNumber,
+    ),
     /// ShareWeighted vote, u32 threshold for approval, but everyone in second org has veto rights, for BlockNumber after approval
-    ShareWeightedVoteThresholdANDVetoEnabledGroup(OrgId, u32, OrgId, BlockNumber),
+    ShareWeightedVoteThresholdANDVetoEnabledGroup(
+        OrgId,
+        u32,
+        OrgId,
+        BlockNumber,
+    ),
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]

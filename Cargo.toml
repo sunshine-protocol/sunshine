@@ -3,12 +3,14 @@ panic = "unwind"
 
 [workspace]
 members = [
+    "bin/runtime",
     "bin/node",
     "bin/cli",
+    "client",
     "pallets-util",
     "pallets/org",
     "pallets/vote",
+    "pallets/court",
     "pallets/bank",
     "pallets/bounty",
-    "client",
 ]

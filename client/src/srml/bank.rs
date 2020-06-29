@@ -1,14 +1,36 @@
 use crate::srml::{
-    org::{Org, OrgEventsDecoder},
-    vote::{Vote, VoteEventsDecoder},
+    org::{
+        Org,
+        OrgEventsDecoder,
+    },
+    vote::{
+        Vote,
+        VoteEventsDecoder,
+    },
 };
-use codec::{Codec, Decode, Encode};
+use codec::{
+    Codec,
+    Decode,
+    Encode,
+};
 use frame_support::Parameter;
-use sp_runtime::traits::{AtLeast32Bit, MaybeSerializeDeserialize, Member, Zero};
+use sp_runtime::traits::{
+    AtLeast32Bit,
+    MaybeSerializeDeserialize,
+    Member,
+    Zero,
+};
 use std::fmt::Debug;
-use substrate_subxt::system::{System, SystemEventsDecoder};
+use substrate_subxt::system::{
+    System,
+    SystemEventsDecoder,
+};
 use util::bank::{
-    BankState, DepositInfo, InternalTransferInfo, OnChainTreasuryID, ReservationInfo,
+    BankState,
+    DepositInfo,
+    InternalTransferInfo,
+    OnChainTreasuryID,
+    ReservationInfo,
 };
 
 pub type BalanceOf<T> = <T as Bank>::Currency; // as Currency<<T as System>::AccountId>>::Balance;
@@ -186,7 +208,9 @@ pub struct TransferSpendingPowerForSpendCommitmentCall<T: Bank> {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
-pub struct InternalTransferExecutedAndSpendingPowerDoledOutToControllerEvent<T: Bank> {
+pub struct InternalTransferExecutedAndSpendingPowerDoledOutToControllerEvent<
+    T: Bank,
+> {
     pub qualified_spend_reservation_controller: <T as System>::AccountId,
     pub bank_id: OnChainTreasuryID,
     pub reason: <T as Org>::IpfsReference,
@@ -211,13 +235,17 @@ pub struct SpendRequestForInternalTransferApprovedAndExecutedEvent<T: Bank> {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
-pub struct BurnAllSharesToLeaveWeightedMembershipBankAndWithdrawRelatedFreeCapitalCall<T: Bank> {
+pub struct BurnAllSharesToLeaveWeightedMembershipBankAndWithdrawRelatedFreeCapitalCall<
+    T: Bank,
+> {
     pub bank_id: OnChainTreasuryID,
     phantom: std::marker::PhantomData<T>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
-pub struct AccountLeftMembershipAndWithdrewProportionOfFreeCapitalInBankEvent<T: Bank> {
+pub struct AccountLeftMembershipAndWithdrewProportionOfFreeCapitalInBankEvent<
+    T: Bank,
+> {
     pub bank_id: OnChainTreasuryID,
     pub leaving_member: <T as System>::AccountId,
     pub amount_withdrawn_by_burning_shares: BalanceOf<T>,

@@ -9,28 +9,69 @@
 mod tests;
 
 use util::{
-    organization::{Organization, OrganizationSource},
-    share::{ShareProfile, SimpleShareGenesis},
+    organization::{
+        Organization,
+        OrganizationSource,
+    },
+    share::{
+        ShareProfile,
+        SimpleShareGenesis,
+    },
     traits::{
-        AccessGenesis, GenerateUniqueID, GetGroup, GroupMembership, IDIsAvailable, LockProfile,
-        OrganizationSupervisorPermissions, RegisterOrganization, RemoveOrganization,
-        ReserveProfile, ShareInformation, ShareIssuance, VerifyShape,
+        AccessGenesis,
+        CalculateOwnership,
+        GenerateUniqueID,
+        GetGroup,
+        GroupMembership,
+        IDIsAvailable,
+        LockProfile,
+        OrganizationSupervisorPermissions,
+        RegisterOrganization,
+        RemoveOrganization,
+        ReserveProfile,
+        ShareInformation,
+        ShareIssuance,
+        VerifyShape,
     },
 };
 
 use codec::Codec;
 use frame_support::{
-    decl_error, decl_event, decl_module, decl_storage, ensure,
-    storage::{IterableStorageDoubleMap, IterableStorageMap},
+    decl_error,
+    decl_event,
+    decl_module,
+    decl_storage,
+    ensure,
+    storage::{
+        IterableStorageDoubleMap,
+        IterableStorageMap,
+    },
     traits::Get,
     Parameter,
 };
-use frame_system::{self as system, ensure_signed};
-use sp_runtime::{
-    traits::{AtLeast32Bit, CheckedAdd, CheckedSub, MaybeSerializeDeserialize, Member, Zero},
-    DispatchError, DispatchResult,
+use frame_system::{
+    self as system,
+    ensure_signed,
 };
-use sp_std::{fmt::Debug, prelude::*};
+use orml_utilities::OrderedSet;
+use sp_runtime::{
+    traits::{
+        AtLeast32Bit,
+        AtLeast32BitUnsigned,
+        CheckedAdd,
+        CheckedSub,
+        MaybeSerializeDeserialize,
+        Member,
+        Zero,
+    },
+    DispatchError,
+    DispatchResult,
+    Permill,
+};
+use sp_std::{
+    fmt::Debug,
+    prelude::*,
+};
 
 pub trait Trait: system::Trait {
     /// Overarching event type
@@ -63,7 +104,8 @@ pub trait Trait: system::Trait {
         + Debug
         + PartialOrd
         + CheckedSub
-        + Zero;
+        + Zero
+        + AtLeast32BitUnsigned;
 
     /// The hard limit on the number of times shares can be reserved
     /// - why? we need to track how much the group check is called and limit it somehow and this is the best I've come up with for now...TODO: make issue and get feedback
@@ -143,6 +185,7 @@ decl_error! {
         NotAuthorizedToIssueShares,
         NotAuthorizedToBurnShares,
         OrganizationCannotBeRemovedIfInputIdIsAvailable,
+        AccountHasNoOwnershipInOrg,
     }
 }
 
@@ -365,10 +408,12 @@ impl<T: Trait> GenerateUniqueID<T::OrgId> for Module<T> {
     }
 }
 
-impl<T: Trait> OrganizationSupervisorPermissions<T::OrgId, T::AccountId> for Module<T> {
+impl<T: Trait> OrganizationSupervisorPermissions<T::OrgId, T::AccountId>
+    for Module<T>
+{
     fn is_organization_supervisor(org: T::OrgId, who: &T::AccountId) -> bool {
         if let Some(state) = <OrganizationStates<T>>::get(org) {
-            return state.is_sudo(who);
+            return state.is_sudo(who)
         }
         false
     }
@@ -381,7 +426,10 @@ impl<T: Trait> OrganizationSupervisorPermissions<T::OrgId, T::AccountId> for Mod
         Ok(())
     }
     /// Removes any existing sudo and places `who`
-    fn put_organization_supervisor(org: T::OrgId, who: T::AccountId) -> DispatchResult {
+    fn put_organization_supervisor(
+        org: T::OrgId,
+        who: T::AccountId,
+    ) -> DispatchResult {
         let old_org = <OrganizationStates<T>>::get(org)
             .ok_or(Error::<T>::OrganizationMustExistToPutSupervisor)?;
         let new_org = old_org.put_sudo(who);
@@ -390,9 +438,12 @@ impl<T: Trait> OrganizationSupervisorPermissions<T::OrgId, T::AccountId> for Mod
     }
 }
 
-impl<T: Trait> RegisterOrganization<T::OrgId, T::AccountId, T::IpfsReference> for Module<T> {
+impl<T: Trait> RegisterOrganization<T::OrgId, T::AccountId, T::IpfsReference>
+    for Module<T>
+{
     type OrgSrc = OrganizationSource<T::AccountId, T::Shares>;
-    type OrganizationState = Organization<T::AccountId, T::OrgId, T::IpfsReference>;
+    type OrganizationState =
+        Organization<T::AccountId, T::OrgId, T::IpfsReference>;
     fn organization_from_src(
         src: Self::OrgSrc,
         org_id: T::OrgId,
@@ -423,8 +474,13 @@ impl<T: Trait> RegisterOrganization<T::OrgId, T::AccountId, T::IpfsReference> fo
         value_constitution: T::IpfsReference,
     ) -> Result<T::OrgId, DispatchError> {
         let new_org_id = Self::generate_unique_id();
-        let new_organization =
-            Self::organization_from_src(source, new_org_id, None, supervisor, value_constitution)?;
+        let new_organization = Self::organization_from_src(
+            source,
+            new_org_id,
+            None,
+            supervisor,
+            value_constitution,
+        )?;
         let new_org_count = <OrganizationCounter>::get() + 1u32;
         <OrganizationStates<T>>::insert(new_org_id, new_organization);
         <OrganizationCounter>::put(new_org_count);
@@ -452,7 +508,9 @@ impl<T: Trait> RegisterOrganization<T::OrgId, T::AccountId, T::IpfsReference> fo
     }
 }
 impl<T: Trait> RemoveOrganization<T::OrgId> for Module<T> {
-    fn remove_organization(id: T::OrgId) -> Result<Option<Vec<T::OrgId>>, DispatchError> {
+    fn remove_organization(
+        id: T::OrgId,
+    ) -> Result<Option<Vec<T::OrgId>>, DispatchError> {
         ensure!(
             !Self::id_is_available(id),
             Error::<T>::OrganizationCannotBeRemovedIfInputIdIsAvailable
@@ -475,14 +533,15 @@ impl<T: Trait> RemoveOrganization<T::OrgId> for Module<T> {
 }
 
 impl<T: Trait> GetGroup<T::OrgId, T::AccountId> for Module<T> {
-    fn get_group(organization: T::OrgId) -> Option<Vec<T::AccountId>> {
+    fn get_group(organization: T::OrgId) -> Option<OrderedSet<T::AccountId>> {
         if !Self::id_is_available(organization) {
             Some(
                 // is this the same performance as a get() with Key=Vec<AccountId>
                 <Members<T>>::iter()
                     .filter(|(org, _, _)| *org == organization)
                     .map(|(_, account, _)| account)
-                    .collect::<Vec<_>>(),
+                    .collect::<Vec<_>>()
+                    .into(),
             )
         } else {
             None
@@ -490,7 +549,9 @@ impl<T: Trait> GetGroup<T::OrgId, T::AccountId> for Module<T> {
     }
 }
 
-impl<T: Trait> ShareInformation<T::OrgId, T::AccountId, T::Shares> for Module<T> {
+impl<T: Trait> ShareInformation<T::OrgId, T::AccountId, T::Shares>
+    for Module<T>
+{
     type Profile = ShareProfile<T::Shares>;
     type Genesis = SimpleShareGenesis<T::AccountId, T::Shares>;
     /// Gets the total number of shares issued for an organization's share identifier
@@ -498,11 +559,16 @@ impl<T: Trait> ShareInformation<T::OrgId, T::AccountId, T::Shares> for Module<T>
         <TotalIssuance<T>>::get(organization)
     }
     /// Get input's share profile if it exists
-    fn get_share_profile(organization: T::OrgId, who: &T::AccountId) -> Option<Self::Profile> {
+    fn get_share_profile(
+        organization: T::OrgId,
+        who: &T::AccountId,
+    ) -> Option<Self::Profile> {
         <Members<T>>::get(organization, who)
     }
     /// Returns the entire membership group associated with a share identifier, fallible bc checks existence
-    fn get_membership_with_shape(organization: T::OrgId) -> Option<Self::Genesis> {
+    fn get_membership_with_shape(
+        organization: T::OrgId,
+    ) -> Option<Self::Genesis> {
         if !Self::id_is_available(organization) {
             Some(
                 // is this the same performance as a get() with Key=Vec<AccountId>
@@ -524,12 +590,13 @@ impl<T: Trait> ShareIssuance<T::OrgId, T::AccountId, T::Shares> for Module<T> {
         amount: T::Shares,
         batch: bool,
     ) -> DispatchResult {
-        let new_profile =
-            if let Some(existing_profile) = <Members<T>>::get(organization, &new_owner) {
-                existing_profile.add_shares(amount)
-            } else {
-                ShareProfile::new_shares(amount)
-            };
+        let new_profile = if let Some(existing_profile) =
+            <Members<T>>::get(organization, &new_owner)
+        {
+            existing_profile.add_shares(amount)
+        } else {
+            ShareProfile::new_shares(amount)
+        };
         if !batch {
             let new_issuance = <TotalIssuance<T>>::get(organization) + amount;
             <TotalIssuance<T>>::insert(organization, new_issuance);
@@ -572,7 +639,10 @@ impl<T: Trait> ShareIssuance<T::OrgId, T::AccountId, T::Shares> for Module<T> {
         }
         Ok(())
     }
-    fn batch_issue(organization: T::OrgId, genesis: Self::Genesis) -> DispatchResult {
+    fn batch_issue(
+        organization: T::OrgId,
+        genesis: Self::Genesis,
+    ) -> DispatchResult {
         ensure!(
             genesis.verify_shape(),
             Error::<T>::GenesisTotalMustEqualSumToUseBatchOps
@@ -591,7 +661,10 @@ impl<T: Trait> ShareIssuance<T::OrgId, T::AccountId, T::Shares> for Module<T> {
         <TotalIssuance<T>>::insert(organization, new_issuance);
         Ok(())
     }
-    fn batch_burn(organization: T::OrgId, genesis: Self::Genesis) -> DispatchResult {
+    fn batch_burn(
+        organization: T::OrgId,
+        genesis: Self::Genesis,
+    ) -> DispatchResult {
         ensure!(
             genesis.verify_shape(),
             Error::<T>::GenesisTotalMustEqualSumToUseBatchOps
@@ -671,9 +744,12 @@ impl<T: Trait> ReserveProfile<T::OrgId, T::AccountId, T::Shares> for Module<T> {
 // -> burning shares is not allowed?
 // -> reserving shares is not allowed?
 impl<T: Trait> LockProfile<T::OrgId, T::AccountId> for Module<T> {
-    fn lock_profile(organization: T::OrgId, who: &T::AccountId) -> DispatchResult {
-        let old_profile =
-            <Members<T>>::get(organization, who).ok_or(Error::<T>::CannotLockProfileThatDNE)?;
+    fn lock_profile(
+        organization: T::OrgId,
+        who: &T::AccountId,
+    ) -> DispatchResult {
+        let old_profile = <Members<T>>::get(organization, who)
+            .ok_or(Error::<T>::CannotLockProfileThatDNE)?;
         ensure!(
             old_profile.is_unlocked(),
             Error::<T>::CannotLockIfAlreadyLocked
@@ -682,9 +758,12 @@ impl<T: Trait> LockProfile<T::OrgId, T::AccountId> for Module<T> {
         <Members<T>>::insert(organization, who, new_profile);
         Ok(())
     }
-    fn unlock_profile(organization: T::OrgId, who: &T::AccountId) -> DispatchResult {
-        let old_profile =
-            <Members<T>>::get(organization, who).ok_or(Error::<T>::CannotUnLockProfileThatDNE)?;
+    fn unlock_profile(
+        organization: T::OrgId,
+        who: &T::AccountId,
+    ) -> DispatchResult {
+        let old_profile = <Members<T>>::get(organization, who)
+            .ok_or(Error::<T>::CannotUnLockProfileThatDNE)?;
         ensure!(
             !old_profile.is_unlocked(),
             Error::<T>::CannotUnLockIfAlreadyUnLocked
@@ -692,5 +771,22 @@ impl<T: Trait> LockProfile<T::OrgId, T::AccountId> for Module<T> {
         let new_profile = old_profile.unlock();
         <Members<T>>::insert(organization, who, new_profile);
         Ok(())
+    }
+}
+
+impl<T: Trait> CalculateOwnership<T::OrgId, T::AccountId, Permill>
+    for Module<T>
+{
+    fn calculate_proportion_ownership_for_account(
+        account: T::AccountId,
+        group: T::OrgId,
+    ) -> Result<Permill, DispatchError> {
+        let issuance = <TotalIssuance<T>>::get(group);
+        let acc_ownership = <Members<T>>::get(group, &account)
+            .ok_or(Error::<T>::AccountHasNoOwnershipInOrg)?;
+        Ok(Permill::from_rational_approximation(
+            acc_ownership.total(),
+            issuance,
+        ))
     }
 }

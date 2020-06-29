@@ -1,5 +1,8 @@
-use crate::cli::Cli;
-use crate::{chain_spec, service};
+use crate::{
+    chain_spec,
+    cli::Cli,
+    service,
+};
 use sc_cli::SubstrateCli;
 use sp_consensus_aura::sr25519::AuthorityPair as AuraPair;
 
@@ -32,13 +35,18 @@ impl SubstrateCli for Cli {
         crate::EXECUTABLE_NAME
     }
 
-    fn load_spec(&self, id: &str) -> Result<Box<dyn sc_service::ChainSpec>, String> {
+    fn load_spec(
+        &self,
+        id: &str,
+    ) -> Result<Box<dyn sc_service::ChainSpec>, String> {
         Ok(match id {
             "dev" => Box::new(chain_spec::development_config()),
             "" | "local" => Box::new(chain_spec::local_testnet_config()),
-            path => Box::new(chain_spec::ChainSpec::from_json_file(
-                std::path::PathBuf::from(path),
-            )?),
+            path => {
+                Box::new(chain_spec::ChainSpec::from_json_file(
+                    std::path::PathBuf::from(path),
+                )?)
+            }
         })
     }
 }
@@ -50,11 +58,17 @@ pub fn run() -> sc_cli::Result<()> {
     match &cli.subcommand {
         Some(subcommand) => {
             let runner = cli.create_runner(subcommand)?;
-            runner.run_subcommand(subcommand, |config| Ok(new_full_start!(config).0))
+            runner.run_subcommand(subcommand, |config| {
+                Ok(new_full_start!(config).0)
+            })
         }
         None => {
             let runner = cli.create_runner(&cli.run)?;
-            runner.run_node(service::new_light, service::new_full, suntime::VERSION)
+            runner.run_node(
+                service::new_light,
+                service::new_full,
+                suntime::VERSION,
+            )
         }
     }
 }

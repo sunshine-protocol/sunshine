@@ -1,7 +1,17 @@
-use crate::traits::{AccessGenesis, AccessProfile, VerifyShape};
-use codec::{Decode, Encode};
+use crate::traits::{
+    AccessGenesis,
+    AccessProfile,
+    VerifyShape,
+};
+use codec::{
+    Decode,
+    Encode,
+};
 use frame_support::Parameter;
-use sp_runtime::{traits::Zero, RuntimeDebug};
+use sp_runtime::{
+    traits::Zero,
+    RuntimeDebug,
+};
 use sp_std::prelude::*;
 
 #[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug)]
@@ -122,8 +132,8 @@ pub struct SimpleShareGenesis<AccountId, Shares> {
     account_ownership: Vec<(AccountId, Shares)>,
 }
 
-impl<AccountId: Clone, Shares: Parameter + From<u32>> AccessGenesis<AccountId, Shares>
-    for SimpleShareGenesis<AccountId, Shares>
+impl<AccountId: Clone, Shares: Parameter + From<u32>>
+    AccessGenesis<AccountId, Shares> for SimpleShareGenesis<AccountId, Shares>
 {
     fn total(&self) -> Shares {
         self.total.clone()
@@ -133,10 +143,14 @@ impl<AccountId: Clone, Shares: Parameter + From<u32>> AccessGenesis<AccountId, S
     }
 }
 
-impl<AccountId: Parameter, Shares: Parameter + From<u32> + sp_std::ops::AddAssign>
-    From<Vec<(AccountId, Shares)>> for SimpleShareGenesis<AccountId, Shares>
+impl<
+        AccountId: Parameter,
+        Shares: Parameter + From<u32> + sp_std::ops::AddAssign,
+    > From<Vec<(AccountId, Shares)>> for SimpleShareGenesis<AccountId, Shares>
 {
-    fn from(genesis: Vec<(AccountId, Shares)>) -> SimpleShareGenesis<AccountId, Shares> {
+    fn from(
+        genesis: Vec<(AccountId, Shares)>,
+    ) -> SimpleShareGenesis<AccountId, Shares> {
         let mut total: Shares = 0u32.into();
         let mut dedup_genesis = genesis;
         dedup_genesis.dedup(); // deduplicated
