@@ -601,7 +601,7 @@ impl<T: Trait>
                 }
             }
         } else {
-            BankOrAccount::Account(poster.clone())
+            BankOrAccount::Account(poster)
         };
         // form new bounty post
         let new_bounty_post = BountyInformation::new(

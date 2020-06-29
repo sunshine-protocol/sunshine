@@ -81,7 +81,7 @@ where
     }
     /// Set device key, directly from substrate-identity to use with keystore
     pub async fn has_device_key(&self) -> bool {
-        self.keystore.read().await.is_initialized()
+        self.keystore.read().await.is_initialized().await
     }
     /// Set device key, directly from substrate-identity to use with keystore
     pub async fn set_device_key(
@@ -90,17 +90,21 @@ where
         password: &Password,
         force: bool,
     ) -> Result<<T as System>::AccountId> {
-        if self.keystore.read().await.is_initialized() && !force {
+        if self.keystore.read().await.is_initialized().await && !force {
             return Err(Error::KeystoreInitialized)
         }
         let pair = P::from_seed(&P::Seed::from(*dk.expose_secret()));
-        self.keystore.write().await.initialize(&dk, &password)?;
+        self.keystore
+            .write()
+            .await
+            .initialize(&dk, &password)
+            .await?;
         Ok(pair.public().into())
     }
     /// Returns a signer for alice
     pub async fn signer(&self) -> Result<PairSigner<T, P>> {
         // fetch device key from disk every time to make sure account is unlocked.
-        let dk = self.keystore.read().await.device_key()?;
+        let dk = self.keystore.read().await.device_key().await?;
         Ok(PairSigner::new(P::from_seed(&P::Seed::from(
             *dk.expose_secret(),
         ))))

@@ -67,17 +67,19 @@ async fn run() -> Result<(), Error> {
     let opts: Opts = Opts::parse();
     // initialize requisite storage utilities
     let paths = Paths::new(opts.path)?;
-    let keystore = KeyStore::new(&paths.keystore);
+    let keystore = KeyStore::open(&paths.keystore).await?;
     // initialize keystore with alice's keys
     let alice_seed: [u8; 32] =
         sr25519::Pair::from_string_with_seed("//Alice", None)
             .unwrap()
             .1
             .unwrap();
-    keystore.initialize(
-        &DeviceKey::from_seed(alice_seed),
-        &Password::from("password".to_string()),
-    )?;
+    keystore
+        .initialize(
+            &DeviceKey::from_seed(alice_seed),
+            &Password::from("password".to_string()),
+        )
+        .await?;
     let subxt = ClientBuilder::<Runtime>::new().build().await?;
     let config =
         Config::from_path(&paths.db).map_err(ipfs_embed::Error::Sled)?;
@@ -111,7 +113,7 @@ async fn run() -> Result<(), Error> {
                     } else if let Some(suri) = &suri {
                         DeviceKey::from_seed(suri.0)
                     } else {
-                        DeviceKey::generate()
+                        DeviceKey::generate().await
                     };
                     let account_id =
                         client.set_device_key(&dk, &password, force).await?;

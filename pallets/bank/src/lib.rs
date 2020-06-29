@@ -495,7 +495,7 @@ impl<T: Trait> SeededGenerateUniqueID<T::BankId, (OnChainTreasuryID, BankMapId)>
         let mut id_nonce =
             <AssociatedNonceMap<T>>::get(seed.0, seed.1) + 1u32.into();
         while !Self::id_is_available((seed.0, id_nonce)) {
-            id_nonce = id_nonce + 1u32.into();
+            id_nonce += 1u32.into();
         }
         <AssociatedNonceMap<T>>::insert(seed.0, seed.1, id_nonce);
         id_nonce
@@ -751,8 +751,7 @@ impl<T: Trait>
             updated_spend_reservation,
         );
         let recipient: BankOrAccount<TransferId<T::BankId>, T::AccountId> =
-            if let Some(dest_bank_id) = reservation_recipient.clone().bank_id()
-            {
+            if let Some(dest_bank_id) = reservation_recipient.bank_id() {
                 // form new transfer object
                 let new_transfer: TransferInformation<
                     OrgOrAccount<T::OrgId, T::AccountId>,

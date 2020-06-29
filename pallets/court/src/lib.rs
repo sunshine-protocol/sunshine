@@ -300,9 +300,9 @@ impl<T: Trait>
         T::Currency::reserve(&locker, amount_to_lock)?;
         // form the dispute state
         let new_dispute_state = Dispute::new(
-            locker.clone(),
+            locker,
             amount_to_lock,
-            dispute_raiser.clone(),
+            dispute_raiser,
             resolution_path,
             DisputeState::DisputeNotRaised,
             expiry,

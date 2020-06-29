@@ -326,7 +326,7 @@ impl<
                         bank: self.bank,
                         description: self.description.clone(),
                         total_amount: new_amount,
-                        state: self.state.clone(),
+                        state: self.state,
                     })
                 } else {
                     None
@@ -415,7 +415,7 @@ impl<
         self.submission.clone()
     }
     pub fn amount(&self) -> Currency {
-        self.amount.clone()
+        self.amount
     }
     pub fn state(&self) -> MilestoneStatus<VoteId, BankId> {
         self.state.clone()
@@ -451,7 +451,7 @@ impl<
                     submitter: self.submitter.clone(),
                     referenced_application: self.referenced_application,
                     submission: self.submission.clone(),
-                    amount: self.amount.clone(),
+                    amount: self.amount,
                     state: MilestoneStatus::SubmittedReviewStarted(vote_id),
                 })
             }
@@ -489,7 +489,7 @@ impl<
                     submitter: self.submitter.clone(),
                     referenced_application: self.referenced_application,
                     submission: self.submission.clone(),
-                    amount: self.amount.clone(),
+                    amount: self.amount,
                     state: MilestoneStatus::ApprovedButNotTransferred,
                 })
             }
@@ -521,7 +521,7 @@ impl<
                     submitter: self.submitter.clone(),
                     referenced_application: self.referenced_application,
                     submission: self.submission.clone(),
-                    amount: self.amount.clone(),
+                    amount: self.amount,
                     state: MilestoneStatus::ApprovedAndTransferExecuted(
                         bank_id,
                     ),
@@ -532,7 +532,7 @@ impl<
                     submitter: self.submitter.clone(),
                     referenced_application: self.referenced_application,
                     submission: self.submission.clone(),
-                    amount: self.amount.clone(),
+                    amount: self.amount,
                     state: MilestoneStatus::ApprovedAndTransferExecuted(
                         bank_id,
                     ),

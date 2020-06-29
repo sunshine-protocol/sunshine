@@ -44,7 +44,7 @@ async fn main() -> Result<(), Error> {
     let store = Store::new(config)?;
     let codec = Codec::new();
     let ipld = BlockBuilder::new(store, codec);
-    let keystore = KeyStore::new("/tmp/keystore");
+    let keystore = KeyStore::open("/tmp/keystore").await?;
     let alice_seed: [u8; 32] = Pair::from_string_with_seed("//Alice", None)
         .unwrap()
         .1

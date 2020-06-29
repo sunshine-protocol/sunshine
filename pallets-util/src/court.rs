@@ -42,7 +42,7 @@ impl<
         self.state
     }
     pub fn expiry(&self) -> Option<BlockNumber> {
-        self.expiry.clone()
+        self.expiry
     }
     // TODO: change this to trait impl for state transitions so we don't match in the runtime on the state to enforce valid transitions and instead depend on calls to the logic here
     pub fn set_state(&self, state: State) -> Self {
