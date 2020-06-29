@@ -1,0 +1,74 @@
+name: Compiles
+
+on:
+  pull_request:
+    branches:
+    - master
+  push:
+    branches:
+    - master
+
+jobs:
+  ci:
+    strategy:
+      fail-fast: false
+      matrix:
+        toolchain:
+        - rust: stable
+        - rust: nightly
+        platform:
+        - target: x86_64-unknown-linux-gnu
+        - target: wasm32-unknown-unknown
+          cross: true
+    runs-on: ubuntu-latest
+    env:
+      RUST_BACKTRACE: 1
+      CARGO_INCREMENTAL: 0
+    steps:
+    - name: Checkout sources
+      uses: actions/checkout@v1
+
+    - name: Cache cargo folder
+      uses: actions/cache@v1
+      with:
+        path: ~/.cargo
+        key: ${{ matrix.toolchain.rust }}-${{ matrix.platform.target }}-cache
+
+    - name: Install toolchain
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: nightly-2020-02-05
+        components: rustfmt
+        target: wasm32-unknown-unknown
+        default: true
+
+    - name: Build release
+      run: cargo build --release
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout sources
+      uses: actions/checkout@v1
+
+    - name: Cache cargo folder
+      uses: actions/cache@v1
+      with:
+        path: ~/.cargo
+        key: lint-cache
+
+    - name: Install toolchain
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: nightly-2020-02-05
+        components: clippy, rustfmt
+        target: wasm32-unknown-unknown
+        default: true
+
+    - name: FMT checks
+      run: cargo fmt --all -- --check
+
+    - name: Clippy checks
+      run: cargo clippy -- #-D warnings
