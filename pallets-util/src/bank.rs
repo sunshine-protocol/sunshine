@@ -42,7 +42,9 @@ impl TypeId for OnChainTreasuryID {
 #[derive(
     new, Clone, Copy, Eq, PartialEq, Encode, Decode, sp_runtime::RuntimeDebug,
 )]
-pub struct FullBankId<T> {
+/// The full bank identifier for some object which permits unauthenticated
+/// transfers from it to the recipient
+pub struct TransferId<T> {
     pub id: OnChainTreasuryID,
     pub sub_id: T,
 }

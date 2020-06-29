@@ -48,7 +48,7 @@ pub struct BountyInformation<Poster, Hash, Currency, ReviewBoard> {
     // Vote metadata for application approval
     acceptance_committee: ReviewBoard,
     // Vote metadata for milestone approval
-    default_supervision_committee: Option<ReviewBoard>,
+    supervision_committee: Option<ReviewBoard>,
 }
 
 impl<Poster: Clone, Hash: Clone, Currency: Copy, ReviewBoard: Clone>
@@ -66,8 +66,8 @@ impl<Poster: Clone, Hash: Clone, Currency: Copy, ReviewBoard: Clone>
     pub fn acceptance_committee(&self) -> ReviewBoard {
         self.acceptance_committee.clone()
     }
-    pub fn default_supervision_committee(&self) -> Option<ReviewBoard> {
-        self.default_supervision_committee.clone()
+    pub fn supervision_committee(&self) -> Option<ReviewBoard> {
+        self.supervision_committee.clone()
     }
 }
 
@@ -135,7 +135,7 @@ pub struct GrantApplication<AccountId, BankId, Currency, Hash, State> {
 }
 
 impl<
-        AccountId: Clone,
+        AccountId: Clone + PartialEq,
         BankId: Copy,
         Currency: Clone,
         Hash: Clone,
@@ -169,6 +169,12 @@ impl<
             state: ApplicationState::SubmittedAwaitingResponse,
         }
     }
+    pub fn submitter(&self) -> AccountId {
+        self.submitter.clone()
+    }
+    pub fn is_submitter(&self, who: &AccountId) -> bool {
+        &self.submitter == who
+    }
     pub fn submission(&self) -> Hash {
         self.description.clone()
     }
@@ -184,7 +190,7 @@ impl<
 }
 
 impl<
-        AccountId: Clone,
+        AccountId: Clone + PartialEq,
         BankId: Copy,
         Currency: Clone,
         Hash: Clone,
@@ -225,7 +231,7 @@ impl<
 }
 
 // impl<
-//         AccountId: Clone,
+//         AccountId: Clone + PartialEq,
 //         BankId: Copy,
 //         Currency: Clone,
 //         Hash: Clone,
@@ -262,7 +268,7 @@ impl<
 // }
 
 impl<
-        AccountId: Clone,
+        AccountId: Clone + PartialEq,
         BankId: Copy,
         Currency: Clone,
         Hash: Clone,
@@ -294,7 +300,7 @@ impl<
 }
 
 impl<
-        AccountId: Clone,
+        AccountId: Clone + PartialEq,
         BankId: Copy,
         Currency: Copy + sp_std::ops::Sub<Currency, Output = Currency> + PartialOrd,
         Hash: Clone,
@@ -336,7 +342,7 @@ pub enum MilestoneStatus<VoteId, TransferId> {
     SubmittedAwaitingResponse,
     SubmittedReviewStarted(VoteId),
     ApprovedButNotTransferred,
-    // if to an org, it wraps Some(FullBankId) else None because we don't track transfers to individual accounts
+    // if to an org, it wraps Some(TransferId) else None because we don't track transfers to individual accounts
     ApprovedAndTransferExecuted(TransferId),
 }
 
@@ -364,7 +370,7 @@ pub struct MilestoneSubmission<
 }
 
 impl<
-        AccountId: Clone,
+        AccountId: Clone + PartialEq,
         ApplicationId: Codec + Copy,
         Hash: Clone,
         Currency: Copy,
@@ -402,6 +408,9 @@ impl<
     pub fn submitter(&self) -> AccountId {
         self.submitter.clone()
     }
+    pub fn referenced_application(&self) -> ApplicationId {
+        self.referenced_application
+    }
     pub fn submission(&self) -> Hash {
         self.submission.clone()
     }
@@ -420,7 +429,7 @@ impl<
 }
 
 impl<
-        AccountId: Clone,
+        AccountId: Clone + PartialEq,
         ApplicationId: Codec + Copy,
         Hash: Clone,
         Currency: Copy,
@@ -458,7 +467,7 @@ impl<
 }
 
 impl<
-        AccountId: Clone,
+        AccountId: Clone + PartialEq,
         ApplicationId: Codec + Copy,
         Hash: Clone,
         Currency: Copy,
@@ -490,7 +499,7 @@ impl<
 }
 
 impl<
-        AccountId: Clone,
+        AccountId: Clone + PartialEq,
         ApplicationId: Codec + Copy,
         Hash: Clone,
         Currency: Copy,

@@ -47,10 +47,10 @@ use util::{
         BankMapId,
         BankOrAccount,
         BankState,
-        FullBankId,
         OnChainTreasuryID,
         OrgOrAccount,
         SpendReservation,
+        TransferId,
         TransferInformation,
         TransferState,
     },
@@ -114,11 +114,11 @@ decl_event!(
         AccountOpensOrgBankAccount(AccountId, OnChainTreasuryID, BankId, Balance, OrgId, Option<AccountId>),
         AccountToOrgTransfer(BankId, AccountId, OnChainTreasuryID, Balance),
         OrgToAccountTransferFromTransfer(OnChainTreasuryID, AccountId, Balance),
-        OrgToOrgTransferFromTransfer(FullBankId<BankId>, OnChainTreasuryID, OnChainTreasuryID, Balance),
-        ReserveAccountSpendFromTransfer(FullBankId<BankId>, FullBankId<BankId>, AccountId, Balance),
-        ReserveOrgSpendFromTransfer(FullBankId<BankId>, FullBankId<BankId>, OnChainTreasuryID, Balance),
-        OrgToAccountReservedSpendExecuted(FullBankId<BankId>, AccountId, Balance),
-        OrgToOrgReservedSpendExecuted(FullBankId<BankId>, FullBankId<BankId>, Balance),
+        OrgToOrgTransferFromTransfer(TransferId<BankId>, OnChainTreasuryID, OnChainTreasuryID, Balance),
+        ReserveAccountSpendFromTransfer(TransferId<BankId>, TransferId<BankId>, AccountId, Balance),
+        ReserveOrgSpendFromTransfer(TransferId<BankId>, TransferId<BankId>, OnChainTreasuryID, Balance),
+        OrgToAccountReservedSpendExecuted(TransferId<BankId>, AccountId, Balance),
+        OrgToOrgReservedSpendExecuted(TransferId<BankId>, TransferId<BankId>, Balance),
         WithdrawalFromOrgToAccount(OnChainTreasuryID, BankId, AccountId, Balance),
     }
 );
@@ -288,7 +288,7 @@ decl_module! {
             let _ = ensure_signed(origin)?;
             // TODO: auth
             // execute transfer and return new transfer identifier
-            let full_transfer_id = FullBankId::new(bank_id, transfer_id);
+            let full_transfer_id = TransferId::new(bank_id, transfer_id);
             Self::direct_transfer_to_account(
                 full_transfer_id,
                 dest.clone(),
@@ -315,7 +315,7 @@ decl_module! {
             let _ = ensure_signed(origin)?;
             // TODO: auth
             // execute transfer and return new transfer identifier
-            let full_transfer_id = FullBankId::new(bank_id, transfer_id);
+            let full_transfer_id = TransferId::new(bank_id, transfer_id);
             let new_transfer_id =
                 Self::direct_transfer_to_org(
                     full_transfer_id, dest,
@@ -342,7 +342,7 @@ decl_module! {
         ) -> DispatchResult {
             let _ = ensure_signed(origin)?;
             // TODO: auth
-            let full_transfer_id = FullBankId::new(bank_id, transfer_id);
+            let full_transfer_id = TransferId::new(bank_id, transfer_id);
             let acc_recipient:
                 BankOrAccount<OnChainTreasuryID, T::AccountId> =
                     BankOrAccount::Account(recipient.clone());
@@ -371,7 +371,7 @@ decl_module! {
         ) -> DispatchResult {
             let _ = ensure_signed(origin)?;
             // TODO: auth
-            let full_transfer_id = FullBankId::new(bank_id, transfer_id);
+            let full_transfer_id = TransferId::new(bank_id, transfer_id);
             let bank_recipient:
                 BankOrAccount<OnChainTreasuryID, T::AccountId> =
                     BankOrAccount::Bank(recipient);
@@ -399,7 +399,7 @@ decl_module! {
         ) -> DispatchResult {
             let _ = ensure_signed(origin)?;
             // TODO: auth
-            let full_reservation_id = FullBankId::new(bank_id, reservation_id);
+            let full_reservation_id = TransferId::new(bank_id, reservation_id);
             match Self::transfer_reserved_spend(
                 full_reservation_id,
                 transfer_amount
@@ -426,7 +426,7 @@ decl_module! {
             transfer_id: T::BankId
         ) -> DispatchResult {
             let withdrawer = ensure_signed(origin)?;
-            let full_transfer_id = FullBankId::new(bank_id, transfer_id);
+            let full_transfer_id = TransferId::new(bank_id, transfer_id);
             let claimed_amount = Self::claim_due_amount(
                     full_transfer_id,
                     withdrawer.clone()
@@ -523,13 +523,13 @@ impl<T: Trait> RegisterOrgAccount<T::OrgId, T::AccountId, BalanceOf<T>>
 impl<T: Trait> PostUserTransfer<OnChainTreasuryID, T::AccountId, BalanceOf<T>>
     for Module<T>
 {
-    type TransferId = FullBankId<T::BankId>;
+    type TransferId = TransferId<T::BankId>;
     // account to org transfer structure
     fn post_user_transfer(
         sender: T::AccountId,
         bank_id: OnChainTreasuryID,
         amt: BalanceOf<T>,
-    ) -> Result<FullBankId<T::BankId>, DispatchError> {
+    ) -> Result<TransferId<T::BankId>, DispatchError> {
         ensure!(
             amt >= T::MinimumTransfer::get(),
             Error::<T>::TransferMustExceedModuleMinimum
@@ -550,22 +550,22 @@ impl<T: Trait> PostUserTransfer<OnChainTreasuryID, T::AccountId, BalanceOf<T>>
             Self::seeded_generate_unique_id((bank_id, BankMapId::Transfer));
         // insert new transfer
         <TransferInfo<T>>::insert(bank_id, new_transfer_id, new_transfer);
-        Ok(FullBankId::new(bank_id, new_transfer_id))
+        Ok(TransferId::new(bank_id, new_transfer_id))
     }
 }
 
 impl<T: Trait>
     ReserveOrgSpend<
-        FullBankId<T::BankId>,
+        TransferId<T::BankId>,
         BankOrAccount<OnChainTreasuryID, T::AccountId>,
         BalanceOf<T>,
     > for Module<T>
 {
     fn reserve_org_spend(
-        transfer_id: FullBankId<T::BankId>,
+        transfer_id: TransferId<T::BankId>,
         recipient: BankOrAccount<OnChainTreasuryID, T::AccountId>,
         amt: BalanceOf<T>,
-    ) -> Result<FullBankId<T::BankId>, DispatchError> {
+    ) -> Result<TransferId<T::BankId>, DispatchError> {
         let bank = <BankStores<T>>::get(transfer_id.id)
             .ok_or(Error::<T>::CannotReserveOrgSpendIfBankStoreDNE)?;
         let transfer =
@@ -594,10 +594,10 @@ impl<T: Trait>
             new_transfer,
         );
         <BankStores<T>>::insert(transfer_id.id, new_bank);
-        Ok(FullBankId::new(transfer_id.id, new_reservation_id))
+        Ok(TransferId::new(transfer_id.id, new_reservation_id))
     }
     fn unreserve_org_spend(
-        reservation_id: FullBankId<T::BankId>,
+        reservation_id: TransferId<T::BankId>,
     ) -> Result<BalanceOf<T>, DispatchError> {
         let spend_reservation = <SpendReservations<T>>::get(
             reservation_id.id,
@@ -623,18 +623,18 @@ impl<T: Trait>
 
 impl<T: Trait>
     PostOrgTransfer<
-        FullBankId<T::BankId>,
+        TransferId<T::BankId>,
         OnChainTreasuryID,
         T::AccountId,
         BalanceOf<T>,
     > for Module<T>
 {
-    type Recipient = BankOrAccount<FullBankId<T::BankId>, T::AccountId>;
+    type Recipient = BankOrAccount<TransferId<T::BankId>, T::AccountId>;
     fn direct_transfer_to_org(
-        transfer_id: FullBankId<T::BankId>,
+        transfer_id: TransferId<T::BankId>,
         dest_bank_id: OnChainTreasuryID,
         amt: BalanceOf<T>,
-    ) -> Result<FullBankId<T::BankId>, DispatchError> {
+    ) -> Result<TransferId<T::BankId>, DispatchError> {
         // check for safety, it is too confusing of a user error to debug if we remove this check
         ensure!(
             Self::is_bank(dest_bank_id),
@@ -677,10 +677,10 @@ impl<T: Trait>
         // insert new transfer
         <TransferInfo<T>>::insert(dest_bank_id, new_transfer_id, new_transfer);
         // return new transfer
-        Ok(FullBankId::new(dest_bank_id, new_transfer_id))
+        Ok(TransferId::new(dest_bank_id, new_transfer_id))
     }
     fn direct_transfer_to_account(
-        transfer_id: FullBankId<T::BankId>,
+        transfer_id: TransferId<T::BankId>,
         dest_acc: T::AccountId,
         amt: BalanceOf<T>,
     ) -> Result<(), DispatchError> {
@@ -708,9 +708,9 @@ impl<T: Trait>
         Ok(())
     }
     fn transfer_reserved_spend(
-        reservation_id: FullBankId<T::BankId>,
+        reservation_id: TransferId<T::BankId>,
         amt: BalanceOf<T>,
-    ) -> Result<BankOrAccount<FullBankId<T::BankId>, T::AccountId>, DispatchError>
+    ) -> Result<BankOrAccount<TransferId<T::BankId>, T::AccountId>, DispatchError>
     {
         let (src_bank_id, reservation_sub_identifier) =
             (reservation_id.id, reservation_id.sub_id);
@@ -750,7 +750,7 @@ impl<T: Trait>
             reservation_sub_identifier,
             updated_spend_reservation,
         );
-        let recipient: BankOrAccount<FullBankId<T::BankId>, T::AccountId> =
+        let recipient: BankOrAccount<TransferId<T::BankId>, T::AccountId> =
             if let Some(dest_bank_id) = reservation_recipient.clone().bank_id()
             {
                 // form new transfer object
@@ -773,7 +773,7 @@ impl<T: Trait>
                     new_transfer_id,
                     new_transfer,
                 );
-                BankOrAccount::Bank(FullBankId::new(
+                BankOrAccount::Bank(TransferId::new(
                     dest_bank_id,
                     new_transfer_id,
                 ))
@@ -785,11 +785,11 @@ impl<T: Trait>
     }
 }
 
-impl<T: Trait> StopSpendsStartWithdrawals<FullBankId<T::BankId>> for Module<T> {
+impl<T: Trait> StopSpendsStartWithdrawals<TransferId<T::BankId>> for Module<T> {
     // this method changes the state of the transfer object such that spends and reservations are no longer allowed
     // and withdrawals by members can commence (with limits based on ownership rights)
     fn stop_spends_start_withdrawals(
-        transfer_id: FullBankId<T::BankId>,
+        transfer_id: TransferId<T::BankId>,
     ) -> Result<(), DispatchError> {
         let transfer_info = <TransferInfo<T>>::get(transfer_id.id, transfer_id.sub_id)
             .ok_or(Error::<T>::TransferMustExistToChangeItsStateToStopSpendsStartWithdrawals)?
@@ -803,11 +803,11 @@ impl<T: Trait> StopSpendsStartWithdrawals<FullBankId<T::BankId>> for Module<T> {
     }
 }
 impl<T: Trait>
-    WithdrawFromOrg<FullBankId<T::BankId>, T::AccountId, BalanceOf<T>>
+    WithdrawFromOrg<TransferId<T::BankId>, T::AccountId, BalanceOf<T>>
     for Module<T>
 {
     fn claim_due_amount(
-        transfer_id: FullBankId<T::BankId>,
+        transfer_id: TransferId<T::BankId>,
         for_acc: T::AccountId,
     ) -> Result<BalanceOf<T>, DispatchError> {
         let (bank_id, transfer_sub_identifier) =
