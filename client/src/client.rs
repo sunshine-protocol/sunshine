@@ -7,10 +7,11 @@ use crate::{
     },
     srml::org::*,
 };
-use codec::{
-    Decode,
-    Encode,
+use async_std::sync::{
+    Mutex,
+    RwLock,
 };
+use codec::Decode;
 use core::marker::PhantomData;
 use ipld_block_builder::{
     BlockBuilder,
@@ -22,81 +23,84 @@ use keystore::{
     Password,
 };
 use libipld::store::Store;
-use sp_runtime::traits::{
-    IdentifyAccount,
-    SignedExtension,
-    Verify,
-};
 use substrate_subxt::{
     sp_core::crypto::{
         Pair,
         Ss58Codec,
     },
+    sp_runtime::traits::{
+        IdentifyAccount,
+        SignedExtension,
+        Verify,
+    },
     system::System,
-    Client,
     PairSigner,
+    Runtime,
     SignedExtra,
 };
 
-#[derive(new)]
-pub struct SunClient<T, S, E, P, I>
+pub struct Client<T, P, I>
 where
-    T: Org + Send + Sync + 'static,
-    <T as System>::AccountId: Into<<T as System>::Address> + Ss58Codec,
-    S: Decode + Encode + From<P::Signature> + Verify + Send + Sync + 'static,
-    <S as Verify>::Signer:
-        From<P::Public> + IdentifyAccount<AccountId = <T as System>::AccountId>,
-    E: SignedExtra<T> + SignedExtension + Send + Sync + 'static,
-    <<E as SignedExtra<T>>::Extra as SignedExtension>::AdditionalSigned:
+    T: Runtime + Org,
+    <<T::Extra as SignedExtra<T>>::Extra as SignedExtension>::AdditionalSigned:
         Send + Sync,
     P: Pair,
-    <P as Pair>::Public: Into<<T as System>::AccountId>,
-    <P as Pair>::Seed: From<[u8; 32]>,
     I: Store,
 {
     _marker: PhantomData<P>,
-    keystore: KeyStore,
-    subxt: Client<T, S, E>,
-    pub ipld: BlockBuilder<I, Codec>,
+    keystore: RwLock<KeyStore>,
+    subxt: substrate_subxt::Client<T>,
+    pub cache: Mutex<BlockBuilder<I, Codec>>,
 }
 
-impl<T, S, E, P, I> SunClient<T, S, E, P, I>
+impl<T, P, I> Client<T, P, I>
 where
-    T: Org + Send + Sync + 'static,
+    T: Runtime + Org,
     <T as System>::AccountId: Into<<T as System>::Address> + Ss58Codec,
-    S: Decode + Encode + From<P::Signature> + Verify + Send + Sync + 'static,
-    <S as Verify>::Signer:
+    T::Signature: Decode + From<P::Signature>,
+    <T::Signature as Verify>::Signer:
         From<P::Public> + IdentifyAccount<AccountId = <T as System>::AccountId>,
-    E: SignedExtra<T> + SignedExtension + Send + Sync + 'static,
-    <<E as SignedExtra<T>>::Extra as SignedExtension>::AdditionalSigned:
+    <<T::Extra as SignedExtra<T>>::Extra as SignedExtension>::AdditionalSigned:
         Send + Sync,
     P: Pair,
     <P as Pair>::Public: Into<<T as System>::AccountId>,
     <P as Pair>::Seed: From<[u8; 32]>,
     I: Store,
 {
-    /// Set device key, directly from substrate-identity to use with keystore
-    pub fn has_device_key(&self) -> bool {
-        self.keystore.is_initialized()
+    pub fn new(
+        keystore: KeyStore,
+        subxt: substrate_subxt::Client<T>,
+        store: I,
+    ) -> Self {
+        Self {
+            _marker: PhantomData,
+            keystore: RwLock::new(keystore),
+            subxt,
+            cache: Mutex::new(BlockBuilder::new(store, Codec::new())),
+        }
     }
     /// Set device key, directly from substrate-identity to use with keystore
-    pub fn set_device_key(
+    pub async fn has_device_key(&self) -> bool {
+        self.keystore.read().await.is_initialized()
+    }
+    /// Set device key, directly from substrate-identity to use with keystore
+    pub async fn set_device_key(
         &self,
         dk: &DeviceKey,
         password: &Password,
         force: bool,
     ) -> Result<<T as System>::AccountId> {
-        if self.keystore.is_initialized() && !force {
+        if self.keystore.read().await.is_initialized() && !force {
             return Err(Error::KeystoreInitialized)
         }
         let pair = P::from_seed(&P::Seed::from(*dk.expose_secret()));
-        self.keystore.initialize(&dk, &password)?;
+        self.keystore.write().await.initialize(&dk, &password)?;
         Ok(pair.public().into())
     }
     /// Returns a signer for alice
-    pub fn signer(&self) -> Result<PairSigner<T, S, E, P>> {
+    pub async fn signer(&self) -> Result<PairSigner<T, P>> {
         // fetch device key from disk every time to make sure account is unlocked.
-        let dk = self.keystore.device_key()?;
+        let dk = self.keystore.read().await.device_key()?;
         Ok(PairSigner::new(P::from_seed(&P::Seed::from(
             *dk.expose_secret(),
         ))))
@@ -109,7 +113,7 @@ where
         constitution: <T as Org>::IpfsReference,
         members: &[<T as System>::AccountId],
     ) -> Result<NewFlatOrganizationRegisteredEvent<T>> {
-        let signer = self.signer()?;
+        let signer = self.signer().await?;
         self.subxt
             .clone()
             .register_flat_org_and_watch(
@@ -132,7 +136,7 @@ where
         constitution: <T as Org>::IpfsReference,
         weighted_members: &[(<T as System>::AccountId, <T as Org>::Shares)],
     ) -> Result<NewWeightedOrganizationRegisteredEvent<T>> {
-        let signer = self.signer()?;
+        let signer = self.signer().await?;
         self.subxt
             .clone()
             .register_weighted_org_and_watch(
@@ -154,7 +158,7 @@ where
         who: <T as System>::AccountId,
         shares: <T as Org>::Shares,
     ) -> Result<SharesIssuedEvent<T>> {
-        let signer = self.signer()?;
+        let signer = self.signer().await?;
         self.subxt
             .issue_shares_and_watch(&signer, organization, &who, shares)
             .await?
@@ -169,7 +173,7 @@ where
         who: <T as System>::AccountId,
         shares: <T as Org>::Shares,
     ) -> Result<SharesBurnedEvent<T>> {
-        let signer = self.signer()?;
+        let signer = self.signer().await?;
         self.subxt
             .clone()
             .burn_shares_and_watch(&signer, organization, &who, shares)
@@ -184,7 +188,7 @@ where
         organization: <T as Org>::OrgId,
         new_accounts: &[(<T as System>::AccountId, <T as Org>::Shares)],
     ) -> Result<SharesBatchIssuedEvent<T>> {
-        let signer = self.signer()?;
+        let signer = self.signer().await?;
         self.subxt
             .clone()
             .batch_issue_shares_and_watch(&signer, organization, new_accounts)
@@ -199,7 +203,7 @@ where
         organization: <T as Org>::OrgId,
         old_accounts: &[(<T as System>::AccountId, <T as Org>::Shares)],
     ) -> Result<SharesBatchBurnedEvent<T>> {
-        let signer = self.signer()?;
+        let signer = self.signer().await?;
         self.subxt
             .clone()
             .batch_burn_shares_and_watch(&signer, organization, old_accounts)
@@ -214,7 +218,7 @@ where
         org: <T as Org>::OrgId,
         who: &<T as System>::AccountId,
     ) -> Result<SharesReservedEvent<T>> {
-        let signer = self.signer()?;
+        let signer = self.signer().await?;
         self.subxt
             .clone()
             .reserve_shares_and_watch(&signer, org, who)
@@ -229,7 +233,7 @@ where
         org: <T as Org>::OrgId,
         who: &<T as System>::AccountId,
     ) -> Result<SharesUnReservedEvent<T>> {
-        let signer = self.signer()?;
+        let signer = self.signer().await?;
         self.subxt
             .clone()
             .unreserve_shares_and_watch(&signer, org, who)
@@ -244,7 +248,7 @@ where
         org: <T as Org>::OrgId,
         who: &<T as System>::AccountId,
     ) -> Result<SharesLockedEvent<T>> {
-        let signer = self.signer()?;
+        let signer = self.signer().await?;
         self.subxt
             .clone()
             .lock_shares_and_watch(&signer, org, who)
@@ -259,7 +263,7 @@ where
         org: <T as Org>::OrgId,
         who: &<T as System>::AccountId,
     ) -> Result<SharesUnlockedEvent<T>> {
-        let signer = self.signer()?;
+        let signer = self.signer().await?;
         self.subxt
             .clone()
             .unlock_shares_and_watch(&signer, org, who)

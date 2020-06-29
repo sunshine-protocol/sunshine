@@ -19,7 +19,7 @@ rpassword = "4.0.5"
 sp-keyring = "2.0.0-rc2"
 pallet-indices = "2.0.0-rc4"
 sp-core = "2.0.0-rc4"
-substrate-subxt = "0.8.0"
+substrate-subxt = "0.10.1"
 # textwrap = { version = "0.11.0", features = ["term_size"] }
 thiserror = "1.0.19"
 utils-identity = { package = "utils-identity", git = "https://github.com/sunshine-protocol/sunshine-identity/" }

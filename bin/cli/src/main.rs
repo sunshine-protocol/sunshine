@@ -9,10 +9,6 @@ use ipfs_embed::{
     Config,
     Store,
 };
-use ipld_block_builder::{
-    BlockBuilder,
-    Codec,
-};
 use keybase_keystore::{
     bip39::{
         Language,
@@ -27,13 +23,9 @@ use std::path::PathBuf;
 use substrate_subxt::{
     sp_core,
     sp_core::sr25519,
-    sp_runtime,
     ClientBuilder,
 };
-use sunshine_client::{
-    Extra as ExtraWrapper,
-    Runtime,
-};
+use sunshine_client::Runtime;
 
 mod command;
 mod error;
@@ -68,15 +60,7 @@ impl Paths {
     }
 }
 
-type Signature = sp_runtime::MultiSignature;
-type RuntimeExtra = ExtraWrapper<Runtime>;
-type Client = sunshine_client::SunClient<
-    Runtime,
-    Signature,
-    RuntimeExtra,
-    sr25519::Pair,
-    Store,
->;
+type Client = sunshine_client::Client<Runtime, sr25519::Pair, Store>;
 
 async fn run() -> Result<(), Error> {
     env_logger::init();
@@ -94,16 +78,12 @@ async fn run() -> Result<(), Error> {
         &DeviceKey::from_seed(alice_seed),
         &Password::from("password".to_string()),
     )?;
-    let subxt = ClientBuilder::<Runtime, Signature, RuntimeExtra>::new()
-        .build()
-        .await?;
+    let subxt = ClientBuilder::<Runtime>::new().build().await?;
     let config =
         Config::from_path(&paths.db).map_err(ipfs_embed::Error::Sled)?;
     let store = Store::new(config)?;
-    let codec = Codec::new();
-    let ipld = BlockBuilder::new(store, codec);
     // initialize new client from storage utilities
-    let client = Client::new(keystore, subxt.clone(), ipld);
+    let client = Client::new(keystore, subxt.clone(), store);
     // match on the passed in command
     match opts.cmd {
         SubCommand::Key(KeyCommand { cmd }) => {
@@ -113,7 +93,7 @@ async fn run() -> Result<(), Error> {
                     suri,
                     paperkey,
                 }) => {
-                    if client.has_device_key() && !force {
+                    if client.has_device_key().await && !force {
                         return Err(Error::HasDeviceKey)
                     }
                     let password = ask_for_password(
@@ -134,7 +114,7 @@ async fn run() -> Result<(), Error> {
                         DeviceKey::generate()
                     };
                     let account_id =
-                        client.set_device_key(&dk, &password, force)?;
+                        client.set_device_key(&dk, &password, force).await?;
                     let account_id_str = account_id.to_string();
                     println!("Your device id is {}", &account_id_str);
                 }
