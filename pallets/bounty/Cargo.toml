@@ -10,7 +10,7 @@ description = "on chain bounty platform"
 keywords = ["sunshine", "substrate", "blockchain"]
 
 [dependencies]
-serde = { version = "1.0.104", optional = true }
+serde = { version = "1.0.114", optional = true }
 codec = { package = "parity-scale-codec", version = "1.3.0", default-features = false, features = ["derive"] }
 sp-std = { version = "2.0.0-rc4", default-features = false }
 sp-runtime = { version = "2.0.0-rc4", default-features = false }

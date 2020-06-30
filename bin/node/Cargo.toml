@@ -34,7 +34,7 @@ sp-runtime = { version = "2.0.0-rc4", default-features = false }
 sp-transaction-pool = { version = "2.0.0-rc4", default-features = false }
 suntime = { path = "../runtime" }
 utils-identity = { package = "sunshine-identity-utils", git = "https://github.com/sunshine-protocol/sunshine-identity/", default-features=false }
-structopt = { version = "0.3.14", optional = true }
+structopt = { version = "0.3.15", optional = true }
 
 [features]
 default = ["cli"]
