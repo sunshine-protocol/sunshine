@@ -1,12 +1,6 @@
-use crate::srml::{
-    org::{
-        Org,
-        OrgEventsDecoder,
-    },
-    vote::{
-        Vote,
-        VoteEventsDecoder,
-    },
+use crate::srml::org::{
+    Org,
+    OrgEventsDecoder,
 };
 use codec::{
     Codec,
@@ -26,20 +20,22 @@ use substrate_subxt::system::{
     SystemEventsDecoder,
 };
 use util::bank::{
+    BankOrAccount,
     BankState,
-    DepositInfo,
-    InternalTransferInfo,
     OnChainTreasuryID,
-    ReservationInfo,
+    OrgOrAccount,
+    SpendReservation,
+    TransferInformation,
+    TransferState,
 };
 
 pub type BalanceOf<T> = <T as Bank>::Currency; // as Currency<<T as System>::AccountId>>::Balance;
 
 /// The subset of the bank trait and its inherited traits that the client must inherit
 #[module]
-pub trait Bank: System + Org + Vote {
+pub trait Bank: System + Org {
     /// Identifier for bank-related maps
-    type BankAssociatedId: Parameter
+    type BankId: Parameter
         + Member
         + AtLeast32Bit
         + Codec
@@ -72,34 +68,32 @@ pub struct MinimumInitialDepositStore<T: Bank> {
     pub amount: BalanceOf<T>,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq, Encode)]
+pub struct MinimumTransferStore<T: Bank> {
+    pub amount: BalanceOf<T>,
+}
+
 // ~~ Maps ~~
 
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
 pub struct BankStoresStore<T: Bank> {
-    #[store(returns = BankState<<T as Org>::OrgId, BalanceOf<T>>)]
+    #[store(returns = BankState<<T as System>::AccountId, <T as Org>::OrgId, BalanceOf<T>>)]
     pub id: OnChainTreasuryID,
     phantom: std::marker::PhantomData<T>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
-pub struct DepositsStore<T: Bank> {
-    #[store(returns = DepositInfo<<T as System>::AccountId, <T as Org>::IpfsReference, BalanceOf<T>>)]
-    pub bank_id: OnChainTreasuryID,
-    pub deposit_id: T::BankAssociatedId,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
 pub struct SpendReservationsStore<T: Bank> {
-    #[store(returns = ReservationInfo<<T as Org>::IpfsReference, BalanceOf<T>, <T as Org>::OrgId>)]
+    #[store(returns = SpendReservation<BankOrAccount<OnChainTreasuryID, <T as System>::AccountId>, BalanceOf<T>>)]
     pub bank_id: OnChainTreasuryID,
-    pub reservation_id: T::BankAssociatedId,
+    pub reservation_id: T::BankId,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
 pub struct InternalTransfersStore<T: Bank> {
-    #[store(returns = InternalTransferInfo<T::BankAssociatedId, <T as Org>::IpfsReference, BalanceOf<T>, <T as Org>::OrgId>)]
+    #[store(returns = TransferInformation<OrgOrAccount<<T as Org>::OrgId, <T as System>::AccountId>, BalanceOf<T>, TransferState>)]
     pub bank_id: OnChainTreasuryID,
-    pub transfer_id: T::BankAssociatedId,
+    pub transfer_id: T::BankId,
 }
 
 // ~~ (Calls, Events) ~~
@@ -146,7 +140,7 @@ pub struct ReserveSpendForBankAccountCall<T: Bank> {
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
 pub struct SpendReservedForBankAccountEvent<T: Bank> {
     pub bank_id: OnChainTreasuryID,
-    pub new_reservation_id: T::BankAssociatedId,
+    pub new_reservation_id: T::BankId,
     pub reason: <T as Org>::IpfsReference,
     pub amount: BalanceOf<T>,
     pub controller: <T as Org>::OrgId,
@@ -155,7 +149,7 @@ pub struct SpendReservedForBankAccountEvent<T: Bank> {
 #[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
 pub struct CommitReserveSpendForTransferInsideBankAccountCall<T: Bank> {
     pub bank_id: OnChainTreasuryID,
-    pub reservation_id: T::BankAssociatedId,
+    pub reservation_id: T::BankId,
     pub reason: <T as Org>::IpfsReference,
     pub amount: BalanceOf<T>,
 }
@@ -164,14 +158,14 @@ pub struct CommitReserveSpendForTransferInsideBankAccountCall<T: Bank> {
 pub struct CommitSpendBeforeInternalTransferEvent<T: Bank> {
     pub committer: <T as System>::AccountId,
     pub bank_id: OnChainTreasuryID,
-    pub reservation_id: T::BankAssociatedId,
+    pub reservation_id: T::BankId,
     pub amount: BalanceOf<T>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
 pub struct UnreserveUncommittedReservationToMakeFreeCall<T: Bank> {
     pub bank_id: OnChainTreasuryID,
-    pub reservation_id: T::BankAssociatedId,
+    pub reservation_id: T::BankId,
     pub amount: BalanceOf<T>,
 }
 
@@ -179,14 +173,14 @@ pub struct UnreserveUncommittedReservationToMakeFreeCall<T: Bank> {
 pub struct UnreserveUncommittedReservationToMakeFreeEvent<T: Bank> {
     pub qualified_bank_controller: <T as System>::AccountId,
     pub bank_id: OnChainTreasuryID,
-    pub reservation_id: T::BankAssociatedId,
+    pub reservation_id: T::BankId,
     pub amount: BalanceOf<T>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
 pub struct UnreserveCommittedReservationToMakeFreeCall<T: Bank> {
     pub bank_id: OnChainTreasuryID,
-    pub reservation_id: T::BankAssociatedId,
+    pub reservation_id: T::BankId,
     pub amount: BalanceOf<T>,
 }
 
@@ -194,7 +188,7 @@ pub struct UnreserveCommittedReservationToMakeFreeCall<T: Bank> {
 pub struct UnreserveCommittedReservationToMakeFreeEvent<T: Bank> {
     pub qualified_spend_reservation_controller: <T as System>::AccountId,
     pub bank_id: OnChainTreasuryID,
-    pub reservation_id: T::BankAssociatedId,
+    pub reservation_id: T::BankId,
     pub amount: BalanceOf<T>,
 }
 
@@ -202,7 +196,7 @@ pub struct UnreserveCommittedReservationToMakeFreeEvent<T: Bank> {
 pub struct TransferSpendingPowerForSpendCommitmentCall<T: Bank> {
     pub bank_id: OnChainTreasuryID,
     pub reason: <T as Org>::IpfsReference,
-    pub reservation_id: T::BankAssociatedId,
+    pub reservation_id: T::BankId,
     pub amount: BalanceOf<T>,
     pub committed_controller: <T as Org>::OrgId,
 }
@@ -214,7 +208,7 @@ pub struct InternalTransferExecutedAndSpendingPowerDoledOutToControllerEvent<
     pub qualified_spend_reservation_controller: <T as System>::AccountId,
     pub bank_id: OnChainTreasuryID,
     pub reason: <T as Org>::IpfsReference,
-    pub reservation_id: T::BankAssociatedId,
+    pub reservation_id: T::BankId,
     pub amount: BalanceOf<T>,
     pub committed_controller: <T as Org>::OrgId,
 }
@@ -222,7 +216,7 @@ pub struct InternalTransferExecutedAndSpendingPowerDoledOutToControllerEvent<
 #[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
 pub struct WithdrawByReferencingInternalTransferCall<T: Bank> {
     pub bank_id: OnChainTreasuryID,
-    pub transfer_id: T::BankAssociatedId,
+    pub transfer_id: T::BankId,
     pub amount: BalanceOf<T>,
 }
 
@@ -231,7 +225,7 @@ pub struct SpendRequestForInternalTransferApprovedAndExecutedEvent<T: Bank> {
     pub bank_id: OnChainTreasuryID,
     pub requester: <T as System>::AccountId,
     pub amount: BalanceOf<T>,
-    pub transfer_id: T::BankAssociatedId,
+    pub transfer_id: T::BankId,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
