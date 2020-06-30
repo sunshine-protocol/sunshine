@@ -10,7 +10,7 @@ description = "objects and relationships for sunshine pallets"
 keywords = ["sunshine", "substrate", "voting"]
 
 [dependencies]
-derive-new = {version = "0.5", default-features=false}
+derive-new = { version = "0.5.8", default-features = false }
 codec = { package = "parity-scale-codec", version = "1.3.0", default-features = false, features = ["derive"] }
 sp-std = { version = "2.0.0-rc4", default-features = false }
 sp-runtime = { version = "2.0.0-rc4", default-features = false }

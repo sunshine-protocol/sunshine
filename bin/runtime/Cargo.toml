@@ -78,4 +78,4 @@ vote = { package = "sunshine-vote", path = "../../pallets/vote", default-feature
 court = { package = "sunshine-court", path = "../../pallets/court", default-features=false}
 bank = { package = "sunshine-bank", path = "../../pallets/bank", default-features=false}
 bounty = { package = "sunshine-bounty", path = "../../pallets/bounty", default-features=false}
-serde = { version = "1.0.101", features = ["derive"], optional = true }
+serde = { version = "1.0.114", features = ["derive"], optional = true }
