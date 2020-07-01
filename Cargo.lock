@@ -6520,25 +6520,8 @@ dependencies = [
  "sp-io",
  "sp-runtime",
  "sp-std",
- "sunshine-org 0.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
- "sunshine-util 0.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "sunshine-bank"
-version = "0.0.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d8c68dd7b3e54f0c38376a2c328106b8a84670cbd542f55f7de0b82048642b09"
-dependencies = [
- "clear_on_drop",
- "frame-support",
- "frame-system",
- "pallet-balances",
- "parity-scale-codec",
- "sp-runtime",
- "sp-std",
- "sunshine-org 0.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
- "sunshine-util 0.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sunshine-org",
+ "sunshine-util",
 ]
 
 [[package]]
@@ -6555,10 +6538,10 @@ dependencies = [
  "sp-io",
  "sp-runtime",
  "sp-std",
- "sunshine-bank 0.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
- "sunshine-org 0.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
- "sunshine-util 0.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
- "sunshine-vote 0.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sunshine-bank",
+ "sunshine-org",
+ "sunshine-util",
+ "sunshine-vote",
 ]
 
 [[package]]
@@ -6605,13 +6588,13 @@ dependencies = [
  "sp-keyring",
  "sp-runtime",
  "substrate-subxt",
- "sunshine-bank 0.0.5",
+ "sunshine-bank",
  "sunshine-bounty",
  "sunshine-identity-utils 0.1.0 (git+https://github.com/sunshine-protocol/substrate-identity)",
  "sunshine-node",
- "sunshine-org 0.0.5",
- "sunshine-util 0.0.5",
- "sunshine-vote 0.0.5",
+ "sunshine-org",
+ "sunshine-util",
+ "sunshine-vote",
  "thiserror",
 ]
 
@@ -6629,9 +6612,9 @@ dependencies = [
  "sp-io",
  "sp-runtime",
  "sp-std",
- "sunshine-org 0.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
- "sunshine-util 0.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
- "sunshine-vote 0.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sunshine-org",
+ "sunshine-util",
+ "sunshine-vote",
 ]
 
 [[package]]
@@ -6696,25 +6679,7 @@ dependencies = [
  "sp-io",
  "sp-runtime",
  "sp-std",
- "sunshine-util 0.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "sunshine-org"
-version = "0.0.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "84a2d0218e33ed2ab22b33314886b5a0b0f6ff0dd05d566369589f403345367b"
-dependencies = [
- "clear_on_drop",
- "frame-support",
- "frame-system",
- "orml-utilities",
- "pallet-balances",
- "parity-scale-codec",
- "serde",
- "sp-runtime",
- "sp-std",
- "sunshine-util 0.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sunshine-util",
 ]
 
 [[package]]
@@ -6733,22 +6698,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sunshine-util"
-version = "0.0.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8af8e8c41fad0b6e3e76ed21dad67af5bbd197c81fcfac44bc2b42fdc9e830f3"
-dependencies = [
- "clear_on_drop",
- "derive-new",
- "frame-support",
- "orml-utilities",
- "parity-scale-codec",
- "sp-core",
- "sp-runtime",
- "sp-std",
-]
-
-[[package]]
 name = "sunshine-vote"
 version = "0.0.5"
 dependencies = [
@@ -6761,25 +6710,8 @@ dependencies = [
  "sp-io",
  "sp-runtime",
  "sp-std",
- "sunshine-org 0.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
- "sunshine-util 0.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "sunshine-vote"
-version = "0.0.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "150c5cefec8bba8f61fe77effeeed6362e879b157f49a60f82f97fd8f1aa4cc8"
-dependencies = [
- "clear_on_drop",
- "frame-support",
- "frame-system",
- "pallet-balances",
- "parity-scale-codec",
- "sp-runtime",
- "sp-std",
- "sunshine-org 0.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
- "sunshine-util 0.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sunshine-org",
+ "sunshine-util",
 ]
 
 [[package]]
@@ -6812,13 +6744,13 @@ dependencies = [
  "sp-transaction-pool",
  "sp-version",
  "substrate-wasm-builder-runner",
- "sunshine-bank 0.0.5",
+ "sunshine-bank",
  "sunshine-bounty",
  "sunshine-court",
  "sunshine-identity-utils 0.1.0 (git+https://github.com/sunshine-protocol/sunshine-identity/)",
- "sunshine-org 0.0.5",
- "sunshine-util 0.0.5",
- "sunshine-vote 0.0.5",
+ "sunshine-org",
+ "sunshine-util",
+ "sunshine-vote",
 ]
 
 [[package]]
