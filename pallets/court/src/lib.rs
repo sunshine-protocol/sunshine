@@ -5,6 +5,9 @@
 //! This court module is for dispute resolution
 //! - stores vote metadata to schedule and dispatch votes to resolve disputes
 
+#[cfg(test)]
+mod tests;
+
 use codec::Codec;
 use frame_support::{
     decl_error,
