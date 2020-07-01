@@ -5,6 +5,7 @@
 #[macro_use]
 extern crate substrate_subxt;
 
+mod r#abstract;
 mod client;
 mod error;
 #[cfg(feature = "light-client")]
@@ -16,5 +17,6 @@ pub use client::Client;
 pub use error::Error;
 #[cfg(feature = "light-client")]
 pub use light_client::ChainType;
+pub use r#abstract::AbstractClient;
 pub use runtime::Runtime;
 pub use srml::org::Org;

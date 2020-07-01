@@ -109,7 +109,6 @@ where
             *dk.expose_secret(),
         ))))
     }
-    /// Register flat organization
     pub async fn register_flat_org(
         &self,
         sudo: Option<<T as System>::AccountId>,
@@ -132,7 +131,6 @@ where
             .map_err(substrate_subxt::Error::Codec)?
             .ok_or(Error::EventNotFound)
     }
-    /// Register weighted organization
     pub async fn register_weighted_org(
         &self,
         sudo: Option<<T as System>::AccountId>,
@@ -155,7 +153,6 @@ where
             .map_err(substrate_subxt::Error::Codec)?
             .ok_or(Error::EventNotFound)
     }
-    /// Issue shares
     pub async fn issue_shares(
         &self,
         organization: <T as Org>::OrgId,
@@ -170,7 +167,6 @@ where
             .map_err(substrate_subxt::Error::Codec)?
             .ok_or(Error::EventNotFound)
     }
-    /// Burn shares
     pub async fn burn_shares(
         &self,
         organization: <T as Org>::OrgId,
@@ -186,7 +182,6 @@ where
             .map_err(substrate_subxt::Error::Codec)?
             .ok_or(Error::EventNotFound)
     }
-    /// Batch issue shares
     pub async fn batch_issue_shares(
         &self,
         organization: <T as Org>::OrgId,
@@ -201,7 +196,6 @@ where
             .map_err(substrate_subxt::Error::Codec)?
             .ok_or(Error::EventNotFound)
     }
-    /// Batch burn shares
     pub async fn batch_burn_shares(
         &self,
         organization: <T as Org>::OrgId,
@@ -216,7 +210,6 @@ where
             .map_err(substrate_subxt::Error::Codec)?
             .ok_or(Error::EventNotFound)
     }
-    /// Reserves shares for alice
     pub async fn reserve_shares(
         &self,
         org: <T as Org>::OrgId,
@@ -231,7 +224,6 @@ where
             .map_err(substrate_subxt::Error::Codec)?
             .ok_or(Error::EventNotFound)
     }
-    /// Reserves shares for alice
     pub async fn unreserve_shares(
         &self,
         org: <T as Org>::OrgId,
@@ -246,7 +238,6 @@ where
             .map_err(substrate_subxt::Error::Codec)?
             .ok_or(Error::EventNotFound)
     }
-    /// Lock shares for alice
     pub async fn lock_shares(
         &self,
         org: <T as Org>::OrgId,
@@ -261,7 +252,6 @@ where
             .map_err(substrate_subxt::Error::Codec)?
             .ok_or(Error::EventNotFound)
     }
-    /// Unlock shares for alice
     pub async fn unlock_shares(
         &self,
         org: <T as Org>::OrgId,
