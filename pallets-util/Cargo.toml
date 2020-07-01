@@ -1,12 +1,12 @@
 [package]
 name = "sunshine-util"
-version = "0.0.3"
+version = "0.0.5"
 authors = ["Amar Singh <asinghchrony@protonmail.com>"]
 edition = "2018"
 
 license = "GPL-3.0"
-repository = "https://github.com/sunshine-protocol/sunshine-node"
-description = "objects and relationships for sunshine pallets"
+repository = "https://github.com/sunshine-protocol/sunshine-bounty"
+description = "objects and relationships for sunshine-bounty pallets"
 keywords = ["sunshine", "substrate", "voting"]
 
 [dependencies]
