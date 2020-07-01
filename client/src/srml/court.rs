@@ -10,7 +10,6 @@ use crate::srml::{
 };
 use codec::{
     Codec,
-    Decode,
     Encode,
 };
 use frame_support::Parameter;

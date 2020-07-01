@@ -20,6 +20,7 @@ use frame_support::{
         Currency,
         ExistenceRequirement,
         Get,
+        ReservableCurrency,
     },
     Parameter,
 };
@@ -94,7 +95,8 @@ pub trait Trait: frame_system::Trait + org::Trait {
         + Zero;
 
     /// The currency type for on-chain transactions
-    type Currency: Currency<Self::AccountId>;
+    type Currency: Currency<Self::AccountId>
+        + ReservableCurrency<Self::AccountId>;
 
     /// The minimum amount necessary to use this module for this transfer
     type MinimumTransfer: Get<BalanceOf<Self>>;

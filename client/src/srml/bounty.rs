@@ -19,14 +19,11 @@ use codec::{
     Encode,
 };
 use frame_support::Parameter;
-use sp_runtime::{
-    traits::{
-        AtLeast32Bit,
-        MaybeSerializeDeserialize,
-        Member,
-        Zero,
-    },
-    Permill,
+use sp_runtime::traits::{
+    AtLeast32Bit,
+    MaybeSerializeDeserialize,
+    Member,
+    Zero,
 };
 use std::fmt::Debug;
 use substrate_subxt::system::{
@@ -34,17 +31,20 @@ use substrate_subxt::system::{
     SystemEventsDecoder,
 };
 use util::{
-    bank::OnChainTreasuryID,
+    bank::{
+        BankOrAccount,
+        OnChainTreasuryID,
+        TransferId,
+    },
     bounty::{
         ApplicationState,
+        BankSpend,
         BountyInformation,
         GrantApplication,
         MilestoneStatus,
         MilestoneSubmission,
-        ReviewBoard,
-        TeamID,
     },
-    organization::TermsOfAgreement,
+    court::ResolutionMetadata,
     vote::ThresholdConfig,
 };
 
@@ -67,11 +67,6 @@ pub trait Bounty: System + Org + Vote + Bank {
 // ~~ Constants ~~
 
 #[derive(Clone, Debug, Eq, PartialEq, Encode)]
-pub struct MinimumBountyCollateralRatioConstant {
-    pub get: Permill,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Encode)]
 pub struct BountyLowerBoundConstant<T: Bounty> {
     pub get: BalanceOf<T>,
 }
@@ -79,28 +74,45 @@ pub struct BountyLowerBoundConstant<T: Bounty> {
 // ~~ Maps ~~
 
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
-pub struct RegisteredFoundationsStore<T: Bounty> {
-    #[store(returns = bool)]
-    pub org: <T as Org>::OrgId,
-    pub treasury_id: OnChainTreasuryID,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
-pub struct FoundationSponsoredBountiesStore<T: Bounty> {
-    #[store(returns = BountyInformation<<T as Org>::OrgId, <T as Bank>::BankAssociatedId, <T as Org>::IpfsReference, BalanceOf<T>, ReviewBoard<<T as Org>::OrgId, <T as System>::AccountId, <T as Org>::IpfsReference, ThresholdConfig<<T as Vote>::Signal, Permill>>>)]
+pub struct LiveBountiesStore<T: Bounty> {
+    #[store(returns = BountyInformation<
+        BankOrAccount<
+            BankSpend<TransferId<T::BankId>>,
+            T::AccountId
+        >,
+        T::IpfsReference,
+        BalanceOf<T>,
+        ResolutionMetadata<
+            T::OrgId,
+            ThresholdConfig<T::Signal>,
+            T::BlockNumber,
+        >,
+    >)]
     pub id: T::BountyId,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
 pub struct BountyApplicationsStore<T: Bounty> {
-    #[store(returns = GrantApplication<<T as System>::AccountId, <T as Org>::Shares, BalanceOf<T>, <T as Org>::IpfsReference, ApplicationState<TeamID<<T as Org>::OrgId, <T as System>::AccountId>, <T as Vote>::VoteId>>)]
+    #[store(returns = GrantApplication<
+        T::AccountId,
+        OnChainTreasuryID,
+        BalanceOf<T>,
+        T::IpfsReference,
+        ApplicationState<T::VoteId>,
+    >)]
     pub bounty_id: T::BountyId,
     pub application_id: T::BountyId,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
 pub struct MilestoneSubmissionsStore<T: Bounty> {
-    #[store(returns = MilestoneSubmission<<T as Org>::IpfsReference, BalanceOf<T>, <T as System>::AccountId, T::BountyId, MilestoneStatus<<T as Org>::OrgId, <T as Vote>::VoteId, <T as Bank>::BankAssociatedId>>)]
+    #[store(returns = MilestoneSubmission<
+        T::AccountId,
+        T::BountyId,
+        T::IpfsReference,
+        BalanceOf<T>,
+        MilestoneStatus<T::VoteId, BankOrAccount<TransferId<T::BankId>, T::AccountId>>
+    >)]
     pub bounty_id: T::BountyId,
     pub milestone_id: T::BountyId,
 }
@@ -108,76 +120,50 @@ pub struct MilestoneSubmissionsStore<T: Bounty> {
 // ~~ (Calls, Events) ~~
 
 #[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
-pub struct DirectRegisterFoundationFromExistingBankCall<T: Bounty> {
-    pub registered_organization: <T as Org>::OrgId,
-    pub bank_account: OnChainTreasuryID,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
-pub struct FoundationRegisteredFromOnChainBankEvent<T: Bounty> {
-    pub registered_organization: <T as Org>::OrgId,
-    pub bank_account: OnChainTreasuryID,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
-pub struct DirectCreateBountyCall<T: Bounty> {
-    pub registered_organization: <T as Org>::OrgId,
+pub struct AccountPostsBountyCall<T: Bounty> {
     pub description: <T as Org>::IpfsReference,
-    pub bank_account: OnChainTreasuryID,
     pub amount_reserved_for_bounty: BalanceOf<T>,
-    pub amount_claimed_available: BalanceOf<T>,
-    pub acceptance_committee: ReviewBoard<
+    pub acceptance_committee: ResolutionMetadata<
         <T as Org>::OrgId,
-        <T as System>::AccountId,
-        <T as Org>::IpfsReference,
-        ThresholdConfig<<T as Vote>::Signal, Permill>,
+        ThresholdConfig<<T as Vote>::Signal>,
+        <T as System>::BlockNumber,
     >,
     pub supervision_committee: Option<
-        ReviewBoard<
+        ResolutionMetadata<
             <T as Org>::OrgId,
-            <T as System>::AccountId,
-            <T as Org>::IpfsReference,
-            ThresholdConfig<<T as Vote>::Signal, Permill>,
+            ThresholdConfig<<T as Vote>::Signal>,
+            <T as System>::BlockNumber,
         >,
     >,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
-pub struct FoundationPostedBountyEvent<T: Bounty> {
-    pub bounty_creator: <T as System>::AccountId,
-    pub registered_organization: <T as Org>::OrgId,
-    pub bounty_identifier: T::BountyId,
-    pub bank_account: OnChainTreasuryID,
-    pub description: <T as Org>::IpfsReference,
+pub struct BountyPostedEvent<T: Bounty> {
+    pub new_bounty_id: T::BountyId,
+    pub poster: <T as System>::AccountId,
     pub amount_reserved_for_bounty: BalanceOf<T>,
-    pub amount_claimed_available: BalanceOf<T>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
-pub struct DirectSubmitGrantApplicationCall<T: Bounty> {
+pub struct AccountAppliesForBountyCall<T: Bounty> {
     pub bounty_id: T::BountyId,
     pub description: <T as Org>::IpfsReference,
     pub total_amount: BalanceOf<T>,
-    pub terms_of_agreement: TermsOfAgreement<
-        <T as System>::AccountId,
-        <T as Org>::Shares,
-        <T as Org>::IpfsReference,
-    >,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
-pub struct GrantApplicationSubmittedForBountyEvent<T: Bounty> {
-    pub submitter: <T as System>::AccountId,
+pub struct BountyApplicationSubmittedEvent<T: Bounty> {
     pub bounty_id: T::BountyId,
     pub new_grant_app_id: T::BountyId,
-    pub description: <T as Org>::IpfsReference,
+    pub submitter: <T as System>::AccountId,
+    pub org_bank: Option<OnChainTreasuryID>,
     pub total_amount: BalanceOf<T>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
-pub struct DirectTriggerApplicationReviewCall<T: Bounty> {
+pub struct AccountTriggersApplicationReviewCall<T: Bounty> {
     pub bounty_id: T::BountyId,
-    pub application_id: T::BountyId,
+    pub new_grant_app_id: T::BountyId,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
@@ -185,47 +171,39 @@ pub struct ApplicationReviewTriggeredEvent<T: Bounty> {
     pub trigger: <T as System>::AccountId,
     pub bounty_id: T::BountyId,
     pub application_id: T::BountyId,
-    pub application_state: ApplicationState<
-        TeamID<<T as Org>::OrgId, <T as System>::AccountId>,
-        <T as Vote>::VoteId,
-    >,
+    pub application_state: ApplicationState<<T as Vote>::VoteId>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
-pub struct DirectSudoApproveApplicationCall<T: Bounty> {
+pub struct AccountSudoApprovedApplicationCall<T: Bounty> {
     pub bounty_id: T::BountyId,
     pub application_id: T::BountyId,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
 pub struct SudoApprovedApplicationEvent<T: Bounty> {
-    pub purported_sudo: <T as System>::AccountId,
+    pub sudo: <T as System>::AccountId,
     pub bounty_id: T::BountyId,
     pub application_id: T::BountyId,
-    pub application_state: ApplicationState<
-        TeamID<<T as Org>::OrgId, <T as System>::AccountId>,
-        <T as Vote>::VoteId,
-    >,
+    pub application_state: ApplicationState<<T as Vote>::VoteId>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
-pub struct AnyAccPollApplicationCall<T: Bounty> {
+pub struct PollApplicationCall<T: Bounty> {
     pub bounty_id: T::BountyId,
     pub application_id: T::BountyId,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
-pub struct ApplicationPolledEvent<T: Bounty> {
+pub struct PollApplicationEvent<T: Bounty> {
+    pub poller: <T as System>::AccountId,
     pub bounty_id: T::BountyId,
     pub application_id: T::BountyId,
-    pub application_state: ApplicationState<
-        TeamID<<T as Org>::OrgId, <T as System>::AccountId>,
-        <T as Vote>::VoteId,
-    >,
+    pub application_state: ApplicationState<<T as Vote>::VoteId>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
-pub struct DirectSubmitMilestoneCall<T: Bounty> {
+pub struct SubmitMilestoneCall<T: Bounty> {
     pub bounty_id: T::BountyId,
     pub application_id: T::BountyId,
     pub submission_reference: <T as Org>::IpfsReference,
@@ -238,10 +216,11 @@ pub struct MilestoneSubmittedEvent<T: Bounty> {
     pub bounty_id: T::BountyId,
     pub application_id: T::BountyId,
     pub new_milestone_id: T::BountyId,
+    pub amount_requested: BalanceOf<T>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
-pub struct DirectTriggerMilestoneReviewCall<T: Bounty> {
+pub struct TriggerMilestoneReviewCall<T: Bounty> {
     pub bounty_id: T::BountyId,
     pub milestone_id: T::BountyId,
 }
@@ -252,32 +231,30 @@ pub struct MilestoneReviewTriggeredEvent<T: Bounty> {
     pub bounty_id: T::BountyId,
     pub milestone_id: T::BountyId,
     pub milestone_state: MilestoneStatus<
-        <T as Org>::OrgId,
-        <T as Vote>::VoteId,
-        <T as Bank>::BankAssociatedId,
+        T::VoteId,
+        BankOrAccount<TransferId<T::BankId>, T::AccountId>,
     >,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
-pub struct DirectSudoApprovesMilestoneCall<T: Bounty> {
+pub struct SudoApprovesMilestoneCall<T: Bounty> {
     pub bounty_id: T::BountyId,
     pub milestone_id: T::BountyId,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
 pub struct SudoApprovedMilestoneEvent<T: Bounty> {
-    pub purported_sudo: <T as System>::AccountId,
+    pub sudo: <T as System>::AccountId,
     pub bounty_id: T::BountyId,
     pub milestone_id: T::BountyId,
     pub milestone_state: MilestoneStatus<
-        <T as Org>::OrgId,
-        <T as Vote>::VoteId,
-        <T as Bank>::BankAssociatedId,
+        T::VoteId,
+        BankOrAccount<TransferId<T::BankId>, T::AccountId>,
     >,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
-pub struct DirectPollMilestoneCall<T: Bounty> {
+pub struct PollMilestoneCall<T: Bounty> {
     pub bounty_id: T::BountyId,
     pub milestone_id: T::BountyId,
 }
@@ -288,8 +265,7 @@ pub struct MilestonePolledEvent<T: Bounty> {
     pub bounty_id: T::BountyId,
     pub milestone_id: T::BountyId,
     pub milestone_state: MilestoneStatus<
-        <T as Org>::OrgId,
-        <T as Vote>::VoteId,
-        <T as Bank>::BankAssociatedId,
+        T::VoteId,
+        BankOrAccount<TransferId<T::BankId>, T::AccountId>,
     >,
 }

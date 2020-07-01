@@ -25,6 +25,7 @@ use frame_support::{
         Currency,
         ExistenceRequirement,
         Get,
+        ReservableCurrency,
     },
     Parameter,
 };
@@ -76,7 +77,6 @@ use util::{
         PostUserTransfer,
         ReturnsBountyIdentifier,
         SeededGenerateUniqueID,
-        SetMakeTransfer,
         StartReview,
         SubmitGrantApplication,
         SubmitMilestone,
@@ -467,6 +467,84 @@ impl<T: Trait> Module<T> {
     pub fn is_bounty(id: T::BountyId) -> bool {
         !Self::id_is_available(BIdWrapper::new(id))
     }
+
+    pub fn transfer_milestone_payment(
+        sender: BankOrAccount<BankSpend<TransferId<T::BankId>>, T::AccountId>,
+        recipient: BankOrAccount<OnChainTreasuryID, T::AccountId>,
+        amount: BalanceOf<T>,
+    ) -> Result<BankOrAccount<TransferId<T::BankId>, T::AccountId>, DispatchError>
+    {
+        match (sender, recipient) {
+            (
+                BankOrAccount::Bank(BankSpend::Transfer(full_transfer_id)),
+                BankOrAccount::Bank(dest_bank_id),
+            ) => {
+                let result_transfer_id =
+                    <bank::Module<T>>::direct_transfer_to_org(
+                        full_transfer_id,
+                        dest_bank_id,
+                        amount,
+                    )?;
+                Ok(BankOrAccount::Bank(result_transfer_id))
+            }
+            (
+                BankOrAccount::Bank(BankSpend::Reserved(full_reservation_id)),
+                BankOrAccount::Bank(_),
+            ) => {
+                // TODO: check that the dest_bank_id is equal to the reservation in question
+                <bank::Module<T>>::transfer_reserved_spend(
+                    full_reservation_id,
+                    amount,
+                )
+            }
+            (
+                BankOrAccount::Bank(BankSpend::Transfer(full_transfer_id)),
+                BankOrAccount::Account(dest_acc),
+            ) => {
+                <bank::Module<T>>::direct_transfer_to_account(
+                    full_transfer_id,
+                    dest_acc.clone(),
+                    amount,
+                )?;
+                Ok(BankOrAccount::Account(dest_acc))
+            }
+            (
+                BankOrAccount::Bank(BankSpend::Reserved(full_reservation_id)),
+                BankOrAccount::Account(_),
+            ) => {
+                // TODO: check that the dest_bank_id is equal to the reservation in question
+                <bank::Module<T>>::transfer_reserved_spend(
+                    full_reservation_id,
+                    amount,
+                )
+            }
+            (
+                BankOrAccount::Account(sender_acc),
+                BankOrAccount::Bank(dest_bank_id),
+            ) => {
+                let new_transfer_id = <bank::Module<T>>::post_user_transfer(
+                    sender_acc,
+                    dest_bank_id,
+                    amount,
+                )?;
+                Ok(BankOrAccount::Bank(new_transfer_id))
+            }
+            (
+                BankOrAccount::Account(sender_acc),
+                BankOrAccount::Account(dest_acc),
+            ) => {
+                // unreserve and transfer (note reservation associated with posting bounty initially)
+                T::Currency::unreserve(&sender_acc, amount);
+                T::Currency::transfer(
+                    &sender_acc,
+                    &dest_acc,
+                    amount,
+                    ExistenceRequirement::KeepAlive,
+                )?;
+                Ok(BankOrAccount::Account(dest_acc))
+            }
+        }
+    }
 }
 
 pub struct BIdWrapper<T> {
@@ -601,6 +679,7 @@ impl<T: Trait>
                 }
             }
         } else {
+            T::Currency::reserve(&poster, amount_reserved_for_bounty)?;
             BankOrAccount::Account(poster)
         };
         // form new bounty post
@@ -960,113 +1039,16 @@ impl<T: Trait>
                 BankOrAccount::Account(grant_app.submitter())
             };
         // execute the transfer and set the relevant state
-        // TODO: extract this logic into an auxiliary function for better readability
-        let new_milestone_submission = match (bounty.poster(), grant_recipient)
-        {
-            // transfer from org bank to org bank using direct forwarding of some existing transfer
-            (
-                BankOrAccount::Bank(BankSpend::Transfer(full_transfer_id)),
-                BankOrAccount::Bank(dest_bank_id),
-            ) => {
-                let result_transfer_id =
-                    <bank::Module<T>>::direct_transfer_to_org(
-                        full_transfer_id,
-                        dest_bank_id,
-                        milestone_submission.amount(),
-                    );
-                if let Ok(new_transfer_id) = result_transfer_id {
-                    milestone_submission.set_make_transfer(BankOrAccount::Bank(new_transfer_id)).ok_or(Error::<T>::MilestoneCannotBeSudoApprovedFromTheCurrentState)?
-                // TODO: consider moving this check ahead and having set_make_transfer return Self instead of Option<Self>
-                } else {
-                    milestone_submission.approve_without_transfer().ok_or(Error::<T>::MilestoneCannotBeSudoApprovedFromTheCurrentState)?
-                    // TODO: consider moving this check in front and having approve_without_transfer return Self instead of Option<Self>
-                }
-            }
-            (
-                BankOrAccount::Bank(BankSpend::Reserved(full_reservation_id)),
-                BankOrAccount::Bank(_),
-            ) => {
-                // TODO: check that the dest_bank_id is equal to the reservation in question
-                let result_transfer_id =
-                    <bank::Module<T>>::transfer_reserved_spend(
-                        full_reservation_id,
-                        milestone_submission.amount(),
-                    );
-                if let Ok(new_transfer_id) = result_transfer_id {
-                    milestone_submission.set_make_transfer(new_transfer_id).ok_or(Error::<T>::MilestoneCannotBeSudoApprovedFromTheCurrentState)?
-                // TODO: consider moving this check ahead and having set_make_transfer return Self instead of Option<Self>
-                } else {
-                    milestone_submission.approve_without_transfer().ok_or(Error::<T>::MilestoneCannotBeSudoApprovedFromTheCurrentState)?
-                    // TODO: consider moving this check in front and having approve_without_transfer return Self instead of Option<Self>
-                }
-            }
-            // transfer from org bank to org bank using direct forwarding of some existing transfer
-            (
-                BankOrAccount::Bank(BankSpend::Transfer(full_transfer_id)),
-                BankOrAccount::Account(dest_acc),
-            ) => {
-                if let Ok(()) = <bank::Module<T>>::direct_transfer_to_account(
-                    full_transfer_id,
-                    dest_acc.clone(),
-                    milestone_submission.amount(),
-                ) {
-                    milestone_submission.set_make_transfer(BankOrAccount::Account(dest_acc)).ok_or(Error::<T>::MilestoneCannotBeSudoApprovedFromTheCurrentState)?
-                // TODO: consider moving this check ahead and having set_make_transfer return Self instead of Option<Self>
-                } else {
-                    milestone_submission.approve_without_transfer().ok_or(Error::<T>::MilestoneCannotBeSudoApprovedFromTheCurrentState)?
-                    // TODO: consider moving this check in front and having approve_without_transfer return Self instead of Option<Self>
-                }
-            }
-            (
-                BankOrAccount::Bank(BankSpend::Reserved(full_reservation_id)),
-                BankOrAccount::Account(_),
-            ) => {
-                // TODO: check that the dest_bank_id is equal to the reservation in question
-                let result_transfer_id =
-                    <bank::Module<T>>::transfer_reserved_spend(
-                        full_reservation_id,
-                        milestone_submission.amount(),
-                    );
-                if let Ok(new_transfer_id) = result_transfer_id {
-                    milestone_submission.set_make_transfer(new_transfer_id).ok_or(Error::<T>::MilestoneCannotBeSudoApprovedFromTheCurrentState)?
-                // TODO: consider moving this check ahead and having set_make_transfer return Self instead of Option<Self>
-                } else {
-                    milestone_submission.approve_without_transfer().ok_or(Error::<T>::MilestoneCannotBeSudoApprovedFromTheCurrentState)?
-                    // TODO: consider moving this check in front and having approve_without_transfer return Self instead of Option<Self>
-                }
-            }
-            (
-                BankOrAccount::Account(sender_acc),
-                BankOrAccount::Bank(dest_bank_id),
-            ) => {
-                if let Ok(transfer_id) = <bank::Module<T>>::post_user_transfer(
-                    sender_acc,
-                    dest_bank_id,
-                    milestone_submission.amount(),
-                ) {
-                    milestone_submission.set_make_transfer(BankOrAccount::Bank(transfer_id)).ok_or(Error::<T>::MilestoneCannotBeSudoApprovedFromTheCurrentState)?
-                } else {
-                    milestone_submission.approve_without_transfer().ok_or(Error::<T>::MilestoneCannotBeSudoApprovedFromTheCurrentState)?
-                    // TODO: consider moving this check in front and having approve_without_transfer return Self instead of Option<Self>
-                }
-            }
-            (
-                BankOrAccount::Account(sender_acc),
-                BankOrAccount::Account(dest_acc),
-            ) => {
-                // the rest will eventually become as simple as this path with refactoring
-                if let Ok(()) = T::Currency::transfer(
-                    &sender_acc,
-                    &dest_acc,
-                    milestone_submission.amount(),
-                    ExistenceRequirement::KeepAlive,
-                ) {
-                    milestone_submission.set_make_transfer(BankOrAccount::Account(dest_acc)).ok_or(Error::<T>::MilestoneCannotBeSudoApprovedFromTheCurrentState)?
-                } else {
-                    milestone_submission.approve_without_transfer().ok_or(Error::<T>::MilestoneCannotBeSudoApprovedFromTheCurrentState)?
-                    // TODO: consider moving this check in front and having approve_without_transfer return Self instead of Option<Self>
-                }
-            }
+        let payment_receipt = Self::transfer_milestone_payment(
+            bounty.poster(),
+            grant_recipient,
+            milestone_submission.amount(),
+        );
+        let new_milestone_submission = if let Ok(pay_id) = payment_receipt {
+            milestone_submission
+                .set_state(MilestoneStatus::ApprovedAndTransferExecuted(pay_id))
+        } else {
+            milestone_submission.approve_without_transfer()
         };
         let ret_state = new_milestone_submission.state();
         // insert updated milestone
@@ -1099,8 +1081,10 @@ impl<T: Trait>
                 let vote_outcome =
                     <vote::Module<T>>::get_vote_outcome(live_vote_id)?;
                 if vote_outcome == VoteOutcome::Approved {
-                    // same logic as in sudo_approve, TODO: extract into own method (hard because of associated state)
-                    // get grant recipient from grant app
+                    let poster: BankOrAccount<
+                        BankSpend<TransferId<T::BankId>>,
+                        T::AccountId,
+                    > = bounty.poster();
                     let grant_recipient: BankOrAccount<
                         OnChainTreasuryID,
                         T::AccountId,
@@ -1109,127 +1093,21 @@ impl<T: Trait>
                     } else {
                         BankOrAccount::Account(grant_app.submitter())
                     };
-                    let new_milestone_submission = match (
-                        bounty.poster(),
+                    let payment_receipt = Self::transfer_milestone_payment(
+                        poster,
                         grant_recipient,
-                    ) {
-                        // transfer from org bank to org bank using direct forwarding of some existing transfer
-                        (
-                            BankOrAccount::Bank(BankSpend::Transfer(
-                                full_transfer_id,
-                            )),
-                            BankOrAccount::Bank(dest_bank_id),
-                        ) => {
-                            let result_transfer_id =
-                                <bank::Module<T>>::direct_transfer_to_org(
-                                    full_transfer_id,
-                                    dest_bank_id,
-                                    milestone_submission.amount(),
-                                );
-                            if let Ok(new_transfer_id) = result_transfer_id {
-                                milestone_submission.set_make_transfer(BankOrAccount::Bank(new_transfer_id)).ok_or(Error::<T>::MilestoneCannotBeSudoApprovedFromTheCurrentState)?
-                            // TODO: consider moving this check ahead and having set_make_transfer return Self instead of Option<Self>
-                            } else {
-                                milestone_submission.approve_without_transfer().ok_or(Error::<T>::MilestoneCannotBeSudoApprovedFromTheCurrentState)?
-                                // TODO: consider moving this check in front and having approve_without_transfer return Self instead of Option<Self>
-                            }
-                        }
-                        (
-                            BankOrAccount::Bank(BankSpend::Reserved(
-                                full_reservation_id,
-                            )),
-                            BankOrAccount::Bank(_),
-                        ) => {
-                            // TODO: check that the dest_bank_id is equal to the reservation in question
-                            let result_transfer_id =
-                                <bank::Module<T>>::transfer_reserved_spend(
-                                    full_reservation_id,
-                                    milestone_submission.amount(),
-                                );
-                            if let Ok(new_transfer_id) = result_transfer_id {
-                                milestone_submission.set_make_transfer(new_transfer_id).ok_or(Error::<T>::MilestoneCannotBeSudoApprovedFromTheCurrentState)?
-                            // TODO: consider moving this check ahead and having set_make_transfer return Self instead of Option<Self>
-                            } else {
-                                milestone_submission.approve_without_transfer().ok_or(Error::<T>::MilestoneCannotBeSudoApprovedFromTheCurrentState)?
-                                // TODO: consider moving this check in front and having approve_without_transfer return Self instead of Option<Self>
-                            }
-                        }
-                        // transfer from org bank to org bank using direct forwarding of some existing transfer
-                        (
-                            BankOrAccount::Bank(BankSpend::Transfer(
-                                full_transfer_id,
-                            )),
-                            BankOrAccount::Account(dest_acc),
-                        ) => {
-                            if let Ok(()) =
-                                <bank::Module<T>>::direct_transfer_to_account(
-                                    full_transfer_id,
-                                    dest_acc.clone(),
-                                    milestone_submission.amount(),
-                                )
-                            {
-                                milestone_submission.set_make_transfer(BankOrAccount::Account(dest_acc)).ok_or(Error::<T>::MilestoneCannotBeSudoApprovedFromTheCurrentState)?
-                            // TODO: consider moving this check ahead and having set_make_transfer return Self instead of Option<Self>
-                            } else {
-                                milestone_submission.approve_without_transfer().ok_or(Error::<T>::MilestoneCannotBeSudoApprovedFromTheCurrentState)?
-                                // TODO: consider moving this check in front and having approve_without_transfer return Self instead of Option<Self>
-                            }
-                        }
-                        (
-                            BankOrAccount::Bank(BankSpend::Reserved(
-                                full_reservation_id,
-                            )),
-                            BankOrAccount::Account(_),
-                        ) => {
-                            // TODO: check that the dest_bank_id is equal to the reservation in question
-                            let result_transfer_id =
-                                <bank::Module<T>>::transfer_reserved_spend(
-                                    full_reservation_id,
-                                    milestone_submission.amount(),
-                                );
-                            if let Ok(new_transfer_id) = result_transfer_id {
-                                milestone_submission.set_make_transfer(new_transfer_id).ok_or(Error::<T>::MilestoneCannotBeSudoApprovedFromTheCurrentState)?
-                            // TODO: consider moving this check ahead and having set_make_transfer return Self instead of Option<Self>
-                            } else {
-                                milestone_submission.approve_without_transfer().ok_or(Error::<T>::MilestoneCannotBeSudoApprovedFromTheCurrentState)?
-                                // TODO: consider moving this check in front and having approve_without_transfer return Self instead of Option<Self>
-                            }
-                        }
-                        (
-                            BankOrAccount::Account(sender_acc),
-                            BankOrAccount::Bank(dest_bank_id),
-                        ) => {
-                            if let Ok(transfer_id) =
-                                <bank::Module<T>>::post_user_transfer(
-                                    sender_acc,
-                                    dest_bank_id,
-                                    milestone_submission.amount(),
-                                )
-                            {
-                                milestone_submission.set_make_transfer(BankOrAccount::Bank(transfer_id)).ok_or(Error::<T>::MilestoneCannotBeSudoApprovedFromTheCurrentState)?
-                            } else {
-                                milestone_submission.approve_without_transfer().ok_or(Error::<T>::MilestoneCannotBeSudoApprovedFromTheCurrentState)?
-                                // TODO: consider moving this check in front and having approve_without_transfer return Self instead of Option<Self>
-                            }
-                        }
-                        (
-                            BankOrAccount::Account(sender_acc),
-                            BankOrAccount::Account(dest_acc),
-                        ) => {
-                            // the rest will eventually become as simple as this path with refactoring
-                            if let Ok(()) = T::Currency::transfer(
-                                &sender_acc,
-                                &dest_acc,
-                                milestone_submission.amount(),
-                                ExistenceRequirement::KeepAlive,
-                            ) {
-                                milestone_submission.set_make_transfer(BankOrAccount::Account(dest_acc)).ok_or(Error::<T>::MilestoneCannotBeSudoApprovedFromTheCurrentState)?
-                            } else {
-                                milestone_submission.approve_without_transfer().ok_or(Error::<T>::MilestoneCannotBeSudoApprovedFromTheCurrentState)?
-                                // TODO: consider moving this check in front and having approve_without_transfer return Self instead of Option<Self>
-                            }
-                        }
-                    };
+                        milestone_submission.amount(),
+                    );
+                    let new_milestone_submission =
+                        if let Ok(pay_id) = payment_receipt {
+                            milestone_submission.set_state(
+                                MilestoneStatus::ApprovedAndTransferExecuted(
+                                    pay_id,
+                                ),
+                            )
+                        } else {
+                            milestone_submission.approve_without_transfer()
+                        };
                     let ret_state = new_milestone_submission.state();
                     // insert updated milestone
                     <MilestoneSubmissions<T>>::insert(
