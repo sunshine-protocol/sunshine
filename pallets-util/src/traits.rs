@@ -393,12 +393,8 @@ pub trait StartReview<VoteIdentifier>: Sized {
 }
 
 pub trait ApproveWithoutTransfer: Sized {
-    fn approve_without_transfer(&self) -> Option<Self>;
-}
-
-pub trait SetMakeTransfer<BankId>: Sized {
-    fn set_make_transfer(&self, bank_id: BankId) -> Option<Self>;
-    fn get_transfer_id(&self) -> Option<BankId>;
+    // infallible
+    fn approve_without_transfer(&self) -> Self;
 }
 
 pub trait ApproveGrant: Sized {
@@ -442,9 +438,7 @@ pub trait SuperviseGrantApplication<BountyId, AccountId> {
 }
 
 pub trait SubmitMilestone<AccountId, BountyId, Hash, Currency, VoteId, BankId> {
-    type Milestone: StartReview<VoteId>
-        + ApproveWithoutTransfer
-        + SetMakeTransfer<BankId>;
+    type Milestone: StartReview<VoteId> + ApproveWithoutTransfer;
     type MilestoneState;
     fn submit_milestone(
         submitter: AccountId,

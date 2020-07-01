@@ -1,7 +1,6 @@
 use crate::traits::{
     ApproveGrant,
     ApproveWithoutTransfer,
-    SetMakeTransfer,
     SpendApprovedGrant,
     StartReview,
 };
@@ -420,6 +419,12 @@ impl<
     pub fn state(&self) -> MilestoneStatus<VoteId, BankId> {
         self.state.clone()
     }
+    pub fn set_state(&self, state: MilestoneStatus<VoteId, BankId>) -> Self {
+        MilestoneSubmission {
+            state,
+            ..self.clone()
+        }
+    }
     pub fn ready_for_review(&self) -> bool {
         match self.state {
             MilestoneStatus::SubmittedAwaitingResponse => true,
@@ -482,71 +487,7 @@ impl<
         MilestoneStatus<VoteId, BankId>,
     >
 {
-    fn approve_without_transfer(&self) -> Option<Self> {
-        match self.state {
-            MilestoneStatus::SubmittedAwaitingResponse => {
-                Some(MilestoneSubmission {
-                    submitter: self.submitter.clone(),
-                    referenced_application: self.referenced_application,
-                    submission: self.submission.clone(),
-                    amount: self.amount,
-                    state: MilestoneStatus::ApprovedButNotTransferred,
-                })
-            }
-            _ => None,
-        }
-    }
-}
-
-impl<
-        AccountId: Clone + PartialEq,
-        ApplicationId: Codec + Copy,
-        Hash: Clone,
-        Currency: Copy,
-        VoteId: Codec + Copy,
-        BankId: Clone,
-    > SetMakeTransfer<BankId>
-    for MilestoneSubmission<
-        AccountId,
-        ApplicationId,
-        Hash,
-        Currency,
-        MilestoneStatus<VoteId, BankId>,
-    >
-{
-    fn set_make_transfer(&self, bank_id: BankId) -> Option<Self> {
-        match &self.state {
-            MilestoneStatus::SubmittedReviewStarted(_) => {
-                Some(MilestoneSubmission {
-                    submitter: self.submitter.clone(),
-                    referenced_application: self.referenced_application,
-                    submission: self.submission.clone(),
-                    amount: self.amount,
-                    state: MilestoneStatus::ApprovedAndTransferExecuted(
-                        bank_id,
-                    ),
-                })
-            }
-            MilestoneStatus::ApprovedButNotTransferred => {
-                Some(MilestoneSubmission {
-                    submitter: self.submitter.clone(),
-                    referenced_application: self.referenced_application,
-                    submission: self.submission.clone(),
-                    amount: self.amount,
-                    state: MilestoneStatus::ApprovedAndTransferExecuted(
-                        bank_id,
-                    ),
-                })
-            }
-            _ => None,
-        }
-    }
-    fn get_transfer_id(&self) -> Option<BankId> {
-        match self.state.clone() {
-            MilestoneStatus::ApprovedAndTransferExecuted(bank_id) => {
-                Some(bank_id)
-            }
-            _ => None,
-        }
+    fn approve_without_transfer(&self) -> Self {
+        self.set_state(MilestoneStatus::ApprovedButNotTransferred)
     }
 }

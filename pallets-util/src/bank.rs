@@ -211,7 +211,7 @@ impl<Sender: Clone + PartialEq, Currency: Zero + AtLeast32Bit + Clone>
     pub fn state(&self) -> TransferState {
         self.state
     }
-    pub fn stop_spend_start_withdrawals(&self) -> Option<Self> {
+    pub fn stop_spends_start_withdrawals(&self) -> Option<Self> {
         match self.state {
             TransferState::FreeForSpending => {
                 Some(TransferInformation {
@@ -234,7 +234,7 @@ impl<Sender: Clone + PartialEq, Currency: Zero + AtLeast32Bit + Clone>
     ) -> Option<TransferInformation<Sender, Currency, TransferState>> {
         match self.state() {
             TransferState::FreeForSpending => {
-                if self.amount_left() <= amt {
+                if self.amount_left() >= amt {
                     let new_spent_amt = self.amount_spent() + amt;
                     Some(TransferInformation {
                         amount_spent: new_spent_amt,

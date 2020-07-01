@@ -69,7 +69,7 @@ pub struct OpenVoteCounterStore {
 
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
 pub struct VoteStateStore<T: Vote> {
-    #[store(returns = VoteState<T::Signal, Permill, <T as System>::BlockNumber, <T as Org>::IpfsReference>)]
+    #[store(returns = VoteState<T::Signal, <T as System>::BlockNumber, <T as Org>::IpfsReference>)]
     pub vote: T::VoteId,
 }
 

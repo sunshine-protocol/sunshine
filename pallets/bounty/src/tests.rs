@@ -173,3 +173,382 @@ fn genesis_config_works() {
         assert!(System::events().is_empty());
     });
 }
+
+#[test]
+fn account_posts_bounty_works() {
+    new_test_ext().execute_with(|| {
+        let one = Origin::signed(1);
+        let passage_threshold = ThresholdConfig::new(1, None).unwrap();
+        let new_resolution_metadata =
+            ResolutionMetadata::new(1, passage_threshold, None, None);
+        assert_noop!(
+            Bounty::account_posts_bounty(
+                one.clone(),
+                10u32, // constitution
+                101,   // amount reserved for bounty
+                new_resolution_metadata.clone(),
+                None,
+            ),
+            DispatchError::Module {
+                index: 0,
+                error: 3,
+                message: Some("InsufficientBalance",),
+            }
+        );
+        assert_ok!(Bounty::account_posts_bounty(
+            one.clone(),
+            10u32, // constitution
+            10,    // amount reserved for bounty
+            new_resolution_metadata,
+            None,
+        ));
+        assert_eq!(get_last_event(), RawEvent::BountyPosted(1, 1, 10));
+    });
+}
+
+#[test]
+fn account_applies_for_bounty_works() {
+    new_test_ext().execute_with(|| {
+        let one = Origin::signed(1);
+        let two = Origin::signed(2);
+        let passage_threshold = ThresholdConfig::new(1, None).unwrap();
+        let new_resolution_metadata =
+            ResolutionMetadata::new(1, passage_threshold, None, None);
+        assert_ok!(Bounty::account_posts_bounty(
+            one.clone(),
+            10u32, // constitution
+            10,    // amount reserved for bounty
+            new_resolution_metadata,
+            None,
+        ));
+        assert_noop!(
+            Bounty::account_applies_for_bounty(
+                two.clone(),
+                1,
+                15u32, // application description
+                11
+            ),
+            Error::<Test>::GrantApplicationRequestExceedsBountyFundingReserved
+        );
+        assert_ok!(Bounty::account_applies_for_bounty(
+            two.clone(),
+            1,
+            15u32, // application description
+            10
+        ));
+        assert_eq!(
+            get_last_event(),
+            RawEvent::BountyApplicationSubmitted(1, 1, 2, None, 10)
+        );
+    });
+}
+
+#[test]
+fn account_triggers_application_review_works() {
+    new_test_ext().execute_with(|| {
+        let one = Origin::signed(1);
+        let two = Origin::signed(2);
+        let passage_threshold = ThresholdConfig::new(1, None).unwrap();
+        let new_resolution_metadata =
+            ResolutionMetadata::new(1, passage_threshold, None, None);
+        assert_ok!(Bounty::account_posts_bounty(
+            one.clone(),
+            10u32, // constitution
+            10,    // amount reserved for bounty
+            new_resolution_metadata,
+            None,
+        ));
+        assert_noop!(
+            Bounty::account_applies_for_bounty(
+                two.clone(),
+                1,
+                15u32, // application description
+                11
+            ),
+            Error::<Test>::GrantApplicationRequestExceedsBountyFundingReserved
+        );
+        assert_ok!(Bounty::account_applies_for_bounty(
+            two.clone(),
+            1,
+            15u32, // application description
+            10
+        ));
+        assert_ok!(Bounty::account_triggers_application_review(
+            one.clone(),
+            1,
+            1,
+        ));
+        assert_eq!(
+            get_last_event(),
+            RawEvent::ApplicationReviewTriggered(
+                1,
+                1,
+                1,
+                ApplicationState::UnderReviewByAcceptanceCommittee(1)
+            )
+        );
+    });
+}
+
+#[test]
+fn account_sudo_approves_application_works() {
+    new_test_ext().execute_with(|| {
+        let one = Origin::signed(1);
+        let two = Origin::signed(2);
+        let passage_threshold = ThresholdConfig::new(1, None).unwrap();
+        let new_resolution_metadata =
+            ResolutionMetadata::new(1, passage_threshold, None, None);
+        assert_ok!(Bounty::account_posts_bounty(
+            one.clone(),
+            10u32, // constitution
+            10,    // amount reserved for bounty
+            new_resolution_metadata,
+            None,
+        ));
+        assert_noop!(
+            Bounty::account_applies_for_bounty(
+                two.clone(),
+                1,
+                15u32, // application description
+                11
+            ),
+            Error::<Test>::GrantApplicationRequestExceedsBountyFundingReserved
+        );
+        assert_ok!(Bounty::account_applies_for_bounty(
+            two.clone(),
+            1,
+            15u32, // application description
+            10
+        ));
+        assert_ok!(Bounty::account_sudo_approves_application(
+            one.clone(),
+            1,
+            1,
+        ));
+        assert_eq!(
+            get_last_event(),
+            RawEvent::SudoApprovedBountyApplication(
+                1,
+                1,
+                1,
+                ApplicationState::ApprovedAndLive
+            )
+        );
+    });
+}
+
+#[test]
+fn account_poll_application_works() {
+    new_test_ext().execute_with(|| {
+        let one = Origin::signed(1);
+        let two = Origin::signed(2);
+        let passage_threshold = ThresholdConfig::new(1, None).unwrap();
+        let new_resolution_metadata =
+            ResolutionMetadata::new(1, passage_threshold, None, None);
+        assert_ok!(Bounty::account_posts_bounty(
+            one.clone(),
+            10u32, // constitution
+            10,    // amount reserved for bounty
+            new_resolution_metadata,
+            None,
+        ));
+        assert_ok!(Bounty::account_applies_for_bounty(
+            two.clone(),
+            1,
+            15u32, // application description
+            10
+        ));
+        assert_ok!(Bounty::account_poll_application(one.clone(), 1, 1,));
+        assert_eq!(
+            get_last_event(),
+            RawEvent::ApplicationPolled(
+                1,
+                1,
+                1,
+                ApplicationState::SubmittedAwaitingResponse
+            )
+        );
+        assert_ok!(Bounty::account_sudo_approves_application(
+            one.clone(),
+            1,
+            1,
+        ));
+        assert_eq!(
+            get_last_event(),
+            RawEvent::SudoApprovedBountyApplication(
+                1,
+                1,
+                1,
+                ApplicationState::ApprovedAndLive
+            )
+        );
+        assert_ok!(Bounty::account_poll_application(one.clone(), 1, 1,));
+        assert_eq!(
+            get_last_event(),
+            RawEvent::ApplicationPolled(
+                1,
+                1,
+                1,
+                ApplicationState::ApprovedAndLive
+            )
+        );
+    });
+}
+
+#[test]
+fn milestone_submission_works() {
+    new_test_ext().execute_with(|| {
+        let one = Origin::signed(1);
+        let two = Origin::signed(2);
+        let passage_threshold = ThresholdConfig::new(1, None).unwrap();
+        let new_resolution_metadata =
+            ResolutionMetadata::new(1, passage_threshold, None, None);
+        assert_ok!(Bounty::account_posts_bounty(
+            one.clone(),
+            10u32, // constitution
+            10,    // amount reserved for bounty
+            new_resolution_metadata,
+            None,
+        ));
+        assert_ok!(Bounty::account_applies_for_bounty(
+            two.clone(),
+            1,
+            15u32, // application description
+            10
+        ));
+        assert_ok!(Bounty::account_sudo_approves_application(
+            one.clone(),
+            1,
+            1,
+        ));
+        assert_noop!(
+            Bounty::grantee_submits_milestone(
+                two.clone(),
+                2,
+                1,
+                10u32, // milestone reference
+                10
+            ),
+            Error::<Test>::CannotSubmitMilestoneIfBaseBountyDNE
+        );
+        assert_noop!(
+            Bounty::grantee_submits_milestone(
+                two.clone(),
+                1,
+                2,
+                10u32, // milestone reference
+                10
+            ),
+            Error::<Test>::CannotSubmitMilestoneIfApplicationDNE
+        );
+        assert_ok!(Bounty::grantee_submits_milestone(
+            two.clone(),
+            1,
+            1,
+            10u32, // milestone reference
+            10
+        ));
+        assert_eq!(
+            get_last_event(),
+            RawEvent::MilestoneSubmitted(2, 1, 1, 1, 10,)
+        );
+    });
+}
+
+#[test]
+fn account_triggers_milestone_review_works() {
+    new_test_ext().execute_with(|| {
+        let one = Origin::signed(1);
+        let two = Origin::signed(2);
+        let passage_threshold = ThresholdConfig::new(1, None).unwrap();
+        let new_resolution_metadata =
+            ResolutionMetadata::new(1, passage_threshold, None, None);
+        assert_ok!(Bounty::account_posts_bounty(
+            one.clone(),
+            10u32, // constitution
+            10,    // amount reserved for bounty
+            new_resolution_metadata,
+            None,
+        ));
+        assert_ok!(Bounty::account_applies_for_bounty(
+            two.clone(),
+            1,
+            15u32, // application description
+            10
+        ));
+        assert_ok!(Bounty::account_sudo_approves_application(
+            one.clone(),
+            1,
+            1,
+        ));
+        assert_ok!(Bounty::grantee_submits_milestone(
+            two.clone(),
+            1,
+            1,
+            10u32, // milestone reference
+            10
+        ));
+        assert_ok!(Bounty::account_triggers_milestone_review(
+            one.clone(),
+            1,
+            1,
+        ));
+        assert_eq!(
+            get_last_event(),
+            RawEvent::MilestoneReviewTriggered(
+                1,
+                1,
+                1,
+                MilestoneStatus::SubmittedReviewStarted(1)
+            )
+        );
+    });
+}
+
+#[test]
+fn account_sudo_approves_milestone_works() {
+    new_test_ext().execute_with(|| {
+        let one = Origin::signed(1);
+        let two = Origin::signed(2);
+        let passage_threshold = ThresholdConfig::new(1, None).unwrap();
+        let new_resolution_metadata =
+            ResolutionMetadata::new(1, passage_threshold, None, None);
+        assert_ok!(Bounty::account_posts_bounty(
+            one.clone(),
+            10u32, // constitution
+            10,    // amount reserved for bounty
+            new_resolution_metadata,
+            None,
+        ));
+        assert_ok!(Bounty::account_applies_for_bounty(
+            two.clone(),
+            1,
+            15u32, // application description
+            10
+        ));
+        assert_ok!(Bounty::account_sudo_approves_application(
+            one.clone(),
+            1,
+            1,
+        ));
+        assert_ok!(Bounty::grantee_submits_milestone(
+            two.clone(),
+            1,
+            1,
+            10u32, // milestone reference
+            10
+        ));
+        assert_ok!(Bounty::account_approved_milestone(one.clone(), 1, 1,));
+        assert_eq!(
+            get_last_event(),
+            RawEvent::SudoApprovedMilestone(
+                1,
+                1,
+                1,
+                MilestoneStatus::ApprovedAndTransferExecuted(
+                    BankOrAccount::Account(2)
+                )
+            )
+        );
+    });
+}

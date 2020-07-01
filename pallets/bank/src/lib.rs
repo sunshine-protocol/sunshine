@@ -20,6 +20,7 @@ use frame_support::{
         Currency,
         ExistenceRequirement,
         Get,
+        ReservableCurrency,
     },
     Parameter,
 };
@@ -94,7 +95,8 @@ pub trait Trait: frame_system::Trait + org::Trait {
         + Zero;
 
     /// The currency type for on-chain transactions
-    type Currency: Currency<Self::AccountId>;
+    type Currency: Currency<Self::AccountId>
+        + ReservableCurrency<Self::AccountId>;
 
     /// The minimum amount necessary to use this module for this transfer
     type MinimumTransfer: Get<BalanceOf<Self>>;
@@ -142,6 +144,7 @@ decl_error! {
         CannotUnreserveSpendReservationThatDNE,
         CannotUnreserveSpendReservationIfBankStoreDNE,
         CannotUnreserveSpendReservationIfBankReservedIsLessThanAmtToUnreserve,
+        ThisModuleDoesNotPermitTransfersToSelf,
         CannotTransferFromOrgToOrgIfBankForTransferReferenceDNE,
         CannotTransferFromOrgToOrgIfReferenceTransferDNE,
         CannotTransferFromOrgToOrgIfInWrongStateOrNotEnoughFunds,
@@ -167,7 +170,7 @@ decl_storage! {
         /// Counter for generating unique bank accounts
         BankIDNonce get(fn bank_id_nonce): OnChainTreasuryID;
 
-        /// Counter for transfers to the OnChainTreasuryID
+        /// Counter for transfers and reserves for each bank
         AssociatedNonceMap get(fn transfer_nonce_map): double_map
             hasher(blake2_128_concat) OnChainTreasuryID,
             hasher(blake2_128_concat) BankMapId => T::BankId;
@@ -177,6 +180,9 @@ decl_storage! {
             hasher(blake2_128_concat) OnChainTreasuryID,
             hasher(blake2_128_concat) T::BankId =>
             Option<TransferInformation<OrgOrAccount<T::OrgId, T::AccountId>, BalanceOf<T>, TransferState>>;
+
+        /// Total number of banks registered in this module
+        pub TotalBankCount get(fn total_bank_count): u32;
 
         /// The store for organizational bank accounts
         /// -> keyset acts as canonical set for unique `OnChainTreasuryID`s (note the cryptographic hash function)
@@ -239,6 +245,8 @@ decl_module! {
                 deposit_amount,
                 controller.clone()
             );
+            // iterate total bank count
+            <TotalBankCount>::mutate(|count| *count += 1u32);
             // event emission
             Self::deposit_event(
                     RawEvent::AccountOpensOrgBankAccount(
@@ -259,6 +267,11 @@ decl_module! {
             transfer_amount: BalanceOf<T>
         ) -> DispatchResult {
             let sender = ensure_signed(origin)?;
+            // check that dest_bank_id is registered
+            ensure!(
+                Self::is_bank(bank_id),
+                Error::<T>::TransferFailsIfDestBankDNE
+            );
             // execute transfer and return new transfer identifier
             let new_transfer_id =
                 Self::post_user_transfer(
@@ -313,6 +326,7 @@ decl_module! {
             transfer_amount: BalanceOf<T>
         ) -> DispatchResult {
             let _ = ensure_signed(origin)?;
+            ensure!(bank_id != dest, Error::<T>::ThisModuleDoesNotPermitTransfersToSelf);
             // TODO: auth
             // execute transfer and return new transfer identifier
             let full_transfer_id = TransferId::new(bank_id, transfer_id);
@@ -370,6 +384,7 @@ decl_module! {
             amount: BalanceOf<T>,
         ) -> DispatchResult {
             let _ = ensure_signed(origin)?;
+            ensure!(bank_id != recipient, Error::<T>::ThisModuleDoesNotPermitTransfersToSelf);
             // TODO: auth
             let full_transfer_id = TransferId::new(bank_id, transfer_id);
             let bank_recipient:
@@ -418,6 +433,17 @@ decl_module! {
                     )),
             }
             Ok(())
+        }
+        #[weight = 0]
+        fn stop_transfers_to_trigger_withdrawals(
+            origin,
+            bank_id: OnChainTreasuryID,
+            transfer_id: T::BankId
+        ) -> DispatchResult {
+            let _ = ensure_signed(origin)?;
+            // TODO: auth
+            let full_transfer_id = TransferId::new(bank_id, transfer_id);
+            Self::stop_spends_start_withdrawals(full_transfer_id)
         }
         #[weight = 0]
         fn withdraw_from_org_to_account(
@@ -524,7 +550,7 @@ impl<T: Trait> PostUserTransfer<OnChainTreasuryID, T::AccountId, BalanceOf<T>>
     for Module<T>
 {
     type TransferId = TransferId<T::BankId>;
-    // account to org transfer structure
+    // account to org transfer structure, NOTE that bank_id MUST exist or this call will effectively burn funds (caller must perform is_bank() existence check)
     fn post_user_transfer(
         sender: T::AccountId,
         bank_id: OnChainTreasuryID,
@@ -566,6 +592,12 @@ impl<T: Trait>
         recipient: BankOrAccount<OnChainTreasuryID, T::AccountId>,
         amt: BalanceOf<T>,
     ) -> Result<TransferId<T::BankId>, DispatchError> {
+        if let BankOrAccount::Bank(bank_id) = recipient {
+            ensure!(
+                Self::is_bank(bank_id),
+                Error::<T>::TransferFailsIfDestBankDNE
+            );
+        }
         let bank = <BankStores<T>>::get(transfer_id.id)
             .ok_or(Error::<T>::CannotReserveOrgSpendIfBankStoreDNE)?;
         let transfer =
@@ -792,7 +824,7 @@ impl<T: Trait> StopSpendsStartWithdrawals<TransferId<T::BankId>> for Module<T> {
     ) -> Result<(), DispatchError> {
         let transfer_info = <TransferInfo<T>>::get(transfer_id.id, transfer_id.sub_id)
             .ok_or(Error::<T>::TransferMustExistToChangeItsStateToStopSpendsStartWithdrawals)?
-            .stop_spend_start_withdrawals().ok_or(Error::<T>::TransferNotInSpendingStateSoCannotTransitionToWithdrawableState)?;
+            .stop_spends_start_withdrawals().ok_or(Error::<T>::TransferNotInSpendingStateSoCannotTransitionToWithdrawableState)?;
         <TransferInfo<T>>::insert(
             transfer_id.id,
             transfer_id.sub_id,

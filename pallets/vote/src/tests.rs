@@ -186,3 +186,71 @@ fn vote_threshold_works() {
         assert_eq!(outcome_has_passed, VoteOutcome::Approved);
     });
 }
+
+#[test]
+fn changing_votes_upholds_invariants() {
+    new_test_ext().execute_with(|| {
+        let one = Origin::signed(1);
+        assert_noop!(
+            VoteThreshold::submit_vote(
+                one.clone(),
+                1,
+                VoterView::Against,
+                None
+            ),
+            Error::<Test>::NoVoteStateForVoteRequest
+        );
+        // unanimous consent
+        assert_ok!(VoteThreshold::create_unanimous_consent_approval_vote(
+            one.clone(),
+            None,
+            1,
+            None,
+        ));
+        for i in 1u64..6u64 {
+            let i_origin = Origin::signed(i);
+            assert_ok!(VoteThreshold::submit_vote(
+                i_origin,
+                1,
+                VoterView::InFavor,
+                None
+            ));
+        }
+        // change the vote of voter 5
+        let five = Origin::signed(5u64);
+        assert_ok!(VoteThreshold::submit_vote(
+            five.clone(),
+            1,
+            VoterView::Against,
+            None
+        ));
+        // check that the vote has not passed
+        let outcome_almost_passed = VoteThreshold::get_vote_outcome(1).unwrap();
+        assert_eq!(outcome_almost_passed, VoteOutcome::Voting);
+        let six = Origin::signed(6);
+        assert_ok!(VoteThreshold::submit_vote(
+            six.clone(),
+            1,
+            VoterView::InFavor,
+            None
+        ));
+        // cannot change vote to NoVote from an existing vote
+        assert_noop!(
+            VoteThreshold::submit_vote(six, 1, VoterView::NoVote, None),
+            Error::<Test>::VoteChangeNotSupported
+        );
+        // check that the vote has still not passed
+        let outcome_has_passed = VoteThreshold::get_vote_outcome(1).unwrap();
+        assert_eq!(outcome_has_passed, VoteOutcome::Voting);
+        // change the vote of voter 5
+        assert_ok!(VoteThreshold::submit_vote(
+            five,
+            1,
+            VoterView::InFavor,
+            None
+        ));
+        // check that the vote has not passed
+        let outcome_almost_passed = VoteThreshold::get_vote_outcome(1).unwrap();
+        assert_eq!(outcome_almost_passed, VoteOutcome::Approved);
+    });
+}
