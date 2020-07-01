@@ -28,7 +28,7 @@ sp-core = { version = "2.0.0-rc4", default-features = false }
 codec = { version = "1.3.0", package = "parity-scale-codec" }
 frame-support = "2.0.0-rc4"
 pallet-indices = "2.0.0-rc4"
-sunshine-node = { path = "../../bin/node", default-features = false, optional = true }
+sunshine-node = {package = "test-node", path = "../../bin/node", default-features = false, optional = true }
 keystore = {package = "keybase-keystore", git = "https://github.com/sunshine-protocol/substrate-identity"}
 # local deps
 utils-identity = {package = "sunshine-identity-utils", git = "https://github.com/sunshine-protocol/substrate-identity", default-features=false}

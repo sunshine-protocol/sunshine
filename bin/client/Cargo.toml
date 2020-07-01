@@ -1,0 +1,37 @@
+[package]
+name = "test-client"
+version = "0.1.0"
+authors = ["David Craven <david@craven.ch>, Amar Singh <asingchrony@protonmail.com>"]
+edition = "2018"
+
+[features]
+light = [
+    "sc-service",
+    "sled",
+    "sp-database",
+    "substrate-subxt/client",
+    "test-node",
+    "thiserror",
+]
+mock = [
+    "env_logger",
+    "jsonrpsee",
+    "sp-keyring",
+    "tempdir",
+    "test-node",
+]
+
+[dependencies]
+bounty-client = { package = "sunshine-bounty-client", path = "../../client/client" }
+identity-utils = {package = "sunshine-identity-utils", git = "https://github.com/sunshine-protocol/substrate-identity"}
+sled = { version = "0.32.0", optional = true }
+sc-service = { version = "0.8.0-rc4", optional = true }
+sp-database = { version = "2.0.0-rc4", optional = true }
+substrate-subxt = { version = "0.10.1", features = ["client"] }
+thiserror = { version = "1.0.20", optional = true }
+
+env_logger = { version = "0.7.1", optional = true }
+jsonrpsee = { version = "0.1.0", optional = true }
+sp-keyring = { version = "2.0.0-rc4", optional = true }
+tempdir = { version = "0.3.7", optional = true }
+test-node = { path = "../node", optional = true }

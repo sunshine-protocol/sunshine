@@ -1,7 +1,4 @@
-use crate::{
-    command::*,
-    error::Error,
-};
+use crate::command::*;
 use clap::Clap;
 use core::convert::TryInto;
 use exitfailure::ExitDisplay;
@@ -25,15 +22,16 @@ use substrate_subxt::{
     sp_core::sr25519,
     ClientBuilder,
 };
-use sunshine_client::Runtime;
+use test_client::Runtime;
 
 mod command;
-mod error;
 
 #[async_std::main]
 async fn main() -> Result<(), ExitDisplay<Error>> {
     Ok(run().await?)
 }
+
+type Client = test_client::bounty::Client<Runtime, sr25519::Pair, Store>;
 
 struct Paths {
     _root: PathBuf,
@@ -59,8 +57,6 @@ impl Paths {
         })
     }
 }
-
-type Client = sunshine_client::Client<Runtime, sr25519::Pair, Store>;
 
 async fn run() -> Result<(), Error> {
     env_logger::init();
