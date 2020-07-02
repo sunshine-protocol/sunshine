@@ -1,4 +1,3 @@
-use crate::error::Error;
 use clap::Clap;
 use std::{
     path::PathBuf,
@@ -50,21 +49,6 @@ pub enum KeySubCommand {
     Set(KeySetCommand),
     Unlock,
     Lock,
-}
-
-#[derive(Clone, Debug, Clap)]
-pub struct KeySetCommand {
-    /// Overwrite existing keys.
-    #[clap(short = "f", long = "force")]
-    pub force: bool,
-
-    /// Suri.
-    #[clap(long = "suri")]
-    pub suri: Option<Suri>,
-
-    /// Paperkey.
-    #[clap(long = "paperkey")]
-    pub paperkey: bool,
 }
 
 #[derive(Clone, Debug, Clap)]

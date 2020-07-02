@@ -6631,6 +6631,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "sunshine-donate"
+version = "0.0.1"
+dependencies = [
+ "clear_on_drop",
+ "frame-support",
+ "frame-system",
+ "pallet-balances",
+ "parity-scale-codec",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+ "sunshine-org",
+ "sunshine-util",
+]
+
+[[package]]
 name = "sunshine-identity-utils"
 version = "0.1.0"
 source = "git+https://github.com/sunshine-protocol/substrate-identity#c6d35d25f5d12b3a0d6b3fe4abbf492ddef4ce42"

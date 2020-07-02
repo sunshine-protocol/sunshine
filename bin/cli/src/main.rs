@@ -1,4 +1,10 @@
 use crate::command::*;
+use bounty_cli::{
+    key::KeySetCommand,
+    set_device_key,
+    Command,
+    Error,
+};
 use clap::Clap;
 use core::convert::TryInto;
 use exitfailure::ExitDisplay;
