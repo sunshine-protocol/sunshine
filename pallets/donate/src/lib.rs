@@ -1,5 +1,8 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
+#[cfg(test)]
+mod tests;
+
 use frame_support::{
     decl_error,
     decl_event,
@@ -22,11 +25,9 @@ use sp_runtime::{
     DispatchError,
     DispatchResult,
     ModuleId,
+    Permill,
 };
-use util::traits::{
-    CalculateOwnership,
-    GetGroup,
-};
+use util::traits::GetGroup;
 
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<
     <T as system::Trait>::AccountId,
@@ -37,9 +38,9 @@ pub trait Trait: system::Trait + org::Trait {
     type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
     /// The currency type
     type Currency: Currency<Self::AccountId>;
-    //// Taxes for using this module
+    //// Taxes for some transfers
     type TransactionFee: Get<BalanceOf<Self>>;
-    /// Where the taxes go (should be a treasury identifier)
+    /// Where the conditional taxes go
     type Treasury: Get<ModuleId>;
 }
 
@@ -49,12 +50,13 @@ decl_event!(
         <T as org::Trait>::OrgId,
         Balance = BalanceOf<T>,
     {
-        DonationExecuted(AccountId, OrgId, Balance),
+        DonationExecuted(AccountId, OrgId, Balance, bool),
     }
 );
 
 decl_error! {
     pub enum Error for Module<T: Trait> {
+        AccountHasNoOwnershipInOrg,
         NotEnoughFundsInFreeToMakeTransfer,
         CannotDonateToOrgThatDNE,
     }
@@ -65,14 +67,25 @@ decl_module! {
         fn deposit_event() = default;
 
         #[weight = 0]
-        fn make_donation_in_proportion_to_ownership(
+        fn make_donation_in_proportion_to_ownership_with_fee(
             origin,
             org: T::OrgId,
             amt: BalanceOf<T>
         ) -> DispatchResult {
             let sender = ensure_signed(origin)?;
-            Self::donate(&sender, org, amt)?;
-            Self::deposit_event(RawEvent::DonationExecuted(sender, org, amt));
+            Self::donate(&sender, org, amt, true)?;
+            Self::deposit_event(RawEvent::DonationExecuted(sender, org, amt, true));
+            Ok(())
+        }
+        #[weight = 0]
+        fn make_donation_in_proportion_to_ownership_without_fee(
+            origin,
+            org: T::OrgId,
+            amt: BalanceOf<T>
+        ) -> DispatchResult {
+            let sender = ensure_signed(origin)?;
+            Self::donate(&sender, org, amt, false)?;
+            Self::deposit_event(RawEvent::DonationExecuted(sender, org, amt, false));
             Ok(())
         }
     }
@@ -90,9 +103,14 @@ impl<T: Trait> Module<T> {
         sender: &T::AccountId,
         recipient: T::OrgId,
         amt: BalanceOf<T>,
+        transaction_fee: bool,
     ) -> DispatchResult {
         let free = T::Currency::free_balance(sender);
-        let total_transfer = amt + T::TransactionFee::get();
+        let total_transfer = if transaction_fee {
+            amt + T::TransactionFee::get()
+        } else {
+            amt
+        };
         let _ = free
             .checked_sub(&total_transfer)
             .ok_or(Error::<T>::NotEnoughFundsInFreeToMakeTransfer)?;
@@ -118,23 +136,30 @@ impl<T: Trait> Module<T> {
                 Ok(())
             })
             .collect::<DispatchResult>()?;
-        // pay the transaction fee last
-        T::Currency::transfer(
-            &sender,
-            &Self::account_id(),
-            T::TransactionFee::get(),
-            ExistenceRequirement::KeepAlive,
-        )
+        if transaction_fee {
+            // pay the transaction fee last
+            T::Currency::transfer(
+                &sender,
+                &Self::account_id(),
+                T::TransactionFee::get(),
+                ExistenceRequirement::KeepAlive,
+            )
+        } else {
+            Ok(())
+        }
     }
     fn calculate_proportional_amount_for_account(
         amount: BalanceOf<T>,
         account: T::AccountId,
         group: T::OrgId,
     ) -> Result<BalanceOf<T>, DispatchError> {
-        let proportion_due =
-            <org::Module<T>>::calculate_proportion_ownership_for_account(
-                account, group,
-            )?;
-        Ok(proportion_due * amount)
+        let issuance = <org::Module<T>>::total_issuance(group);
+        let acc_ownership = <org::Module<T>>::members(group, &account)
+            .ok_or(Error::<T>::AccountHasNoOwnershipInOrg)?;
+        let ownership = Permill::from_rational_approximation(
+            acc_ownership.total(),
+            issuance,
+        );
+        Ok(ownership * amount)
     }
 }
