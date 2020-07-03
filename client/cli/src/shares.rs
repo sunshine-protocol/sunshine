@@ -7,7 +7,10 @@ use crate::{
     Result,
     Runtime,
 };
-use bounty_client::Account;
+use bounty_client::{
+    Account,
+    AccountShare,
+};
 use clap::Clap;
 use core::fmt::{
     Debug,
@@ -49,38 +52,65 @@ where
     }
 }
 
-// #[derive(Clone, Debug, Clap)]
-// pub struct SharesBatchIssueCommand {
-//     pub organization: u64,
-//     pub new_accounts: Vec<(String, u64)>,
-// }
+#[derive(Clone, Debug, Clap)]
+pub struct SharesBatchIssueCommand {
+    pub organization: u64,
+    pub new_accounts: Vec<AccountShare>,
+}
 
-// #[async_trait]
-// impl<T: Runtime + Org, P: Pair> Command<T, P> for SharesBatchIssueCommand
-// where
-//     <T as System>::AccountId: Ss58Codec,
-//     <T as Org>::OrgId: From<u64> + Display,
-//     <T as Org>::Shares: From<u64> + Display,
-// {
-//     async fn exec(&self, client: &dyn AbstractClient<T, P>) -> Result<()> {
-//         let accounts = self.new_accounts.map(|(acc_str, amt)| -> Result<()> {
-//             let account: Account<T> = self.acc_str.parse()?;
-//             let amount_issued: T::Shares = amt.into();
-//             (account.id, amount_issued)
-//         }).collect::<Result<Vec<(<T as System>::AccountId, <T as Org>::Shares)>>>()?;
-//         let event = client
-//             .batch_issue_shares(
-//                 self.organization.into(),
-//                 accounts.as_slice()
-//             )
-//             .await?;
-//         println!(
-//             "{} new shares minted in the context of Org {}",
-//             event.total_new_shares_minted, event.organization
-//         );
-//         Ok(())
-//     }
-// }
+#[async_trait]
+impl<T: Runtime + Org, P: Pair> Command<T, P> for SharesBatchIssueCommand
+where
+    <T as System>::AccountId: Ss58Codec,
+    <T as Org>::OrgId: From<u64> + Display,
+    <T as Org>::Shares: From<u64> + Display,
+{
+    async fn exec(&self, client: &dyn AbstractClient<T, P>) -> Result<()> {
+        let accounts = self.new_accounts.iter().map(|acc_share| -> Result<(<T as System>::AccountId, <T as Org>::Shares)> {
+            let account: Account<T> = acc_share.0.parse()?;
+            let amount_issued: T::Shares = (acc_share.1).into();
+            Ok((account.id, amount_issued))
+        }).collect::<Result<Vec<(<T as System>::AccountId, <T as Org>::Shares)>>>()?;
+        let event = client
+            .batch_issue_shares(self.organization.into(), accounts.as_slice())
+            .await?;
+        println!(
+            "{} new shares minted in the context of Org {}",
+            event.total_new_shares_minted, event.organization
+        );
+        Ok(())
+    }
+}
+
+#[derive(Clone, Debug, Clap)]
+pub struct SharesBatchBurnCommand {
+    pub organization: u64,
+    pub old_accounts: Vec<AccountShare>,
+}
+
+#[async_trait]
+impl<T: Runtime + Org, P: Pair> Command<T, P> for SharesBatchBurnCommand
+where
+    <T as System>::AccountId: Ss58Codec,
+    <T as Org>::OrgId: From<u64> + Display,
+    <T as Org>::Shares: From<u64> + Display,
+{
+    async fn exec(&self, client: &dyn AbstractClient<T, P>) -> Result<()> {
+        let accounts = self.old_accounts.iter().map(|acc_share| -> Result<(<T as System>::AccountId, <T as Org>::Shares)> {
+            let account: Account<T> = acc_share.0.parse()?;
+            let amount_burned: T::Shares = (acc_share.1).into();
+            Ok((account.id, amount_burned))
+        }).collect::<Result<Vec<(<T as System>::AccountId, <T as Org>::Shares)>>>()?;
+        let event = client
+            .batch_issue_shares(self.organization.into(), accounts.as_slice())
+            .await?;
+        println!(
+            "{} new shares minted in the context of Org {}",
+            event.total_new_shares_minted, event.organization
+        );
+        Ok(())
+    }
+}
 
 #[derive(Clone, Debug, Clap)]
 pub struct SharesBurnCommand {

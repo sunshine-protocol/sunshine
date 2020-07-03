@@ -23,6 +23,7 @@ pub use runtime::Runtime;
 pub use srml::org::Org;
 pub use utils::{
     Account,
+    AccountShare,
     InvalidSs58,
     InvalidSuri,
     Ss58,
