@@ -12,6 +12,7 @@ mod error;
 mod light_client;
 mod runtime;
 mod srml;
+mod utils;
 
 pub use client::Client;
 pub use error::Error;
@@ -20,3 +21,10 @@ pub use light_client::ChainType;
 pub use r#abstract::AbstractClient;
 pub use runtime::Runtime;
 pub use srml::org::Org;
+pub use utils::{
+    Account,
+    InvalidSs58,
+    InvalidSuri,
+    Ss58,
+    Suri,
+};

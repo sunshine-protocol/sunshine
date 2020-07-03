@@ -38,6 +38,8 @@ pub trait AbstractClient<T: Runtime + Org, P: Pair>: Send + Sync {
         force: bool,
     ) -> Result<T::AccountId>;
     async fn signer(&self) -> Result<Box<dyn Signer<T> + Send + Sync>>;
+    async fn lock(&self) -> Result<()>;
+    async fn unlock(&self, password: &Password) -> Result<()>;
     async fn register_flat_org(
         &self,
         sudo: Option<<T as System>::AccountId>,
@@ -127,6 +129,14 @@ where
 
     async fn signer(&self) -> Result<Box<dyn Signer<T> + Send + Sync>> {
         Ok(Box::new(self.signer().await?))
+    }
+
+    async fn lock(&self) -> Result<()> {
+        self.lock().await
+    }
+
+    async fn unlock(&self, password: &Password) -> Result<()> {
+        self.unlock(password).await
     }
 
     async fn register_flat_org(

@@ -17,6 +17,10 @@ pub enum Error {
     KeystoreInitialized,
     #[error("event not found")]
     EventNotFound,
+    #[error("Account ID cannot be parsed from string.")]
+    AccountIdParseFail,
+    #[error("Account ID cannot be parsed from string.")]
+    Unsigned64BitIntegerConversionFails,
 }
 
 pub type Result<T> = core::result::Result<T, Error>;
