@@ -44,14 +44,17 @@ use util::{
         GroupMembership,
         IDIsAvailable,
         Increment,
+        OrganizationSupervisorPermissions,
     },
 };
 
 mod bank;
 use bank::{
     traits::{
+        BankPermissions,
         OpenBankAccount,
         SpendFromBank,
+        TransferToBank,
     },
     BankState,
 };
@@ -86,7 +89,6 @@ decl_event!(
         Balance = BalanceOf<T>,
     {
         BankAccountOpened(AccountId, OnChainTreasuryID, Balance, OrgId, Option<AccountId>),
-        // ProposeSpend(),
         SpendFromFree(AccountId, OnChainTreasuryID, AccountId, Balance),
         SpendFromReserved(AccountId, OnChainTreasuryID, AccountId, Balance),
         BankAccountClosed(AccountId, OnChainTreasuryID, OrgId),
@@ -95,14 +97,18 @@ decl_event!(
 
 decl_error! {
     pub enum Error for Module<T: Trait> {
-        CannotOpenBankAccountForOrgIfNotOrgMember,
         CannotOpenBankAccountIfDepositIsBelowModuleMinimum,
         CannotOpenBankAccountForOrgIfBankCountExceedsLimitPerOrg,
-        CallerNotAuthorizedToMakeSpendFromBank,
         NotEnoughFreeFundsToMakeFreeSpend,
         NotEnoughReservedFundsToMakeReservedSpend,
+        CannotTransferToBankThatDNE,
         CannotSpendFromBankThatDNE,
         CannotCloseBankThatDNE,
+        NotPermittedToOpenBankAccountForOrg,
+        NotPermittedToSpendFromReserved,
+        NotPermittedToSpendFromFree,
+        BankDNE,
+        MustBeOrgSupervisorToCloseBankAccount,
     }
 }
 
@@ -139,6 +145,8 @@ decl_module! {
             controller: Option<T::AccountId>,
         ) -> DispatchResult {
             let opener = ensure_signed(origin)?;
+            let auth = Self::can_open_bank_account_for_org(org, &opener);
+            ensure!(auth, Error::<T>::NotPermittedToOpenBankAccountForOrg);
             let bank_id = Self::open_bank_account(opener.clone(), org, deposit, controller.clone())?;
             Self::deposit_event(RawEvent::BankAccountOpened(opener, bank_id, deposit, org, controller));
             Ok(())
@@ -151,7 +159,9 @@ decl_module! {
             amount: BalanceOf<T>,
         ) -> DispatchResult {
             let caller = ensure_signed(origin)?;
-            Self::spend_from_free(caller.clone(), bank_id, dest.clone(), amount)?;
+            let auth = Self::can_spend_from_free(bank_id, &caller)?;
+            ensure!(auth, Error::<T>::NotPermittedToSpendFromFree);
+            Self::spend_from_free(bank_id, dest.clone(), amount)?;
             Self::deposit_event(RawEvent::SpendFromFree(caller, bank_id, dest, amount));
             Ok(())
         }
@@ -163,7 +173,9 @@ decl_module! {
             amount: BalanceOf<T>,
         ) -> DispatchResult {
             let caller = ensure_signed(origin)?;
-            Self::spend_from_reserved(caller.clone(), bank_id, dest.clone(), amount)?;
+            let auth = Self::can_spend_from_reserved(bank_id, &caller)?;
+            ensure!(auth, Error::<T>::NotPermittedToSpendFromReserved);
+            Self::spend_from_reserved(bank_id, dest.clone(), amount)?;
             Self::deposit_event(RawEvent::SpendFromReserved(caller, bank_id, dest, amount));
             Ok(())
         }
@@ -173,8 +185,12 @@ decl_module! {
             bank_id: OnChainTreasuryID,
         ) -> DispatchResult {
             let closer = ensure_signed(origin)?;
-            // TODO: auth
             let bank = <BankStores<T>>::get(bank_id).ok_or(Error::<T>::CannotCloseBankThatDNE)?;
+            // permissions for closing bank accounts is org supervisor status
+            ensure!(
+                <org::Module<T>>::is_organization_supervisor(bank.org(), &closer),
+                Error::<T>::MustBeOrgSupervisorToCloseBankAccount
+            );
             let bank_account_id = Self::account_id(bank_id);
             let remaining_funds = <T as donate::Trait>::Currency::total_balance(&bank_account_id);
             // distributes remaining funds equally among members
@@ -194,11 +210,14 @@ decl_module! {
 }
 
 impl<T: Trait> Module<T> {
+    pub fn is_bank(id: OnChainTreasuryID) -> bool {
+        !Self::id_is_available(id)
+    }
     pub fn account_id(id: OnChainTreasuryID) -> T::AccountId {
         id.into_account()
     }
-    pub fn is_bank(id: OnChainTreasuryID) -> bool {
-        !Self::id_is_available(id)
+    pub fn bank_balance(bank: OnChainTreasuryID) -> BalanceOf<T> {
+        <T as Trait>::Currency::total_balance(&Self::account_id(bank))
     }
 }
 
@@ -219,6 +238,39 @@ impl<T: Trait> GenerateUniqueID<OnChainTreasuryID> for Module<T> {
     }
 }
 
+// adds a storage lookup /forall methods but this is just for local permissions anyway
+impl<T: Trait> BankPermissions<OnChainTreasuryID, T::OrgId, T::AccountId>
+    for Module<T>
+{
+    fn can_open_bank_account_for_org(
+        org: T::OrgId,
+        who: &T::AccountId,
+    ) -> bool {
+        <org::Module<T>>::is_member_of_group(org, who)
+    }
+    fn can_spend_from_free(
+        bank: OnChainTreasuryID,
+        who: &T::AccountId,
+    ) -> Result<bool, DispatchError> {
+        let bank = <BankStores<T>>::get(bank).ok_or(Error::<T>::BankDNE)?;
+        Ok(bank.is_controller(who))
+    }
+    fn can_reserve_spend(
+        bank: OnChainTreasuryID,
+        who: &T::AccountId,
+    ) -> Result<bool, DispatchError> {
+        let bank = <BankStores<T>>::get(bank).ok_or(Error::<T>::BankDNE)?;
+        Ok(bank.is_controller(who))
+    }
+    fn can_spend_from_reserved(
+        bank: OnChainTreasuryID,
+        who: &T::AccountId,
+    ) -> Result<bool, DispatchError> {
+        let bank = <BankStores<T>>::get(bank).ok_or(Error::<T>::BankDNE)?;
+        Ok(bank.is_controller(who))
+    }
+}
+
 impl<T: Trait> OpenBankAccount<T::OrgId, BalanceOf<T>, T::AccountId>
     for Module<T>
 {
@@ -229,11 +281,6 @@ impl<T: Trait> OpenBankAccount<T::OrgId, BalanceOf<T>, T::AccountId>
         deposit: BalanceOf<T>,
         controller: Option<T::AccountId>,
     ) -> Result<Self::BankId, DispatchError> {
-        let authentication = <org::Module<T>>::is_member_of_group(org, &opener);
-        ensure!(
-            authentication,
-            Error::<T>::CannotOpenBankAccountForOrgIfNotOrgMember
-        );
         ensure!(
             deposit >= T::MinimumInitialDeposit::get(),
             Error::<T>::CannotOpenBankAccountIfDepositIsBelowModuleMinimum
@@ -270,11 +317,49 @@ impl<T: Trait> OpenBankAccount<T::OrgId, BalanceOf<T>, T::AccountId>
     }
 }
 
+impl<T: Trait> TransferToBank<T::OrgId, BalanceOf<T>, T::AccountId>
+    for Module<T>
+{
+    fn transfer_to_free(
+        from: T::AccountId,
+        bank_id: Self::BankId,
+        amount: BalanceOf<T>,
+    ) -> sp_runtime::DispatchResult {
+        let bank = <BankStores<T>>::get(bank_id)
+            .ok_or(Error::<T>::CannotTransferToBankThatDNE)?
+            .add_free(amount);
+        <T as Trait>::Currency::transfer(
+            &from,
+            &Self::account_id(bank_id),
+            amount,
+            ExistenceRequirement::KeepAlive,
+        )?;
+        <BankStores<T>>::insert(bank_id, bank);
+        Ok(())
+    }
+    fn transfer_to_reserved(
+        from: T::AccountId,
+        bank_id: Self::BankId,
+        amount: BalanceOf<T>,
+    ) -> sp_runtime::DispatchResult {
+        let bank = <BankStores<T>>::get(bank_id)
+            .ok_or(Error::<T>::CannotTransferToBankThatDNE)?
+            .add_reserved(amount);
+        <T as Trait>::Currency::transfer(
+            &from,
+            &Self::account_id(bank_id),
+            amount,
+            ExistenceRequirement::KeepAlive,
+        )?;
+        <BankStores<T>>::insert(bank_id, bank);
+        Ok(())
+    }
+}
+
 impl<T: Trait> SpendFromBank<T::OrgId, BalanceOf<T>, T::AccountId>
     for Module<T>
 {
     fn spend_from_free(
-        caller: T::AccountId,
         bank_id: Self::BankId,
         dest: T::AccountId,
         amount: BalanceOf<T>,
@@ -283,10 +368,6 @@ impl<T: Trait> SpendFromBank<T::OrgId, BalanceOf<T>, T::AccountId>
             .ok_or(Error::<T>::CannotSpendFromBankThatDNE)?
             .subtract_free(amount)
             .ok_or(Error::<T>::NotEnoughFreeFundsToMakeFreeSpend)?;
-        ensure!(
-            bank.is_controller(&caller),
-            Error::<T>::CallerNotAuthorizedToMakeSpendFromBank
-        );
         <T as Trait>::Currency::transfer(
             &Self::account_id(bank_id),
             &dest,
@@ -297,7 +378,6 @@ impl<T: Trait> SpendFromBank<T::OrgId, BalanceOf<T>, T::AccountId>
         Ok(())
     }
     fn spend_from_reserved(
-        caller: T::AccountId,
         bank_id: Self::BankId,
         dest: T::AccountId,
         amount: BalanceOf<T>,
@@ -306,10 +386,6 @@ impl<T: Trait> SpendFromBank<T::OrgId, BalanceOf<T>, T::AccountId>
             .ok_or(Error::<T>::CannotSpendFromBankThatDNE)?
             .subtract_reserved(amount)
             .ok_or(Error::<T>::NotEnoughReservedFundsToMakeReservedSpend)?;
-        ensure!(
-            bank.is_controller(&caller),
-            Error::<T>::CallerNotAuthorizedToMakeSpendFromBank
-        );
         <T as Trait>::Currency::transfer(
             &Self::account_id(bank_id),
             &dest,

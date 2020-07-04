@@ -96,6 +96,17 @@ impl<
 pub mod traits {
     pub type Result<T> = sp_std::result::Result<T, sp_runtime::DispatchError>;
 
+    // local permissions for this module
+    pub trait BankPermissions<BankId, OrgId, AccountId> {
+        fn can_open_bank_account_for_org(org: OrgId, who: &AccountId) -> bool;
+        fn can_spend_from_free(bank: BankId, who: &AccountId) -> Result<bool>;
+        fn can_reserve_spend(bank: BankId, who: &AccountId) -> Result<bool>;
+        fn can_spend_from_reserved(
+            bank: BankId,
+            who: &AccountId,
+        ) -> Result<bool>;
+    }
+
     pub trait OpenBankAccount<OrgId, Currency, AccountId> {
         type BankId;
         fn open_bank_account(
@@ -106,17 +117,30 @@ pub mod traits {
         ) -> Result<Self::BankId>;
     }
 
+    pub trait TransferToBank<OrgId, Currency, AccountId>:
+        OpenBankAccount<OrgId, Currency, AccountId>
+    {
+        fn transfer_to_free(
+            from: AccountId,
+            bank_id: Self::BankId,
+            amount: Currency,
+        ) -> sp_runtime::DispatchResult;
+        fn transfer_to_reserved(
+            from: AccountId,
+            bank_id: Self::BankId,
+            amount: Currency,
+        ) -> sp_runtime::DispatchResult;
+    }
+
     pub trait SpendFromBank<OrgId, Currency, AccountId>:
         OpenBankAccount<OrgId, Currency, AccountId>
     {
         fn spend_from_free(
-            caller: AccountId,
             bank_id: Self::BankId,
             dest: AccountId,
             amount: Currency,
         ) -> sp_runtime::DispatchResult;
         fn spend_from_reserved(
-            caller: AccountId,
             bank_id: Self::BankId,
             dest: AccountId,
             amount: Currency,
