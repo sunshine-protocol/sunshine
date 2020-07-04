@@ -1,2 +1,4 @@
 add aux function for getting all the bank accounts for an org (iterate over storage map (key, value) pairs and filter)
 
+propose spend flow wherein any member can propose a spend but only the controller can sudo approved
+and/or the group can vote on it if ANOTHER member triggers the vote?
