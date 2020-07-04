@@ -6544,6 +6544,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "sunshine-bank2"
+version = "0.0.5"
+dependencies = [
+ "clear_on_drop",
+ "derive-new",
+ "frame-support",
+ "frame-system",
+ "pallet-balances",
+ "parity-scale-codec",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+ "sunshine-donate",
+ "sunshine-org",
+ "sunshine-util",
+ "sunshine-vote",
+]
+
+[[package]]
 name = "sunshine-bounty"
 version = "0.0.5"
 dependencies = [

@@ -1,0 +1,2 @@
+add aux function for getting all the bank accounts for an org (iterate over storage map (key, value) pairs and filter)
+
