@@ -1,5 +1,3 @@
-#[cfg(feature = "light-client")]
-use crate::light_client::ChainType;
 use crate::{
     error::{
         Error,

@@ -10,6 +10,8 @@ pub enum Error {
     Io(#[from] async_std::io::Error),
     #[error(transparent)]
     Keystore(#[from] keystore::Error),
+    #[error(transparent)]
+    Ipfsembed(#[from] ipfs_embed::Error),
 
     #[error("Failed to find config dir. Use `--path` to supply a suitable directory.")]
     ConfigDirNotFound,

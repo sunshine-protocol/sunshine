@@ -1,4 +1,9 @@
-use bounty_cli::key;
+use bounty_cli::{
+    key,
+    org,
+    shares,
+    wallet,
+};
 use clap::Clap;
 use std::path::PathBuf;
 
@@ -13,7 +18,8 @@ pub struct Opts {
 #[derive(Clone, Debug, Clap)]
 pub enum SubCommand {
     Key(KeyCommand),
-    // Wallet(WalletCommand),
+    Wallet(WalletCommand),
+    Org(OrgCommand),
     Run,
 }
 
@@ -30,15 +36,36 @@ pub enum KeySubCommand {
     Lock(key::KeyLockCommand),
 }
 
-// #[derive(Clone, Debug, Clap)]
-// pub struct WalletCommand {
-//     #[clap(subcommand)]
-//     pub cmd: WalletSubCommand,
-// }
+#[derive(Clone, Debug, Clap)]
+pub struct WalletCommand {
+    #[clap(subcommand)]
+    pub cmd: WalletSubCommand,
+}
 
-// #[derive(Clone, Debug, Clap)]
-// pub enum WalletSubCommand {
-//     IssueShares(WalletIssueSharesCommand),
-//     ReserveShares(WalletReserveSharesCommand),
-//     LockShares(WalletLockSharesCommand),
-// }
+#[derive(Clone, Debug, Clap)]
+pub enum WalletSubCommand {
+    GetAccountBalance(wallet::WalletBalanceCommand),
+    TransferBalance(wallet::WalletTransferCommand),
+}
+
+#[derive(Clone, Debug, Clap)]
+pub struct OrgCommand {
+    #[clap(subcommand)]
+    pub cmd: OrgSubCommand,
+}
+
+#[derive(Clone, Debug, Clap)]
+pub enum OrgSubCommand {
+    // share stuff
+    IssueShares(shares::SharesIssueCommand),
+    BurnShares(shares::SharesBurnCommand),
+    BatchIssueShares(shares::SharesBatchIssueCommand),
+    BatchBurnShares(shares::SharesBatchBurnCommand),
+    ReserveShares(shares::SharesReserveCommand),
+    UnreserveShares(shares::SharesUnReserveCommand),
+    LockShares(shares::SharesLockCommand),
+    UnlockShares(shares::SharesUnLockCommand),
+    // full org stuff
+    RegisterFlatOrg(org::OrgRegisterFlatCommand),
+    RegisterWeightedOrg(org::OrgRegisterWeightedCommand),
+}
