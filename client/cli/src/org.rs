@@ -61,9 +61,7 @@ where
             let content = self.constitution.as_bytes();
             let hash = Blake2b256::digest(&content[..]);
             let cid = Cid::new_v1(Codec::Raw, hash);
-            // CidBytes::from(&cid);
-            // TODO: get above line to work
-            CidBytes::default()
+            CidBytes::from(&cid)
         };
         let members = self
             .members
@@ -116,9 +114,7 @@ where
             let content = self.constitution.as_bytes();
             let hash = Blake2b256::digest(&content[..]);
             let cid = Cid::new_v1(Codec::Raw, hash);
-            // CidBytes::from(&cid);
-            // TODO: get above line to work
-            CidBytes::default()
+            CidBytes::from(&cid)
         };
         let members = self
             .members
