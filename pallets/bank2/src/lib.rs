@@ -8,8 +8,8 @@
 #[macro_use]
 extern crate derive_new;
 
-// #[cfg(test)]
-// mod tests;
+#[cfg(test)]
+mod tests;
 
 use frame_support::{
     decl_error,
@@ -109,6 +109,8 @@ decl_error! {
         NotPermittedToSpendFromFree,
         BankDNE,
         MustBeOrgSupervisorToCloseBankAccount,
+        CannotReserveSpendForBankThatDNE,
+        NotEnoughFreeFundsToReserveSpend,
     }
 }
 
@@ -374,6 +376,18 @@ impl<T: Trait> SpendFromBank<T::OrgId, BalanceOf<T>, T::AccountId>
             amount,
             ExistenceRequirement::KeepAlive,
         )?;
+        <BankStores<T>>::insert(bank_id, bank);
+        Ok(())
+    }
+    fn reserve_spend(
+        bank_id: Self::BankId,
+        amount: BalanceOf<T>,
+    ) -> sp_runtime::DispatchResult {
+        let bank = <BankStores<T>>::get(bank_id)
+            .ok_or(Error::<T>::CannotReserveSpendForBankThatDNE)?
+            .subtract_free(amount)
+            .ok_or(Error::<T>::NotEnoughFreeFundsToReserveSpend)?
+            .add_reserved(amount);
         <BankStores<T>>::insert(bank_id, bank);
         Ok(())
     }

@@ -93,10 +93,6 @@ impl org::Trait for Test {
     type Shares = u64;
     type ReservationLimit = ReservationLimit;
 }
-parameter_types! {
-    pub const MinimumTransfer: u64 = 10;
-    pub const MinimumInitialDeposit: u64 = 20;
-}
 impl vote::Trait for Test {
     type Event = TestEvent;
     type VoteId = u64;

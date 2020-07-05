@@ -11,6 +11,7 @@ use sp_core::H256;
 use sp_runtime::{
     testing::Header,
     traits::IdentityLookup,
+    ModuleId,
     Perbill,
 };
 use util::{
@@ -26,7 +27,7 @@ impl_outer_origin! {
     pub enum Origin for Test where system = frame_system {}
 }
 
-mod bank2 {
+mod bank {
     pub use super::super::*;
 }
 
@@ -35,7 +36,9 @@ impl_outer_event! {
         system<T>,
         pallet_balances<T>,
         org<T>,
-        bank2<T>,
+        vote<T>,
+        donate<T>,
+        bank<T>,
     }
 }
 
@@ -91,8 +94,23 @@ impl org::Trait for Test {
     type Shares = u64;
     type ReservationLimit = ReservationLimit;
 }
+impl vote::Trait for Test {
+    type Event = TestEvent;
+    type VoteId = u64;
+    type Signal = u64;
+}
 parameter_types! {
-    pub const MaxTreasuryPerOrg: u64 = 50;
+    pub const TransactionFee: u64 = 3;
+    pub const TreasuryModuleId: ModuleId = ModuleId(*b"py/trsry");
+}
+impl donate::Trait for Test {
+    type Event = TestEvent;
+    type Currency = Balances;
+    type TransactionFee = TransactionFee;
+    type Treasury = TreasuryModuleId;
+}
+parameter_types! {
+    pub const MaxTreasuryPerOrg: u32 = 50;
     pub const MinimumInitialDeposit: u64 = 20;
 }
 impl Trait for Test {
@@ -106,7 +124,7 @@ pub type Balances = pallet_balances::Module<Test>;
 pub type Org = org::Module<Test>;
 pub type Bank = Module<Test>;
 
-fn get_last_event() -> RawEvent<u64, u64, u64, u64> {
+fn get_last_event() -> RawEvent<u64, u64, u64> {
     System::events()
         .into_iter()
         .map(|r| r.event)
@@ -164,34 +182,21 @@ fn opening_bank_account_works() {
         let one = Origin::signed(1);
         let sixnine = Origin::signed(69);
         assert_noop!(
-            Bank::open_org_bank_account(
-                sixnine, 1, 10, None
-            ),
-            Error::<Test>::CannotOpenBankAccountForOrgIfNotOrgMember
+            Bank::open_org_bank_account(sixnine, 1, 10, None),
+            Error::<Test>::NotPermittedToOpenBankAccountForOrg
         );
         assert_noop!(
-            Bank::open_org_bank_account(
-                one.clone(),
-                1,
-                19,
-                None
-            ),
+            Bank::open_org_bank_account(one.clone(), 1, 19, None),
             Error::<Test>::CannotOpenBankAccountIfDepositIsBelowModuleMinimum
         );
         let total_bank_count = Bank::total_bank_count();
         assert_eq!(total_bank_count, 0u32);
-        assert_ok!(Bank::open_org_bank_account(
-            one.clone(),
-            1,
-            20,
-            None
-        ));
+        assert_ok!(Bank::open_org_bank_account(one.clone(), 1, 20, None));
         assert_eq!(
             get_last_event(),
-            RawEvent::AccountOpensOrgBankAccount(
+            RawEvent::BankAccountOpened(
                 1,
                 OnChainTreasuryID([0, 0, 0, 0, 0, 0, 0, 1]),
-                1,
                 20,
                 1,
                 None
@@ -199,5 +204,97 @@ fn opening_bank_account_works() {
         );
         let total_bank_count = Bank::total_bank_count();
         assert_eq!(total_bank_count, 1u32);
+    });
+}
+
+#[test]
+fn bank_spends_work() {
+    new_test_ext().execute_with(|| {
+        let one = Origin::signed(1);
+        let sixnine = Origin::signed(69);
+        assert_ok!(Bank::open_org_bank_account(one.clone(), 1, 20, Some(1)));
+        assert_noop!(
+            Bank::spend_from_bank_free_balance(
+                sixnine.clone(),
+                OnChainTreasuryID([0, 0, 0, 0, 0, 0, 0, 1]),
+                3,
+                10
+            ),
+            Error::<Test>::NotPermittedToSpendFromFree
+        );
+        assert_noop!(
+            Bank::spend_from_bank_free_balance(
+                one.clone(),
+                OnChainTreasuryID([0, 0, 0, 0, 0, 0, 0, 2]),
+                3,
+                10
+            ),
+            Error::<Test>::BankDNE
+        );
+        assert_noop!(
+            Bank::spend_from_bank_free_balance(
+                one.clone(),
+                OnChainTreasuryID([0, 0, 0, 0, 0, 0, 0, 1]),
+                3,
+                21
+            ),
+            Error::<Test>::NotEnoughFreeFundsToMakeFreeSpend
+        );
+        assert_noop!(
+            Bank::spend_from_bank_reserved_balance(
+                one.clone(),
+                OnChainTreasuryID([0, 0, 0, 0, 0, 0, 0, 1]),
+                3,
+                10
+            ),
+            Error::<Test>::NotEnoughReservedFundsToMakeReservedSpend
+        );
+        assert_eq!(Balances::total_balance(&3), 200);
+        assert_ok!(Bank::spend_from_bank_free_balance(
+            one.clone(),
+            OnChainTreasuryID([0, 0, 0, 0, 0, 0, 0, 1]),
+            3,
+            10
+        ));
+        assert_eq!(
+            get_last_event(),
+            RawEvent::SpendFromFree(
+                1,
+                OnChainTreasuryID([0, 0, 0, 0, 0, 0, 0, 1]),
+                3,
+                10
+            ),
+        );
+        assert_eq!(Balances::total_balance(&3), 210);
+        assert_ok!(Bank::transfer_to_reserved(
+            1,
+            OnChainTreasuryID([0, 0, 0, 0, 0, 0, 0, 1]),
+            10
+        ));
+        assert_noop!(
+            Bank::spend_from_bank_reserved_balance(
+                sixnine.clone(),
+                OnChainTreasuryID([0, 0, 0, 0, 0, 0, 0, 1]),
+                3,
+                10
+            ),
+            Error::<Test>::NotPermittedToSpendFromReserved
+        );
+        assert_noop!(
+            Bank::spend_from_bank_reserved_balance(
+                one.clone(),
+                OnChainTreasuryID([0, 0, 0, 0, 0, 0, 0, 1]),
+                3,
+                11
+            ),
+            Error::<Test>::NotEnoughReservedFundsToMakeReservedSpend
+        );
+        assert_ok!(Bank::spend_from_bank_reserved_balance(
+            one.clone(),
+            OnChainTreasuryID([0, 0, 0, 0, 0, 0, 0, 1]),
+            3,
+            10
+        ));
+        assert_eq!(Balances::total_balance(&3), 220);
     });
 }

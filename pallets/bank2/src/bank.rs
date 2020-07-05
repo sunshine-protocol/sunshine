@@ -140,6 +140,10 @@ pub mod traits {
             dest: AccountId,
             amount: Currency,
         ) -> sp_runtime::DispatchResult;
+        fn reserve_spend(
+            bank_id: Self::BankId,
+            amount: Currency,
+        ) -> sp_runtime::DispatchResult;
         fn spend_from_reserved(
             bank_id: Self::BankId,
             dest: AccountId,
