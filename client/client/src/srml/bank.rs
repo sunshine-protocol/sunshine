@@ -23,10 +23,6 @@ use util::bank::{
     BankOrAccount,
     BankState,
     OnChainTreasuryID,
-    OrgOrAccount,
-    SpendReservation,
-    TransferInformation,
-    TransferState,
 };
 
 pub type BalanceOf<T> = <T as Bank>::Currency; // as Currency<<T as System>::AccountId>>::Balance;
@@ -34,19 +30,6 @@ pub type BalanceOf<T> = <T as Bank>::Currency; // as Currency<<T as System>::Acc
 /// The subset of the bank trait and its inherited traits that the client must inherit
 #[module]
 pub trait Bank: System + Org {
-    /// Identifier for bank-related maps
-    type BankId: Parameter
-        + Member
-        + AtLeast32Bit
-        + Codec
-        + Default
-        + Copy
-        + MaybeSerializeDeserialize
-        + Debug
-        + PartialOrd
-        + PartialEq
-        + Zero;
-
     /// The currency type for on-chain transactions
     type Currency: Parameter
         + Member

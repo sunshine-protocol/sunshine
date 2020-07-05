@@ -147,12 +147,6 @@ pub trait RemoveOrganization<OrgId> {
     fn remove_organization(id: OrgId) -> Result<Option<Vec<OrgId>>>;
     fn recursive_remove_organization(id: OrgId) -> DispatchResult;
 }
-pub trait CalculateOwnership<OrgId, AccountId, FineArithmetic> {
-    fn calculate_proportion_ownership_for_account(
-        account: AccountId,
-        group: OrgId,
-    ) -> Result<FineArithmetic>;
-}
 
 // ====== Vote Logic ======
 

@@ -24,10 +24,6 @@ use substrate_subxt::system::{
     System,
     SystemEventsDecoder,
 };
-// use util::{
-//     organization::Organization,
-//     share::ShareProfile,
-// };
 
 pub type BalanceOf<T> = <T as Court>::Currency; // as Currency<<T as System>::AccountId>>::Balance;
 

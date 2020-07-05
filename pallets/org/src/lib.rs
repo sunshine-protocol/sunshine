@@ -19,7 +19,6 @@ use util::{
     },
     traits::{
         AccessGenesis,
-        CalculateOwnership,
         GenerateUniqueID,
         GetGroup,
         GroupMembership,
@@ -66,7 +65,6 @@ use sp_runtime::{
     },
     DispatchError,
     DispatchResult,
-    Permill,
 };
 use sp_std::{
     fmt::Debug,
@@ -771,22 +769,5 @@ impl<T: Trait> LockProfile<T::OrgId, T::AccountId> for Module<T> {
         let new_profile = old_profile.unlock();
         <Members<T>>::insert(organization, who, new_profile);
         Ok(())
-    }
-}
-
-impl<T: Trait> CalculateOwnership<T::OrgId, T::AccountId, Permill>
-    for Module<T>
-{
-    fn calculate_proportion_ownership_for_account(
-        account: T::AccountId,
-        group: T::OrgId,
-    ) -> Result<Permill, DispatchError> {
-        let issuance = <TotalIssuance<T>>::get(group);
-        let acc_ownership = <Members<T>>::get(group, &account)
-            .ok_or(Error::<T>::AccountHasNoOwnershipInOrg)?;
-        Ok(Permill::from_rational_approximation(
-            acc_ownership.total(),
-            issuance,
-        ))
     }
 }

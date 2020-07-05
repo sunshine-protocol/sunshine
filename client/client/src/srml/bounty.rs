@@ -34,7 +34,6 @@ use util::{
     bank::{
         BankOrAccount,
         OnChainTreasuryID,
-        TransferId,
     },
     bounty::{
         ApplicationState,
@@ -77,7 +76,7 @@ pub struct BountyLowerBoundConstant<T: Bounty> {
 pub struct LiveBountiesStore<T: Bounty> {
     #[store(returns = BountyInformation<
         BankOrAccount<
-            BankSpend<TransferId<T::BankId>>,
+            OnChainTreasuryID,
             T::AccountId
         >,
         T::IpfsReference,
