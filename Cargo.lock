@@ -6755,6 +6755,7 @@ dependencies = [
  "sunshine-bank",
  "sunshine-bounty",
  "sunshine-court",
+ "sunshine-donate",
  "sunshine-identity-utils 0.1.0 (git+https://github.com/sunshine-protocol/sunshine-identity/)",
  "sunshine-org",
  "sunshine-util",

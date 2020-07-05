@@ -1,3 +1,3 @@
 fn main() -> sc_cli::Result<()> {
-    sunshine_node::run_cli()
+    test_node::run_cli()
 }
