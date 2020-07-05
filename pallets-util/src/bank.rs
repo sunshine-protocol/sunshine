@@ -34,6 +34,14 @@ impl TypeId for OnChainTreasuryID {
 }
 
 #[derive(
+    new, Clone, Copy, Eq, PartialEq, Encode, Decode, sp_runtime::RuntimeDebug,
+)]
+pub struct BankSpend<BankId, SpendId> {
+    pub bank: BankId,
+    pub spend: SpendId,
+}
+
+#[derive(
     Clone, Copy, Eq, PartialEq, Encode, Decode, sp_runtime::RuntimeDebug,
 )]
 pub enum BankOrAccount<BankId, AccountId> {
@@ -84,6 +92,52 @@ impl<
             &op == purported_sudo
         } else {
             false
+        }
+    }
+}
+
+#[derive(
+    Clone, Copy, Eq, PartialEq, Encode, Decode, sp_runtime::RuntimeDebug,
+)]
+pub enum SpendState<VoteId> {
+    WaitingForApproval,
+    Voting(VoteId),
+    ApprovedButNotExecuted,
+    ApprovedAndExecuted,
+}
+
+#[derive(
+    Clone, Copy, Eq, PartialEq, Encode, Decode, sp_runtime::RuntimeDebug,
+)]
+pub struct SpendProposal<Currency, AccountId, State> {
+    amount: Currency,
+    dest: AccountId,
+    state: State,
+}
+
+impl<Currency: Copy, AccountId: Clone, VoteId: Copy>
+    SpendProposal<Currency, AccountId, SpendState<VoteId>>
+{
+    pub fn new(amount: Currency, dest: AccountId) -> Self {
+        Self {
+            amount,
+            dest,
+            state: SpendState::WaitingForApproval,
+        }
+    }
+    pub fn amount(&self) -> Currency {
+        self.amount
+    }
+    pub fn dest(&self) -> AccountId {
+        self.dest.clone()
+    }
+    pub fn state(&self) -> SpendState<VoteId> {
+        self.state
+    }
+    pub fn set_state(&self, state: SpendState<VoteId>) -> Self {
+        Self {
+            state,
+            ..self.clone()
         }
     }
 }

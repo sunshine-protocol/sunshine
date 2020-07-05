@@ -112,6 +112,7 @@ parameter_types! {
 }
 impl bank::Trait for Test {
     type Event = TestEvent;
+    type SpendId = u64;
     type Currency = Balances;
     type MaxTreasuryPerOrg = MaxTreasuryPerOrg;
     type MinimumInitialDeposit = MinimumInitialDeposit;

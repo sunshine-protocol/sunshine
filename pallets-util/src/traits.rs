@@ -292,6 +292,23 @@ pub trait OpenBankAccount<OrgId, Currency, AccountId> {
     ) -> Result<Self::BankId>;
 }
 
+pub trait SpendGovernance<BankId, Currency, AccountId> {
+    type SpendId;
+    type VoteId;
+    type SpendState;
+    fn propose_spend(
+        bank_id: BankId,
+        amount: Currency,
+        dest: AccountId,
+    ) -> Result<Self::SpendId>;
+    fn trigger_vote_on_spend_proposal(
+        spend_id: Self::SpendId,
+    ) -> Result<Self::VoteId>;
+    fn sudo_approve_spend_proposal(spend_id: Self::SpendId) -> DispatchResult;
+    fn poll_spend_proposal(spend_id: Self::SpendId)
+        -> Result<Self::SpendState>;
+}
+
 // ~~~~~~~~ Bounty Module ~~~~~~~~
 
 pub trait ReturnsBountyIdentifier {

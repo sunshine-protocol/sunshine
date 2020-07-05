@@ -94,14 +94,6 @@ impl<VoteId: Codec + PartialEq + Zero + From<u32> + Copy>
             _ => None,
         }
     }
-    // pub fn awaiting_team_consent(self) -> Option<VoteId> {
-    //     match self {
-    //         ApplicationState::ApprovedByFoundationAwaitingTeamConsent(
-    //             vote_id,
-    //         ) => Some(vote_id),
-    //         _ => None,
-    //     }
-    // }
     pub fn approved_and_live(self) -> bool {
         match self {
             ApplicationState::ApprovedAndLive => true,
@@ -219,43 +211,6 @@ impl<
         }
     }
 }
-
-// impl<
-//         AccountId: Clone + PartialEq,
-//         BankId: Copy,
-//         Currency: Clone,
-//         Hash: Clone,
-//         VoteId: Codec + PartialEq + Zero + From<u32> + Copy,
-//     > StartTeamConsentPetition<VoteId>
-//     for GrantApplication<
-//         AccountId,
-//         BankId,
-//         Currency,
-//         Hash,
-//         ApplicationState<VoteId>,
-//     >
-// {
-//     fn start_team_consent_petition(&self, vote_id: VoteId) -> Option<Self> {
-//         match self.state {
-//             ApplicationState::UnderReviewByAcceptanceCommittee(_) => Some(GrantApplication {
-//                 submitter: self.submitter.clone(),
-//                 bank: self.bank,
-//                 description: self.description.clone(),
-//                 total_amount: self.total_amount.clone(),
-//                 state: ApplicationState::ApprovedByFoundationAwaitingTeamConsent(vote_id),
-//             }),
-//             _ => None,
-//         }
-//     }
-//     fn get_team_consent_vote_id(&self) -> Option<VoteId> {
-//         match self.state() {
-//             ApplicationState::ApprovedByFoundationAwaitingTeamConsent(
-//                 vote_id,
-//             ) => Some(vote_id),
-//             _ => None,
-//         }
-//     }
-// }
 
 impl<
         AccountId: Clone + PartialEq,

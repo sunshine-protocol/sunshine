@@ -407,6 +407,7 @@ parameter_types! {
 }
 impl bank::Trait for Runtime {
     type Event = Event;
+    type SpendId = u64;
     type Currency = Balances;
     type MaxTreasuryPerOrg = MaxTreasuryPerOrg;
     type MinimumInitialDeposit = MinimumInitialDeposit;

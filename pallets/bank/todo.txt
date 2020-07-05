@@ -1,6 +1,0 @@
-add function for getting all the bank accounts for an org (iterate over storage map (key, value) pairs and filter)
-
-## use vote module for spending governance && revocable sudo for each bank
-
-propose spend flow wherein any member can propose a spend but only the controller can sudo approved
-and/or the group can vote on it if ANOTHER member triggers the vote?
