@@ -37,7 +37,6 @@ use util::{
     },
     bounty::{
         ApplicationState,
-        BankSpend,
         BountyInformation,
         GrantApplication,
         MilestoneStatus,
@@ -110,7 +109,7 @@ pub struct MilestoneSubmissionsStore<T: Bounty> {
         T::BountyId,
         T::IpfsReference,
         BalanceOf<T>,
-        MilestoneStatus<T::VoteId, BankOrAccount<TransferId<T::BankId>, T::AccountId>>
+        MilestoneStatus<T::VoteId>
     >)]
     pub bounty_id: T::BountyId,
     pub milestone_id: T::BountyId,
@@ -229,10 +228,7 @@ pub struct MilestoneReviewTriggeredEvent<T: Bounty> {
     pub trigger: <T as System>::AccountId,
     pub bounty_id: T::BountyId,
     pub milestone_id: T::BountyId,
-    pub milestone_state: MilestoneStatus<
-        T::VoteId,
-        BankOrAccount<TransferId<T::BankId>, T::AccountId>,
-    >,
+    pub milestone_state: MilestoneStatus<T::VoteId>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
@@ -246,10 +242,7 @@ pub struct SudoApprovedMilestoneEvent<T: Bounty> {
     pub sudo: <T as System>::AccountId,
     pub bounty_id: T::BountyId,
     pub milestone_id: T::BountyId,
-    pub milestone_state: MilestoneStatus<
-        T::VoteId,
-        BankOrAccount<TransferId<T::BankId>, T::AccountId>,
-    >,
+    pub milestone_state: MilestoneStatus<T::VoteId>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
@@ -263,8 +256,5 @@ pub struct MilestonePolledEvent<T: Bounty> {
     pub poller: <T as System>::AccountId,
     pub bounty_id: T::BountyId,
     pub milestone_id: T::BountyId,
-    pub milestone_state: MilestoneStatus<
-        T::VoteId,
-        BankOrAccount<TransferId<T::BankId>, T::AccountId>,
-    >,
+    pub milestone_state: MilestoneStatus<T::VoteId>,
 }
