@@ -283,68 +283,19 @@ pub trait RegisterDisputeType<AccountId, Currency, VoteMetadata, BlockNumber> {
 
 // ~~~~~~~~ Bank Module ~~~~~~~~
 
-pub trait RegisterOrgAccount<OrgId, AccountId, Currency> {
-    type TreasuryId;
-    fn register_org_account(
-        bank_id: Self::TreasuryId,
-        for_org: OrgId,
-        deposit_amount: Currency,
+pub trait BankPermissions<BankId, OrgId, AccountId> {
+    fn can_open_bank_account_for_org(org: OrgId, who: &AccountId) -> bool;
+    fn can_spend(bank: BankId, who: &AccountId) -> Result<bool>;
+}
+
+pub trait OpenBankAccount<OrgId, Currency, AccountId> {
+    type BankId;
+    fn open_bank_account(
+        opener: AccountId,
+        org: OrgId,
+        deposit: Currency,
         controller: Option<AccountId>,
-    );
-}
-pub trait PostUserTransfer<BankId, AccountId, Currency> {
-    type TransferId;
-    fn post_user_transfer(
-        sender: AccountId,
-        dest_bank_id: BankId,
-        amt: Currency,
-    ) -> Result<Self::TransferId>;
-}
-// sets aside some funds from a transfer aside for spending later from the org account
-pub trait ReserveOrgSpend<BankTransfer, Recipient, Currency> {
-    fn reserve_org_spend(
-        transfer_id: BankTransfer,
-        recipient: Recipient,
-        amt: Currency,
-    ) -> Result<BankTransfer>; // reservation_id is same structure as BankTransfer
-    fn unreserve_org_spend(
-        reservation_id: BankTransfer, // see comment immediately above^
-    ) -> Result<Currency>;
-}
-pub trait PostOrgTransfer<BankReservation, BankId, AccountId, Currency>:
-    PostUserTransfer<BankId, AccountId, Currency>
-{
-    type Recipient;
-    fn direct_transfer_to_org(
-        transfer_id: BankReservation,
-        dest_bank_id: BankId,
-        amt: Currency,
-    ) -> Result<Self::TransferId>;
-    fn direct_transfer_to_account(
-        transfer_id: BankReservation,
-        dest_acc: AccountId,
-        amt: Currency,
-    ) -> Result<()>;
-    fn transfer_reserved_spend(
-        reservation_id: BankReservation,
-        amt: Currency,
-    ) -> Result<Self::Recipient>;
-}
-pub trait StopSpendsStartWithdrawals<BankTransfer> {
-    // this method changes the state of the transfer object such that spends and reservations are no longer allowed
-    // and withdrawals by members can commence (with limits based on ownership rights)
-    fn stop_spends_start_withdrawals(transfer_id: BankTransfer) -> Result<()>;
-}
-pub trait WithdrawFromOrg<BankTransfer, AccountId, Currency> {
-    fn claim_due_amount(
-        transfer_id: BankTransfer,
-        for_acc: AccountId,
-    ) -> Result<Currency>;
-}
-// for TransferInformation object
-pub trait SpendWithdrawOps<Currency>: Sized {
-    fn spend(&self, amt: Currency) -> Option<Self>;
-    fn withdraw(&self, amt: Currency) -> Option<Self>;
+    ) -> Result<Self::BankId>;
 }
 
 // ~~~~~~~~ Bounty Module ~~~~~~~~

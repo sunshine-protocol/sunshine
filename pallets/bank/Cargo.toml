@@ -1,12 +1,12 @@
 [package]
 name = "sunshine-bank"
-version = "0.0.5"
+version = "0.0.6"
 authors = ["Amar Singh <asinghchrony@protonmail.com>"]
 edition = "2018"
 
 license = "GPL-3.0"
 repository = "https://github.com/sunshine-protocol/sunshine-bounty"
-description = "joint owned bank accounts with democratic escrow rules"
+description = "bank accounts for orgs (n treasury limit per org)"
 keywords = ["sunshine", "substrate"]
 
 [dependencies]
@@ -18,7 +18,10 @@ frame-support = { version = "2.0.0-rc4", default-features = false }
 frame-system = { version = "2.0.0-rc4", default-features = false }
 util = { package = "sunshine-util", path = "../../pallets-util", default-features=false}
 org = { package = "sunshine-org", path = "../org", default-features=false}
+vote = { package = "sunshine-vote", path = "../vote", default-features=false}
+donate = { package = "sunshine-donate", path = "../donate", default-features=false}
 clear_on_drop = { version = "0.2.4", features = ["no_cc"] } # https://github.com/paritytech/substrate/issues/4179
+# temp until ./bank.rs is merged into pallets-util
 
 [dev-dependencies]
 pallet-balances = { version = "2.0.0-rc4", default-features = false }

@@ -16,15 +16,6 @@ use sp_runtime::{
 use sp_std::prelude::*;
 
 #[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug)]
-/// This type disambiguates between full bank identifiers representing spendable accounts
-pub enum BankSpend<T> {
-    // transfer identifier
-    Transfer(T),
-    // reserved spend
-    Reserved(T),
-}
-
-#[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug)]
 pub enum BountyMapID {
     ApplicationId,
     MilestoneId,
@@ -337,16 +328,15 @@ impl<
 }
 
 #[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug)]
-pub enum MilestoneStatus<VoteId, TransferId> {
+pub enum MilestoneStatus<VoteId> {
     SubmittedAwaitingResponse,
     SubmittedReviewStarted(VoteId),
     ApprovedButNotTransferred,
-    // if to an org, it wraps Some(TransferId) else None because we don't track transfers to individual accounts
-    ApprovedAndTransferExecuted(TransferId),
+    ApprovedAndTransferExecuted,
 }
 
-impl<VoteId, BankId> Default for MilestoneStatus<VoteId, BankId> {
-    fn default() -> MilestoneStatus<VoteId, BankId> {
+impl<VoteId> Default for MilestoneStatus<VoteId> {
+    fn default() -> MilestoneStatus<VoteId> {
         MilestoneStatus::SubmittedAwaitingResponse
     }
 }
@@ -374,14 +364,13 @@ impl<
         Hash: Clone,
         Currency: Copy,
         VoteId: Codec + Copy,
-        BankId: Clone,
     >
     MilestoneSubmission<
         AccountId,
         ApplicationId,
         Hash,
         Currency,
-        MilestoneStatus<VoteId, BankId>,
+        MilestoneStatus<VoteId>,
     >
 {
     pub fn new(
@@ -394,7 +383,7 @@ impl<
         ApplicationId,
         Hash,
         Currency,
-        MilestoneStatus<VoteId, BankId>,
+        MilestoneStatus<VoteId>,
     > {
         MilestoneSubmission {
             submitter,
@@ -416,10 +405,10 @@ impl<
     pub fn amount(&self) -> Currency {
         self.amount
     }
-    pub fn state(&self) -> MilestoneStatus<VoteId, BankId> {
+    pub fn state(&self) -> MilestoneStatus<VoteId> {
         self.state.clone()
     }
-    pub fn set_state(&self, state: MilestoneStatus<VoteId, BankId>) -> Self {
+    pub fn set_state(&self, state: MilestoneStatus<VoteId>) -> Self {
         MilestoneSubmission {
             state,
             ..self.clone()
@@ -439,14 +428,13 @@ impl<
         Hash: Clone,
         Currency: Copy,
         VoteId: Codec + Copy,
-        BankId: Clone,
     > StartReview<VoteId>
     for MilestoneSubmission<
         AccountId,
         ApplicationId,
         Hash,
         Currency,
-        MilestoneStatus<VoteId, BankId>,
+        MilestoneStatus<VoteId>,
     >
 {
     fn start_review(&self, vote_id: VoteId) -> Option<Self> {
@@ -477,14 +465,13 @@ impl<
         Hash: Clone,
         Currency: Copy,
         VoteId: Codec + Copy,
-        BankId: Clone,
     > ApproveWithoutTransfer
     for MilestoneSubmission<
         AccountId,
         ApplicationId,
         Hash,
         Currency,
-        MilestoneStatus<VoteId, BankId>,
+        MilestoneStatus<VoteId>,
     >
 {
     fn approve_without_transfer(&self) -> Self {

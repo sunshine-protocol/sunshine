@@ -51,11 +51,9 @@ use util::{
     bank::{
         BankOrAccount,
         OnChainTreasuryID,
-        TransferId,
     },
     bounty::{
         ApplicationState,
-        BankSpend,
         BountyInformation,
         BountyMapID,
         GrantApplication,
@@ -73,8 +71,6 @@ use util::{
         OpenVote,
         OrganizationSupervisorPermissions,
         PostBounty,
-        PostOrgTransfer,
-        PostUserTransfer,
         ReturnsBountyIdentifier,
         SeededGenerateUniqueID,
         StartReview,
@@ -89,7 +85,6 @@ use util::{
 };
 
 /// The balances type for this module is inherited from bank
-/// - todo, can it match court? is that enforced and can it be
 pub type BalanceOf<T> = <<T as bank::Trait>::Currency as Currency<
     <T as frame_system::Trait>::AccountId,
 >>::Balance;
@@ -122,7 +117,6 @@ decl_event!(
     where
         <T as frame_system::Trait>::AccountId,
         <T as vote::Trait>::VoteId,
-        <T as bank::Trait>::BankId,
         <T as Trait>::BountyId,
         Balance = BalanceOf<T>,
     {
@@ -132,9 +126,9 @@ decl_event!(
         ApplicationReviewTriggered(AccountId, BountyId, BountyId, ApplicationState<VoteId>),
         ApplicationPolled(AccountId, BountyId, BountyId, ApplicationState<VoteId>),
         MilestoneSubmitted(AccountId, BountyId, BountyId, BountyId, Balance),
-        MilestoneReviewTriggered(AccountId, BountyId, BountyId, MilestoneStatus<VoteId, BankOrAccount<TransferId<BankId>, AccountId>>),
-        SudoApprovedMilestone(AccountId, BountyId, BountyId, MilestoneStatus<VoteId, BankOrAccount<TransferId<BankId>, AccountId>>),
-        MilestonePolled(AccountId, BountyId, BountyId, MilestoneStatus<VoteId, BankOrAccount<TransferId<BankId>, AccountId>>),
+        MilestoneReviewTriggered(AccountId, BountyId, BountyId, MilestoneStatus<VoteId>),
+        SudoApprovedMilestone(AccountId, BountyId, BountyId, MilestoneStatus<VoteId>),
+        MilestonePolled(AccountId, BountyId, BountyId, MilestoneStatus<VoteId>),
     }
 );
 
@@ -192,7 +186,7 @@ decl_storage! {
             hasher(opaque_blake2_256) T::BountyId => Option<
                 BountyInformation<
                     BankOrAccount<
-                        BankSpend<TransferId<T::BankId>>,
+                        OnChainTreasuryID,
                         T::AccountId
                     >,
                     T::IpfsReference,
@@ -227,7 +221,7 @@ decl_storage! {
                     T::BountyId,
                     T::IpfsReference,
                     BalanceOf<T>,
-                    MilestoneStatus<T::VoteId, BankOrAccount<TransferId<T::BankId>, T::AccountId>>
+                    MilestoneStatus<T::VoteId>
                 >
             >;
     }
@@ -269,9 +263,9 @@ decl_module! {
             Ok(())
         }
         #[weight = 0]
-        fn account_posts_bounty_for_org_with_direct_transfer(
+        fn account_posts_bounty_for_org(
             origin,
-            transfer_id: TransferId<T::BankId>,
+            bank_id: OnChainTreasuryID,
             description: T::IpfsReference,
             amount_reserved_for_bounty: BalanceOf<T>,
             acceptance_committee: ResolutionMetadata<
@@ -290,38 +284,7 @@ decl_module! {
             let poster = ensure_signed(origin)?;
             let new_bounty_id = Self::post_bounty(
                 poster.clone(),
-                Some(BankSpend::Transfer(transfer_id)),
-                description,
-                amount_reserved_for_bounty,
-                acceptance_committee,
-                supervision_committee,
-            )?;
-            Self::deposit_event(RawEvent::BountyPosted(new_bounty_id, poster, amount_reserved_for_bounty));
-            Ok(())
-        }
-        #[weight = 0]
-        fn account_posts_bounty_for_org_with_reserved_spend(
-            origin,
-            reservation_id: TransferId<T::BankId>,
-            description: T::IpfsReference,
-            amount_reserved_for_bounty: BalanceOf<T>,
-            acceptance_committee: ResolutionMetadata<
-                T::OrgId,
-                ThresholdConfig<T::Signal>,
-                T::BlockNumber,
-            >,
-            supervision_committee: Option<
-                ResolutionMetadata<
-                    T::OrgId,
-                    ThresholdConfig<T::Signal>,
-                    T::BlockNumber,
-                >,
-            >,
-        ) -> DispatchResult {
-            let poster = ensure_signed(origin)?;
-            let new_bounty_id = Self::post_bounty(
-                poster.clone(),
-                Some(BankSpend::Reserved(reservation_id)),
+                Some(bank_id),
                 description,
                 amount_reserved_for_bounty,
                 acceptance_committee,
@@ -469,79 +432,70 @@ impl<T: Trait> Module<T> {
     }
 
     pub fn transfer_milestone_payment(
-        sender: BankOrAccount<BankSpend<TransferId<T::BankId>>, T::AccountId>,
+        sender: BankOrAccount<OnChainTreasuryID, T::AccountId>,
         recipient: BankOrAccount<OnChainTreasuryID, T::AccountId>,
         amount: BalanceOf<T>,
-    ) -> Result<BankOrAccount<TransferId<T::BankId>, T::AccountId>, DispatchError>
-    {
+    ) -> DispatchResult {
         match (sender, recipient) {
             (
-                BankOrAccount::Bank(BankSpend::Transfer(full_transfer_id)),
+                BankOrAccount::Bank(src_bank_id),
                 BankOrAccount::Bank(dest_bank_id),
             ) => {
-                let result_transfer_id =
-                    <bank::Module<T>>::direct_transfer_to_org(
-                        full_transfer_id,
-                        dest_bank_id,
-                        amount,
-                    )?;
-                Ok(BankOrAccount::Bank(result_transfer_id))
-            }
-            (
-                BankOrAccount::Bank(BankSpend::Reserved(full_reservation_id)),
-                BankOrAccount::Bank(_),
-            ) => {
-                // TODO: check that the dest_bank_id is equal to the reservation in question
-                <bank::Module<T>>::transfer_reserved_spend(
-                    full_reservation_id,
+                let (src_account_id, dest_account_id) = (
+                    <bank::Module<T>>::account_id(src_bank_id),
+                    <bank::Module<T>>::account_id(dest_bank_id),
+                );
+                <T as bank::Trait>::Currency::unreserve(
+                    &src_account_id,
                     amount,
+                );
+                <T as bank::Trait>::Currency::transfer(
+                    &src_account_id,
+                    &dest_account_id,
+                    amount,
+                    ExistenceRequirement::KeepAlive,
                 )
             }
             (
-                BankOrAccount::Bank(BankSpend::Transfer(full_transfer_id)),
+                BankOrAccount::Bank(src_bank_id),
                 BankOrAccount::Account(dest_acc),
             ) => {
-                <bank::Module<T>>::direct_transfer_to_account(
-                    full_transfer_id,
-                    dest_acc.clone(),
+                let src_account_id = <bank::Module<T>>::account_id(src_bank_id);
+                <T as bank::Trait>::Currency::unreserve(
+                    &src_account_id,
                     amount,
-                )?;
-                Ok(BankOrAccount::Account(dest_acc))
-            }
-            (
-                BankOrAccount::Bank(BankSpend::Reserved(full_reservation_id)),
-                BankOrAccount::Account(_),
-            ) => {
-                // TODO: check that the dest_bank_id is equal to the reservation in question
-                <bank::Module<T>>::transfer_reserved_spend(
-                    full_reservation_id,
+                );
+                <T as bank::Trait>::Currency::transfer(
+                    &src_account_id,
+                    &dest_acc,
                     amount,
+                    ExistenceRequirement::KeepAlive,
                 )
             }
             (
                 BankOrAccount::Account(sender_acc),
                 BankOrAccount::Bank(dest_bank_id),
             ) => {
-                let new_transfer_id = <bank::Module<T>>::post_user_transfer(
-                    sender_acc,
-                    dest_bank_id,
+                <T as bank::Trait>::Currency::unreserve(&sender_acc, amount);
+                <T as bank::Trait>::Currency::transfer(
+                    &sender_acc,
+                    &<bank::Module<T>>::account_id(dest_bank_id),
                     amount,
-                )?;
-                Ok(BankOrAccount::Bank(new_transfer_id))
+                    ExistenceRequirement::KeepAlive,
+                )
             }
             (
                 BankOrAccount::Account(sender_acc),
                 BankOrAccount::Account(dest_acc),
             ) => {
                 // unreserve and transfer (note reservation associated with posting bounty initially)
-                T::Currency::unreserve(&sender_acc, amount);
-                T::Currency::transfer(
+                <T as bank::Trait>::Currency::unreserve(&sender_acc, amount);
+                <T as bank::Trait>::Currency::transfer(
                     &sender_acc,
                     &dest_acc,
                     amount,
                     ExistenceRequirement::KeepAlive,
-                )?;
-                Ok(BankOrAccount::Account(dest_acc))
+                )
             }
         }
     }
@@ -614,7 +568,7 @@ impl<T: Trait>
     PostBounty<
         T::AccountId,
         T::OrgId,
-        BankSpend<TransferId<T::BankId>>,
+        OnChainTreasuryID,
         BalanceOf<T>,
         T::IpfsReference,
         ResolutionMetadata<
@@ -625,7 +579,7 @@ impl<T: Trait>
     > for Module<T>
 {
     type BountyInfo = BountyInformation<
-        BankOrAccount<BankSpend<TransferId<T::BankId>>, T::AccountId>,
+        BankOrAccount<OnChainTreasuryID, T::AccountId>,
         T::IpfsReference,
         BalanceOf<T>,
         ResolutionMetadata<
@@ -636,7 +590,7 @@ impl<T: Trait>
     >;
     fn post_bounty(
         poster: T::AccountId,
-        on_behalf_of: Option<BankSpend<TransferId<T::BankId>>>,
+        on_behalf_of: Option<OnChainTreasuryID>,
         description: T::IpfsReference,
         amount_reserved_for_bounty: BalanceOf<T>,
         acceptance_committee: ResolutionMetadata<
@@ -652,36 +606,20 @@ impl<T: Trait>
             >,
         >,
     ) -> Result<Self::BountyId, DispatchError> {
-        let bounty_poster: BankOrAccount<
-            BankSpend<TransferId<T::BankId>>,
-            T::AccountId,
-        > = if let Some(bank_spend) = on_behalf_of {
-            match bank_spend {
-                BankSpend::Transfer(full_transfer_id) => {
-                    ensure!(
-                        <bank::Module<T>>::is_bank(full_transfer_id.id),
-                        Error::<T>::CannotPostBountyIfBankReferencedDNE
-                    );
-                    let transfer_info = <bank::Module<T>>::transfer_info(full_transfer_id.id, full_transfer_id.sub_id).ok_or(Error::<T>::CannotPostBountyOnBehalfOfOrgWithInvalidTransferReference)?;
-                    // ensure amount left is above amount_reserved_for_bounty; this check is aggressive because we don't really need to reserve until an application is approved
-                    ensure!(transfer_info.amount_left() >= amount_reserved_for_bounty, Error::<T>::CannotPostBountyIfAmountExceedsAmountLeftFromSpendReference);
-                    BankOrAccount::Bank(bank_spend)
-                }
-                BankSpend::Reserved(full_reservation_id) => {
-                    ensure!(
-                        <bank::Module<T>>::is_bank(full_reservation_id.id),
-                        Error::<T>::CannotPostBountyIfBankReferencedDNE
-                    );
-                    let spend_reservation = <bank::Module<T>>::spend_reservations(full_reservation_id.id, full_reservation_id.sub_id).ok_or(Error::<T>::CannotPostBountyOnBehalfOfOrgWithInvalidSpendReservation)?;
-                    // ensure amount left is above amount_reserved_for_bounty; this check is aggressive because we don't really need to reserve until an application is approved
-                    ensure!(spend_reservation.amount_left() >= amount_reserved_for_bounty, Error::<T>::CannotPostBountyIfAmountExceedsAmountLeftFromSpendReference);
-                    BankOrAccount::Bank(bank_spend)
-                }
-            }
-        } else {
-            T::Currency::reserve(&poster, amount_reserved_for_bounty)?;
-            BankOrAccount::Account(poster)
-        };
+        let bounty_poster: BankOrAccount<OnChainTreasuryID, T::AccountId> =
+            if let Some(bank_id) = on_behalf_of {
+                <T as bank::Trait>::Currency::reserve(
+                    &<bank::Module<T>>::account_id(bank_id),
+                    amount_reserved_for_bounty,
+                )?;
+                BankOrAccount::Bank(bank_id)
+            } else {
+                <T as bank::Trait>::Currency::reserve(
+                    &poster,
+                    amount_reserved_for_bounty,
+                )?;
+                BankOrAccount::Account(poster)
+            };
         // form new bounty post
         let new_bounty_post = BountyInformation::new(
             bounty_poster,
@@ -897,7 +835,7 @@ impl<T: Trait>
         T::IpfsReference,
         BalanceOf<T>,
         T::VoteId,
-        BankOrAccount<TransferId<T::BankId>, T::AccountId>,
+        BankOrAccount<OnChainTreasuryID, T::AccountId>,
     > for Module<T>
 {
     type Milestone = MilestoneSubmission<
@@ -905,15 +843,9 @@ impl<T: Trait>
         T::BountyId,
         T::IpfsReference,
         BalanceOf<T>,
-        MilestoneStatus<
-            T::VoteId,
-            BankOrAccount<TransferId<T::BankId>, T::AccountId>,
-        >,
+        MilestoneStatus<T::VoteId>,
     >;
-    type MilestoneState = MilestoneStatus<
-        T::VoteId,
-        BankOrAccount<TransferId<T::BankId>, T::AccountId>,
-    >;
+    type MilestoneState = MilestoneStatus<T::VoteId>;
     fn submit_milestone(
         submitter: T::AccountId,
         bounty_id: T::BountyId,
@@ -1044,10 +976,11 @@ impl<T: Trait>
             grant_recipient,
             milestone_submission.amount(),
         );
-        let new_milestone_submission = if let Ok(pay_id) = payment_receipt {
+        let new_milestone_submission = if let Ok(()) = payment_receipt {
             milestone_submission
-                .set_state(MilestoneStatus::ApprovedAndTransferExecuted(pay_id))
+                .set_state(MilestoneStatus::ApprovedAndTransferExecuted)
         } else {
+            // will perform the transfer later but it is still approved
             milestone_submission.approve_without_transfer()
         };
         let ret_state = new_milestone_submission.state();
@@ -1081,10 +1014,8 @@ impl<T: Trait>
                 let vote_outcome =
                     <vote::Module<T>>::get_vote_outcome(live_vote_id)?;
                 if vote_outcome == VoteOutcome::Approved {
-                    let poster: BankOrAccount<
-                        BankSpend<TransferId<T::BankId>>,
-                        T::AccountId,
-                    > = bounty.poster();
+                    let poster: BankOrAccount<OnChainTreasuryID, T::AccountId> =
+                        bounty.poster();
                     let grant_recipient: BankOrAccount<
                         OnChainTreasuryID,
                         T::AccountId,
@@ -1099,11 +1030,9 @@ impl<T: Trait>
                         milestone_submission.amount(),
                     );
                     let new_milestone_submission =
-                        if let Ok(pay_id) = payment_receipt {
+                        if let Ok(()) = payment_receipt {
                             milestone_submission.set_state(
-                                MilestoneStatus::ApprovedAndTransferExecuted(
-                                    pay_id,
-                                ),
+                                MilestoneStatus::ApprovedAndTransferExecuted,
                             )
                         } else {
                             milestone_submission.approve_without_transfer()

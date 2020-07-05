@@ -13,7 +13,6 @@ members = [
     "pallets/vote",
     "pallets/court",
     "pallets/bank",
-    "pallets/bank2",
     "pallets/donate",
     "pallets/bounty",
 ]
