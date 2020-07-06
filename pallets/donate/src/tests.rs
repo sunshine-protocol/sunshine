@@ -164,20 +164,12 @@ fn check_donation_accuracy() {
         let one = Origin::signed(1);
         let two = Origin::signed(2);
         assert_eq!(Balances::total_balance(&2), 98);
-        assert_ok!(
-            Donate::make_donation_in_proportion_to_ownership_without_fee(
-                one, 1, 60
-            )
-        );
+        assert_ok!(Donate::make_prop_donation_without_fee(one, 1, 60));
         // 98 + 10 = 108
         assert_eq!(Balances::total_balance(&2), 108);
         // 100 - 60 + 10 = 50
         assert_eq!(Balances::total_balance(&1), 50);
-        assert_ok!(
-            Donate::make_donation_in_proportion_to_ownership_without_fee(
-                two, 1, 20
-            )
-        );
+        assert_ok!(Donate::make_prop_donation_without_fee(two, 1, 20));
         // 50 + (20/6 ~= 3) = 53
         assert_eq!(Balances::total_balance(&1), 53);
         // 108 - 18 + 3 = 93

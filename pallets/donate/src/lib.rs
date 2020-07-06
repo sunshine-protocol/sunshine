@@ -67,7 +67,7 @@ decl_module! {
         fn deposit_event() = default;
 
         #[weight = 0]
-        fn make_donation_in_proportion_to_ownership_with_fee(
+        fn make_prop_donation_with_fee(
             origin,
             org: T::OrgId,
             amt: BalanceOf<T>
@@ -78,7 +78,7 @@ decl_module! {
             Ok(())
         }
         #[weight = 0]
-        fn make_donation_in_proportion_to_ownership_without_fee(
+        fn make_prop_donation_without_fee(
             origin,
             org: T::OrgId,
             amt: BalanceOf<T>
