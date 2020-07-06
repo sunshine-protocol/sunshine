@@ -279,6 +279,16 @@ pub trait RegisterDisputeType<AccountId, Currency, VoteMetadata, BlockNumber> {
 
 pub trait BankPermissions<BankId, OrgId, AccountId> {
     fn can_open_bank_account_for_org(org: OrgId, who: &AccountId) -> bool;
+    fn can_propose_spend(bank: BankId, who: &AccountId) -> Result<bool>;
+    fn can_trigger_vote_on_spend_proposal(
+        bank: BankId,
+        who: &AccountId,
+    ) -> Result<bool>;
+    fn can_sudo_approve_spend_proposal(
+        bank: BankId,
+        who: &AccountId,
+    ) -> Result<bool>;
+    fn can_poll_spend_proposal(bank: BankId, who: &AccountId) -> Result<bool>;
     fn can_spend(bank: BankId, who: &AccountId) -> Result<bool>;
 }
 

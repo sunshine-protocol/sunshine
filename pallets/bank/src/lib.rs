@@ -106,10 +106,15 @@ decl_event!(
     where
         <T as frame_system::Trait>::AccountId,
         <T as org::Trait>::OrgId,
+        <T as vote::Trait>::VoteId,
+        <T as Trait>::SpendId,
         Balance = BalanceOf<T>,
     {
         BankAccountOpened(AccountId, OnChainTreasuryID, Balance, OrgId, Option<AccountId>),
-        Spend(AccountId, OnChainTreasuryID, AccountId, Balance),
+        SpendProposedByMember(AccountId, OnChainTreasuryID, SpendId, Balance, AccountId),
+        VoteTriggeredOnSpendProposal(AccountId, OnChainTreasuryID, SpendId, VoteId),
+        SudoApprovedSpendProposal(AccountId, OnChainTreasuryID, SpendId),
+        SpendProposalPolled(AccountId, OnChainTreasuryID, SpendId, SpendState<VoteId>),
         BankAccountClosed(AccountId, OnChainTreasuryID, OrgId),
     }
 );
@@ -120,9 +125,14 @@ decl_error! {
         CannotOpenBankAccountForOrgIfBankCountExceedsLimitPerOrg,
         CannotCloseBankThatDNE,
         NotPermittedToOpenBankAccountForOrg,
+        NotPermittedToProposeSpendForBankAccount,
+        NotPermittedToTriggerVoteForBankAccount,
+        NotPermittedToSudoApproveForBankAccount,
+        NotPermittedToPollSpendProposalForBankAccount,
         CannotSpendIfBankDNE,
         MustBeOrgSupervisorToCloseBankAccount,
         // spend proposal stuff
+        CannotProposeSpendIfBankDNE,
         BankMustExistToProposeSpendFrom,
         CannotTriggerVoteForSpendIfBaseBankDNE,
         CannotTriggerVoteForSpendIfSpendProposalDNE,
@@ -190,6 +200,62 @@ decl_module! {
             ensure!(auth, Error::<T>::NotPermittedToOpenBankAccountForOrg);
             let bank_id = Self::open_bank_account(opener.clone(), org, deposit, controller.clone())?;
             Self::deposit_event(RawEvent::BankAccountOpened(opener, bank_id, deposit, org, controller));
+            Ok(())
+        }
+        #[weight = 0]
+        fn member_proposes_spend(
+            origin,
+            bank_id: OnChainTreasuryID,
+            amount: BalanceOf<T>,
+            dest: T::AccountId,
+        ) -> DispatchResult {
+            let caller = ensure_signed(origin)?;
+            let auth = Self::can_propose_spend(bank_id, &caller)?;
+            ensure!(auth, Error::<T>::NotPermittedToProposeSpendForBankAccount);
+            let new_spend_id = Self::propose_spend(bank_id, amount, dest.clone())?;
+            Self::deposit_event(RawEvent::SpendProposedByMember(caller, bank_id, new_spend_id.spend, amount, dest));
+            Ok(())
+        }
+        #[weight = 0]
+        fn member_triggers_vote_on_spend_proposal(
+            origin,
+            bank_id: OnChainTreasuryID,
+            spend_id: T::SpendId,
+        ) -> DispatchResult {
+            let caller = ensure_signed(origin)?;
+            let auth = Self::can_trigger_vote_on_spend_proposal(bank_id, &caller)?;
+            ensure!(auth, Error::<T>::NotPermittedToTriggerVoteForBankAccount);
+            let bank_spend_id = BankSpend::new(bank_id, spend_id);
+            let vote_id = Self::trigger_vote_on_spend_proposal(bank_spend_id)?;
+            Self::deposit_event(RawEvent::VoteTriggeredOnSpendProposal(caller, bank_id, spend_id, vote_id));
+            Ok(())
+        }
+        #[weight = 0]
+        fn member_sudo_approves_spend_proposal(
+            origin,
+            bank_id: OnChainTreasuryID,
+            spend_id: T::SpendId,
+        ) -> DispatchResult {
+            let caller = ensure_signed(origin)?;
+            let auth = Self::can_sudo_approve_spend_proposal(bank_id, &caller)?;
+            ensure!(auth, Error::<T>::NotPermittedToSudoApproveForBankAccount);
+            let bank_spend_id = BankSpend::new(bank_id, spend_id);
+            Self::sudo_approve_spend_proposal(bank_spend_id)?;
+            Self::deposit_event(RawEvent::SudoApprovedSpendProposal(caller, bank_id, spend_id));
+            Ok(())
+        }
+        #[weight = 0]
+        fn member_polls_spend_proposal(
+            origin,
+            bank_id: OnChainTreasuryID,
+            spend_id: T::SpendId,
+        ) -> DispatchResult {
+            let caller = ensure_signed(origin)?;
+            let auth = Self::can_poll_spend_proposal(bank_id, &caller)?;
+            ensure!(auth, Error::<T>::NotPermittedToPollSpendProposalForBankAccount);
+            let bank_spend_id = BankSpend::new(bank_id, spend_id);
+            let state = Self::poll_spend_proposal(bank_spend_id)?;
+            Self::deposit_event(RawEvent::SpendProposalPolled(caller, bank_id, spend_id, state));
             Ok(())
         }
         #[weight = 0]
@@ -292,6 +358,38 @@ impl<T: Trait> BankPermissions<OnChainTreasuryID, T::OrgId, T::AccountId>
         who: &T::AccountId,
     ) -> bool {
         <org::Module<T>>::is_member_of_group(org, who)
+    }
+    fn can_propose_spend(
+        bank: OnChainTreasuryID,
+        who: &T::AccountId,
+    ) -> Result<bool, DispatchError> {
+        let bank = <BankStores<T>>::get(bank)
+            .ok_or(Error::<T>::CannotProposeSpendIfBankDNE)?;
+        Ok(<org::Module<T>>::is_member_of_group(bank.org(), who))
+    }
+    fn can_trigger_vote_on_spend_proposal(
+        bank: OnChainTreasuryID,
+        who: &T::AccountId,
+    ) -> Result<bool, DispatchError> {
+        let bank = <BankStores<T>>::get(bank)
+            .ok_or(Error::<T>::CannotTriggerVoteForSpendIfBaseBankDNE)?;
+        Ok(<org::Module<T>>::is_member_of_group(bank.org(), who))
+    }
+    fn can_sudo_approve_spend_proposal(
+        bank: OnChainTreasuryID,
+        who: &T::AccountId,
+    ) -> Result<bool, DispatchError> {
+        let bank = <BankStores<T>>::get(bank)
+            .ok_or(Error::<T>::CannotSudoApproveSpendProposalIfBaseBankDNE)?;
+        Ok(bank.is_controller(who))
+    }
+    fn can_poll_spend_proposal(
+        bank: OnChainTreasuryID,
+        who: &T::AccountId,
+    ) -> Result<bool, DispatchError> {
+        let bank = <BankStores<T>>::get(bank)
+            .ok_or(Error::<T>::CannotPollSpendProposalIfBaseBankDNE)?;
+        Ok(<org::Module<T>>::is_member_of_group(bank.org(), who))
     }
     fn can_spend(
         bank: OnChainTreasuryID,

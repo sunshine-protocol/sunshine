@@ -127,7 +127,7 @@ pub type Org = org::Module<Test>;
 pub type Vote = vote::Module<Test>;
 pub type Bank = Module<Test>;
 
-fn get_last_event() -> RawEvent<u64, u64, u64> {
+fn get_last_event() -> RawEvent<u64, u64, u64, u64, u64> {
     System::events()
         .into_iter()
         .map(|r| r.event)
