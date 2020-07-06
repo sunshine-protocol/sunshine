@@ -2,6 +2,7 @@ use bounty_cli::{
     key,
     org,
     shares,
+    vote,
     wallet,
 };
 use clap::Clap;
@@ -20,6 +21,7 @@ pub enum SubCommand {
     Key(KeyCommand),
     Wallet(WalletCommand),
     Org(OrgCommand),
+    Vote(VoteCommand),
     Run,
 }
 
@@ -68,4 +70,17 @@ pub enum OrgSubCommand {
     // full org stuff
     RegisterFlatOrg(org::OrgRegisterFlatCommand),
     RegisterWeightedOrg(org::OrgRegisterWeightedCommand),
+}
+
+#[derive(Clone, Debug, Clap)]
+pub struct VoteCommand {
+    #[clap(subcommand)]
+    pub cmd: VoteSubCommand,
+}
+
+#[derive(Clone, Debug, Clap)]
+pub enum VoteSubCommand {
+    CreateThresholdApprovalVote(vote::VoteCreateThresholdApprovalCommand),
+    CreateUnanimousConsentVote(vote::VoteCreateUnanimousConsentCommand),
+    SubmitVote(vote::VoteSubmitCommand),
 }

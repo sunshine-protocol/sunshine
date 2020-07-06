@@ -20,7 +20,10 @@ pub use error::Error;
 pub use light_client::ChainType;
 pub use r#abstract::AbstractClient;
 pub use runtime::Runtime;
-pub use srml::org::Org;
+pub use srml::{
+    org::Org,
+    vote::Vote,
+};
 pub use utils::{
     Account,
     AccountShare,

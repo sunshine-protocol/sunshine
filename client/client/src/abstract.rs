@@ -1,6 +1,9 @@
 use crate::{
     error::Result,
-    srml::org::*,
+    srml::{
+        org::*,
+        vote::*,
+    },
     Client,
 };
 use async_trait::async_trait;
@@ -27,9 +30,13 @@ use substrate_subxt::{
     SignedExtra,
     Signer,
 };
+use util::vote::VoterView;
 
 #[async_trait]
-pub trait AbstractClient<T: Runtime + Org, P: Pair>: Send + Sync {
+pub trait AbstractClient<T: Runtime + Org + Vote, P: Pair>:
+    Send + Sync
+{
+    // local key security
     async fn has_device_key(&self) -> bool;
     async fn set_device_key(
         &self,
@@ -40,6 +47,7 @@ pub trait AbstractClient<T: Runtime + Org, P: Pair>: Send + Sync {
     async fn signer(&self) -> Result<Box<dyn Signer<T> + Send + Sync>>;
     async fn lock(&self) -> Result<()>;
     async fn unlock(&self, password: &Password) -> Result<()>;
+    // org module calls
     async fn register_flat_org(
         &self,
         sudo: Option<<T as System>::AccountId>,
@@ -96,13 +104,34 @@ pub trait AbstractClient<T: Runtime + Org, P: Pair>: Send + Sync {
         org: <T as Org>::OrgId,
         who: &<T as System>::AccountId,
     ) -> Result<SharesUnlockedEvent<T>>;
+    // vote module calls
+    async fn create_threshold_approval_vote(
+        &self,
+        topic: Option<<T as Org>::IpfsReference>,
+        organization: T::OrgId,
+        support_requirement: T::Signal,
+        turnout_requirement: Option<T::Signal>,
+        duration: Option<<T as System>::BlockNumber>,
+    ) -> Result<NewVoteStartedEvent<T>>;
+    async fn create_unanimous_consent_approval_vote(
+        &self,
+        topic: Option<<T as Org>::IpfsReference>,
+        organization: T::OrgId,
+        duration: Option<<T as System>::BlockNumber>,
+    ) -> Result<NewVoteStartedEvent<T>>;
+    async fn submit_vote(
+        &self,
+        vote_id: <T as Vote>::VoteId,
+        direction: VoterView,
+        justification: Option<<T as Org>::IpfsReference>,
+    ) -> Result<VotedEvent<T>>;
     fn subxt(&self) -> &substrate_subxt::Client<T>;
 }
 
 #[async_trait]
 impl<T, P, I> AbstractClient<T, P> for Client<T, P, I>
 where
-    T: Runtime + Org,
+    T: Runtime + Org + Vote,
     <T as System>::AccountId: Into<<T as System>::Address> + Ss58Codec,
     T::Signature: Decode + From<P::Signature>,
     <T::Signature as Verify>::Signer:
@@ -230,6 +259,47 @@ where
         who: &<T as System>::AccountId,
     ) -> Result<SharesUnlockedEvent<T>> {
         self.unlock_shares(org, who).await
+    }
+
+    async fn create_threshold_approval_vote(
+        &self,
+        topic: Option<<T as Org>::IpfsReference>,
+        organization: T::OrgId,
+        support_requirement: T::Signal,
+        turnout_requirement: Option<T::Signal>,
+        duration: Option<<T as System>::BlockNumber>,
+    ) -> Result<NewVoteStartedEvent<T>> {
+        self.create_threshold_approval_vote(
+            topic,
+            organization,
+            support_requirement,
+            turnout_requirement,
+            duration,
+        )
+        .await
+    }
+
+    async fn create_unanimous_consent_approval_vote(
+        &self,
+        topic: Option<<T as Org>::IpfsReference>,
+        organization: T::OrgId,
+        duration: Option<<T as System>::BlockNumber>,
+    ) -> Result<NewVoteStartedEvent<T>> {
+        self.create_unanimous_consent_approval_vote(
+            topic,
+            organization,
+            duration,
+        )
+        .await
+    }
+
+    async fn submit_vote(
+        &self,
+        vote_id: <T as Vote>::VoteId,
+        direction: VoterView,
+        justification: Option<<T as Org>::IpfsReference>,
+    ) -> Result<VotedEvent<T>> {
+        self.submit_vote(vote_id, direction, justification).await
     }
 
     fn subxt(&self) -> &substrate_subxt::Client<T> {

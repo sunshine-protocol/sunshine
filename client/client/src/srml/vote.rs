@@ -8,14 +8,11 @@ use codec::{
     Encode,
 };
 use frame_support::Parameter;
-use sp_runtime::{
-    traits::{
-        AtLeast32Bit,
-        MaybeSerializeDeserialize,
-        Member,
-        Zero,
-    },
-    Permill,
+use sp_runtime::traits::{
+    AtLeast32Bit,
+    MaybeSerializeDeserialize,
+    Member,
+    Zero,
 };
 use std::fmt::Debug;
 use substrate_subxt::system::{
@@ -89,20 +86,11 @@ pub struct VoteLoggerStore<T: Vote> {
 // ~~ Calls ~~
 
 #[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
-pub struct CreateWeightedPercentageThresholdVoteCall<T: Vote> {
-    pub topic: Option<<T as Org>::IpfsReference>,
-    pub organization: T::OrgId,
-    pub passage_threshold_pct: Permill,
-    pub turnout_threshold_pct: Permill,
-    pub duration: Option<<T as System>::BlockNumber>,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
-pub struct CreateWeightedCountThresholdVoteCall<T: Vote> {
+pub struct CreateThresholdApprovalVoteCall<T: Vote> {
     pub topic: Option<<T as Org>::IpfsReference>,
     pub organization: T::OrgId,
     pub support_requirement: T::Signal,
-    pub turnout_requirement: T::Signal,
+    pub turnout_requirement: Option<T::Signal>,
     pub duration: Option<<T as System>::BlockNumber>,
 }
 
@@ -117,7 +105,6 @@ pub struct CreateUnanimousConsentVoteCall<T: Vote> {
 pub struct SubmitVoteCall<T: Vote> {
     pub vote_id: T::VoteId,
     pub direction: VoterView,
-    pub magnitude: Option<T::Signal>,
     pub justification: Option<<T as Org>::IpfsReference>,
 }
 

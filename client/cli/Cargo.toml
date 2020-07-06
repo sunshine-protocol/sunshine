@@ -21,6 +21,7 @@ textwrap = { version = "0.12.0", features = ["terminal_size"] }
 thiserror = "1.0.20"
 utils-identity = {package = "sunshine-identity-utils", git = "https://github.com/sunshine-protocol/substrate-identity", default-features=false}
 ipfs-embed = {version = "0.1.1", default-features = false}
+util = { package = "sunshine-util", path = "../../pallets-util", default-features = false }
 
 [features]
 default = ["std"]

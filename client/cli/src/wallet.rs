@@ -7,6 +7,7 @@ use crate::{
     Pair,
     Result,
     Runtime,
+    Vote,
 };
 use bounty_client::Account;
 use clap::Clap;
@@ -35,7 +36,7 @@ pub struct WalletBalanceCommand {
 }
 
 #[async_trait]
-impl<T: Runtime + Org + Balances, P: Pair> Command<T, P>
+impl<T: Runtime + Org + Vote + Balances, P: Pair> Command<T, P>
     for WalletBalanceCommand
 where
     <T as System>::AccountId: Ss58Codec,
@@ -58,7 +59,7 @@ pub struct WalletTransferCommand {
 }
 
 #[async_trait]
-impl<T: Runtime + Org + Balances, P: Pair> Command<T, P> for WalletTransferCommand
+impl<T: Runtime + Org + Vote + Balances, P: Pair> Command<T, P> for WalletTransferCommand
 where
     <T as System>::AccountId: Ss58Codec + Into<<T as System>::Address>,
     <<<T as Runtime>::Extra as SignedExtra<T>>::Extra as SignedExtension>::AdditionalSigned:

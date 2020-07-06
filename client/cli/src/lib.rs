@@ -2,6 +2,7 @@ mod error;
 pub mod key;
 pub mod org;
 pub mod shares;
+pub mod vote;
 pub mod wallet;
 
 pub use crate::error::*;
@@ -21,6 +22,7 @@ pub(crate) use bounty_client::{
     AbstractClient,
     Org,
     Suri,
+    Vote,
 };
 pub(crate) use substrate_subxt::{
     sp_core::Pair,
@@ -28,7 +30,7 @@ pub(crate) use substrate_subxt::{
 };
 
 #[async_trait]
-pub trait Command<T: Runtime + Org, P: Pair>: Send + Sync {
+pub trait Command<T: Runtime + Org + Vote, P: Pair>: Send + Sync {
     async fn exec(&self, client: &dyn AbstractClient<T, P>) -> Result<()>;
 }
 
@@ -61,7 +63,7 @@ pub async fn ask_for_phrase(prompt: &str) -> Result<Mnemonic> {
         .map_err(|_| Error::InvalidMnemonic)?)
 }
 
-pub async fn set_device_key<T: Runtime + Org, P: Pair>(
+pub async fn set_device_key<T: Runtime + Org + Vote, P: Pair>(
     client: &dyn AbstractClient<T, P>,
     paperkey: bool,
     suri: Option<&str>,

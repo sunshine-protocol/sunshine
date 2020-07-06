@@ -132,6 +132,17 @@ async fn run() -> Result<(), Error> {
                 }
             }
         }
+        SubCommand::Vote(VoteCommand { cmd }) => {
+            match cmd {
+                VoteSubCommand::CreateThresholdApprovalVote(cmd) => {
+                    cmd.exec(&client).await
+                }
+                VoteSubCommand::CreateUnanimousConsentVote(cmd) => {
+                    cmd.exec(&client).await
+                }
+                VoteSubCommand::SubmitVote(cmd) => cmd.exec(&client).await,
+            }
+        }
         SubCommand::Run => {
             loop {
                 async_std::task::sleep(std::time::Duration::from_millis(100))

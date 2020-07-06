@@ -6581,6 +6581,7 @@ dependencies = [
  "substrate-subxt",
  "sunshine-bounty-client",
  "sunshine-identity-utils 0.1.0 (git+https://github.com/sunshine-protocol/substrate-identity)",
+ "sunshine-util",
  "textwrap 0.12.0",
  "thiserror",
 ]

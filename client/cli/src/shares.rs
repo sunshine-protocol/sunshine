@@ -6,6 +6,7 @@ use crate::{
     Pair,
     Result,
     Runtime,
+    Vote,
 };
 use bounty_client::{
     Account,
@@ -29,7 +30,7 @@ pub struct SharesIssueCommand {
 }
 
 #[async_trait]
-impl<T: Runtime + Org, P: Pair> Command<T, P> for SharesIssueCommand
+impl<T: Runtime + Org + Vote, P: Pair> Command<T, P> for SharesIssueCommand
 where
     <T as System>::AccountId: Ss58Codec,
     <T as Org>::OrgId: From<u64> + Display,
@@ -59,7 +60,7 @@ pub struct SharesBatchIssueCommand {
 }
 
 #[async_trait]
-impl<T: Runtime + Org, P: Pair> Command<T, P> for SharesBatchIssueCommand
+impl<T: Runtime + Org + Vote, P: Pair> Command<T, P> for SharesBatchIssueCommand
 where
     <T as System>::AccountId: Ss58Codec,
     <T as Org>::OrgId: From<u64> + Display,
@@ -89,7 +90,7 @@ pub struct SharesBatchBurnCommand {
 }
 
 #[async_trait]
-impl<T: Runtime + Org, P: Pair> Command<T, P> for SharesBatchBurnCommand
+impl<T: Runtime + Org + Vote, P: Pair> Command<T, P> for SharesBatchBurnCommand
 where
     <T as System>::AccountId: Ss58Codec,
     <T as Org>::OrgId: From<u64> + Display,
@@ -120,7 +121,7 @@ pub struct SharesBurnCommand {
 }
 
 #[async_trait]
-impl<T: Runtime + Org, P: Pair> Command<T, P> for SharesBurnCommand
+impl<T: Runtime + Org + Vote, P: Pair> Command<T, P> for SharesBurnCommand
 where
     <T as System>::AccountId: Ss58Codec,
     <T as Org>::OrgId: From<u64> + Display,
@@ -150,7 +151,7 @@ pub struct SharesReserveCommand {
 }
 
 #[async_trait]
-impl<T: Runtime + Org, P: Pair> Command<T, P> for SharesReserveCommand
+impl<T: Runtime + Org + Vote, P: Pair> Command<T, P> for SharesReserveCommand
 where
     <T as System>::AccountId: Ss58Codec,
     <T as Org>::OrgId: From<u64> + Display,
@@ -176,7 +177,7 @@ pub struct SharesUnReserveCommand {
 }
 
 #[async_trait]
-impl<T: Runtime + Org, P: Pair> Command<T, P> for SharesUnReserveCommand
+impl<T: Runtime + Org + Vote, P: Pair> Command<T, P> for SharesUnReserveCommand
 where
     <T as System>::AccountId: Ss58Codec,
     <T as Org>::OrgId: From<u64> + Display,
@@ -202,7 +203,7 @@ pub struct SharesLockCommand {
 }
 
 #[async_trait]
-impl<T: Runtime + Org, P: Pair> Command<T, P> for SharesLockCommand
+impl<T: Runtime + Org + Vote, P: Pair> Command<T, P> for SharesLockCommand
 where
     <T as System>::AccountId: Ss58Codec,
     <T as Org>::OrgId: From<u64> + Display,
@@ -228,7 +229,7 @@ pub struct SharesUnLockCommand {
 }
 
 #[async_trait]
-impl<T: Runtime + Org, P: Pair> Command<T, P> for SharesUnLockCommand
+impl<T: Runtime + Org + Vote, P: Pair> Command<T, P> for SharesUnLockCommand
 where
     <T as System>::AccountId: Ss58Codec,
     <T as Org>::OrgId: From<u64> + Display,

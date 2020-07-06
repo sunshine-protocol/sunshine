@@ -3,7 +3,10 @@ use crate::{
         Error,
         Result,
     },
-    srml::org::*,
+    srml::{
+        org::*,
+        vote::*,
+    },
 };
 use async_std::sync::{
     Mutex,
@@ -36,10 +39,11 @@ use substrate_subxt::{
     Runtime,
     SignedExtra,
 };
+use util::vote::VoterView;
 
 pub struct Client<T, P, I>
 where
-    T: Runtime + Org,
+    T: Runtime + Org + Vote,
     <<T::Extra as SignedExtra<T>>::Extra as SignedExtension>::AdditionalSigned:
         Send + Sync,
     P: Pair,
@@ -53,7 +57,7 @@ where
 
 impl<T, P, I> Client<T, P, I>
 where
-    T: Runtime + Org,
+    T: Runtime + Org + Vote,
     <T as System>::AccountId: Into<<T as System>::Address> + Ss58Codec,
     T::Signature: Decode + From<P::Signature>,
     <T::Signature as Verify>::Signer:
@@ -107,6 +111,7 @@ where
             *dk.expose_secret(),
         ))))
     }
+    // org logic
     pub async fn register_flat_org(
         &self,
         sudo: Option<<T as System>::AccountId>,
@@ -261,6 +266,66 @@ where
             .unlock_shares_and_watch(&signer, org, who)
             .await?
             .shares_unlocked()
+            .map_err(substrate_subxt::Error::Codec)?
+            .ok_or(Error::EventNotFound)
+    }
+    // vote logic
+    pub async fn create_threshold_approval_vote(
+        &self,
+        topic: Option<<T as Org>::IpfsReference>,
+        organization: T::OrgId,
+        support_requirement: T::Signal,
+        turnout_requirement: Option<T::Signal>,
+        duration: Option<<T as System>::BlockNumber>,
+    ) -> Result<NewVoteStartedEvent<T>> {
+        let signer = self.signer().await?;
+        self.subxt
+            .clone()
+            .create_threshold_approval_vote_and_watch(
+                &signer,
+                topic,
+                organization,
+                support_requirement,
+                turnout_requirement,
+                duration,
+            )
+            .await?
+            .new_vote_started()
+            .map_err(substrate_subxt::Error::Codec)?
+            .ok_or(Error::EventNotFound)
+    }
+    pub async fn create_unanimous_consent_approval_vote(
+        &self,
+        topic: Option<<T as Org>::IpfsReference>,
+        organization: T::OrgId,
+        duration: Option<<T as System>::BlockNumber>,
+    ) -> Result<NewVoteStartedEvent<T>> {
+        let signer = self.signer().await?;
+        self.subxt
+            .clone()
+            .create_unanimous_consent_vote_and_watch(
+                &signer,
+                topic,
+                organization,
+                duration,
+            )
+            .await?
+            .new_vote_started()
+            .map_err(substrate_subxt::Error::Codec)?
+            .ok_or(Error::EventNotFound)
+    }
+    pub async fn submit_vote(
+        &self,
+        vote_id: <T as Vote>::VoteId,
+        direction: VoterView,
+        justification: Option<<T as Org>::IpfsReference>,
+    ) -> Result<VotedEvent<T>> {
+        let signer = self.signer().await?;
+        self.subxt
+            .clone()
+            .submit_vote_and_watch(&signer, vote_id, direction, justification)
+            .await?
+            .voted()
             .map_err(substrate_subxt::Error::Codec)?
             .ok_or(Error::EventNotFound)
     }

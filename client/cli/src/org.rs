@@ -6,6 +6,7 @@ use crate::{
     Pair,
     Result,
     Runtime,
+    Vote,
 };
 use bounty_client::{
     Account,
@@ -38,7 +39,7 @@ pub struct OrgRegisterFlatCommand {
 }
 
 #[async_trait]
-impl<T: Runtime + Org, P: Pair> Command<T, P> for OrgRegisterFlatCommand
+impl<T: Runtime + Org + Vote, P: Pair> Command<T, P> for OrgRegisterFlatCommand
 where
     <T as System>::AccountId: Ss58Codec,
     <T as Org>::OrgId: From<u64> + Display,
@@ -91,7 +92,8 @@ pub struct OrgRegisterWeightedCommand {
 }
 
 #[async_trait]
-impl<T: Runtime + Org, P: Pair> Command<T, P> for OrgRegisterWeightedCommand
+impl<T: Runtime + Org + Vote, P: Pair> Command<T, P>
+    for OrgRegisterWeightedCommand
 where
     <T as System>::AccountId: Ss58Codec,
     <T as Org>::OrgId: From<u64> + Display,

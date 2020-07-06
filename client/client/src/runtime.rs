@@ -1,4 +1,7 @@
-use crate::srml::org::Org;
+use crate::{
+    Org,
+    Vote,
+};
 use core::fmt::Debug;
 use sp_runtime::{
     generic::Header,
@@ -43,6 +46,11 @@ impl Org for Runtime {
     type IpfsReference = CidBytes;
     type OrgId = u64;
     type Shares = u64;
+}
+
+impl Vote for Runtime {
+    type VoteId = u64;
+    type Signal = u64;
 }
 
 impl substrate_subxt::Runtime for Runtime {
