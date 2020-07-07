@@ -43,7 +43,6 @@ use util::{
         MilestoneSubmission,
     },
     court::ResolutionMetadata,
-    vote::ThresholdConfig,
 };
 
 #[module]
@@ -82,7 +81,7 @@ pub struct LiveBountiesStore<T: Bounty> {
         BalanceOf<T>,
         ResolutionMetadata<
             T::OrgId,
-            ThresholdConfig<T::Signal>,
+            T::Signal,
             T::BlockNumber,
         >,
     >)]
@@ -123,13 +122,13 @@ pub struct AccountPostsBountyCall<T: Bounty> {
     pub amount_reserved_for_bounty: BalanceOf<T>,
     pub acceptance_committee: ResolutionMetadata<
         <T as Org>::OrgId,
-        ThresholdConfig<<T as Vote>::Signal>,
+        <T as Vote>::Signal,
         <T as System>::BlockNumber,
     >,
     pub supervision_committee: Option<
         ResolutionMetadata<
             <T as Org>::OrgId,
-            ThresholdConfig<<T as Vote>::Signal>,
+            <T as Vote>::Signal,
             <T as System>::BlockNumber,
         >,
     >,

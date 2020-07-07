@@ -1,15 +1,36 @@
 ![sunset](https://user-images.githubusercontent.com/741807/81438174-95909f00-916c-11ea-9bb2-ca677781069f.jpg)
 > "Over time, all the components of the DAO are likely to be upgraded using its own mechanisms...Given the high requirements for stability, **self-improvement will be critical to the survival of any DAO-based democratic system.**" ~[DAOs, Democracy and Governance](http://merkle.com/papers/DAOdemocracyDraft.pdf) by Ralph Merkle
 
-## What is This?
+This is DAO-chain implementation with Substrate. It is experimental and the design intends to focus on short-term developer contracts. It may become something like Gitcoin + Aragon with organizations using the platform to post bounties and teams using the platform to pursue bounties and eventually even raise funds for their own projects.
 
-Like any other blockchain, this is infrastructure, NOT necessarily a product built on top of infrastructure. It is experimental and the design intends to focus on short-term developer contracts. It could become something like Gitcoin + Aragon with foundations using the platform to post bounties and teams using the platform to pursue bounties and eventually even raise funds for their own projects.
+## Runtime Logic
+> `./pallets/*`
 
-The most useful parts of it right now are the `org` and `vote` modules. I'm pretty happy with how those turned out. The goal was to build something so that I could refer to unweighted (`Vec<AccountId>`) or weighted (`Vec<(AccountId, Shares)>`) groups with a single `OrgId` identifier. Now I pass that identifier around to establish ownership of state associated with the group. The `vote` module allows me to dispatch votes with the given group's membership as the electorate.
+### Org
 
-`court` uses `vote` to dispatch votes to resolve disputes between two parties. Like insurance, one party might only agree to enter into an external contract with the other party if they agree to stake collateral and forfeit that collateral in the event that the dispatched vote resolves against them.
+Every organization encodes membership with ownership expressed as `Vec<(AccountId, Shares)>`. Each org has an `OrgId`, which is used to establish ownership of state associated with the group.
 
-`bank` is an opinionated design for joint bank accounts. It's a bit complicated and, unfortunately, `bounty` inherits this complexity. I have ideas for improving `bank` so it's more readable and the direction is more clear, but am unsure when I'll get back to it.
+Every group has a sudo `Option<AccountId>`. The intention is that this position will be a representative selected by the group to _keep things moving_, but their selection will be easily revocable.
+
+### Vote
+
+Provides functionality for dispatching votes with the given group's membership as the electorate. These votes may be weighted by the group's ownership or 1 account 1 vote.
+
+### Court
+
+Uses `vote` to dispatch votes to resolve disputes between two parties. Like insurance, one party might only agree to enter into an external contract with the other party if they agree to stake collateral and forfeit that collateral in the event that the dispatched vote resolves against them.
+
+### Donate
+
+Allows any `AccountId` to transfer funds to an `OrgId` such that the funds are distributed to the members of the group in proportion to their ownership in the group.
+
+### Bank
+
+Enables orgs to create joint bank accounts with spends governed by group votes.
+
+### Bounty
+
+Allows orgs or individuals to post bounties and govern/supervise execution. Allows orgs or individuals to apply for bounties.
 
 ## Rust/Substrate Onboarding
 

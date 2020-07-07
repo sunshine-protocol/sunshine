@@ -78,10 +78,7 @@ use util::{
         SubmitMilestone,
         SuperviseGrantApplication,
     },
-    vote::{
-        ThresholdConfig,
-        VoteOutcome,
-    },
+    vote::VoteOutcome,
 };
 
 /// The balances type for this module is inherited from bank
@@ -193,7 +190,7 @@ decl_storage! {
                     BalanceOf<T>,
                     ResolutionMetadata<
                         T::OrgId,
-                        ThresholdConfig<T::Signal>,
+                        T::Signal,
                         T::BlockNumber,
                     >,
                 >
@@ -239,13 +236,13 @@ decl_module! {
             amount_reserved_for_bounty: BalanceOf<T>,
             acceptance_committee: ResolutionMetadata<
                 T::OrgId,
-                ThresholdConfig<T::Signal>,
+                T::Signal,
                 T::BlockNumber,
             >,
             supervision_committee: Option<
                 ResolutionMetadata<
                     T::OrgId,
-                    ThresholdConfig<T::Signal>,
+                    T::Signal,
                     T::BlockNumber,
                 >,
             >,
@@ -270,13 +267,13 @@ decl_module! {
             amount_reserved_for_bounty: BalanceOf<T>,
             acceptance_committee: ResolutionMetadata<
                 T::OrgId,
-                ThresholdConfig<T::Signal>,
+                T::Signal,
                 T::BlockNumber,
             >,
             supervision_committee: Option<
                 ResolutionMetadata<
                     T::OrgId,
-                    ThresholdConfig<T::Signal>,
+                    T::Signal,
                     T::BlockNumber,
                 >,
             >,
@@ -571,22 +568,14 @@ impl<T: Trait>
         OnChainTreasuryID,
         BalanceOf<T>,
         T::IpfsReference,
-        ResolutionMetadata<
-            T::OrgId,
-            ThresholdConfig<T::Signal>,
-            T::BlockNumber,
-        >,
+        ResolutionMetadata<T::OrgId, T::Signal, T::BlockNumber>,
     > for Module<T>
 {
     type BountyInfo = BountyInformation<
         BankOrAccount<OnChainTreasuryID, T::AccountId>,
         T::IpfsReference,
         BalanceOf<T>,
-        ResolutionMetadata<
-            T::OrgId,
-            ThresholdConfig<T::Signal>,
-            T::BlockNumber,
-        >,
+        ResolutionMetadata<T::OrgId, T::Signal, T::BlockNumber>,
     >;
     fn post_bounty(
         poster: T::AccountId,
@@ -595,15 +584,11 @@ impl<T: Trait>
         amount_reserved_for_bounty: BalanceOf<T>,
         acceptance_committee: ResolutionMetadata<
             T::OrgId,
-            ThresholdConfig<T::Signal>,
+            T::Signal,
             T::BlockNumber,
         >,
         supervision_committee: Option<
-            ResolutionMetadata<
-                T::OrgId,
-                ThresholdConfig<T::Signal>,
-                T::BlockNumber,
-            >,
+            ResolutionMetadata<T::OrgId, T::Signal, T::BlockNumber>,
         >,
     ) -> Result<Self::BountyId, DispatchError> {
         let bounty_poster: BankOrAccount<OnChainTreasuryID, T::AccountId> =

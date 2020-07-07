@@ -70,60 +70,6 @@ impl<Signal: Copy, Hash: Clone> VoteVector<Signal, VoterView, Hash>
     }
 }
 
-#[derive(
-    Clone,
-    Copy,
-    Default,
-    PartialEq,
-    Eq,
-    Encode,
-    Decode,
-    sp_runtime::RuntimeDebug,
-)]
-/// This is the threshold configuration
-/// - evaluates passage of vote state
-pub struct ThresholdConfig<Signal> {
-    /// Support threshold
-    support_required: Signal,
-    /// Required turnout
-    turnout_required: Option<Signal>,
-}
-
-impl<Signal: PartialOrd + Copy> ThresholdConfig<Signal> {
-    pub fn new(
-        support_required: Signal,
-        turnout_required: Option<Signal>,
-    ) -> Option<Self> {
-        if let Some(turnout_threshold) = turnout_required {
-            if support_required < turnout_threshold {
-                Some(ThresholdConfig {
-                    support_required,
-                    turnout_required,
-                })
-            } else {
-                None
-            }
-        } else {
-            Some(ThresholdConfig {
-                support_required,
-                turnout_required: None,
-            })
-        }
-    }
-    pub fn new_support_threshold(support_required: Signal) -> Self {
-        ThresholdConfig {
-            support_required,
-            turnout_required: None,
-        }
-    }
-    pub fn support_threshold(&self) -> Signal {
-        self.support_required
-    }
-    pub fn turnout_threshold(&self) -> Option<Signal> {
-        self.turnout_required
-    }
-}
-
 #[derive(PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
 /// The state of an ongoing vote
 pub struct VoteState<Signal, BlockNumber, Hash> {
@@ -138,9 +84,9 @@ pub struct VoteState<Signal, BlockNumber, Hash> {
     /// All signal that can vote
     all_possible_turnout: Signal,
     /// The threshold requirement for passage
-    passage_threshold: ThresholdConfig<Signal>,
+    passage_threshold: Signal,
     /// The threshold requirement for rejection
-    rejection_threshold: Option<ThresholdConfig<Signal>>,
+    rejection_threshold: Option<Signal>,
     /// The time at which this vote state is initialized
     initialized: BlockNumber,
     /// The time at which this vote state expires
@@ -167,7 +113,7 @@ impl<
             against: 0u32.into(),
             turnout: 0u32.into(),
             all_possible_turnout: 0u32.into(),
-            passage_threshold: ThresholdConfig::default(),
+            passage_threshold: 0u32.into(),
             rejection_threshold: None,
             initialized: BlockNumber::default(),
             expires: None,
@@ -191,8 +137,8 @@ impl<
     pub fn new(
         topic: Option<Hash>,
         all_possible_turnout: Signal,
-        passage_threshold: ThresholdConfig<Signal>,
-        rejection_threshold: Option<ThresholdConfig<Signal>>,
+        passage_threshold: Signal,
+        rejection_threshold: Option<Signal>,
         initialized: BlockNumber,
         expires: Option<BlockNumber>,
     ) -> VoteState<Signal, BlockNumber, Hash> {
@@ -213,12 +159,10 @@ impl<
         initialized: BlockNumber,
         expires: Option<BlockNumber>,
     ) -> VoteState<Signal, BlockNumber, Hash> {
-        let unanimous_passage_threshold =
-            ThresholdConfig::new_support_threshold(all_possible_turnout);
         VoteState {
             topic,
             all_possible_turnout,
-            passage_threshold: unanimous_passage_threshold,
+            passage_threshold: all_possible_turnout,
             initialized,
             expires,
             outcome: VoteOutcome::Voting,
@@ -243,10 +187,10 @@ impl<
     pub fn expires(&self) -> Option<BlockNumber> {
         self.expires
     }
-    pub fn passage_threshold(&self) -> ThresholdConfig<Signal> {
+    pub fn passage_threshold(&self) -> Signal {
         self.passage_threshold
     }
-    pub fn rejection_threshold(&self) -> Option<ThresholdConfig<Signal>> {
+    pub fn rejection_threshold(&self) -> Option<Signal> {
         self.rejection_threshold
     }
     pub fn outcome(&self) -> VoteOutcome {
@@ -302,15 +246,7 @@ impl<
     > Approved for VoteState<Signal, BlockNumber, Hash>
 {
     fn approved(&self) -> bool {
-        let turnout_exceeds_turnout_threshold = if let Some(turnout_threshold) =
-            self.passage_threshold().turnout_threshold()
-        {
-            self.turnout() >= turnout_threshold
-        } else {
-            true // vacuously true if left unset
-        };
-        self.in_favor() >= self.passage_threshold().support_threshold()
-            && turnout_exceeds_turnout_threshold
+        self.in_favor() >= self.passage_threshold()
     }
 }
 
@@ -328,16 +264,7 @@ impl<
 {
     fn rejected(&self) -> Option<bool> {
         if let Some(rejection_threshold_set) = self.rejection_threshold() {
-            Some(
-                self.against() >= rejection_threshold_set.support_threshold()
-                    && if let Some(turnout_threshold) =
-                        rejection_threshold_set.turnout_threshold()
-                    {
-                        self.turnout() >= turnout_threshold
-                    } else {
-                        true
-                    },
-            )
+            Some(self.against() >= rejection_threshold_set)
         } else {
             // rejection threshold not set!
             None
