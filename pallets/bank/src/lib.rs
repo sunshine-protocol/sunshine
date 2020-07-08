@@ -423,7 +423,7 @@ impl<T: Trait> OpenBankAccount<T::OrgId, BalanceOf<T>, T::AccountId>
         // generate new treasury identifier
         let new_treasury_id = Self::generate_unique_id();
         // create new bank object
-        let new_bank = BankState::new(org, controller.clone());
+        let new_bank = BankState::new(org, controller);
         // perform fallible transfer
         <T as Trait>::Currency::transfer(
             &opener,
@@ -563,7 +563,7 @@ impl<T: Trait> SpendGovernance<OnChainTreasuryID, BalanceOf<T>, T::AccountId>
                     <SpendProposals<T>>::insert(
                         spend_id.bank,
                         spend_id.spend,
-                        new_spend_proposal.clone(),
+                        new_spend_proposal,
                     );
                     Ok(ret_state)
                 } else {

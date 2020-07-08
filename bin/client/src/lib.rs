@@ -1,4 +1,7 @@
 use bounty_client::{
+    Bank,
+    Bounty,
+    Donate,
     Org,
     Vote,
 };
@@ -52,6 +55,19 @@ impl Org for Runtime {
 impl Vote for Runtime {
     type VoteId = u64;
     type Signal = u64;
+}
+
+impl Donate for Runtime {
+    type DCurrency = u128;
+}
+
+impl Bank for Runtime {
+    type SpendId = u64;
+    type Currency = u128;
+}
+
+impl Bounty for Runtime {
+    type BountyId = u64;
 }
 
 impl substrate_subxt::Runtime for Runtime {

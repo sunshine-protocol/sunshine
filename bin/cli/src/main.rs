@@ -143,6 +143,47 @@ async fn run() -> Result<(), Error> {
                 VoteSubCommand::SubmitVote(cmd) => cmd.exec(&client).await,
             }
         }
+        SubCommand::Donate(DonateCommand { cmd }) => {
+            match cmd {
+                DonateSubCommand::DonateWithFee(cmd) => cmd.exec(&client).await,
+                DonateSubCommand::DonateWithoutFee(cmd) => {
+                    cmd.exec(&client).await
+                }
+            }
+        }
+        SubCommand::Bank(BankCommand { cmd }) => {
+            match cmd {
+                BankSubCommand::OpenAccount(cmd) => cmd.exec(&client).await,
+                BankSubCommand::OpenAccount2(cmd) => cmd.exec(&client).await,
+            }
+        }
+        SubCommand::Bounty(BountyCommand { cmd }) => {
+            match cmd {
+                BountySubCommand::PostBounty(cmd) => cmd.exec(&client).await,
+                BountySubCommand::ApplyForBounty(cmd) => {
+                    cmd.exec(&client).await
+                }
+                BountySubCommand::TriggerApplicationReview(cmd) => {
+                    cmd.exec(&client).await
+                }
+                BountySubCommand::SudoApproveApplication(cmd) => {
+                    cmd.exec(&client).await
+                }
+                BountySubCommand::PollApplication(cmd) => {
+                    cmd.exec(&client).await
+                }
+                BountySubCommand::SubmitMilestone(cmd) => {
+                    cmd.exec(&client).await
+                }
+                BountySubCommand::TriggerMilestoneReview(cmd) => {
+                    cmd.exec(&client).await
+                }
+                BountySubCommand::SudoApproveMilestone(cmd) => {
+                    cmd.exec(&client).await
+                }
+                BountySubCommand::PollMilestone(cmd) => cmd.exec(&client).await,
+            }
+        }
         SubCommand::Run => {
             loop {
                 async_std::task::sleep(std::time::Duration::from_millis(100))

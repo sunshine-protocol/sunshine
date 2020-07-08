@@ -1,7 +1,10 @@
 use crate::{
     async_trait,
     AbstractClient,
+    Bank,
+    Bounty,
     Command,
+    Donate,
     Error,
     Org,
     Pair,
@@ -36,8 +39,8 @@ pub struct WalletBalanceCommand {
 }
 
 #[async_trait]
-impl<T: Runtime + Org + Vote + Balances, P: Pair> Command<T, P>
-    for WalletBalanceCommand
+impl<T: Runtime + Org + Vote + Donate + Bank + Bounty + Balances, P: Pair>
+    Command<T, P> for WalletBalanceCommand
 where
     <T as System>::AccountId: Ss58Codec,
 {
@@ -59,7 +62,7 @@ pub struct WalletTransferCommand {
 }
 
 #[async_trait]
-impl<T: Runtime + Org + Vote + Balances, P: Pair> Command<T, P> for WalletTransferCommand
+impl<T: Runtime + Org + Vote + Donate + Bank + Bounty + Balances, P: Pair> Command<T, P> for WalletTransferCommand
 where
     <T as System>::AccountId: Ss58Codec + Into<<T as System>::Address>,
     <<<T as Runtime>::Extra as SignedExtra<T>>::Extra as SignedExtension>::AdditionalSigned:

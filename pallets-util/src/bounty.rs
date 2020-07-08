@@ -361,7 +361,7 @@ impl<
         self.amount
     }
     pub fn state(&self) -> MilestoneStatus<VoteId> {
-        self.state.clone()
+        self.state
     }
     pub fn set_state(&self, state: MilestoneStatus<VoteId>) -> Self {
         MilestoneSubmission {

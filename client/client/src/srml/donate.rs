@@ -20,12 +20,13 @@ use substrate_subxt::system::{
 };
 use util::bank::OnChainTreasuryID;
 
-pub type BalanceOf<T> = <T as Donate>::Currency; // as Currency<<T as System>::AccountId>>::Balance;
+/// The donation balance type
+pub type DonateBalanceOf<T> = <T as Donate>::DCurrency; // as Currency<<T as System>::AccountId>>::Balance;
 
 #[module]
 pub trait Donate: System + Org {
     /// The currency type for on-chain transactions
-    type Currency: Parameter
+    type DCurrency: Parameter
         + Member
         + AtLeast32Bit
         + Codec
@@ -42,11 +43,33 @@ pub trait Donate: System + Org {
 
 #[derive(Clone, Debug, Eq, PartialEq, Encode)]
 pub struct TransactionFee<T: Donate> {
-    pub amount: BalanceOf<T>,
+    pub amount: DonateBalanceOf<T>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Encode)]
 pub struct TreasuryAddress {
     // ModuleId type which implements Debug
     pub module_id: OnChainTreasuryID,
+}
+
+// ~~ Calls and Events ~~
+
+#[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
+pub struct MakePropDonationWithFeeCall<T: Donate> {
+    pub org: <T as Org>::OrgId,
+    pub amt: DonateBalanceOf<T>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
+pub struct MakePropDonationWithoutFeeCall<T: Donate> {
+    pub org: <T as Org>::OrgId,
+    pub amt: DonateBalanceOf<T>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
+pub struct DonationExecutedEvent<T: Donate> {
+    pub sender: <T as System>::AccountId,
+    pub org: <T as Org>::OrgId,
+    pub amt: DonateBalanceOf<T>,
+    pub fee: bool,
 }

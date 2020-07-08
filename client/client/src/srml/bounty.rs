@@ -172,7 +172,7 @@ pub struct ApplicationReviewTriggeredEvent<T: Bounty> {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
-pub struct AccountSudoApprovedApplicationCall<T: Bounty> {
+pub struct AccountSudoApprovesApplicationCall<T: Bounty> {
     pub bounty_id: T::BountyId,
     pub application_id: T::BountyId,
 }
@@ -192,7 +192,7 @@ pub struct PollApplicationCall<T: Bounty> {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
-pub struct PollApplicationEvent<T: Bounty> {
+pub struct ApplicationPolledEvent<T: Bounty> {
     pub poller: <T as System>::AccountId,
     pub bounty_id: T::BountyId,
     pub application_id: T::BountyId,
@@ -237,7 +237,7 @@ pub struct SudoApprovesMilestoneCall<T: Bounty> {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
-pub struct SudoApprovedMilestoneEvent<T: Bounty> {
+pub struct MilestoneSudoApprovedEvent<T: Bounty> {
     pub sudo: <T as System>::AccountId,
     pub bounty_id: T::BountyId,
     pub milestone_id: T::BountyId,

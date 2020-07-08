@@ -3,7 +3,10 @@ use crate::{
     async_trait,
     set_device_key,
     AbstractClient,
+    Bank,
+    Bounty,
     Command,
+    Donate,
     Org,
     Pair,
     Result,
@@ -28,7 +31,8 @@ pub struct KeySetCommand {
 }
 
 #[async_trait]
-impl<T: Runtime + Org + Vote, P: Pair> Command<T, P> for KeySetCommand
+impl<T: Runtime + Org + Vote + Donate + Bank + Bounty, P: Pair> Command<T, P>
+    for KeySetCommand
 where
     P::Seed: Into<[u8; 32]> + Copy + Send + Sync,
 {
@@ -50,7 +54,9 @@ where
 pub struct KeyLockCommand;
 
 #[async_trait]
-impl<T: Runtime + Org + Vote, P: Pair> Command<T, P> for KeyLockCommand {
+impl<T: Runtime + Org + Vote + Donate + Bank + Bounty, P: Pair> Command<T, P>
+    for KeyLockCommand
+{
     async fn exec(&self, client: &dyn AbstractClient<T, P>) -> Result<()> {
         client.lock().await?;
         Ok(())
@@ -61,7 +67,9 @@ impl<T: Runtime + Org + Vote, P: Pair> Command<T, P> for KeyLockCommand {
 pub struct KeyUnlockCommand;
 
 #[async_trait]
-impl<T: Runtime + Org + Vote, P: Pair> Command<T, P> for KeyUnlockCommand {
+impl<T: Runtime + Org + Vote + Donate + Bank + Bounty, P: Pair> Command<T, P>
+    for KeyUnlockCommand
+{
     async fn exec(&self, client: &dyn AbstractClient<T, P>) -> Result<()> {
         let password =
             ask_for_password("Please enter your password (8+ characters):\n")?;

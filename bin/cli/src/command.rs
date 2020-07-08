@@ -1,4 +1,7 @@
 use bounty_cli::{
+    bank,
+    bounty,
+    donate,
     key,
     org,
     shares,
@@ -22,6 +25,9 @@ pub enum SubCommand {
     Wallet(WalletCommand),
     Org(OrgCommand),
     Vote(VoteCommand),
+    Donate(DonateCommand),
+    Bank(BankCommand),
+    Bounty(BountyCommand),
     Run,
 }
 
@@ -83,4 +89,47 @@ pub enum VoteSubCommand {
     CreateThresholdApprovalVote(vote::VoteCreateThresholdApprovalCommand),
     CreateUnanimousConsentVote(vote::VoteCreateUnanimousConsentCommand),
     SubmitVote(vote::VoteSubmitCommand),
+}
+
+#[derive(Clone, Debug, Clap)]
+pub struct DonateCommand {
+    #[clap(subcommand)]
+    pub cmd: DonateSubCommand,
+}
+
+#[derive(Clone, Debug, Clap)]
+pub enum DonateSubCommand {
+    DonateWithFee(donate::DonateWithFeeCommand),
+    DonateWithoutFee(donate::DonateWithoutFeeCommand),
+}
+
+#[derive(Clone, Debug, Clap)]
+pub struct BankCommand {
+    #[clap(subcommand)]
+    pub cmd: BankSubCommand,
+}
+
+#[derive(Clone, Debug, Clap)]
+pub enum BankSubCommand {
+    OpenAccount(bank::BankOpenOrgAccountCommand),
+    OpenAccount2(bank::BankOpenOrgAccountCommand),
+}
+
+#[derive(Clone, Debug, Clap)]
+pub struct BountyCommand {
+    #[clap(subcommand)]
+    pub cmd: BountySubCommand,
+}
+
+#[derive(Clone, Debug, Clap)]
+pub enum BountySubCommand {
+    PostBounty(bounty::BountyPostCommand),
+    ApplyForBounty(bounty::BountyApplicationCommand),
+    TriggerApplicationReview(bounty::BountyTriggerApplicationReviewCommand),
+    SudoApproveApplication(bounty::BountySudoApproveApplicationCommand),
+    PollApplication(bounty::BountyPollApplicationCommand),
+    SubmitMilestone(bounty::BountySubmitMilestoneCommand),
+    TriggerMilestoneReview(bounty::BountyTriggerMilestoneReviewCommand),
+    SudoApproveMilestone(bounty::BountySudoApproveMilestoneCommand),
+    PollMilestone(bounty::BountyPollMilestoneCommand),
 }

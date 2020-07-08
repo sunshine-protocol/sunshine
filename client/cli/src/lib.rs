@@ -1,3 +1,6 @@
+pub mod bank;
+pub mod bounty;
+pub mod donate;
 mod error;
 pub mod key;
 pub mod org;
@@ -20,6 +23,9 @@ use substrate_subxt::system::System;
 pub(crate) use async_trait::async_trait;
 pub(crate) use bounty_client::{
     AbstractClient,
+    Bank,
+    Bounty,
+    Donate,
     Org,
     Suri,
     Vote,
@@ -30,7 +36,9 @@ pub(crate) use substrate_subxt::{
 };
 
 #[async_trait]
-pub trait Command<T: Runtime + Org + Vote, P: Pair>: Send + Sync {
+pub trait Command<T: Runtime + Org + Vote + Donate + Bank + Bounty, P: Pair>:
+    Send + Sync
+{
     async fn exec(&self, client: &dyn AbstractClient<T, P>) -> Result<()>;
 }
 
@@ -63,7 +71,10 @@ pub async fn ask_for_phrase(prompt: &str) -> Result<Mnemonic> {
         .map_err(|_| Error::InvalidMnemonic)?)
 }
 
-pub async fn set_device_key<T: Runtime + Org + Vote, P: Pair>(
+pub async fn set_device_key<
+    T: Runtime + Org + Vote + Donate + Bank + Bounty,
+    P: Pair,
+>(
     client: &dyn AbstractClient<T, P>,
     paperkey: bool,
     suri: Option<&str>,

@@ -1,7 +1,10 @@
 use crate::{
     async_trait,
     AbstractClient,
+    Bank,
+    Bounty,
     Command,
+    Donate,
     Org,
     Pair,
     Result,
@@ -37,7 +40,7 @@ pub struct VoteCreateThresholdApprovalCommand {
 }
 
 #[async_trait]
-impl<T: Runtime + Org + Vote, P: Pair> Command<T, P>
+impl<T: Runtime + Org + Vote + Donate + Bank + Bounty, P: Pair> Command<T, P>
     for VoteCreateThresholdApprovalCommand
 where
     <T as System>::AccountId: Ss58Codec,
@@ -94,7 +97,7 @@ pub struct VoteCreateUnanimousConsentCommand {
 }
 
 #[async_trait]
-impl<T: Runtime + Org + Vote, P: Pair> Command<T, P>
+impl<T: Runtime + Org + Vote + Donate + Bank + Bounty, P: Pair> Command<T, P>
     for VoteCreateUnanimousConsentCommand
 where
     <T as System>::AccountId: Ss58Codec,
@@ -143,7 +146,8 @@ pub struct VoteSubmitCommand {
 }
 
 #[async_trait]
-impl<T: Runtime + Org + Vote, P: Pair> Command<T, P> for VoteSubmitCommand
+impl<T: Runtime + Org + Vote + Donate + Bank + Bounty, P: Pair> Command<T, P>
+    for VoteSubmitCommand
 where
     <T as System>::AccountId: Ss58Codec,
     <T as Org>::IpfsReference: From<CidBytes> + Debug,

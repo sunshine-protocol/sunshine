@@ -1,6 +1,16 @@
-use crate::srml::org::{
-    Org,
-    OrgEventsDecoder,
+use crate::srml::{
+    donate::{
+        Donate,
+        DonateEventsDecoder,
+    },
+    org::{
+        Org,
+        OrgEventsDecoder,
+    },
+    vote::{
+        Vote,
+        VoteEventsDecoder,
+    },
 };
 use codec::{
     Codec,
@@ -22,13 +32,25 @@ use substrate_subxt::system::{
 use util::bank::{
     BankState,
     OnChainTreasuryID,
+    SpendState,
 };
 
 pub type BalanceOf<T> = <T as Bank>::Currency; // as Currency<<T as System>::AccountId>>::Balance;
 
 /// The subset of the bank trait and its inherited traits that the client must inherit
 #[module]
-pub trait Bank: System + Org {
+pub trait Bank: System + Org + Vote + Donate {
+    type SpendId: Parameter
+        + Member
+        + AtLeast32Bit
+        + Codec
+        + Default
+        + Copy
+        + MaybeSerializeDeserialize
+        + Debug
+        + PartialOrd
+        + PartialEq
+        + Zero;
     /// The currency type for on-chain transactions
     type Currency: Parameter
         + Member
@@ -67,17 +89,89 @@ pub struct BankStoresStore<T: Bank> {
 // ~~ (Calls, Events) ~~
 
 #[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
-pub struct RegisterAndSeedForBankAccountCall<T: Bank> {
+pub struct OpenOrgBankAccountCall<T: Bank> {
     pub seed: BalanceOf<T>,
     pub hosting_org: <T as Org>::OrgId,
-    pub bank_operator: Option<<T as Org>::OrgId>,
+    pub bank_operator: Option<<T as System>::AccountId>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
-pub struct RegisteredNewOnChainBankEvent<T: Bank> {
+pub struct OrgBankAccountOpenedEvent<T: Bank> {
     pub seeder: <T as System>::AccountId,
     pub new_bank_id: OnChainTreasuryID,
     pub seed: BalanceOf<T>,
     pub hosting_org: <T as Org>::OrgId,
-    pub bank_operator: Option<<T as Org>::OrgId>,
+    pub bank_operator: Option<<T as System>::AccountId>,
+}
+
+// -- unimplemented in client (TODO) --
+
+#[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
+pub struct MemberProposesSpendCall<T: Bank> {
+    pub bank_id: OnChainTreasuryID,
+    pub amount: BalanceOf<T>,
+    pub dest: <T as System>::AccountId,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
+pub struct SpendProposedByMemberEvent<T: Bank> {
+    pub caller: <T as System>::AccountId,
+    pub bank_id: OnChainTreasuryID,
+    pub spend_id: T::SpendId,
+    pub amount: BalanceOf<T>,
+    pub dest: <T as System>::AccountId,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
+pub struct MemberTriggersVoteOnSpendProposalCall<T: Bank> {
+    pub bank_id: OnChainTreasuryID,
+    pub spend_id: T::SpendId,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
+pub struct VoteTriggeredOnSpendProposalEvent<T: Bank> {
+    pub caller: <T as System>::AccountId,
+    pub bank_id: OnChainTreasuryID,
+    pub spend_id: T::SpendId,
+    pub vote_id: <T as Vote>::VoteId,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
+pub struct MemberSudoApprovesSpendProposalCall<T: Bank> {
+    pub bank_id: OnChainTreasuryID,
+    pub spend_id: T::SpendId,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
+pub struct SudoApprovedSpendProposalEvent<T: Bank> {
+    pub caller: <T as System>::AccountId,
+    pub bank_id: OnChainTreasuryID,
+    pub spend_id: T::SpendId,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
+pub struct MemberPollsSpendProposalCall<T: Bank> {
+    pub bank_id: OnChainTreasuryID,
+    pub spend_id: T::SpendId,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
+pub struct SpendProposalPolledEvent<T: Bank> {
+    pub caller: <T as System>::AccountId,
+    pub bank_id: OnChainTreasuryID,
+    pub spend_id: T::SpendId,
+    pub state: SpendState<<T as Vote>::VoteId>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
+pub struct CloseBankAccountCall<T: Bank> {
+    pub bank_id: OnChainTreasuryID,
+    p: core::marker::PhantomData<T>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
+pub struct BankAccountClosedEvent<T: Bank> {
+    pub closer: <T as System>::AccountId,
+    pub bank_id: OnChainTreasuryID,
+    pub org: <T as Org>::OrgId,
 }

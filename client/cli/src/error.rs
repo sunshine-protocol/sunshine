@@ -29,6 +29,8 @@ pub enum Error {
     PasswordTooShort,
     #[error("Passwords don't match.")]
     PasswordMismatch,
+    #[error("Input error for posting bounty.")]
+    PostBountyInputError,
 }
 
 pub type Result<T> = core::result::Result<T, Error>;
