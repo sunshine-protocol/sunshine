@@ -93,10 +93,6 @@ impl org::Trait for Test {
     type Shares = u64;
     type ReservationLimit = ReservationLimit;
 }
-parameter_types! {
-    pub const MinimumTransfer: u64 = 10;
-    pub const MinimumInitialDeposit: u64 = 20;
-}
 impl vote::Trait for Test {
     type Event = TestEvent;
     type VoteId = u64;
@@ -173,9 +169,7 @@ fn genesis_config_works() {
 fn dispute_registration_works() {
     new_test_ext().execute_with(|| {
         let one = Origin::signed(1);
-        let passage_threshold = ThresholdConfig::new(1, None).unwrap();
-        let new_resolution_metadata =
-            ResolutionMetadata::new(1, passage_threshold, None, None);
+        let new_resolution_metadata = ResolutionMetadata::new(1, 1, None, None);
         assert_noop!(
             Court::register_dispute_type_with_resolution_path(
                 one.clone(),
@@ -219,9 +213,7 @@ fn dispute_raised_works() {
     new_test_ext().execute_with(|| {
         let one = Origin::signed(1);
         let two = Origin::signed(2);
-        let passage_threshold = ThresholdConfig::new(1, None).unwrap();
-        let new_resolution_metadata =
-            ResolutionMetadata::new(1, passage_threshold, None, None);
+        let new_resolution_metadata = ResolutionMetadata::new(1, 1, None, None);
         assert_noop!(
             Court::raise_dispute_to_trigger_vote(two.clone(), 1),
             Error::<Test>::CannotRaiseDisputeIfDisputeStateDNE
@@ -250,9 +242,7 @@ fn poll_dispute_to_execute_outcome_works() {
     new_test_ext().execute_with(|| {
         let one = Origin::signed(1);
         let two = Origin::signed(2);
-        let passage_threshold = ThresholdConfig::new(1, None).unwrap();
-        let new_resolution_metadata =
-            ResolutionMetadata::new(1, passage_threshold, None, None);
+        let new_resolution_metadata = ResolutionMetadata::new(1, 1, None, None);
         assert_ok!(Court::register_dispute_type_with_resolution_path(
             one.clone(),
             10,

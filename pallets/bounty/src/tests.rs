@@ -11,6 +11,7 @@ use sp_core::H256;
 use sp_runtime::{
     testing::Header,
     traits::IdentityLookup,
+    ModuleId,
     Perbill,
 };
 
@@ -32,6 +33,7 @@ impl_outer_event! {
         pallet_balances<T>,
         org<T>,
         vote<T>,
+        donate<T>,
         bank<T>,
         bounty<T>,
     }
@@ -95,15 +97,24 @@ impl vote::Trait for Test {
     type Signal = u64;
 }
 parameter_types! {
-    // minimum deposit to register an on-chain bank
-    pub const MinimumInitialDeposit: u64 = 5;
-    pub const MinimumTransfer: u64 = 5;
+    pub const TransactionFee: u64 = 3;
+    pub const TreasuryModuleId: ModuleId = ModuleId(*b"py/trsry");
+}
+impl donate::Trait for Test {
+    type Event = TestEvent;
+    type Currency = Balances;
+    type TransactionFee = TransactionFee;
+    type Treasury = TreasuryModuleId;
+}
+parameter_types! {
+    pub const MaxTreasuryPerOrg: u32 = 50;
+    pub const MinimumInitialDeposit: u64 = 20;
 }
 impl bank::Trait for Test {
     type Event = TestEvent;
-    type BankId = u64;
+    type SpendId = u64;
     type Currency = Balances;
-    type MinimumTransfer = MinimumTransfer;
+    type MaxTreasuryPerOrg = MaxTreasuryPerOrg;
     type MinimumInitialDeposit = MinimumInitialDeposit;
 }
 parameter_types! {
@@ -120,7 +131,7 @@ pub type Balances = pallet_balances::Module<Test>;
 pub type Org = org::Module<Test>;
 pub type Bounty = Module<Test>;
 
-fn get_last_event() -> RawEvent<u64, u64, u64, u64, u64> {
+fn get_last_event() -> RawEvent<u64, u64, u64, u64> {
     System::events()
         .into_iter()
         .map(|r| r.event)
@@ -178,9 +189,7 @@ fn genesis_config_works() {
 fn account_posts_bounty_works() {
     new_test_ext().execute_with(|| {
         let one = Origin::signed(1);
-        let passage_threshold = ThresholdConfig::new(1, None).unwrap();
-        let new_resolution_metadata =
-            ResolutionMetadata::new(1, passage_threshold, None, None);
+        let new_resolution_metadata = ResolutionMetadata::new(1, 1, None, None);
         assert_noop!(
             Bounty::account_posts_bounty(
                 one.clone(),
@@ -211,9 +220,7 @@ fn account_applies_for_bounty_works() {
     new_test_ext().execute_with(|| {
         let one = Origin::signed(1);
         let two = Origin::signed(2);
-        let passage_threshold = ThresholdConfig::new(1, None).unwrap();
-        let new_resolution_metadata =
-            ResolutionMetadata::new(1, passage_threshold, None, None);
+        let new_resolution_metadata = ResolutionMetadata::new(1, 1, None, None);
         assert_ok!(Bounty::account_posts_bounty(
             one.clone(),
             10u32, // constitution
@@ -248,9 +255,7 @@ fn account_triggers_application_review_works() {
     new_test_ext().execute_with(|| {
         let one = Origin::signed(1);
         let two = Origin::signed(2);
-        let passage_threshold = ThresholdConfig::new(1, None).unwrap();
-        let new_resolution_metadata =
-            ResolutionMetadata::new(1, passage_threshold, None, None);
+        let new_resolution_metadata = ResolutionMetadata::new(1, 1, None, None);
         assert_ok!(Bounty::account_posts_bounty(
             one.clone(),
             10u32, // constitution
@@ -295,9 +300,7 @@ fn account_sudo_approves_application_works() {
     new_test_ext().execute_with(|| {
         let one = Origin::signed(1);
         let two = Origin::signed(2);
-        let passage_threshold = ThresholdConfig::new(1, None).unwrap();
-        let new_resolution_metadata =
-            ResolutionMetadata::new(1, passage_threshold, None, None);
+        let new_resolution_metadata = ResolutionMetadata::new(1, 1, None, None);
         assert_ok!(Bounty::account_posts_bounty(
             one.clone(),
             10u32, // constitution
@@ -342,9 +345,7 @@ fn account_poll_application_works() {
     new_test_ext().execute_with(|| {
         let one = Origin::signed(1);
         let two = Origin::signed(2);
-        let passage_threshold = ThresholdConfig::new(1, None).unwrap();
-        let new_resolution_metadata =
-            ResolutionMetadata::new(1, passage_threshold, None, None);
+        let new_resolution_metadata = ResolutionMetadata::new(1, 1, None, None);
         assert_ok!(Bounty::account_posts_bounty(
             one.clone(),
             10u32, // constitution
@@ -400,9 +401,7 @@ fn milestone_submission_works() {
     new_test_ext().execute_with(|| {
         let one = Origin::signed(1);
         let two = Origin::signed(2);
-        let passage_threshold = ThresholdConfig::new(1, None).unwrap();
-        let new_resolution_metadata =
-            ResolutionMetadata::new(1, passage_threshold, None, None);
+        let new_resolution_metadata = ResolutionMetadata::new(1, 1, None, None);
         assert_ok!(Bounty::account_posts_bounty(
             one.clone(),
             10u32, // constitution
@@ -460,9 +459,7 @@ fn account_triggers_milestone_review_works() {
     new_test_ext().execute_with(|| {
         let one = Origin::signed(1);
         let two = Origin::signed(2);
-        let passage_threshold = ThresholdConfig::new(1, None).unwrap();
-        let new_resolution_metadata =
-            ResolutionMetadata::new(1, passage_threshold, None, None);
+        let new_resolution_metadata = ResolutionMetadata::new(1, 1, None, None);
         assert_ok!(Bounty::account_posts_bounty(
             one.clone(),
             10u32, // constitution
@@ -510,9 +507,7 @@ fn account_sudo_approves_milestone_works() {
     new_test_ext().execute_with(|| {
         let one = Origin::signed(1);
         let two = Origin::signed(2);
-        let passage_threshold = ThresholdConfig::new(1, None).unwrap();
-        let new_resolution_metadata =
-            ResolutionMetadata::new(1, passage_threshold, None, None);
+        let new_resolution_metadata = ResolutionMetadata::new(1, 1, None, None);
         assert_ok!(Bounty::account_posts_bounty(
             one.clone(),
             10u32, // constitution
@@ -545,9 +540,7 @@ fn account_sudo_approves_milestone_works() {
                 1,
                 1,
                 1,
-                MilestoneStatus::ApprovedAndTransferExecuted(
-                    BankOrAccount::Account(2)
-                )
+                MilestoneStatus::ApprovedAndTransferExecuted,
             )
         );
     });

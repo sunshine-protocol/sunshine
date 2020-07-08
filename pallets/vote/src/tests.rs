@@ -128,17 +128,6 @@ fn vote_creation_works() {
             ),
             Error::<Test>::NotAuthorizedToCreateVoteForOrganization
         );
-        assert_noop!(
-            VoteThreshold::create_threshold_approval_vote(
-                one.clone(),
-                None,
-                1,
-                4,
-                Some(3),
-                None
-            ),
-            Error::<Test>::ThresholdInputDoesNotSatisfySupportGEQTurnoutNorms
-        );
         assert_ok!(VoteThreshold::create_threshold_approval_vote(
             one.clone(),
             None,

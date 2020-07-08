@@ -34,18 +34,15 @@ use util::{
     bank::{
         BankOrAccount,
         OnChainTreasuryID,
-        TransferId,
     },
     bounty::{
         ApplicationState,
-        BankSpend,
         BountyInformation,
         GrantApplication,
         MilestoneStatus,
         MilestoneSubmission,
     },
     court::ResolutionMetadata,
-    vote::ThresholdConfig,
 };
 
 #[module]
@@ -77,14 +74,14 @@ pub struct BountyLowerBoundConstant<T: Bounty> {
 pub struct LiveBountiesStore<T: Bounty> {
     #[store(returns = BountyInformation<
         BankOrAccount<
-            BankSpend<TransferId<T::BankId>>,
+            OnChainTreasuryID,
             T::AccountId
         >,
         T::IpfsReference,
         BalanceOf<T>,
         ResolutionMetadata<
             T::OrgId,
-            ThresholdConfig<T::Signal>,
+            T::Signal,
             T::BlockNumber,
         >,
     >)]
@@ -111,7 +108,7 @@ pub struct MilestoneSubmissionsStore<T: Bounty> {
         T::BountyId,
         T::IpfsReference,
         BalanceOf<T>,
-        MilestoneStatus<T::VoteId, BankOrAccount<TransferId<T::BankId>, T::AccountId>>
+        MilestoneStatus<T::VoteId>
     >)]
     pub bounty_id: T::BountyId,
     pub milestone_id: T::BountyId,
@@ -125,13 +122,13 @@ pub struct AccountPostsBountyCall<T: Bounty> {
     pub amount_reserved_for_bounty: BalanceOf<T>,
     pub acceptance_committee: ResolutionMetadata<
         <T as Org>::OrgId,
-        ThresholdConfig<<T as Vote>::Signal>,
+        <T as Vote>::Signal,
         <T as System>::BlockNumber,
     >,
     pub supervision_committee: Option<
         ResolutionMetadata<
             <T as Org>::OrgId,
-            ThresholdConfig<<T as Vote>::Signal>,
+            <T as Vote>::Signal,
             <T as System>::BlockNumber,
         >,
     >,
@@ -175,7 +172,7 @@ pub struct ApplicationReviewTriggeredEvent<T: Bounty> {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
-pub struct AccountSudoApprovedApplicationCall<T: Bounty> {
+pub struct AccountSudoApprovesApplicationCall<T: Bounty> {
     pub bounty_id: T::BountyId,
     pub application_id: T::BountyId,
 }
@@ -195,7 +192,7 @@ pub struct PollApplicationCall<T: Bounty> {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
-pub struct PollApplicationEvent<T: Bounty> {
+pub struct ApplicationPolledEvent<T: Bounty> {
     pub poller: <T as System>::AccountId,
     pub bounty_id: T::BountyId,
     pub application_id: T::BountyId,
@@ -230,10 +227,7 @@ pub struct MilestoneReviewTriggeredEvent<T: Bounty> {
     pub trigger: <T as System>::AccountId,
     pub bounty_id: T::BountyId,
     pub milestone_id: T::BountyId,
-    pub milestone_state: MilestoneStatus<
-        T::VoteId,
-        BankOrAccount<TransferId<T::BankId>, T::AccountId>,
-    >,
+    pub milestone_state: MilestoneStatus<T::VoteId>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
@@ -243,14 +237,11 @@ pub struct SudoApprovesMilestoneCall<T: Bounty> {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
-pub struct SudoApprovedMilestoneEvent<T: Bounty> {
+pub struct MilestoneSudoApprovedEvent<T: Bounty> {
     pub sudo: <T as System>::AccountId,
     pub bounty_id: T::BountyId,
     pub milestone_id: T::BountyId,
-    pub milestone_state: MilestoneStatus<
-        T::VoteId,
-        BankOrAccount<TransferId<T::BankId>, T::AccountId>,
-    >,
+    pub milestone_state: MilestoneStatus<T::VoteId>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
@@ -264,8 +255,5 @@ pub struct MilestonePolledEvent<T: Bounty> {
     pub poller: <T as System>::AccountId,
     pub bounty_id: T::BountyId,
     pub milestone_id: T::BountyId,
-    pub milestone_state: MilestoneStatus<
-        T::VoteId,
-        BankOrAccount<TransferId<T::BankId>, T::AccountId>,
-    >,
+    pub milestone_state: MilestoneStatus<T::VoteId>,
 }

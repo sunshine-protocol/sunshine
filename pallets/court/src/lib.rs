@@ -54,10 +54,7 @@ use util::{
         OpenVote,
         RegisterDisputeType,
     },
-    vote::{
-        ThresholdConfig,
-        VoteOutcome,
-    },
+    vote::VoteOutcome,
 };
 
 /// The balances type for this module
@@ -142,7 +139,7 @@ decl_storage! {
                         T::BlockNumber,
                         ResolutionMetadata<
                             T::OrgId,
-                            ThresholdConfig<Signal<T>>,
+                            Signal<T>,
                             T::BlockNumber
                         >,
                         DisputeState<VoteId<T>>,
@@ -161,7 +158,7 @@ decl_module! {
             origin,
             amount_to_lock: BalanceOf<T>,
             dispute_raiser: T::AccountId,
-            resolution_metadata: ResolutionMetadata<T::OrgId, ThresholdConfig<Signal<T>>, T::BlockNumber>,
+            resolution_metadata: ResolutionMetadata<T::OrgId, Signal<T>, T::BlockNumber>,
             expiry: Option<T::BlockNumber>,
         ) -> DispatchResult {
             let locker = ensure_signed(origin)?;
@@ -275,11 +272,7 @@ impl<T: Trait>
     RegisterDisputeType<
         T::AccountId,
         BalanceOf<T>,
-        ResolutionMetadata<
-            T::OrgId,
-            ThresholdConfig<Signal<T>>,
-            T::BlockNumber,
-        >,
+        ResolutionMetadata<T::OrgId, Signal<T>, T::BlockNumber>,
         T::BlockNumber,
     > for Module<T>
 {
@@ -290,7 +283,7 @@ impl<T: Trait>
         dispute_raiser: T::AccountId,
         resolution_path: ResolutionMetadata<
             T::OrgId,
-            ThresholdConfig<Signal<T>>,
+            Signal<T>,
             T::BlockNumber,
         >,
         expiry: Option<T::BlockNumber>,

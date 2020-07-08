@@ -57,7 +57,6 @@ use util::{
         VoteVector,
     },
     vote::{
-        ThresholdConfig,
         Vote,
         VoteOutcome,
         VoteState,
@@ -120,8 +119,6 @@ decl_error! {
         CannotMintSignalBecauseMembershipShapeDNE,
         OldVoteDirectionEqualsNewVoteDirectionSoNoChange,
         CannotUpdateVoteTopicIfVoteStateDNE,
-        // the turnout threshold must be less than the support threshold
-        ThresholdInputDoesNotSatisfySupportGEQTurnoutNorms,
         // i.e. changing from any non-NoVote view to NoVote (some vote changes aren't allowed to simplify assumptions)
         VoteChangeNotSupported,
     }
@@ -161,17 +158,15 @@ decl_module! {
             topic: Option<T::IpfsReference>,
             organization: T::OrgId,
             support_requirement: T::Signal,
-            turnout_requirement: Option<T::Signal>,
+            rejection_requirement: Option<T::Signal>,
             duration: Option<T::BlockNumber>,
         ) -> DispatchResult {
             let vote_creator = ensure_signed(origin)?;
             // default authentication is organization supervisor or sudo key
             let authentication: bool = <org::Module<T>>::is_organization_supervisor(organization, &vote_creator);
             ensure!(authentication, Error::<T>::NotAuthorizedToCreateVoteForOrganization);
-            let threshold_config = ThresholdConfig::new(support_requirement, turnout_requirement)
-                .ok_or(Error::<T>::ThresholdInputDoesNotSatisfySupportGEQTurnoutNorms)?;
             // share weighted count threshold vote started
-            let new_vote_id = Self::open_vote(topic, organization, threshold_config, None, duration)?;
+            let new_vote_id = Self::open_vote(topic, organization, support_requirement, rejection_requirement, duration)?;
             // emit event
             Self::deposit_event(RawEvent::NewVoteStarted(vote_creator, organization, new_vote_id));
             Ok(())
@@ -235,20 +230,15 @@ impl<T: Trait> GetVoteOutcome<T::VoteId> for Module<T> {
     }
 }
 
-impl<T: Trait>
-    OpenVote<
-        T::OrgId,
-        ThresholdConfig<T::Signal>,
-        T::BlockNumber,
-        T::IpfsReference,
-    > for Module<T>
+impl<T: Trait> OpenVote<T::OrgId, T::Signal, T::BlockNumber, T::IpfsReference>
+    for Module<T>
 {
     type VoteIdentifier = T::VoteId;
     fn open_vote(
         topic: Option<T::IpfsReference>,
         organization: T::OrgId,
-        passage_threshold: ThresholdConfig<T::Signal>,
-        rejection_threshold: Option<ThresholdConfig<T::Signal>>,
+        passage_threshold: T::Signal,
+        rejection_threshold: Option<T::Signal>,
         duration: Option<T::BlockNumber>,
     ) -> Result<Self::VoteIdentifier, DispatchError> {
         // calculate `initialized` and `expires` fields for vote state
@@ -334,7 +324,7 @@ impl<T: Trait>
     MintableSignal<
         T::AccountId,
         T::OrgId,
-        ThresholdConfig<T::Signal>,
+        T::Signal,
         T::BlockNumber,
         T::VoteId,
         T::IpfsReference,
@@ -423,7 +413,7 @@ impl<T: Trait>
     VoteOnProposal<
         T::AccountId,
         T::OrgId,
-        ThresholdConfig<T::Signal>,
+        T::Signal,
         T::BlockNumber,
         T::VoteId,
         T::IpfsReference,

@@ -1,19 +1,17 @@
-use crate::{
-    command::*,
-    error::Error,
+use crate::command::*;
+use bounty_cli::{
+    key::KeySetCommand,
+    set_device_key,
+    Command,
+    Error,
 };
 use clap::Clap;
-use core::convert::TryInto;
 use exitfailure::ExitDisplay;
 use ipfs_embed::{
     Config,
     Store,
 };
 use keybase_keystore::{
-    bip39::{
-        Language,
-        Mnemonic,
-    },
     DeviceKey,
     KeyStore,
     Password,
@@ -25,15 +23,16 @@ use substrate_subxt::{
     sp_core::sr25519,
     ClientBuilder,
 };
-use sunshine_client::Runtime;
+use test_client::Runtime;
 
 mod command;
-mod error;
 
 #[async_std::main]
 async fn main() -> Result<(), ExitDisplay<Error>> {
     Ok(run().await?)
 }
+
+type Client = test_client::bounty::Client<Runtime, sr25519::Pair, Store>;
 
 struct Paths {
     _root: PathBuf,
@@ -59,8 +58,6 @@ impl Paths {
         })
     }
 }
-
-type Client = sunshine_client::Client<Runtime, sr25519::Pair, Store>;
 
 async fn run() -> Result<(), Error> {
     env_logger::init();
@@ -95,87 +92,96 @@ async fn run() -> Result<(), Error> {
                     suri,
                     paperkey,
                 }) => {
-                    if client.has_device_key().await && !force {
-                        return Err(Error::HasDeviceKey)
-                    }
-                    let password = ask_for_password(
-                        "Please enter a new password (8+ characters):\n",
-                    )?;
-                    if password.expose_secret().len() < 8 {
-                        return Err(Error::PasswordTooShort)
-                    }
-                    let dk = if paperkey {
-                        let mnemonic =
-                            ask_for_phrase("Please enter your backup phrase:")
-                                .await?;
-                        DeviceKey::from_mnemonic(&mnemonic)
-                            .map_err(|_| Error::InvalidMnemonic)?
-                    } else if let Some(suri) = &suri {
-                        DeviceKey::from_seed(suri.0)
-                    } else {
-                        DeviceKey::generate().await
-                    };
-                    let account_id =
-                        client.set_device_key(&dk, &password, force).await?;
-                    let account_id_str = account_id.to_string();
-                    println!("Your device id is {}", &account_id_str);
+                    let account_id = set_device_key(
+                        &client,
+                        paperkey,
+                        suri.as_deref(),
+                        force,
+                    )
+                    .await?;
+                    println!("your device key is {}", account_id.to_string());
+                    Ok(())
                 }
-                _ => {
-                    println!("lock and unlock left unimplemented for now");
-                }
+                KeySubCommand::Unlock(cmd) => cmd.exec(&client).await,
+                KeySubCommand::Lock(cmd) => cmd.exec(&client).await,
             }
         }
         SubCommand::Wallet(WalletCommand { cmd }) => {
             match cmd {
-                WalletSubCommand::IssueShares(WalletIssueSharesCommand {
-                    organization,
-                    who,
-                    shares,
-                }) => {
-                    let org: OrgId = organization.try_into()?;
-                    let recipient: AccountId = who
-                        .into_account()
-                        .ok_or(Error::AccountIdConversionFailed)?;
-                    let new_shares_minted: Shares = shares.try_into()?;
-                    let event = client
-                        .issue_shares(org, recipient, new_shares_minted)
-                        .await?;
-                    println!(
-                        "{} shares issued for {} account in {} org",
-                        event.shares, event.who, event.organization
-                    );
+                WalletSubCommand::GetAccountBalance(cmd) => {
+                    cmd.exec(&client).await
                 }
-                WalletSubCommand::ReserveShares(
-                    WalletReserveSharesCommand { organization, who },
-                ) => {
-                    let org: OrgId = organization.try_into()?;
-                    let owner_of_reserved_shares: AccountId = who
-                        .into_account()
-                        .ok_or(Error::AccountIdConversionFailed)?;
-                    let event = client
-                        .reserve_shares(org, &owner_of_reserved_shares)
-                        .await?;
-                    println!(
-                        "{} shares reserved for {} account in {} org",
-                        event.amount_reserved, event.who, event.organization
-                    );
+                WalletSubCommand::TransferBalance(cmd) => {
+                    cmd.exec(&client).await
                 }
-                WalletSubCommand::LockShares(WalletLockSharesCommand {
-                    organization,
-                    who,
-                }) => {
-                    let org: OrgId = organization.try_into()?;
-                    let owner_of_locked_shares: AccountId = who
-                        .into_account()
-                        .ok_or(Error::AccountIdConversionFailed)?;
-                    let event = client
-                        .lock_shares(org, &owner_of_locked_shares)
-                        .await?;
-                    println!(
-                        "shares locked for {} account in {} org",
-                        event.who, event.organization
-                    );
+            }
+        }
+        SubCommand::Org(OrgCommand { cmd }) => {
+            match cmd {
+                OrgSubCommand::IssueShares(cmd) => cmd.exec(&client).await,
+                OrgSubCommand::BurnShares(cmd) => cmd.exec(&client).await,
+                OrgSubCommand::BatchIssueShares(cmd) => cmd.exec(&client).await,
+                OrgSubCommand::BatchBurnShares(cmd) => cmd.exec(&client).await,
+                OrgSubCommand::ReserveShares(cmd) => cmd.exec(&client).await,
+                OrgSubCommand::UnreserveShares(cmd) => cmd.exec(&client).await,
+                OrgSubCommand::LockShares(cmd) => cmd.exec(&client).await,
+                OrgSubCommand::UnlockShares(cmd) => cmd.exec(&client).await,
+                OrgSubCommand::RegisterFlatOrg(cmd) => cmd.exec(&client).await,
+                OrgSubCommand::RegisterWeightedOrg(cmd) => {
+                    cmd.exec(&client).await
                 }
+            }
+        }
+        SubCommand::Vote(VoteCommand { cmd }) => {
+            match cmd {
+                VoteSubCommand::CreateThresholdApprovalVote(cmd) => {
+                    cmd.exec(&client).await
+                }
+                VoteSubCommand::CreateUnanimousConsentVote(cmd) => {
+                    cmd.exec(&client).await
+                }
+                VoteSubCommand::SubmitVote(cmd) => cmd.exec(&client).await,
+            }
+        }
+        SubCommand::Donate(DonateCommand { cmd }) => {
+            match cmd {
+                DonateSubCommand::DonateWithFee(cmd) => cmd.exec(&client).await,
+                DonateSubCommand::DonateWithoutFee(cmd) => {
+                    cmd.exec(&client).await
+                }
+            }
+        }
+        SubCommand::Bank(BankCommand { cmd }) => {
+            match cmd {
+                BankSubCommand::OpenAccount(cmd) => cmd.exec(&client).await,
+                BankSubCommand::OpenAccount2(cmd) => cmd.exec(&client).await,
+            }
+        }
+        SubCommand::Bounty(BountyCommand { cmd }) => {
+            match cmd {
+                BountySubCommand::PostBounty(cmd) => cmd.exec(&client).await,
+                BountySubCommand::ApplyForBounty(cmd) => {
+                    cmd.exec(&client).await
+                }
+                BountySubCommand::TriggerApplicationReview(cmd) => {
+                    cmd.exec(&client).await
+                }
+                BountySubCommand::SudoApproveApplication(cmd) => {
+                    cmd.exec(&client).await
+                }
+                BountySubCommand::PollApplication(cmd) => {
+                    cmd.exec(&client).await
+                }
+                BountySubCommand::SubmitMilestone(cmd) => {
+                    cmd.exec(&client).await
+                }
+                BountySubCommand::TriggerMilestoneReview(cmd) => {
+                    cmd.exec(&client).await
+                }
+                BountySubCommand::SudoApproveMilestone(cmd) => {
+                    cmd.exec(&client).await
+                }
+                BountySubCommand::PollMilestone(cmd) => cmd.exec(&client).await,
             }
         }
         SubCommand::Run => {
@@ -185,24 +191,4 @@ async fn run() -> Result<(), Error> {
             }
         }
     }
-    Ok(())
-}
-
-fn ask_for_password(prompt: &str) -> Result<Password, Error> {
-    Ok(Password::from(rpassword::prompt_password_stdout(prompt)?))
-}
-
-async fn ask_for_phrase(prompt: &str) -> Result<Mnemonic, Error> {
-    println!("{}", prompt);
-    let mut words = Vec::with_capacity(24);
-    while words.len() < 24 {
-        let mut line = String::new();
-        async_std::io::stdin().read_line(&mut line).await?;
-        for word in line.split(' ') {
-            words.push(word.trim().to_string());
-        }
-    }
-    println!();
-    Ok(Mnemonic::from_phrase(&words.join(" "), Language::English)
-        .map_err(|_| Error::InvalidMnemonic)?)
 }

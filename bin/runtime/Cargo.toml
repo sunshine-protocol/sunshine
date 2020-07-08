@@ -4,7 +4,7 @@ edition = '2018'
 homepage = 'https://joinsunshine.com'
 license = 'GPLv3'
 name = 'suntime'
-repository = 'https://github.com/sunshine-protocol/sunshine-node/'
+repository = 'https://github.com/sunshine-protocol/sunshine-bounty/'
 version = '0.0.1'
 
 [features]
@@ -76,6 +76,7 @@ util = { package = "sunshine-util", path = "../../pallets-util", default-feature
 org = {package = "sunshine-org", path = "../../pallets/org", default-features=false }
 vote = { package = "sunshine-vote", path = "../../pallets/vote", default-features=false}
 court = { package = "sunshine-court", path = "../../pallets/court", default-features=false}
+donate = { package = "sunshine-donate", path = "../../pallets/donate", default-features=false}
 bank = { package = "sunshine-bank", path = "../../pallets/bank", default-features=false}
 bounty = { package = "sunshine-bounty", path = "../../pallets/bounty", default-features=false}
 serde = { version = "1.0.114", features = ["derive"], optional = true }

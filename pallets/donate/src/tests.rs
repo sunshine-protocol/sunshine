@@ -11,13 +11,11 @@ use sp_core::H256;
 use sp_runtime::{
     testing::Header,
     traits::IdentityLookup,
-    ModuleId,
     Perbill,
 };
 use util::{
     organization::Organization,
     traits::GroupMembership,
-    vote::VoterView,
 };
 
 // type aliases
@@ -28,7 +26,7 @@ impl_outer_origin! {
     pub enum Origin for Test where system = frame_system {}
 }
 
-mod bank {
+mod donate {
     pub use super::super::*;
 }
 
@@ -37,9 +35,7 @@ impl_outer_event! {
         system<T>,
         pallet_balances<T>,
         org<T>,
-        vote<T>,
         donate<T>,
-        bank<T>,
     }
 }
 
@@ -95,44 +91,27 @@ impl org::Trait for Test {
     type Shares = u64;
     type ReservationLimit = ReservationLimit;
 }
-impl vote::Trait for Test {
-    type Event = TestEvent;
-    type VoteId = u64;
-    type Signal = u64;
-}
 parameter_types! {
     pub const TransactionFee: u64 = 3;
     pub const TreasuryModuleId: ModuleId = ModuleId(*b"py/trsry");
 }
-impl donate::Trait for Test {
+impl Trait for Test {
     type Event = TestEvent;
     type Currency = Balances;
     type TransactionFee = TransactionFee;
     type Treasury = TreasuryModuleId;
 }
-parameter_types! {
-    pub const MaxTreasuryPerOrg: u32 = 50;
-    pub const MinimumInitialDeposit: u64 = 20;
-}
-impl Trait for Test {
-    type Event = TestEvent;
-    type SpendId = u64;
-    type Currency = Balances;
-    type MaxTreasuryPerOrg = MaxTreasuryPerOrg;
-    type MinimumInitialDeposit = MinimumInitialDeposit;
-}
 pub type System = system::Module<Test>;
 pub type Balances = pallet_balances::Module<Test>;
 pub type Org = org::Module<Test>;
-pub type Vote = vote::Module<Test>;
-pub type Bank = Module<Test>;
+pub type Donate = Module<Test>;
 
-fn get_last_event() -> RawEvent<u64, u64, u64, u64, u64> {
+fn get_last_event() -> RawEvent<u64, u64, u64> {
     System::events()
         .into_iter()
         .map(|r| r.event)
         .filter_map(|e| {
-            if let TestEvent::bank(inner) = e {
+            if let TestEvent::donate(inner) = e {
                 Some(inner)
             } else {
                 None
@@ -180,81 +159,21 @@ fn genesis_config_works() {
 }
 
 #[test]
-fn opening_bank_account_works() {
+fn check_donation_accuracy() {
     new_test_ext().execute_with(|| {
         let one = Origin::signed(1);
-        let sixnine = Origin::signed(69);
-        assert_noop!(
-            Bank::open_org_bank_account(sixnine, 1, 10, None),
-            Error::<Test>::NotPermittedToOpenBankAccountForOrg
-        );
-        assert_noop!(
-            Bank::open_org_bank_account(one.clone(), 1, 19, None),
-            Error::<Test>::CannotOpenBankAccountIfDepositIsBelowModuleMinimum
-        );
-        let total_bank_count = Bank::total_bank_count();
-        assert_eq!(total_bank_count, 0u32);
-        assert_ok!(Bank::open_org_bank_account(one.clone(), 1, 20, None));
-        assert_eq!(
-            get_last_event(),
-            RawEvent::BankAccountOpened(
-                1,
-                OnChainTreasuryID([0, 0, 0, 0, 0, 0, 0, 1]),
-                20,
-                1,
-                None
-            ),
-        );
-        let total_bank_count = Bank::total_bank_count();
-        assert_eq!(total_bank_count, 1u32);
-    });
-}
-
-#[test]
-fn spend_governance_works() {
-    new_test_ext().execute_with(|| {
-        let one = Origin::signed(1);
-        assert_ok!(Bank::open_org_bank_account(one.clone(), 1, 20, None));
-        assert_noop!(
-            Bank::propose_spend(
-                OnChainTreasuryID([0, 0, 0, 0, 0, 0, 0, 2]),
-                10,
-                3,
-            ),
-            Error::<Test>::BankMustExistToProposeSpendFrom
-        );
-        assert_ok!(Bank::propose_spend(
-            OnChainTreasuryID([0, 0, 0, 0, 0, 0, 0, 1]),
-            10,
-            3,
-        ));
-        let first_spend_proposal =
-            BankSpend::new(OnChainTreasuryID([0, 0, 0, 0, 0, 0, 0, 1]), 1);
-        assert_ok!(Bank::trigger_vote_on_spend_proposal(
-            first_spend_proposal.clone()
-        ));
-        for i in 1u64..7u64 {
-            let i_origin = Origin::signed(i);
-            assert_ok!(Vote::submit_vote(
-                i_origin,
-                1,
-                VoterView::InFavor,
-                None
-            ));
-        }
-        assert_eq!(Balances::total_balance(&3), 200);
-        assert_ok!(Bank::poll_spend_proposal(first_spend_proposal.clone()));
-        // spend executed
-        assert_eq!(Balances::total_balance(&3), 210);
-        assert_ok!(Bank::propose_spend(
-            OnChainTreasuryID([0, 0, 0, 0, 0, 0, 0, 1]),
-            5,
-            4,
-        ));
-        let second_spend_proposal =
-            BankSpend::new(OnChainTreasuryID([0, 0, 0, 0, 0, 0, 0, 1]), 2);
-        assert_eq!(Balances::total_balance(&4), 75);
-        assert_ok!(Bank::sudo_approve_spend_proposal(second_spend_proposal));
-        assert_eq!(Balances::total_balance(&4), 80);
+        let two = Origin::signed(2);
+        assert_eq!(Balances::total_balance(&2), 98);
+        assert_ok!(Donate::make_prop_donation_without_fee(one, 1, 60));
+        // 98 + 10 = 108
+        assert_eq!(Balances::total_balance(&2), 108);
+        // 100 - 60 + 10 = 50
+        assert_eq!(Balances::total_balance(&1), 50);
+        assert_ok!(Donate::make_prop_donation_without_fee(two, 1, 20));
+        // 50 + (20/6 ~= 3) = 53
+        assert_eq!(Balances::total_balance(&1), 53);
+        // 108 - 18 + 3 = 93
+        // the remainder 2 wasn't transferred
+        assert_eq!(Balances::total_balance(&2), 93);
     });
 }

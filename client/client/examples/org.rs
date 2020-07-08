@@ -17,13 +17,12 @@ use sp_core::{
 };
 use substrate_subxt::{
     sp_runtime,
+    Client,
     ClientBuilder,
 };
 use sunshine_client::{
     Error,
-    Extra,
     Runtime,
-    SunClient,
 };
 
 pub type RuntimeExtra = Extra<Runtime>;
@@ -53,7 +52,7 @@ async fn main() -> Result<(), Error> {
         &DeviceKey::from_seed(alice_seed),
         &Password::from("password".to_string()),
     )?;
-    let client = SunClient::<_, _, _, Pair, _>::new(keystore, subxt, ipld);
+    let client = Client::<Runtime>::new(keystore, subxt, ipld);
     let account_id = sp_keyring::AccountKeyring::Alice.to_account_id();
     println!("This is Alice's Account Identifier: {}", account_id);
     let event = client.issue_shares(1u64, account_id, 10u64).await?;

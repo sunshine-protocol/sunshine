@@ -11,7 +11,6 @@ pub mod bank;
 pub mod bounty;
 pub mod court;
 pub mod organization;
-pub mod proposal;
 pub mod share;
 pub mod traits;
 pub mod vote;

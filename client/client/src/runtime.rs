@@ -1,4 +1,10 @@
-use crate::srml::org::Org;
+use crate::{
+    Bank,
+    Bounty,
+    Donate,
+    Org,
+    Vote,
+};
 use core::fmt::Debug;
 use sp_runtime::{
     generic::Header,
@@ -43,6 +49,24 @@ impl Org for Runtime {
     type IpfsReference = CidBytes;
     type OrgId = u64;
     type Shares = u64;
+}
+
+impl Vote for Runtime {
+    type VoteId = u64;
+    type Signal = u64;
+}
+
+impl Donate for Runtime {
+    type DCurrency = u128;
+}
+
+impl Bank for Runtime {
+    type SpendId = u64;
+    type Currency = u128;
+}
+
+impl Bounty for Runtime {
+    type BountyId = u64;
 }
 
 impl substrate_subxt::Runtime for Runtime {

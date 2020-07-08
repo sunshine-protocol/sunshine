@@ -1,28 +1,15 @@
-use crate::error::Error;
+use bounty_cli::{
+    bank,
+    bounty,
+    donate,
+    key,
+    org,
+    shares,
+    vote,
+    wallet,
+};
 use clap::Clap;
-use std::{
-    path::PathBuf,
-    str::FromStr,
-};
-use substrate_subxt::{
-    sp_core::{
-        crypto::Ss58Codec,
-        sr25519,
-        Pair,
-    },
-    sp_runtime::{
-        traits::{
-            IdentifyAccount,
-            Verify,
-        },
-        MultiSignature,
-    },
-};
-
-pub type AccountId =
-    <<MultiSignature as Verify>::Signer as IdentifyAccount>::AccountId;
-pub type OrgId = u64;
-pub type Shares = u64;
+use std::path::PathBuf;
 
 #[derive(Clone, Debug, Clap)]
 pub struct Opts {
@@ -36,6 +23,11 @@ pub struct Opts {
 pub enum SubCommand {
     Key(KeyCommand),
     Wallet(WalletCommand),
+    Org(OrgCommand),
+    Vote(VoteCommand),
+    Donate(DonateCommand),
+    Bank(BankCommand),
+    Bounty(BountyCommand),
     Run,
 }
 
@@ -47,24 +39,9 @@ pub struct KeyCommand {
 
 #[derive(Clone, Debug, Clap)]
 pub enum KeySubCommand {
-    Set(KeySetCommand),
-    Unlock,
-    Lock,
-}
-
-#[derive(Clone, Debug, Clap)]
-pub struct KeySetCommand {
-    /// Overwrite existing keys.
-    #[clap(short = "f", long = "force")]
-    pub force: bool,
-
-    /// Suri.
-    #[clap(long = "suri")]
-    pub suri: Option<Suri>,
-
-    /// Paperkey.
-    #[clap(long = "paperkey")]
-    pub paperkey: bool,
+    Set(key::KeySetCommand),
+    Unlock(key::KeyUnlockCommand),
+    Lock(key::KeyLockCommand),
 }
 
 #[derive(Clone, Debug, Clap)]
@@ -75,112 +52,84 @@ pub struct WalletCommand {
 
 #[derive(Clone, Debug, Clap)]
 pub enum WalletSubCommand {
-    IssueShares(WalletIssueSharesCommand),
-    ReserveShares(WalletReserveSharesCommand),
-    LockShares(WalletLockSharesCommand),
+    GetAccountBalance(wallet::WalletBalanceCommand),
+    TransferBalance(wallet::WalletTransferCommand),
 }
 
 #[derive(Clone, Debug, Clap)]
-pub struct WalletIssueSharesCommand {
-    pub organization: Identifier,
-    pub who: Identifier,
-    pub shares: Identifier,
+pub struct OrgCommand {
+    #[clap(subcommand)]
+    pub cmd: OrgSubCommand,
 }
 
 #[derive(Clone, Debug, Clap)]
-pub struct WalletReserveSharesCommand {
-    pub organization: Identifier,
-    pub who: Identifier,
+pub enum OrgSubCommand {
+    // share stuff
+    IssueShares(shares::SharesIssueCommand),
+    BurnShares(shares::SharesBurnCommand),
+    BatchIssueShares(shares::SharesBatchIssueCommand),
+    BatchBurnShares(shares::SharesBatchBurnCommand),
+    ReserveShares(shares::SharesReserveCommand),
+    UnreserveShares(shares::SharesUnReserveCommand),
+    LockShares(shares::SharesLockCommand),
+    UnlockShares(shares::SharesUnLockCommand),
+    // full org stuff
+    RegisterFlatOrg(org::OrgRegisterFlatCommand),
+    RegisterWeightedOrg(org::OrgRegisterWeightedCommand),
 }
 
 #[derive(Clone, Debug, Clap)]
-pub struct WalletLockSharesCommand {
-    pub organization: Identifier,
-    pub who: Identifier,
+pub struct VoteCommand {
+    #[clap(subcommand)]
+    pub cmd: VoteSubCommand,
 }
 
-#[derive(Clone)]
-pub struct Suri(pub [u8; 32]);
-
-impl core::fmt::Debug for Suri {
-    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
-        write!(f, "*****")
-    }
+#[derive(Clone, Debug, Clap)]
+pub enum VoteSubCommand {
+    CreateThresholdApprovalVote(vote::VoteCreateThresholdApprovalCommand),
+    CreateUnanimousConsentVote(vote::VoteCreateUnanimousConsentCommand),
+    SubmitVote(vote::VoteSubmitCommand),
 }
 
-impl FromStr for Suri {
-    type Err = Error;
-
-    fn from_str(string: &str) -> Result<Self, Self::Err> {
-        let (_, seed) = sr25519::Pair::from_string_with_seed(string, None)
-            .map_err(|_| Error::InvalidSuri)?;
-        Ok(Self(seed.unwrap()))
-    }
+#[derive(Clone, Debug, Clap)]
+pub struct DonateCommand {
+    #[clap(subcommand)]
+    pub cmd: DonateSubCommand,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct Ss58(pub AccountId);
-
-impl FromStr for Ss58 {
-    type Err = Error;
-
-    fn from_str(string: &str) -> Result<Self, Self::Err> {
-        Ok(Self(
-            AccountId::from_string(string).map_err(|_| Error::InvalidSs58)?,
-        ))
-    }
+#[derive(Clone, Debug, Clap)]
+pub enum DonateSubCommand {
+    DonateWithFee(donate::DonateWithFeeCommand),
+    DonateWithoutFee(donate::DonateWithoutFeeCommand),
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum Identifier {
-    Org(OrgId),
-    Account(AccountId),
-    Shares(Shares),
+#[derive(Clone, Debug, Clap)]
+pub struct BankCommand {
+    #[clap(subcommand)]
+    pub cmd: BankSubCommand,
 }
 
-impl Identifier {
-    pub fn into_account(self) -> Option<AccountId> {
-        match self {
-            Identifier::Account(acc) => Some(acc),
-            _ => None,
-        }
-    }
+#[derive(Clone, Debug, Clap)]
+pub enum BankSubCommand {
+    OpenAccount(bank::BankOpenOrgAccountCommand),
+    OpenAccount2(bank::BankOpenOrgAccountCommand),
 }
 
-use core::convert::TryInto;
-impl TryInto<u64> for Identifier {
-    type Error = Error;
-    fn try_into(self) -> Result<u64, Self::Error> {
-        match self {
-            Identifier::Org(org_id) => Ok(org_id),
-            Identifier::Shares(shares) => Ok(shares),
-            _ => Err(Error::IdentifierConversionFailed),
-        }
-    }
+#[derive(Clone, Debug, Clap)]
+pub struct BountyCommand {
+    #[clap(subcommand)]
+    pub cmd: BountySubCommand,
 }
 
-impl core::fmt::Display for Identifier {
-    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
-        match self {
-            Self::Org(org_id) => write!(f, "{}", org_id),
-            Self::Account(account_id) => write!(f, "{}", account_id),
-            Self::Shares(shares) => write!(f, "{}", shares),
-        }
-    }
-}
-
-impl FromStr for Identifier {
-    type Err = Error;
-
-    fn from_str(string: &str) -> Result<Self, Self::Err> {
-        if let Ok(org_id) = OrgId::from_str(string) {
-            Ok(Self::Org(org_id))
-        } else if let Ok(shares) = Shares::from_str(string) {
-            Ok(Self::Shares(shares))
-        } else if let Ok(Ss58(account_id)) = Ss58::from_str(string) {
-            Ok(Self::Account(account_id))
-        } else {
-            Err(Error::UnparsedIdentifier)
-        }
-    }
+#[derive(Clone, Debug, Clap)]
+pub enum BountySubCommand {
+    PostBounty(bounty::BountyPostCommand),
+    ApplyForBounty(bounty::BountyApplicationCommand),
+    TriggerApplicationReview(bounty::BountyTriggerApplicationReviewCommand),
+    SudoApproveApplication(bounty::BountySudoApproveApplicationCommand),
+    PollApplication(bounty::BountyPollApplicationCommand),
+    SubmitMilestone(bounty::BountySubmitMilestoneCommand),
+    TriggerMilestoneReview(bounty::BountyTriggerMilestoneReviewCommand),
+    SudoApproveMilestone(bounty::BountySudoApproveMilestoneCommand),
+    PollMilestone(bounty::BountyPollMilestoneCommand),
 }
