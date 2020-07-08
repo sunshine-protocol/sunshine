@@ -6547,7 +6547,7 @@ dependencies = [
 
 [[package]]
 name = "sunshine-bounty"
-version = "0.0.5"
+version = "0.0.6"
 dependencies = [
  "clear_on_drop",
  "frame-support",
@@ -6619,7 +6619,7 @@ dependencies = [
 
 [[package]]
 name = "sunshine-court"
-version = "0.0.5"
+version = "0.0.6"
 dependencies = [
  "clear_on_drop",
  "frame-support",
@@ -6638,7 +6638,7 @@ dependencies = [
 
 [[package]]
 name = "sunshine-donate"
-version = "0.0.1"
+version = "0.0.6"
 dependencies = [
  "clear_on_drop",
  "frame-support",
@@ -6675,7 +6675,7 @@ dependencies = [
 
 [[package]]
 name = "sunshine-org"
-version = "0.0.5"
+version = "0.0.6"
 dependencies = [
  "clear_on_drop",
  "frame-support",
@@ -6693,7 +6693,7 @@ dependencies = [
 
 [[package]]
 name = "sunshine-util"
-version = "0.0.5"
+version = "0.0.6"
 dependencies = [
  "clear_on_drop",
  "derive-new",
@@ -6708,7 +6708,7 @@ dependencies = [
 
 [[package]]
 name = "sunshine-vote"
-version = "0.0.5"
+version = "0.0.6"
 dependencies = [
  "clear_on_drop",
  "frame-support",
