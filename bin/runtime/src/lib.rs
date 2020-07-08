@@ -414,7 +414,6 @@ impl bank::Trait for Runtime {
 }
 pub use bounty;
 parameter_types! {
-    // minimum deposit to register an on-chain bank
     pub const BountyLowerBound: u128 = 5;
 }
 impl bounty::Trait for Runtime {
