@@ -380,7 +380,7 @@ impl vote::Trait for Runtime {
     type Signal = u64;
 }
 parameter_types! {
-    pub const MinimumDisputeAmount: u64 = 10;
+    pub const MinimumDisputeAmount: u128 = 10;
 }
 pub use court;
 impl court::Trait for Runtime {
@@ -391,7 +391,7 @@ impl court::Trait for Runtime {
 }
 pub use donate;
 parameter_types! {
-    pub const TransactionFee: u64 = 3;
+    pub const TransactionFee: u128 = 3;
     pub const TreasuryModuleId: ModuleId = ModuleId(*b"py/trsry");
 }
 impl donate::Trait for Runtime {
@@ -403,7 +403,7 @@ impl donate::Trait for Runtime {
 pub use bank;
 parameter_types! {
     pub const MaxTreasuryPerOrg: u32 = 50;
-    pub const MinimumInitialDeposit: u64 = 20;
+    pub const MinimumInitialDeposit: u128 = 20;
 }
 impl bank::Trait for Runtime {
     type Event = Event;
@@ -414,8 +414,7 @@ impl bank::Trait for Runtime {
 }
 pub use bounty;
 parameter_types! {
-    // minimum deposit to register an on-chain bank
-    pub const BountyLowerBound: u64 = 5;
+    pub const BountyLowerBound: u128 = 5;
 }
 impl bounty::Trait for Runtime {
     type Event = Event;
