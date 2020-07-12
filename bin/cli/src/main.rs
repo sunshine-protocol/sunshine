@@ -45,7 +45,7 @@ impl Paths {
         let root = if let Some(root) = root {
             root
         } else {
-            dirs2::config_dir()
+            dirs::config_dir()
                 .ok_or(Error::ConfigDirNotFound)?
                 .join("sunshine-cli")
         };
