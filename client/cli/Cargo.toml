@@ -16,8 +16,8 @@ bounty-client = { version = "0.1.0", package = "sunshine-bounty-client", path = 
 keystore = {package = "keybase-keystore", git = "https://github.com/sunshine-protocol/substrate-identity"}
 libipld = "0.3.0"
 rpassword = "4.0.5"
-substrate-subxt = "0.10.0"
-textwrap = { version = "0.12.0", features = ["terminal_size"] }
+substrate-subxt = "0.10.1"
+textwrap = { version = "0.12.1", features = ["terminal_size"] }
 thiserror = "1.0.20"
 utils-identity = {package = "sunshine-identity-utils", git = "https://github.com/sunshine-protocol/substrate-identity", default-features=false}
 ipfs-embed = {version = "0.1.1", default-features = false}
