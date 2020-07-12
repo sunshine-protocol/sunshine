@@ -21,11 +21,6 @@ use ipld_block_builder::{
     BlockBuilder,
     Codec,
 };
-use keystore::{
-    DeviceKey,
-    KeyStore,
-    Password,
-};
 use libipld::store::Store;
 use substrate_subxt::{
     sp_core::crypto::{
@@ -42,7 +37,7 @@ use substrate_subxt::{
     Runtime,
     SignedExtra,
 };
-use util::{
+use sunshine_bounty_utils::{
     court::ResolutionMetadata,
     vote::VoterView,
 };
@@ -56,7 +51,6 @@ where
     I: Store,
 {
     _marker: PhantomData<P>,
-    keystore: RwLock<KeyStore>,
     subxt: substrate_subxt::Client<T>,
     pub cache: Mutex<BlockBuilder<I, Codec>>,
 }
@@ -76,47 +70,16 @@ where
     I: Store,
 {
     pub fn new(
-        keystore: KeyStore,
         subxt: substrate_subxt::Client<T>,
         store: I,
     ) -> Self {
         Self {
             _marker: PhantomData,
-            keystore: RwLock::new(keystore),
             subxt,
             cache: Mutex::new(BlockBuilder::new(store, Codec::new())),
         }
     }
-    /// Set device key, directly from substrate-identity to use with keystore
-    pub async fn has_device_key(&self) -> bool {
-        self.keystore.read().await.is_initialized().await
-    }
-    /// Set device key, directly from substrate-identity to use with keystore
-    pub async fn set_device_key(
-        &self,
-        dk: &DeviceKey,
-        password: &Password,
-        force: bool,
-    ) -> Result<<T as System>::AccountId> {
-        if self.keystore.read().await.is_initialized().await && !force {
-            return Err(Error::KeystoreInitialized)
-        }
-        let pair = P::from_seed(&P::Seed::from(*dk.expose_secret()));
-        self.keystore
-            .write()
-            .await
-            .initialize(&dk, &password)
-            .await?;
-        Ok(pair.public().into())
-    }
-    /// Returns a signer for alice
-    pub async fn signer(&self) -> Result<PairSigner<T, P>> {
-        // fetch device key from disk every time to make sure account is unlocked.
-        let dk = self.keystore.read().await.device_key().await?;
-        Ok(PairSigner::new(P::from_seed(&P::Seed::from(
-            *dk.expose_secret(),
-        ))))
-    }
+
     // org logic
     pub async fn register_flat_org(
         &self,

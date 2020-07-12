@@ -15,11 +15,11 @@ use sp_runtime::traits::{
     Zero,
 };
 use std::fmt::Debug;
-use substrate_subxt::system::{
+use substrate_subxt::{sp_runtime, system::{
     System,
     SystemEventsDecoder,
-};
-use util::vote::{
+}};
+use sunshine_bounty_utils::vote::{
     Vote as VoteVector,
     VoteState,
     VoterView,

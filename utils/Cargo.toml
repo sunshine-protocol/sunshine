@@ -1,5 +1,5 @@
 [package]
-name = "sunshine-util"
+name = "sunshine-bounty-utils"
 version = "0.0.6"
 authors = ["Amar Singh <asinghchrony@protonmail.com>"]
 edition = "2018"

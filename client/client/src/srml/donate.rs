@@ -14,11 +14,11 @@ use sp_runtime::traits::{
     Zero,
 };
 use std::fmt::Debug;
-use substrate_subxt::system::{
+use substrate_subxt::{sp_runtime, system::{
     System,
     SystemEventsDecoder,
-};
-use util::bank::OnChainTreasuryID;
+}};
+use sunshine_bounty_utils::bank::OnChainTreasuryID;
 
 /// The donation balance type
 pub type DonateBalanceOf<T> = <T as Donate>::DCurrency; // as Currency<<T as System>::AccountId>>::Balance;

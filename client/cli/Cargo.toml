@@ -8,7 +8,6 @@ license = "GPL-3.0"
 repository = "https://github.com/sunshine-protocol/sunshine-bounty"
 
 [dependencies]
-async-std = { version = "=1.5.0", features = ["attributes"] }
 async-trait = "0.1.36"
 clap = "3.0.0-beta.1"
 codec = { version = "1.3.0", package = "parity-scale-codec" }
@@ -20,8 +19,7 @@ substrate-subxt = "0.10.1"
 textwrap = { version = "0.12.1", features = ["terminal_size"] }
 thiserror = "1.0.20"
 utils-identity = {package = "sunshine-identity-utils", git = "https://github.com/sunshine-protocol/substrate-identity", default-features=false}
-ipfs-embed = {version = "0.1.1", default-features = false}
-util = { package = "sunshine-util", path = "../../pallets-util", default-features = false }
+util = { package = "sunshine-bounty-utils", path = "../../utils", default-features = false }
 
 [features]
 default = ["std"]

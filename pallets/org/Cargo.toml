@@ -16,7 +16,7 @@ sp-std = { version = "2.0.0-rc4", default-features = false }
 sp-runtime = { version = "2.0.0-rc4", default-features = false }
 frame-support = { version = "2.0.0-rc4", default-features = false }
 frame-system = { version = "2.0.0-rc4", default-features = false }
-util = { package = "sunshine-util", path = "../../pallets-util", default-features=false}
+util = { package = "sunshine-bounty-utils", path = "../../utils", default-features=false}
 orml-utilities = { version = "0.1.1", default-features = false }
 clear_on_drop = { version = "0.2.4", features = ["no_cc"] }	# https://github.com/paritytech/substrate/issues/4179
 

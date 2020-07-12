@@ -11,10 +11,6 @@ use crate::{
 };
 use async_trait::async_trait;
 use codec::Decode;
-use keystore::{
-    DeviceKey,
-    Password,
-};
 use libipld::store::Store;
 use sp_core::crypto::{
     Pair,
@@ -34,9 +30,8 @@ use substrate_subxt::{
     system::System,
     Runtime,
     SignedExtra,
-    Signer,
 };
-use util::{
+use sunshine_bounty_utils::{
     court::ResolutionMetadata,
     vote::VoterView,
 };
@@ -47,17 +42,6 @@ pub trait AbstractClient<
     P: Pair,
 >: Send + Sync
 {
-    // local key security
-    async fn has_device_key(&self) -> bool;
-    async fn set_device_key(
-        &self,
-        dk: &DeviceKey,
-        password: &Password,
-        force: bool,
-    ) -> Result<T::AccountId>;
-    async fn signer(&self) -> Result<Box<dyn Signer<T> + Send + Sync>>;
-    async fn lock(&self) -> Result<()>;
-    async fn unlock(&self, password: &Password) -> Result<()>;
     // org module calls
     async fn register_flat_org(
         &self,
@@ -241,31 +225,6 @@ where
     <P as Pair>::Seed: From<[u8; 32]>,
     I: Store + Send + Sync,
 {
-    async fn has_device_key(&self) -> bool {
-        self.has_device_key().await
-    }
-
-    async fn set_device_key(
-        &self,
-        dk: &DeviceKey,
-        password: &Password,
-        force: bool,
-    ) -> Result<T::AccountId> {
-        self.set_device_key(dk, password, force).await
-    }
-
-    async fn signer(&self) -> Result<Box<dyn Signer<T> + Send + Sync>> {
-        Ok(Box::new(self.signer().await?))
-    }
-
-    async fn lock(&self) -> Result<()> {
-        self.lock().await
-    }
-
-    async fn unlock(&self, password: &Password) -> Result<()> {
-        self.unlock(password).await
-    }
-
     async fn register_flat_org(
         &self,
         sudo: Option<<T as System>::AccountId>,

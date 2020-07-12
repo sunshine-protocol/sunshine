@@ -15,7 +15,7 @@ sp-std = { version = "2.0.0-rc4", default-features = false }
 sp-runtime = { version = "2.0.0-rc4", default-features = false }
 frame-support = { version = "2.0.0-rc4", default-features = false }
 frame-system = { version = "2.0.0-rc4", default-features = false }
-util = { package = "sunshine-util", path = "../../pallets-util", default-features=false}
+util = { package = "sunshine-bounty-utils", path = "../../utils", default-features=false}
 org = { package = "sunshine-org", path = "../org", default-features=false}
 vote = { package = "sunshine-vote", path = "../vote", default-features=false}
 donate = { package = "sunshine-donate", path = "../donate", default-features=false}
