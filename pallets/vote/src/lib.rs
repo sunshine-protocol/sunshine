@@ -25,7 +25,7 @@ use frame_system::{
 };
 use sp_runtime::{
     traits::{
-        AtLeast32Bit,
+        AtLeast32BitUnsigned,
         CheckedSub,
         MaybeSerializeDeserialize,
         Member,
@@ -33,6 +33,7 @@ use sp_runtime::{
     },
     DispatchError,
     DispatchResult,
+    Permill,
 };
 use sp_std::{
     fmt::Debug,
@@ -49,6 +50,7 @@ use util::{
         GetVoteOutcome,
         IDIsAvailable,
         MintableSignal,
+        OpenThresholdVote,
         OpenVote,
         OrganizationSupervisorPermissions,
         ShareInformation,
@@ -71,7 +73,7 @@ pub trait Trait: frame_system::Trait + org::Trait {
     /// The vote identifier
     type VoteId: Parameter
         + Member
-        + AtLeast32Bit
+        + AtLeast32BitUnsigned
         + Codec
         + Default
         + Copy
@@ -84,7 +86,7 @@ pub trait Trait: frame_system::Trait + org::Trait {
     /// The metric for voting power
     type Signal: Parameter
         + Member
-        + AtLeast32Bit
+        + AtLeast32BitUnsigned
         + Codec
         + Default
         + Copy
@@ -153,7 +155,7 @@ decl_module! {
         fn deposit_event() = default;
 
         #[weight = 0]
-        pub fn create_threshold_approval_vote(
+        pub fn create_threshold_signal_vote(
             origin,
             topic: Option<T::IpfsReference>,
             organization: T::OrgId,
@@ -162,7 +164,7 @@ decl_module! {
             duration: Option<T::BlockNumber>,
         ) -> DispatchResult {
             let vote_creator = ensure_signed(origin)?;
-            // default authentication is organization supervisor or sudo key
+            // default authentication is organization supervisor
             let authentication: bool = <org::Module<T>>::is_organization_supervisor(organization, &vote_creator);
             ensure!(authentication, Error::<T>::NotAuthorizedToCreateVoteForOrganization);
             // share weighted count threshold vote started
@@ -172,14 +174,33 @@ decl_module! {
             Ok(())
         }
         #[weight = 0]
-        pub fn create_unanimous_consent_approval_vote(
+        pub fn create_threshold_pct_vote(
+            origin,
+            topic: Option<T::IpfsReference>,
+            organization: T::OrgId,
+            support_threshold: Permill,
+            rejection_threshold: Option<Permill>,
+            duration: Option<T::BlockNumber>,
+        ) -> DispatchResult {
+            let vote_creator = ensure_signed(origin)?;
+            // default authentication is organization supervisor
+            let authentication: bool = <org::Module<T>>::is_organization_supervisor(organization, &vote_creator);
+            ensure!(authentication, Error::<T>::NotAuthorizedToCreateVoteForOrganization);
+            // percentage threshold vote started
+            let new_vote_id = Self::open_threshold_vote(topic, organization, support_threshold, rejection_threshold, duration)?;
+            // emit event
+            Self::deposit_event(RawEvent::NewVoteStarted(vote_creator, organization, new_vote_id));
+            Ok(())
+        }
+        #[weight = 0]
+        pub fn create_unanimous_consent_vote(
             origin,
             topic: Option<T::IpfsReference>,
             organization: T::OrgId,
             duration: Option<T::BlockNumber>,
         ) -> DispatchResult {
             let vote_creator = ensure_signed(origin)?;
-            // default authentication is organization supervisor or sudo key
+            // default authentication is organization supervisor
             let authentication: bool = <org::Module<T>>::is_organization_supervisor(organization, &vote_creator);
             ensure!(authentication, Error::<T>::NotAuthorizedToCreateVoteForOrganization);
             let new_vote_id = Self::open_unanimous_consent(topic, organization, duration)?;
@@ -290,6 +311,58 @@ impl<T: Trait> OpenVote<T::OrgId, T::Signal, T::BlockNumber, T::IpfsReference>
         let new_vote_state = VoteState::new_unanimous_consent(
             topic,
             total_possible_turnout,
+            now,
+            ends,
+        );
+        // insert the VoteState
+        <VoteStates<T>>::insert(new_vote_id, new_vote_state);
+        // increment open vote count
+        let new_vote_count = <OpenVoteCounter>::get() + 1u32;
+        <OpenVoteCounter>::put(new_vote_count);
+        Ok(new_vote_id)
+    }
+}
+
+impl<T: Trait>
+    OpenThresholdVote<
+        T::OrgId,
+        T::Signal,
+        T::BlockNumber,
+        T::IpfsReference,
+        Permill,
+    > for Module<T>
+{
+    fn open_threshold_vote(
+        topic: Option<T::IpfsReference>,
+        organization: T::OrgId,
+        passage_threshold_pct: Permill,
+        rejection_threshold_pct: Option<Permill>,
+        duration: Option<T::BlockNumber>,
+    ) -> Result<Self::VoteIdentifier, DispatchError> {
+        // calculate `initialized` and `expires` fields for vote state
+        let now = system::Module::<T>::block_number();
+        let ends: Option<T::BlockNumber> = if let Some(time_to_add) = duration {
+            Some(now + time_to_add)
+        } else {
+            None
+        };
+        // generate new vote_id
+        let new_vote_id = Self::generate_unique_id();
+        // by default, this call mints signal based on weighted ownership in group
+        let total_possible_turnout =
+            Self::batch_mint_signal(new_vote_id, organization)?;
+        let passage_threshold = passage_threshold_pct * total_possible_turnout;
+        let rejection_threshold = if let Some(r_t) = rejection_threshold_pct {
+            Some(r_t * total_possible_turnout)
+        } else {
+            None
+        };
+        // instantiate new VoteState with threshold and temporal metadata
+        let new_vote_state = VoteState::new(
+            topic,
+            total_possible_turnout,
+            passage_threshold,
+            rejection_threshold,
             now,
             ends,
         );

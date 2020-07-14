@@ -8,7 +8,6 @@ pub type Result<T> = sp_std::result::Result<T, DispatchError>;
 
 // === Unique ID Logic, Useful for All Modules ===
 
-/// For the module to implement for its id type (typically a common double_map prefix key)
 pub trait IDIsAvailable<Id> {
     fn id_is_available(id: Id) -> bool;
 }
@@ -170,6 +169,18 @@ pub trait OpenVote<OrgId, Threshold, BlockNumber, Hash> {
     fn open_unanimous_consent(
         topic: Option<Hash>,
         organization: OrgId,
+        duration: Option<BlockNumber>,
+    ) -> Result<Self::VoteIdentifier>;
+}
+
+pub trait OpenThresholdVote<OrgId, Threshold, BlockNumber, Hash, FineArithmetic>:
+    OpenVote<OrgId, Threshold, BlockNumber, Hash>
+{
+    fn open_threshold_vote(
+        topic: Option<Hash>,
+        organization: OrgId,
+        passage_threshold_pct: FineArithmetic,
+        rejection_threshold_pct: Option<FineArithmetic>,
         duration: Option<BlockNumber>,
     ) -> Result<Self::VoteIdentifier>;
 }
