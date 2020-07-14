@@ -323,58 +323,6 @@ impl<T: Trait> OpenVote<T::OrgId, T::Signal, T::BlockNumber, T::IpfsReference>
     }
 }
 
-impl<T: Trait>
-    OpenThresholdVote<
-        T::OrgId,
-        T::Signal,
-        T::BlockNumber,
-        T::IpfsReference,
-        Permill,
-    > for Module<T>
-{
-    fn open_threshold_vote(
-        topic: Option<T::IpfsReference>,
-        organization: T::OrgId,
-        passage_threshold_pct: Permill,
-        rejection_threshold_pct: Option<Permill>,
-        duration: Option<T::BlockNumber>,
-    ) -> Result<Self::VoteIdentifier, DispatchError> {
-        // calculate `initialized` and `expires` fields for vote state
-        let now = system::Module::<T>::block_number();
-        let ends: Option<T::BlockNumber> = if let Some(time_to_add) = duration {
-            Some(now + time_to_add)
-        } else {
-            None
-        };
-        // generate new vote_id
-        let new_vote_id = Self::generate_unique_id();
-        // by default, this call mints signal based on weighted ownership in group
-        let total_possible_turnout =
-            Self::batch_mint_signal(new_vote_id, organization)?;
-        let passage_threshold = passage_threshold_pct * total_possible_turnout;
-        let rejection_threshold = if let Some(r_t) = rejection_threshold_pct {
-            Some(r_t * total_possible_turnout)
-        } else {
-            None
-        };
-        // instantiate new VoteState with threshold and temporal metadata
-        let new_vote_state = VoteState::new(
-            topic,
-            total_possible_turnout,
-            passage_threshold,
-            rejection_threshold,
-            now,
-            ends,
-        );
-        // insert the VoteState
-        <VoteStates<T>>::insert(new_vote_id, new_vote_state);
-        // increment open vote count
-        let new_vote_count = <OpenVoteCounter>::get() + 1u32;
-        <OpenVoteCounter>::put(new_vote_count);
-        Ok(new_vote_id)
-    }
-}
-
 impl<T: Trait> UpdateVoteTopic<T::VoteId, T::IpfsReference> for Module<T> {
     fn update_vote_topic(
         vote_id: T::VoteId,
@@ -525,5 +473,237 @@ impl<T: Trait>
         // commit new vote state to storage
         <VoteStates<T>>::insert(vote_id, new_state);
         Ok(())
+    }
+}
+
+impl<T: Trait>
+    OpenThresholdVote<
+        T::OrgId,
+        T::Signal,
+        T::BlockNumber,
+        T::IpfsReference,
+        Permill,
+    > for Module<T>
+{
+    const THIRTY_FOUR_PERCENT: Permill = Permill::from_percent(34);
+    const FIFTY_ONE_PERCENT: Permill = Permill::from_percent(51);
+    const SIXTY_SEVEN_PERCENT: Permill = Permill::from_percent(67);
+    const SEVENTY_SIX_PERCENT: Permill = Permill::from_percent(76);
+    const NINETY_ONE_PERCENT: Permill = Permill::from_percent(91);
+    fn open_threshold_vote(
+        topic: Option<T::IpfsReference>,
+        organization: T::OrgId,
+        passage_threshold_pct: Permill,
+        rejection_threshold_pct: Option<Permill>,
+        duration: Option<T::BlockNumber>,
+    ) -> Result<Self::VoteIdentifier, DispatchError> {
+        // calculate `initialized` and `expires` fields for vote state
+        let now = system::Module::<T>::block_number();
+        let ends: Option<T::BlockNumber> = if let Some(time_to_add) = duration {
+            Some(now + time_to_add)
+        } else {
+            None
+        };
+        // generate new vote_id
+        let new_vote_id = Self::generate_unique_id();
+        // by default, this call mints signal based on weighted ownership in group
+        let total_possible_turnout =
+            Self::batch_mint_signal(new_vote_id, organization)?;
+        let passage_threshold = passage_threshold_pct * total_possible_turnout;
+        let rejection_threshold = if let Some(r_t) = rejection_threshold_pct {
+            Some(r_t * total_possible_turnout)
+        } else {
+            None
+        };
+        // instantiate new VoteState with threshold and temporal metadata
+        let new_vote_state = VoteState::new(
+            topic,
+            total_possible_turnout,
+            passage_threshold,
+            rejection_threshold,
+            now,
+            ends,
+        );
+        // insert the VoteState
+        <VoteStates<T>>::insert(new_vote_id, new_vote_state);
+        // increment open vote count
+        let new_vote_count = <OpenVoteCounter>::get() + 1u32;
+        <OpenVoteCounter>::put(new_vote_count);
+        Ok(new_vote_id)
+    }
+    fn open_34_pct_passage_threshold_vote(
+        topic: Option<T::IpfsReference>,
+        organization: T::OrgId,
+        duration: Option<T::BlockNumber>,
+    ) -> Result<Self::VoteIdentifier, DispatchError> {
+        // calculate `initialized` and `expires` fields for vote state
+        let now = system::Module::<T>::block_number();
+        let ends: Option<T::BlockNumber> = if let Some(time_to_add) = duration {
+            Some(now + time_to_add)
+        } else {
+            None
+        };
+        // generate new vote_id
+        let new_vote_id = Self::generate_unique_id();
+        // by default, this call mints signal based on weighted ownership in group
+        let total_possible_turnout =
+            Self::batch_mint_signal(new_vote_id, organization)?;
+        let passage_threshold =
+            Self::THIRTY_FOUR_PERCENT * total_possible_turnout;
+        // instantiate new VoteState with threshold and temporal metadata
+        let new_vote_state = VoteState::new(
+            topic,
+            total_possible_turnout,
+            passage_threshold,
+            None,
+            now,
+            ends,
+        );
+        // insert the VoteState
+        <VoteStates<T>>::insert(new_vote_id, new_vote_state);
+        // increment open vote count
+        let new_vote_count = <OpenVoteCounter>::get() + 1u32;
+        <OpenVoteCounter>::put(new_vote_count);
+        Ok(new_vote_id)
+    }
+    fn open_51_pct_passage_threshold_vote(
+        topic: Option<T::IpfsReference>,
+        organization: T::OrgId,
+        duration: Option<T::BlockNumber>,
+    ) -> Result<Self::VoteIdentifier, DispatchError> {
+        // calculate `initialized` and `expires` fields for vote state
+        let now = system::Module::<T>::block_number();
+        let ends: Option<T::BlockNumber> = if let Some(time_to_add) = duration {
+            Some(now + time_to_add)
+        } else {
+            None
+        };
+        // generate new vote_id
+        let new_vote_id = Self::generate_unique_id();
+        // by default, this call mints signal based on weighted ownership in group
+        let total_possible_turnout =
+            Self::batch_mint_signal(new_vote_id, organization)?;
+        let passage_threshold =
+            Self::FIFTY_ONE_PERCENT * total_possible_turnout;
+        // instantiate new VoteState with threshold and temporal metadata
+        let new_vote_state = VoteState::new(
+            topic,
+            total_possible_turnout,
+            passage_threshold,
+            None,
+            now,
+            ends,
+        );
+        // insert the VoteState
+        <VoteStates<T>>::insert(new_vote_id, new_vote_state);
+        // increment open vote count
+        let new_vote_count = <OpenVoteCounter>::get() + 1u32;
+        <OpenVoteCounter>::put(new_vote_count);
+        Ok(new_vote_id)
+    }
+    fn open_67_pct_passage_threshold_vote(
+        topic: Option<T::IpfsReference>,
+        organization: T::OrgId,
+        duration: Option<T::BlockNumber>,
+    ) -> Result<Self::VoteIdentifier, DispatchError> {
+        // calculate `initialized` and `expires` fields for vote state
+        let now = system::Module::<T>::block_number();
+        let ends: Option<T::BlockNumber> = if let Some(time_to_add) = duration {
+            Some(now + time_to_add)
+        } else {
+            None
+        };
+        // generate new vote_id
+        let new_vote_id = Self::generate_unique_id();
+        // by default, this call mints signal based on weighted ownership in group
+        let total_possible_turnout =
+            Self::batch_mint_signal(new_vote_id, organization)?;
+        let passage_threshold =
+            Self::SIXTY_SEVEN_PERCENT * total_possible_turnout;
+        // instantiate new VoteState with threshold and temporal metadata
+        let new_vote_state = VoteState::new(
+            topic,
+            total_possible_turnout,
+            passage_threshold,
+            None,
+            now,
+            ends,
+        );
+        // insert the VoteState
+        <VoteStates<T>>::insert(new_vote_id, new_vote_state);
+        // increment open vote count
+        let new_vote_count = <OpenVoteCounter>::get() + 1u32;
+        <OpenVoteCounter>::put(new_vote_count);
+        Ok(new_vote_id)
+    }
+    fn open_76_pct_passage_threshold_vote(
+        topic: Option<T::IpfsReference>,
+        organization: T::OrgId,
+        duration: Option<T::BlockNumber>,
+    ) -> Result<Self::VoteIdentifier, DispatchError> {
+        // calculate `initialized` and `expires` fields for vote state
+        let now = system::Module::<T>::block_number();
+        let ends: Option<T::BlockNumber> = if let Some(time_to_add) = duration {
+            Some(now + time_to_add)
+        } else {
+            None
+        };
+        // generate new vote_id
+        let new_vote_id = Self::generate_unique_id();
+        // by default, this call mints signal based on weighted ownership in group
+        let total_possible_turnout =
+            Self::batch_mint_signal(new_vote_id, organization)?;
+        let passage_threshold =
+            Self::SEVENTY_SIX_PERCENT * total_possible_turnout;
+        // instantiate new VoteState with threshold and temporal metadata
+        let new_vote_state = VoteState::new(
+            topic,
+            total_possible_turnout,
+            passage_threshold,
+            None,
+            now,
+            ends,
+        );
+        // insert the VoteState
+        <VoteStates<T>>::insert(new_vote_id, new_vote_state);
+        // increment open vote count
+        let new_vote_count = <OpenVoteCounter>::get() + 1u32;
+        <OpenVoteCounter>::put(new_vote_count);
+        Ok(new_vote_id)
+    }
+    fn open_91_pct_passage_threshold_vote(
+        topic: Option<T::IpfsReference>,
+        organization: T::OrgId,
+        duration: Option<T::BlockNumber>,
+    ) -> Result<Self::VoteIdentifier, DispatchError> {
+        // calculate `initialized` and `expires` fields for vote state
+        let now = system::Module::<T>::block_number();
+        let ends: Option<T::BlockNumber> = if let Some(time_to_add) = duration {
+            Some(now + time_to_add)
+        } else {
+            None
+        };
+        // generate new vote_id
+        let new_vote_id = Self::generate_unique_id();
+        // by default, this call mints signal based on weighted ownership in group
+        let total_possible_turnout =
+            Self::batch_mint_signal(new_vote_id, organization)?;
+        let passage_threshold =
+            Self::NINETY_ONE_PERCENT * total_possible_turnout;
+        // instantiate new VoteState with threshold and temporal metadata
+        let new_vote_state = VoteState::new(
+            topic,
+            total_possible_turnout,
+            passage_threshold,
+            None,
+            now,
+            ends,
+        );
+        // insert the VoteState
+        <VoteStates<T>>::insert(new_vote_id, new_vote_state);
+        // increment open vote count
+        let new_vote_count = <OpenVoteCounter>::get() + 1u32;
+        <OpenVoteCounter>::put(new_vote_count);
+        Ok(new_vote_id)
     }
 }
