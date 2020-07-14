@@ -185,7 +185,7 @@ fn vote_pct_threshold_works() {
             one.clone(),
             None,
             1,
-            Permill::from_percent(50),
+            Permill::from_percent(34),
             None,
             None,
         ));

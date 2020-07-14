@@ -509,7 +509,8 @@ impl<T: Trait>
         // by default, this call mints signal based on weighted ownership in group
         let total_possible_turnout =
             Self::batch_mint_signal(new_vote_id, organization)?;
-        let passage_threshold = passage_threshold_pct * total_possible_turnout;
+        let passage_threshold =
+            passage_threshold_pct.mul_ceil(total_possible_turnout);
         let rejection_threshold = if let Some(r_t) = rejection_threshold_pct {
             Some(r_t * total_possible_turnout)
         } else {
@@ -549,7 +550,7 @@ impl<T: Trait>
         let total_possible_turnout =
             Self::batch_mint_signal(new_vote_id, organization)?;
         let passage_threshold =
-            Self::THIRTY_FOUR_PERCENT * total_possible_turnout;
+            Self::THIRTY_FOUR_PERCENT.mul_ceil(total_possible_turnout);
         // instantiate new VoteState with threshold and temporal metadata
         let new_vote_state = VoteState::new(
             topic,
@@ -584,7 +585,7 @@ impl<T: Trait>
         let total_possible_turnout =
             Self::batch_mint_signal(new_vote_id, organization)?;
         let passage_threshold =
-            Self::FIFTY_ONE_PERCENT * total_possible_turnout;
+            Self::FIFTY_ONE_PERCENT.mul_ceil(total_possible_turnout);
         // instantiate new VoteState with threshold and temporal metadata
         let new_vote_state = VoteState::new(
             topic,
@@ -619,7 +620,7 @@ impl<T: Trait>
         let total_possible_turnout =
             Self::batch_mint_signal(new_vote_id, organization)?;
         let passage_threshold =
-            Self::SIXTY_SEVEN_PERCENT * total_possible_turnout;
+            Self::SIXTY_SEVEN_PERCENT.mul_ceil(total_possible_turnout);
         // instantiate new VoteState with threshold and temporal metadata
         let new_vote_state = VoteState::new(
             topic,
@@ -654,7 +655,7 @@ impl<T: Trait>
         let total_possible_turnout =
             Self::batch_mint_signal(new_vote_id, organization)?;
         let passage_threshold =
-            Self::SEVENTY_SIX_PERCENT * total_possible_turnout;
+            Self::SEVENTY_SIX_PERCENT.mul_ceil(total_possible_turnout);
         // instantiate new VoteState with threshold and temporal metadata
         let new_vote_state = VoteState::new(
             topic,
@@ -689,7 +690,7 @@ impl<T: Trait>
         let total_possible_turnout =
             Self::batch_mint_signal(new_vote_id, organization)?;
         let passage_threshold =
-            Self::NINETY_ONE_PERCENT * total_possible_turnout;
+            Self::NINETY_ONE_PERCENT.mul_ceil(total_possible_turnout);
         // instantiate new VoteState with threshold and temporal metadata
         let new_vote_state = VoteState::new(
             topic,
