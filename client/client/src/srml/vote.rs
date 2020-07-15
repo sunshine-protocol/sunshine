@@ -86,11 +86,20 @@ pub struct VoteLoggerStore<T: Vote> {
 // ~~ Calls ~~
 
 #[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
-pub struct CreateThresholdApprovalVoteCall<T: Vote> {
+pub struct CreateSignalThresholdVoteCall<T: Vote> {
     pub topic: Option<<T as Org>::IpfsReference>,
     pub organization: T::OrgId,
     pub support_requirement: T::Signal,
     pub turnout_requirement: Option<T::Signal>,
+    pub duration: Option<<T as System>::BlockNumber>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
+pub struct CreatePercentThresholdVoteCall<T: Vote> {
+    pub topic: Option<<T as Org>::IpfsReference>,
+    pub organization: T::OrgId,
+    pub support_requirement: sp_runtime::Permill,
+    pub turnout_requirement: Option<sp_runtime::Permill>,
     pub duration: Option<<T as System>::BlockNumber>,
 }
 

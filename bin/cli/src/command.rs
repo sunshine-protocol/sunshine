@@ -86,7 +86,8 @@ pub struct VoteCommand {
 
 #[derive(Clone, Debug, Clap)]
 pub enum VoteSubCommand {
-    CreateThresholdApprovalVote(vote::VoteCreateThresholdApprovalCommand),
+    CreateSignalThresholdVote(vote::VoteCreateSignalThresholdCommand),
+    CreatePercentThresholdVote(vote::VoteCreatePercentThresholdCommand),
     CreateUnanimousConsentVote(vote::VoteCreateUnanimousConsentCommand),
     SubmitVote(vote::VoteSubmitCommand),
 }

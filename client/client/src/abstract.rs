@@ -20,10 +20,13 @@ use sp_core::crypto::{
     Pair,
     Ss58Codec,
 };
-use sp_runtime::traits::{
-    IdentifyAccount,
-    SignedExtension,
-    Verify,
+use sp_runtime::{
+    traits::{
+        IdentifyAccount,
+        SignedExtension,
+        Verify,
+    },
+    Permill,
 };
 use substrate_subxt::{
     sp_core,
@@ -113,7 +116,7 @@ pub trait AbstractClient<
         who: &<T as System>::AccountId,
     ) -> Result<SharesUnlockedEvent<T>>;
     // vote module calls
-    async fn create_threshold_approval_vote(
+    async fn create_signal_threshold_vote(
         &self,
         topic: Option<<T as Org>::IpfsReference>,
         organization: T::OrgId,
@@ -121,7 +124,15 @@ pub trait AbstractClient<
         turnout_requirement: Option<T::Signal>,
         duration: Option<<T as System>::BlockNumber>,
     ) -> Result<NewVoteStartedEvent<T>>;
-    async fn create_unanimous_consent_approval_vote(
+    async fn create_percent_threshold_vote(
+        &self,
+        topic: Option<<T as Org>::IpfsReference>,
+        organization: T::OrgId,
+        support_threshold: Permill,
+        turnout_threshold: Option<Permill>,
+        duration: Option<<T as System>::BlockNumber>,
+    ) -> Result<NewVoteStartedEvent<T>>;
+    async fn create_unanimous_consent_vote(
         &self,
         topic: Option<<T as Org>::IpfsReference>,
         organization: T::OrgId,
@@ -348,7 +359,7 @@ where
         self.unlock_shares(org, who).await
     }
 
-    async fn create_threshold_approval_vote(
+    async fn create_signal_threshold_vote(
         &self,
         topic: Option<<T as Org>::IpfsReference>,
         organization: T::OrgId,
@@ -356,7 +367,7 @@ where
         turnout_requirement: Option<T::Signal>,
         duration: Option<<T as System>::BlockNumber>,
     ) -> Result<NewVoteStartedEvent<T>> {
-        self.create_threshold_approval_vote(
+        self.create_signal_threshold_vote(
             topic,
             organization,
             support_requirement,
@@ -366,18 +377,32 @@ where
         .await
     }
 
-    async fn create_unanimous_consent_approval_vote(
+    async fn create_percent_threshold_vote(
+        &self,
+        topic: Option<<T as Org>::IpfsReference>,
+        organization: T::OrgId,
+        support_threshold: Permill,
+        turnout_threshold: Option<Permill>,
+        duration: Option<<T as System>::BlockNumber>,
+    ) -> Result<NewVoteStartedEvent<T>> {
+        self.create_percent_threshold_vote(
+            topic,
+            organization,
+            support_threshold,
+            turnout_threshold,
+            duration,
+        )
+        .await
+    }
+
+    async fn create_unanimous_consent_vote(
         &self,
         topic: Option<<T as Org>::IpfsReference>,
         organization: T::OrgId,
         duration: Option<<T as System>::BlockNumber>,
     ) -> Result<NewVoteStartedEvent<T>> {
-        self.create_unanimous_consent_approval_vote(
-            topic,
-            organization,
-            duration,
-        )
-        .await
+        self.create_unanimous_consent_vote(topic, organization, duration)
+            .await
     }
 
     async fn submit_vote(

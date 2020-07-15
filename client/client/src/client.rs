@@ -276,7 +276,7 @@ where
             .ok_or(Error::EventNotFound)
     }
     // vote logic
-    pub async fn create_threshold_approval_vote(
+    pub async fn create_signal_threshold_vote(
         &self,
         topic: Option<<T as Org>::IpfsReference>,
         organization: T::OrgId,
@@ -287,7 +287,7 @@ where
         let signer = self.signer().await?;
         self.subxt
             .clone()
-            .create_threshold_approval_vote_and_watch(
+            .create_signal_threshold_vote_and_watch(
                 &signer,
                 topic,
                 organization,
@@ -300,7 +300,31 @@ where
             .map_err(substrate_subxt::Error::Codec)?
             .ok_or(Error::EventNotFound)
     }
-    pub async fn create_unanimous_consent_approval_vote(
+    pub async fn create_percent_threshold_vote(
+        &self,
+        topic: Option<<T as Org>::IpfsReference>,
+        organization: T::OrgId,
+        support_threshold: sp_runtime::Permill,
+        turnout_threshold: Option<sp_runtime::Permill>,
+        duration: Option<<T as System>::BlockNumber>,
+    ) -> Result<NewVoteStartedEvent<T>> {
+        let signer = self.signer().await?;
+        self.subxt
+            .clone()
+            .create_percent_threshold_vote_and_watch(
+                &signer,
+                topic,
+                organization,
+                support_threshold,
+                turnout_threshold,
+                duration,
+            )
+            .await?
+            .new_vote_started()
+            .map_err(substrate_subxt::Error::Codec)?
+            .ok_or(Error::EventNotFound)
+    }
+    pub async fn create_unanimous_consent_vote(
         &self,
         topic: Option<<T as Org>::IpfsReference>,
         organization: T::OrgId,

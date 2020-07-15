@@ -8,7 +8,6 @@ pub type Result<T> = sp_std::result::Result<T, DispatchError>;
 
 // === Unique ID Logic, Useful for All Modules ===
 
-/// For the module to implement for its id type (typically a common double_map prefix key)
 pub trait IDIsAvailable<Id> {
     fn id_is_available(id: Id) -> bool;
 }
@@ -168,6 +167,48 @@ pub trait OpenVote<OrgId, Threshold, BlockNumber, Hash> {
         duration: Option<BlockNumber>,
     ) -> Result<Self::VoteIdentifier>;
     fn open_unanimous_consent(
+        topic: Option<Hash>,
+        organization: OrgId,
+        duration: Option<BlockNumber>,
+    ) -> Result<Self::VoteIdentifier>;
+}
+
+pub trait OpenThresholdVote<OrgId, Threshold, BlockNumber, Hash, FineArithmetic>:
+    OpenVote<OrgId, Threshold, BlockNumber, Hash>
+{
+    const THIRTY_FOUR_PERCENT: FineArithmetic;
+    const FIFTY_ONE_PERCENT: FineArithmetic;
+    const SIXTY_SEVEN_PERCENT: FineArithmetic;
+    const SEVENTY_SIX_PERCENT: FineArithmetic;
+    const NINETY_ONE_PERCENT: FineArithmetic;
+    fn open_threshold_vote(
+        topic: Option<Hash>,
+        organization: OrgId,
+        passage_threshold_pct: FineArithmetic,
+        rejection_threshold_pct: Option<FineArithmetic>,
+        duration: Option<BlockNumber>,
+    ) -> Result<Self::VoteIdentifier>;
+    fn open_34_pct_passage_threshold_vote(
+        topic: Option<Hash>,
+        organization: OrgId,
+        duration: Option<BlockNumber>,
+    ) -> Result<Self::VoteIdentifier>;
+    fn open_51_pct_passage_threshold_vote(
+        topic: Option<Hash>,
+        organization: OrgId,
+        duration: Option<BlockNumber>,
+    ) -> Result<Self::VoteIdentifier>;
+    fn open_67_pct_passage_threshold_vote(
+        topic: Option<Hash>,
+        organization: OrgId,
+        duration: Option<BlockNumber>,
+    ) -> Result<Self::VoteIdentifier>;
+    fn open_76_pct_passage_threshold_vote(
+        topic: Option<Hash>,
+        organization: OrgId,
+        duration: Option<BlockNumber>,
+    ) -> Result<Self::VoteIdentifier>;
+    fn open_91_pct_passage_threshold_vote(
         topic: Option<Hash>,
         organization: OrgId,
         duration: Option<BlockNumber>,

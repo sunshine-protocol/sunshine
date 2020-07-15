@@ -123,12 +123,12 @@ fn vote_creation_works() {
         let one = Origin::signed(1);
         let twentytwo = Origin::signed(22);
         assert_noop!(
-            VoteThreshold::create_threshold_approval_vote(
+            VoteThreshold::create_signal_threshold_vote(
                 twentytwo, None, 1, 4, None, None
             ),
             Error::<Test>::NotAuthorizedToCreateVoteForOrganization
         );
-        assert_ok!(VoteThreshold::create_threshold_approval_vote(
+        assert_ok!(VoteThreshold::create_signal_threshold_vote(
             one.clone(),
             None,
             1,
@@ -141,11 +141,11 @@ fn vote_creation_works() {
 }
 
 #[test]
-fn vote_threshold_works() {
+fn vote_signal_threshold_works() {
     new_test_ext().execute_with(|| {
         let one = Origin::signed(1);
         // unanimous consent
-        assert_ok!(VoteThreshold::create_unanimous_consent_approval_vote(
+        assert_ok!(VoteThreshold::create_unanimous_consent_vote(
             one.clone(),
             None,
             1,
@@ -177,6 +177,52 @@ fn vote_threshold_works() {
 }
 
 #[test]
+fn vote_pct_threshold_works() {
+    new_test_ext().execute_with(|| {
+        let one = Origin::signed(1);
+        // 34% passage requirement => 3 people at least
+        assert_ok!(VoteThreshold::create_percent_threshold_vote(
+            one.clone(),
+            None,
+            1,
+            Permill::from_percent(34),
+            None,
+            None,
+        ));
+        // check that the vote has not passed
+        let outcome_almost_passed = VoteThreshold::get_vote_outcome(1).unwrap();
+        assert_eq!(outcome_almost_passed, VoteOutcome::Voting);
+        assert_ok!(VoteThreshold::submit_vote(
+            one.clone(),
+            1,
+            VoterView::InFavor,
+            None
+        ));
+        let outcome_almost_passed = VoteThreshold::get_vote_outcome(1).unwrap();
+        assert_eq!(outcome_almost_passed, VoteOutcome::Voting);
+        let two = Origin::signed(2);
+        assert_ok!(VoteThreshold::submit_vote(
+            two.clone(),
+            1,
+            VoterView::InFavor,
+            None
+        ));
+        let outcome_almost_passed = VoteThreshold::get_vote_outcome(1).unwrap();
+        assert_eq!(outcome_almost_passed, VoteOutcome::Voting);
+        let three = Origin::signed(3);
+        assert_ok!(VoteThreshold::submit_vote(
+            three.clone(),
+            1,
+            VoterView::InFavor,
+            None
+        ));
+        // check that the vote has passed
+        let outcome_has_passed = VoteThreshold::get_vote_outcome(1).unwrap();
+        assert_eq!(outcome_has_passed, VoteOutcome::Approved);
+    });
+}
+
+#[test]
 fn changing_votes_upholds_invariants() {
     new_test_ext().execute_with(|| {
         let one = Origin::signed(1);
@@ -190,7 +236,7 @@ fn changing_votes_upholds_invariants() {
             Error::<Test>::NoVoteStateForVoteRequest
         );
         // unanimous consent
-        assert_ok!(VoteThreshold::create_unanimous_consent_approval_vote(
+        assert_ok!(VoteThreshold::create_unanimous_consent_vote(
             one.clone(),
             None,
             1,

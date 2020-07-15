@@ -164,16 +164,17 @@ fn check_donation_accuracy() {
         let one = Origin::signed(1);
         let two = Origin::signed(2);
         assert_eq!(Balances::total_balance(&2), 98);
+        // only 54 actually transferred because it rounds down 1/6 * 60 = 9
         assert_ok!(Donate::make_prop_donation_without_fee(one, 1, 60));
-        // 98 + 10 = 108
-        assert_eq!(Balances::total_balance(&2), 108);
-        // 100 - 60 + 10 = 50
-        assert_eq!(Balances::total_balance(&1), 50);
+        // 98 + 9 = 107
+        assert_eq!(Balances::total_balance(&2), 107);
+        // 100 - 54 + 9 = 55
+        assert_eq!(Balances::total_balance(&1), 55);
         assert_ok!(Donate::make_prop_donation_without_fee(two, 1, 20));
-        // 50 + (20/6 ~= 3) = 53
-        assert_eq!(Balances::total_balance(&1), 53);
+        // 55 + (20/6 ~= 3) = 53
+        assert_eq!(Balances::total_balance(&1), 58);
         // 108 - 18 + 3 = 93
         // the remainder 2 wasn't transferred
-        assert_eq!(Balances::total_balance(&2), 93);
+        assert_eq!(Balances::total_balance(&2), 92);
     });
 }
