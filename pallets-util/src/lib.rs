@@ -1,6 +1,7 @@
 #![recursion_limit = "256"]
 #![allow(clippy::type_complexity)]
 #![allow(clippy::too_many_arguments)]
+#![allow(clippy::declare_interior_mutable_const)]
 #![cfg_attr(not(feature = "std"), no_std)]
 //! `util` contains all objects and relationships for all sunshine modules
 //! - see `traits.rs` for behavioral definitions and other files for object impls
