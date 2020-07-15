@@ -21,6 +21,7 @@ use sp_runtime::{
     traits::{
         AccountIdConversion,
         CheckedSub,
+        Zero,
     },
     DispatchError,
     DispatchResult,
@@ -73,8 +74,9 @@ decl_module! {
             amt: BalanceOf<T>
         ) -> DispatchResult {
             let sender = ensure_signed(origin)?;
-            Self::donate(&sender, org, amt, true)?;
-            Self::deposit_event(RawEvent::DonationExecuted(sender, org, amt, true));
+            let remainder = Self::donate(&sender, org, amt, true)?;
+            let transferred_amt = amt - remainder;
+            Self::deposit_event(RawEvent::DonationExecuted(sender, org, transferred_amt, true));
             Ok(())
         }
         #[weight = 0]
@@ -84,8 +86,9 @@ decl_module! {
             amt: BalanceOf<T>
         ) -> DispatchResult {
             let sender = ensure_signed(origin)?;
-            Self::donate(&sender, org, amt, false)?;
-            Self::deposit_event(RawEvent::DonationExecuted(sender, org, amt, false));
+            let remainder = Self::donate(&sender, org, amt, false)?;
+            let transferred_amt = amt - remainder;
+            Self::deposit_event(RawEvent::DonationExecuted(sender, org, transferred_amt, false));
             Ok(())
         }
     }
@@ -99,12 +102,13 @@ impl<T: Trait> Module<T> {
     pub fn account_id() -> T::AccountId {
         T::Treasury::get().into_account()
     }
+    /// Returns the remainder NOT transferred because the amount was not perfectly divisible
     pub fn donate(
         sender: &T::AccountId,
         recipient: T::OrgId,
         amt: BalanceOf<T>,
         transaction_fee: bool,
-    ) -> DispatchResult {
+    ) -> Result<BalanceOf<T>, DispatchError> {
         let free = T::Currency::free_balance(sender);
         let total_transfer = if transaction_fee {
             amt + T::TransactionFee::get()
@@ -118,6 +122,7 @@ impl<T: Trait> Module<T> {
         let group = <org::Module<T>>::get_group(recipient)
             .ok_or(Error::<T>::CannotDonateToOrgThatDNE)?;
         // iterate through and pay the transfer out
+        let mut transferred_amt = BalanceOf::<T>::zero();
         group
             .0
             .into_iter()
@@ -133,9 +138,11 @@ impl<T: Trait> Module<T> {
                     amt_due,
                     ExistenceRequirement::KeepAlive,
                 )?;
+                transferred_amt += amt_due;
                 Ok(())
             })
             .collect::<DispatchResult>()?;
+        let remainder = amt - transferred_amt;
         if transaction_fee {
             // pay the transaction fee last
             T::Currency::transfer(
@@ -143,10 +150,9 @@ impl<T: Trait> Module<T> {
                 &Self::account_id(),
                 T::TransactionFee::get(),
                 ExistenceRequirement::KeepAlive,
-            )
-        } else {
-            Ok(())
+            )?;
         }
+        Ok(remainder)
     }
     fn calculate_proportional_amount_for_account(
         amount: BalanceOf<T>,
@@ -160,6 +166,6 @@ impl<T: Trait> Module<T> {
             acc_ownership.total(),
             issuance,
         );
-        Ok(ownership * amount)
+        Ok(ownership.mul_floor(amount))
     }
 }
