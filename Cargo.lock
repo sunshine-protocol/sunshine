@@ -744,7 +744,7 @@ dependencies = [
  "atty",
  "bitflags",
  "strsim 0.8.0",
- "textwrap 0.11.0",
+ "textwrap",
  "unicode-width",
  "vec_map",
 ]
@@ -763,7 +763,7 @@ dependencies = [
  "os_str_bytes",
  "strsim 0.10.0",
  "termcolor",
- "textwrap 0.11.0",
+ "textwrap",
  "unicode-width",
  "vec_map",
 ]
@@ -6591,6 +6591,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "substrate-keybase-keystore"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c32ec486a87da388759a76e8fb2f7c6da06b5d9a131c7fc7075f5cc0d4a134fa"
+dependencies = [
+ "async-trait",
+ "keybase-keystore 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "substrate-subxt",
+ "sunshine-core",
+]
+
+[[package]]
 name = "substrate-prometheus-endpoint"
 version = "0.8.0-rc4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6729,17 +6741,14 @@ dependencies = [
 name = "sunshine-bounty-cli"
 version = "0.1.0"
 dependencies = [
- "async-trait",
  "clap 3.0.0-beta.1",
- "keybase-keystore 0.2.0 (git+https://github.com/sunshine-protocol/substrate-identity)",
  "libipld",
  "parity-scale-codec",
- "rpassword",
  "substrate-subxt",
  "sunshine-bounty-client",
  "sunshine-bounty-utils",
- "sunshine-identity-utils 0.2.0 (git+https://github.com/sunshine-protocol/substrate-identity)",
- "textwrap 0.12.1",
+ "sunshine-core",
+ "sunshine-identity-utils 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "thiserror",
 ]
 
@@ -6831,7 +6840,7 @@ dependencies = [
 [[package]]
 name = "sunshine-identity-utils"
 version = "0.2.0"
-source = "git+https://github.com/sunshine-protocol/substrate-identity#f494f3e1247e73651b13ebaada03a56816d79cdf"
+source = "git+https://github.com/sunshine-protocol/sunshine-identity/#f494f3e1247e73651b13ebaada03a56816d79cdf"
 dependencies = [
  "libipld",
  "parity-scale-codec",
@@ -6841,7 +6850,8 @@ dependencies = [
 [[package]]
 name = "sunshine-identity-utils"
 version = "0.2.0"
-source = "git+https://github.com/sunshine-protocol/sunshine-identity/#f494f3e1247e73651b13ebaada03a56816d79cdf"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d7b1496e0cb3765b323ebda979e4a9ab5186f335a8c0621b104d37855fe41c12"
 dependencies = [
  "libipld",
  "parity-scale-codec",
@@ -7032,16 +7042,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "terminal_size"
-version = "0.1.13"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9a14cd9f8c72704232f0bfc8455c0e861f0ad4eb60cc9ec8a170e231414c1e13"
-dependencies = [
- "libc",
- "winapi 0.3.9",
-]
-
-[[package]]
 name = "test-cli"
 version = "0.1.0"
 dependencies = [
@@ -7068,15 +7068,17 @@ dependencies = [
 name = "test-client"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "env_logger",
  "jsonrpsee",
- "sc-service",
- "sled",
- "sp-database",
+ "libipld",
+ "parity-scale-codec",
  "sp-keyring",
+ "substrate-keybase-keystore",
  "substrate-subxt",
  "sunshine-bounty-client",
- "sunshine-identity-utils 0.2.0 (git+https://github.com/sunshine-protocol/substrate-identity)",
+ "sunshine-core",
+ "sunshine-identity-utils 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "tempdir",
  "test-node",
  "thiserror",
@@ -7117,16 +7119,6 @@ version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d326610f408c7a4eb6f51c37c330e496b08506c9457c9d34287ecc38809fb060"
 dependencies = [
- "unicode-width",
-]
-
-[[package]]
-name = "textwrap"
-version = "0.12.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "203008d98caf094106cfaba70acfed15e18ed3ddb7d94e49baec153a2b462789"
-dependencies = [
- "terminal_size",
  "unicode-width",
 ]
 
