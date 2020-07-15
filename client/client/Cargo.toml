@@ -20,6 +20,7 @@ serde = { version = "1.0.114", features = ["derive"] }
 serde_json = "1.0.56"
 substrate-subxt = "0.10.1"
 sunshine-bounty-utils = { path = "../../utils" }
+sunshine-core = "0.2.0"
 thiserror = "1.0.20"
 
 [dev-dependencies]
