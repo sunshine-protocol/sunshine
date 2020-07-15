@@ -27,6 +27,7 @@ pub(crate) use bounty_client::{
     Bounty,
     Donate,
     Org,
+    Permill,
     Suri,
     Vote,
 };

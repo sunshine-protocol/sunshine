@@ -134,7 +134,10 @@ async fn run() -> Result<(), Error> {
         }
         SubCommand::Vote(VoteCommand { cmd }) => {
             match cmd {
-                VoteSubCommand::CreateThresholdApprovalVote(cmd) => {
+                VoteSubCommand::CreateSignalThresholdVote(cmd) => {
+                    cmd.exec(&client).await
+                }
+                VoteSubCommand::CreatePercentThresholdVote(cmd) => {
                     cmd.exec(&client).await
                 }
                 VoteSubCommand::CreateUnanimousConsentVote(cmd) => {

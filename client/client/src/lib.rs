@@ -20,6 +20,7 @@ pub use error::Error;
 pub use light_client::ChainType;
 pub use r#abstract::AbstractClient;
 pub use runtime::Runtime;
+pub use sp_runtime::Permill;
 pub use srml::{
     bank::Bank,
     bounty::Bounty,

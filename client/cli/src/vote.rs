@@ -1,5 +1,6 @@
 use crate::{
     async_trait,
+    error::Error,
     AbstractClient,
     Bank,
     Bounty,
@@ -7,6 +8,7 @@ use crate::{
     Donate,
     Org,
     Pair,
+    Permill,
     Result,
     Runtime,
     Vote,
@@ -31,7 +33,7 @@ use util::vote::VoterView;
 use utils_identity::cid::CidBytes;
 
 #[derive(Clone, Debug, Clap)]
-pub struct VoteCreateThresholdApprovalCommand {
+pub struct VoteCreateSignalThresholdCommand {
     pub topic: Option<String>,
     pub organization: u64,
     pub support_requirement: u64,
@@ -41,7 +43,7 @@ pub struct VoteCreateThresholdApprovalCommand {
 
 #[async_trait]
 impl<T: Runtime + Org + Vote + Donate + Bank + Bounty, P: Pair> Command<T, P>
-    for VoteCreateThresholdApprovalCommand
+    for VoteCreateSignalThresholdCommand
 where
     <T as System>::AccountId: Ss58Codec,
     <T as System>::BlockNumber: From<u32> + Display,
@@ -73,7 +75,7 @@ where
                 None
             };
         let event = client
-            .create_threshold_approval_vote(
+            .create_signal_threshold_vote(
                 topic,
                 self.organization.into(),
                 self.support_requirement.into(),
@@ -82,7 +84,75 @@ where
             )
             .await?;
         println!(
-            "Account {} created a threshold approval vote for OrgId {} with VoteId {}",
+            "Account {} created a signal threshold vote for OrgId {} with VoteId {}",
+            event.caller, event.org, event.new_vote_id
+        );
+        Ok(())
+    }
+}
+
+#[derive(Clone, Debug, Clap)]
+pub struct VoteCreatePercentThresholdCommand {
+    pub topic: Option<String>,
+    pub organization: u64,
+    pub support_threshold: u8,
+    pub turnout_threshold: Option<u8>,
+    pub duration: Option<u32>,
+}
+
+fn u8_to_permill(u: u8) -> Result<Permill> {
+    if u > 0u8 && u < 100u8 {
+        Ok(Permill::from_percent(u.into()))
+    } else {
+        Err(Error::VotePercentThresholdInputBoundError)
+    }
+}
+
+#[async_trait]
+impl<T: Runtime + Org + Vote + Donate + Bank + Bounty, P: Pair> Command<T, P>
+    for VoteCreatePercentThresholdCommand
+where
+    <T as System>::AccountId: Ss58Codec,
+    <T as System>::BlockNumber: From<u32> + Display,
+    <T as Org>::OrgId: From<u64> + Display,
+    <T as Org>::IpfsReference: From<CidBytes> + Debug,
+    <T as Vote>::VoteId: From<u64> + Display,
+{
+    async fn exec(&self, client: &dyn AbstractClient<T, P>) -> Result<()> {
+        let topic: Option<T::IpfsReference> =
+            if let Some(topic_ref) = &self.topic {
+                let content = topic_ref.as_bytes();
+                let hash = Blake2b256::digest(&content[..]);
+                let cid = Cid::new_v1(Codec::Raw, hash);
+                Some(CidBytes::from(&cid).into())
+            } else {
+                None
+            };
+        let support_threshold = u8_to_permill(self.support_threshold)?;
+        let turnout_threshold: Option<Permill> =
+            if let Some(req) = self.turnout_threshold {
+                let ret = u8_to_permill(req)?;
+                Some(ret)
+            } else {
+                None
+            };
+        let duration: Option<<T as System>::BlockNumber> =
+            if let Some(req) = self.duration {
+                Some(req.into())
+            } else {
+                None
+            };
+        let event = client
+            .create_percent_threshold_vote(
+                topic,
+                self.organization.into(),
+                support_threshold,
+                turnout_threshold,
+                duration,
+            )
+            .await?;
+        println!(
+            "Account {} created a percent threshold vote for OrgId {} with VoteId {}",
             event.caller, event.org, event.new_vote_id
         );
         Ok(())
@@ -124,7 +194,7 @@ where
                 None
             };
         let event = client
-            .create_unanimous_consent_approval_vote(
+            .create_unanimous_consent_vote(
                 topic,
                 self.organization.into(),
                 duration,

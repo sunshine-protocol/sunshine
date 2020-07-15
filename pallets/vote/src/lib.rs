@@ -155,7 +155,7 @@ decl_module! {
         fn deposit_event() = default;
 
         #[weight = 0]
-        pub fn create_threshold_signal_vote(
+        pub fn create_signal_threshold_vote(
             origin,
             topic: Option<T::IpfsReference>,
             organization: T::OrgId,
@@ -174,7 +174,7 @@ decl_module! {
             Ok(())
         }
         #[weight = 0]
-        pub fn create_threshold_pct_vote(
+        pub fn create_percent_threshold_vote(
             origin,
             topic: Option<T::IpfsReference>,
             organization: T::OrgId,

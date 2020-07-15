@@ -29,6 +29,8 @@ pub enum Error {
     PasswordTooShort,
     #[error("Passwords don't match.")]
     PasswordMismatch,
+    #[error("Vote percent threshold input must be 0 < x < 100")]
+    VotePercentThresholdInputBoundError,
     #[error("Input error for posting bounty.")]
     PostBountyInputError,
 }
