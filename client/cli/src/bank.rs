@@ -1,17 +1,7 @@
-use crate::{
-    async_trait,
-    AbstractClient,
-    Bank,
-    Bounty,
-    Command,
-    Donate,
-    Org,
-    Pair,
+use crate::error::{
+    Error,
     Result,
-    Runtime,
-    Vote,
 };
-use bounty_client::Account;
 use clap::Clap;
 use core::fmt::{
     Debug,
@@ -20,7 +10,16 @@ use core::fmt::{
 use substrate_subxt::{
     sp_core::crypto::Ss58Codec,
     system::System,
+    Runtime,
 };
+use sunshine_bounty_client::{
+    bank::{
+        Bank,
+        BankClient,
+    },
+    org::Org,
+};
+use sunshine_core::Ss58;
 
 #[derive(Clone, Debug, Clap)]
 pub struct BankOpenOrgAccountCommand {
@@ -29,29 +28,30 @@ pub struct BankOpenOrgAccountCommand {
     pub bank_operator: Option<String>,
 }
 
-#[async_trait]
-impl<T: Runtime + Org + Vote + Donate + Bank + Bounty, P: Pair> Command<T, P>
-    for BankOpenOrgAccountCommand
-where
-    <T as System>::AccountId: Ss58Codec,
-    <T as Org>::OrgId: From<u64> + Display,
-    <T as Bank>::Currency: From<u128> + Display,
-{
-    async fn exec(&self, client: &dyn AbstractClient<T, P>) -> Result<()> {
-        let bank_operator: Option<T::AccountId> =
-            if let Some(acc) = &self.bank_operator {
-                let new_acc: Account<T> = acc.parse()?;
-                Some(new_acc.id)
-            } else {
-                None
-            };
+impl BankOpenOrgAccountCommand {
+    pub async fn exec<R: Runtime + Bank, C: BankClient<R>>(
+        &self,
+        client: &C,
+    ) -> Result<(), C::Error>
+    where
+        <R as System>::AccountId: Ss58Codec,
+        <R as Org>::OrgId: From<u64> + Display,
+        <R as Bank>::Currency: From<u128> + Display,
+    {
+        let bank_operator = if let Some(acc) = &self.bank_operator {
+            let new_acc: Ss58<R> = acc.parse()?;
+            Some(new_acc.0)
+        } else {
+            None
+        };
         let event = client
             .open_org_bank_account(
                 self.seed.into(),
                 self.hosting_org.into(),
                 bank_operator,
             )
-            .await?;
+            .await
+            .map_err(Error::Client)?;
         println!(
             "Account {} initialized new bank account {:?} with balance {} for Org {} with bank operator {:?}",
             event.seeder, event.new_bank_id, event.seed, event.hosting_org, event.bank_operator

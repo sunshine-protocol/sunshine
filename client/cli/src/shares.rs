@@ -1,19 +1,6 @@
-use crate::{
-    async_trait,
-    AbstractClient,
-    Bank,
-    Bounty,
-    Command,
-    Donate,
-    Org,
-    Pair,
+use crate::error::{
+    Error,
     Result,
-    Runtime,
-    Vote,
-};
-use bounty_client::{
-    Account,
-    AccountShare,
 };
 use clap::Clap;
 use core::fmt::{
@@ -23,7 +10,15 @@ use core::fmt::{
 use substrate_subxt::{
     sp_core::crypto::Ss58Codec,
     system::System,
+    Runtime,
 };
+use sunshine_bounty_client::org::{
+    AccountShare,
+    Org,
+    Org as Shares,
+    OrgClient as SharesClient,
+};
+use sunshine_core::Ss58;
 
 #[derive(Clone, Debug, Clap)]
 pub struct SharesIssueCommand {
@@ -32,23 +27,25 @@ pub struct SharesIssueCommand {
     pub shares: u64,
 }
 
-#[async_trait]
-impl<T: Runtime + Org + Vote + Donate + Bank + Bounty, P: Pair> Command<T, P>
-    for SharesIssueCommand
-where
-    <T as System>::AccountId: Ss58Codec,
-    <T as Org>::OrgId: From<u64> + Display,
-    <T as Org>::Shares: From<u64> + Display,
-{
-    async fn exec(&self, client: &dyn AbstractClient<T, P>) -> Result<()> {
-        let account: Account<T> = self.dest.parse()?;
+impl SharesIssueCommand {
+    pub async fn exec<R: Runtime + Shares, C: SharesClient<R>>(
+        &self,
+        client: &C,
+    ) -> Result<(), C::Error>
+    where
+        <R as System>::AccountId: Ss58Codec,
+        <R as Org>::OrgId: From<u64> + Display,
+        <R as Org>::Shares: From<u64> + Display,
+    {
+        let account: Ss58<R> = self.dest.parse()?;
         let event = client
             .issue_shares(
                 self.organization.into(),
-                account.id,
+                account.0,
                 self.shares.into(),
             )
-            .await?;
+            .await
+            .map_err(Error::Client)?;
         println!(
             "{} shares minted for account {:?} in the context of Org {}",
             event.shares, event.who, event.organization
@@ -63,23 +60,29 @@ pub struct SharesBatchIssueCommand {
     pub new_accounts: Vec<AccountShare>,
 }
 
-#[async_trait]
-impl<T: Runtime + Org + Vote + Donate + Bank + Bounty, P: Pair> Command<T, P>
-    for SharesBatchIssueCommand
-where
-    <T as System>::AccountId: Ss58Codec,
-    <T as Org>::OrgId: From<u64> + Display,
-    <T as Org>::Shares: From<u64> + Display,
-{
-    async fn exec(&self, client: &dyn AbstractClient<T, P>) -> Result<()> {
-        let accounts = self.new_accounts.iter().map(|acc_share| -> Result<(<T as System>::AccountId, <T as Org>::Shares)> {
-            let account: Account<T> = acc_share.0.parse()?;
-            let amount_issued: T::Shares = (acc_share.1).into();
-            Ok((account.id, amount_issued))
-        }).collect::<Result<Vec<(<T as System>::AccountId, <T as Org>::Shares)>>>()?;
+impl SharesBatchIssueCommand {
+    pub async fn exec<R: Runtime + Shares, C: SharesClient<R>>(
+        &self,
+        client: &C,
+    ) -> Result<(), C::Error>
+    where
+        <R as System>::AccountId: Ss58Codec,
+        <R as Org>::OrgId: From<u64> + Display,
+        <R as Org>::Shares: From<u64> + Display,
+    {
+        let accounts = self
+            .new_accounts
+            .iter()
+            .map(|acc_share| -> Result<_, C::Error> {
+                let account: Ss58<R> = acc_share.0.parse()?;
+                let amount_issued: R::Shares = (acc_share.1).into();
+                Ok((account.0, amount_issued))
+            })
+            .collect::<Result<Vec<_>, C::Error>>()?;
         let event = client
             .batch_issue_shares(self.organization.into(), accounts.as_slice())
-            .await?;
+            .await
+            .map_err(Error::Client)?;
         println!(
             "{} new shares minted in the context of Org {}",
             event.total_new_shares_minted, event.organization
@@ -94,23 +97,29 @@ pub struct SharesBatchBurnCommand {
     pub old_accounts: Vec<AccountShare>,
 }
 
-#[async_trait]
-impl<T: Runtime + Org + Vote + Donate + Bank + Bounty, P: Pair> Command<T, P>
-    for SharesBatchBurnCommand
-where
-    <T as System>::AccountId: Ss58Codec,
-    <T as Org>::OrgId: From<u64> + Display,
-    <T as Org>::Shares: From<u64> + Display,
-{
-    async fn exec(&self, client: &dyn AbstractClient<T, P>) -> Result<()> {
-        let accounts = self.old_accounts.iter().map(|acc_share| -> Result<(<T as System>::AccountId, <T as Org>::Shares)> {
-            let account: Account<T> = acc_share.0.parse()?;
-            let amount_burned: T::Shares = (acc_share.1).into();
-            Ok((account.id, amount_burned))
-        }).collect::<Result<Vec<(<T as System>::AccountId, <T as Org>::Shares)>>>()?;
+impl SharesBatchBurnCommand {
+    pub async fn exec<R: Runtime + Shares, C: SharesClient<R>>(
+        &self,
+        client: &C,
+    ) -> Result<(), C::Error>
+    where
+        <R as System>::AccountId: Ss58Codec,
+        <R as Org>::OrgId: From<u64> + Display,
+        <R as Org>::Shares: From<u64> + Display,
+    {
+        let accounts = self
+            .old_accounts
+            .iter()
+            .map(|acc_share| -> Result<_, C::Error> {
+                let account: Ss58<R> = acc_share.0.parse()?;
+                let amount_burned: R::Shares = (acc_share.1).into();
+                Ok((account.0, amount_burned))
+            })
+            .collect::<Result<Vec<_>, C::Error>>()?;
         let event = client
             .batch_issue_shares(self.organization.into(), accounts.as_slice())
-            .await?;
+            .await
+            .map_err(Error::Client)?;
         println!(
             "{} new shares minted in the context of Org {}",
             event.total_new_shares_minted, event.organization
@@ -126,23 +135,25 @@ pub struct SharesBurnCommand {
     pub shares: u64,
 }
 
-#[async_trait]
-impl<T: Runtime + Org + Vote + Donate + Bank + Bounty, P: Pair> Command<T, P>
-    for SharesBurnCommand
-where
-    <T as System>::AccountId: Ss58Codec,
-    <T as Org>::OrgId: From<u64> + Display,
-    <T as Org>::Shares: From<u64> + Display,
-{
-    async fn exec(&self, client: &dyn AbstractClient<T, P>) -> Result<()> {
-        let account: Account<T> = self.burner.parse()?;
+impl SharesBurnCommand {
+    pub async fn exec<R: Runtime + Shares, C: SharesClient<R>>(
+        &self,
+        client: &C,
+    ) -> Result<(), C::Error>
+    where
+        <R as System>::AccountId: Ss58Codec,
+        <R as Org>::OrgId: From<u64> + Display,
+        <R as Org>::Shares: From<u64> + Display,
+    {
+        let account: Ss58<R> = self.burner.parse()?;
         let event = client
             .issue_shares(
                 self.organization.into(),
-                account.id,
+                account.0,
                 self.shares.into(),
             )
-            .await?;
+            .await
+            .map_err(Error::Client)?;
         println!(
             "{} shares burned from account {:?} in the context of Org {}",
             event.shares, event.who, event.organization
@@ -157,19 +168,21 @@ pub struct SharesReserveCommand {
     pub who: String,
 }
 
-#[async_trait]
-impl<T: Runtime + Org + Vote + Donate + Bank + Bounty, P: Pair> Command<T, P>
-    for SharesReserveCommand
-where
-    <T as System>::AccountId: Ss58Codec,
-    <T as Org>::OrgId: From<u64> + Display,
-    <T as Org>::Shares: From<u64> + Display,
-{
-    async fn exec(&self, client: &dyn AbstractClient<T, P>) -> Result<()> {
-        let account: Account<T> = self.who.parse()?;
+impl SharesReserveCommand {
+    pub async fn exec<R: Runtime + Shares, C: SharesClient<R>>(
+        &self,
+        client: &C,
+    ) -> Result<(), C::Error>
+    where
+        <R as System>::AccountId: Ss58Codec,
+        <R as Org>::OrgId: From<u64> + Display,
+        <R as Org>::Shares: From<u64> + Display,
+    {
+        let account: Ss58<R> = self.who.parse()?;
         let event = client
-            .reserve_shares(self.organization.into(), &account.id)
-            .await?;
+            .reserve_shares(self.organization.into(), &account.0)
+            .await
+            .map_err(Error::Client)?;
         println!(
             "Account {} reserves {:?} shares in the context of Org {}",
             event.who, event.amount_reserved, event.organization
@@ -184,19 +197,21 @@ pub struct SharesUnReserveCommand {
     pub who: String,
 }
 
-#[async_trait]
-impl<T: Runtime + Org + Vote + Donate + Bank + Bounty, P: Pair> Command<T, P>
-    for SharesUnReserveCommand
-where
-    <T as System>::AccountId: Ss58Codec,
-    <T as Org>::OrgId: From<u64> + Display,
-    <T as Org>::Shares: From<u64> + Display,
-{
-    async fn exec(&self, client: &dyn AbstractClient<T, P>) -> Result<()> {
-        let account: Account<T> = self.who.parse()?;
+impl SharesUnReserveCommand {
+    pub async fn exec<R: Runtime + Shares, C: SharesClient<R>>(
+        &self,
+        client: &C,
+    ) -> Result<(), C::Error>
+    where
+        <R as System>::AccountId: Ss58Codec,
+        <R as Org>::OrgId: From<u64> + Display,
+        <R as Org>::Shares: From<u64> + Display,
+    {
+        let account: Ss58<R> = self.who.parse()?;
         let event = client
-            .unreserve_shares(self.organization.into(), &account.id)
-            .await?;
+            .unreserve_shares(self.organization.into(), &account.0)
+            .await
+            .map_err(Error::Client)?;
         println!(
             "Account {} unreserves {:?} shares in the context of Org {}",
             event.who, event.amount_unreserved, event.organization
@@ -211,19 +226,21 @@ pub struct SharesLockCommand {
     pub who: String,
 }
 
-#[async_trait]
-impl<T: Runtime + Org + Vote + Donate + Bank + Bounty, P: Pair> Command<T, P>
-    for SharesLockCommand
-where
-    <T as System>::AccountId: Ss58Codec,
-    <T as Org>::OrgId: From<u64> + Display,
-    <T as Org>::Shares: From<u64> + Display,
-{
-    async fn exec(&self, client: &dyn AbstractClient<T, P>) -> Result<()> {
-        let account: Account<T> = self.who.parse()?;
+impl SharesLockCommand {
+    pub async fn exec<R: Runtime + Shares, C: SharesClient<R>>(
+        &self,
+        client: &C,
+    ) -> Result<(), C::Error>
+    where
+        <R as System>::AccountId: Ss58Codec,
+        <R as Org>::OrgId: From<u64> + Display,
+        <R as Org>::Shares: From<u64> + Display,
+    {
+        let account: Ss58<R> = self.who.parse()?;
         let event = client
-            .lock_shares(self.organization.into(), &account.id)
-            .await?;
+            .lock_shares(self.organization.into(), &account.0)
+            .await
+            .map_err(Error::Client)?;
         println!(
             "Locked shares for Account {} in the context of Org {}",
             event.who, event.organization
@@ -238,19 +255,21 @@ pub struct SharesUnLockCommand {
     pub who: String,
 }
 
-#[async_trait]
-impl<T: Runtime + Org + Vote + Donate + Bank + Bounty, P: Pair> Command<T, P>
-    for SharesUnLockCommand
-where
-    <T as System>::AccountId: Ss58Codec,
-    <T as Org>::OrgId: From<u64> + Display,
-    <T as Org>::Shares: From<u64> + Display,
-{
-    async fn exec(&self, client: &dyn AbstractClient<T, P>) -> Result<()> {
-        let account: Account<T> = self.who.parse()?;
+impl SharesUnLockCommand {
+    pub async fn exec<R: Runtime + Shares, C: SharesClient<R>>(
+        &self,
+        client: &C,
+    ) -> Result<(), C::Error>
+    where
+        <R as System>::AccountId: Ss58Codec,
+        <R as Org>::OrgId: From<u64> + Display,
+        <R as Org>::Shares: From<u64> + Display,
+    {
+        let account: Ss58<R> = self.who.parse()?;
         let event = client
-            .unlock_shares(self.organization.into(), &account.id)
-            .await?;
+            .unlock_shares(self.organization.into(), &account.0)
+            .await
+            .map_err(Error::Client)?;
         println!(
             "Unlocked shares for Account {} in the context of Org {}",
             event.who, event.organization
