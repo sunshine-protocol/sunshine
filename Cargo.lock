@@ -6631,9 +6631,9 @@ dependencies = [
 
 [[package]]
 name = "sunshine-identity-cli"
-version = "0.2.1"
+version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bec5119ab561323d2c78967ba9cfa6b1feaeeed1f5917a8ca036c42f6c66ede3"
+checksum = "1a6019906bbd8f869e6dc84fab9edb1ef52ccc51824e81b7067301cc89a0b4f8"
 dependencies = [
  "async-std",
  "clap 3.0.0-beta.1",
