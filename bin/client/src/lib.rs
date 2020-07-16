@@ -6,6 +6,8 @@ use bounty_client::{
     vote::Vote,
 };
 use identity_utils::cid::CidBytes;
+use std::path::Path;
+use substrate_keybase_keystore::Keystore;
 use substrate_subxt::{
     balances::{
         AccountData,
@@ -19,9 +21,12 @@ use substrate_subxt::{
     },
     system::System,
 };
-use sunshine_core::{ChainClient, ChainSigner, Keystore as _, OffchainSigner};
-use substrate_keybase_keystore::Keystore;
-use std::path::Path;
+use sunshine_core::{
+    ChainClient,
+    ChainSigner,
+    Keystore as _,
+    OffchainSigner,
+};
 use thiserror::Error;
 
 pub use bounty_client as bounty;
@@ -82,13 +87,13 @@ pub struct Client {
 }
 
 impl Client {
-    pub async fn new(root: &Path, _chain_spec: Option<&Path>) -> Result<Self, Error> {
+    pub async fn new(
+        root: &Path,
+        _chain_spec: Option<&Path>,
+    ) -> Result<Self, Error> {
         let keystore = Keystore::open(root.join("keystore")).await?;
         let chain = substrate_subxt::ClientBuilder::new().build().await?;
-        Ok(Self {
-            keystore,
-            chain,
-        })
+        Ok(Self { keystore, chain })
     }
 
     #[cfg(feature = "mock")]
@@ -98,29 +103,28 @@ impl Client {
     ) -> (Self, tempdir::TempDir) {
         use substrate_keybase_keystore::Key;
         use substrate_subxt::ClientBuilder;
-        use sunshine_core::{Key as _, SecretString};
+        use sunshine_core::{
+            Key as _,
+            SecretString,
+        };
         use tempdir::TempDir;
 
-        let tmp = TempDir::new("sunshine-identity-").expect("failed to create tempdir");
+        let tmp = TempDir::new("sunshine-identity-")
+            .expect("failed to create tempdir");
         let chain = ClientBuilder::new()
             .set_client(test_node.clone())
             .build()
             .await
             .unwrap();
-        let mut keystore = Keystore::open(tmp.path().join("keystore")).await.unwrap();
+        let mut keystore =
+            Keystore::open(tmp.path().join("keystore")).await.unwrap();
         let key = Key::from_suri(&account.to_seed()).unwrap();
         let password = SecretString::new("password".to_string());
         keystore
             .set_device_key(&key, &password, false)
             .await
             .unwrap();
-        (
-            Self {
-                keystore,
-                chain,
-            },
-            tmp,
-        )
+        (Self { keystore, chain }, tmp)
     }
 }
 
@@ -141,7 +145,9 @@ impl ChainClient<Runtime> for Client {
         &self.chain
     }
 
-    fn chain_signer(&self) -> Result<&(dyn ChainSigner<Runtime> + Send + Sync), Self::Error> {
+    fn chain_signer(
+        &self,
+    ) -> Result<&(dyn ChainSigner<Runtime> + Send + Sync), Self::Error> {
         self.keystore
             .chain_signer()
             .ok_or(Error::Keystore(substrate_keybase_keystore::Error::Locked))
@@ -151,7 +157,9 @@ impl ChainClient<Runtime> for Client {
         &()
     }
 
-    fn offchain_signer(&self) -> Result<&dyn OffchainSigner<Runtime>, Self::Error> {
+    fn offchain_signer(
+        &self,
+    ) -> Result<&dyn OffchainSigner<Runtime>, Self::Error> {
         self.keystore
             .offchain_signer()
             .ok_or(Error::Keystore(substrate_keybase_keystore::Error::Locked))
@@ -191,8 +199,8 @@ pub mod mock {
 
     pub fn test_node() -> (TestNode, TempDir) {
         env_logger::try_init().ok();
-        let tmp =
-            TempDir::new("sunshine-bounty-node").expect("failed to create tempdir");
+        let tmp = TempDir::new("sunshine-bounty-node")
+            .expect("failed to create tempdir");
         let config = SubxtClientConfig {
             impl_name: test_node::IMPL_NAME,
             impl_version: test_node::IMPL_VERSION,

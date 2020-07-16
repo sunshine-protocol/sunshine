@@ -211,11 +211,7 @@ where
     ) -> Result<MilestoneReviewTriggeredEvent<T>, C::Error> {
         let signer = self.chain_signer()?;
         self.chain_client()
-            .trigger_milestone_review_and_watch(
-                signer,
-                bounty_id,
-                milestone_id,
-            )
+            .trigger_milestone_review_and_watch(signer, bounty_id, milestone_id)
             .await?
             .milestone_review_triggered()?
             .ok_or(Error::EventNotFound.into())
