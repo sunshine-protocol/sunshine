@@ -1,15 +1,14 @@
-use bounty_cli::{
-    bank,
-    bounty,
-    donate,
-    key,
-    org,
-    shares,
-    vote,
-    wallet,
-};
 use clap::Clap;
 use std::path::PathBuf;
+use sunshine_bounty_cli::{
+    bank,
+    donate,
+    shares,
+};
+use sunshine_identity_cli::{
+    key,
+    wallet,
+};
 
 #[derive(Clone, Debug, Clap)]
 pub struct Opts {
@@ -24,11 +23,10 @@ pub enum SubCommand {
     Key(KeyCommand),
     Wallet(WalletCommand),
     Org(OrgCommand),
-    Vote(VoteCommand),
+    // Vote(VoteCommand),
     Donate(DonateCommand),
     Bank(BankCommand),
-    Bounty(BountyCommand),
-    Run,
+    // Bounty(BountyCommand),
 }
 
 #[derive(Clone, Debug, Clap)]
@@ -73,24 +71,24 @@ pub enum OrgSubCommand {
     UnreserveShares(shares::SharesUnReserveCommand),
     LockShares(shares::SharesLockCommand),
     UnlockShares(shares::SharesUnLockCommand),
-    // full org stuff
-    RegisterFlatOrg(org::OrgRegisterFlatCommand),
-    RegisterWeightedOrg(org::OrgRegisterWeightedCommand),
+    /* full org stuff
+     * RegisterFlatOrg(org::OrgRegisterFlatCommand),
+     * RegisterWeightedOrg(org::OrgRegisterWeightedCommand), */
 }
 
-#[derive(Clone, Debug, Clap)]
-pub struct VoteCommand {
-    #[clap(subcommand)]
-    pub cmd: VoteSubCommand,
-}
-
-#[derive(Clone, Debug, Clap)]
-pub enum VoteSubCommand {
-    CreateSignalThresholdVote(vote::VoteCreateSignalThresholdCommand),
-    CreatePercentThresholdVote(vote::VoteCreatePercentThresholdCommand),
-    CreateUnanimousConsentVote(vote::VoteCreateUnanimousConsentCommand),
-    SubmitVote(vote::VoteSubmitCommand),
-}
+// #[derive(Clone, Debug, Clap)]
+// pub struct VoteCommand {
+// #[clap(subcommand)]
+// pub cmd: VoteSubCommand,
+// }
+//
+// #[derive(Clone, Debug, Clap)]
+// pub enum VoteSubCommand {
+// CreateSignalThresholdVote(vote::VoteCreateSignalThresholdCommand),
+// CreatePercentThresholdVote(vote::VoteCreatePercentThresholdCommand),
+// CreateUnanimousConsentVote(vote::VoteCreateUnanimousConsentCommand),
+// SubmitVote(vote::VoteSubmitCommand),
+// }
 
 #[derive(Clone, Debug, Clap)]
 pub struct DonateCommand {
@@ -116,21 +114,21 @@ pub enum BankSubCommand {
     OpenAccount2(bank::BankOpenOrgAccountCommand),
 }
 
-#[derive(Clone, Debug, Clap)]
-pub struct BountyCommand {
-    #[clap(subcommand)]
-    pub cmd: BountySubCommand,
-}
-
-#[derive(Clone, Debug, Clap)]
-pub enum BountySubCommand {
-    PostBounty(bounty::BountyPostCommand),
-    ApplyForBounty(bounty::BountyApplicationCommand),
-    TriggerApplicationReview(bounty::BountyTriggerApplicationReviewCommand),
-    SudoApproveApplication(bounty::BountySudoApproveApplicationCommand),
-    PollApplication(bounty::BountyPollApplicationCommand),
-    SubmitMilestone(bounty::BountySubmitMilestoneCommand),
-    TriggerMilestoneReview(bounty::BountyTriggerMilestoneReviewCommand),
-    SudoApproveMilestone(bounty::BountySudoApproveMilestoneCommand),
-    PollMilestone(bounty::BountyPollMilestoneCommand),
-}
+// #[derive(Clone, Debug, Clap)]
+// pub struct BountyCommand {
+// #[clap(subcommand)]
+// pub cmd: BountySubCommand,
+// }
+//
+// #[derive(Clone, Debug, Clap)]
+// pub enum BountySubCommand {
+// PostBounty(bounty::BountyPostCommand),
+// ApplyForBounty(bounty::BountyApplicationCommand),
+// TriggerApplicationReview(bounty::BountyTriggerApplicationReviewCommand),
+// SudoApproveApplication(bounty::BountySudoApproveApplicationCommand),
+// PollApplication(bounty::BountyPollApplicationCommand),
+// SubmitMilestone(bounty::BountySubmitMilestoneCommand),
+// TriggerMilestoneReview(bounty::BountyTriggerMilestoneReviewCommand),
+// SudoApproveMilestone(bounty::BountySudoApproveMilestoneCommand),
+// PollMilestone(bounty::BountyPollMilestoneCommand),
+// }

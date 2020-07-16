@@ -3,16 +3,17 @@ panic = "unwind"
 
 [workspace]
 members = [
+    "bin/cli",
+    "bin/client",
     "bin/runtime",
     "bin/node",
-    "bin/cli",
-    "client/client",
     "client/cli",
-    "pallets-util",
-    "pallets/org",
+    "client/client",
     "pallets/vote",
-    "pallets/court",
     "pallets/bank",
-    "pallets/donate",
     "pallets/bounty",
+    "pallets/court",
+    "pallets/donate",
+    "pallets/org",
+    "utils",
 ]

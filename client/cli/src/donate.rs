@@ -1,15 +1,6 @@
-use crate::{
-    async_trait,
-    AbstractClient,
-    Bank,
-    Bounty,
-    Command,
-    Donate,
-    Org,
-    Pair,
+use crate::error::{
+    Error,
     Result,
-    Runtime,
-    Vote,
 };
 use clap::Clap;
 use core::fmt::{
@@ -19,6 +10,14 @@ use core::fmt::{
 use substrate_subxt::{
     sp_core::crypto::Ss58Codec,
     system::System,
+    Runtime,
+};
+use sunshine_bounty_client::{
+    donate::{
+        Donate,
+        DonateClient,
+    },
+    org::Org,
 };
 
 #[derive(Clone, Debug, Clap)]
@@ -27,18 +26,20 @@ pub struct DonateWithFeeCommand {
     pub amt: u128,
 }
 
-#[async_trait]
-impl<T: Runtime + Org + Vote + Donate + Bank + Bounty, P: Pair> Command<T, P>
-    for DonateWithFeeCommand
-where
-    <T as System>::AccountId: Ss58Codec,
-    <T as Org>::OrgId: From<u64> + Display,
-    <T as Donate>::DCurrency: From<u128> + Display,
-{
-    async fn exec(&self, client: &dyn AbstractClient<T, P>) -> Result<()> {
+impl DonateWithFeeCommand {
+    pub async fn exec<R: Runtime + Donate, C: DonateClient<R>>(
+        &self,
+        client: &C,
+    ) -> Result<(), C::Error>
+    where
+        <R as System>::AccountId: Ss58Codec,
+        <R as Org>::OrgId: From<u64> + Display,
+        <R as Donate>::DCurrency: From<u128> + Display,
+    {
         let event = client
             .make_prop_donation_with_fee(self.org.into(), self.amt.into())
-            .await?;
+            .await
+            .map_err(Error::Client)?;
         println!(
             "AccountId {:?} donated {} to OrgId {} (with the module fee)",
             event.sender, event.amt, event.org
@@ -53,18 +54,20 @@ pub struct DonateWithoutFeeCommand {
     pub amt: u128,
 }
 
-#[async_trait]
-impl<T: Runtime + Org + Vote + Donate + Bank + Bounty, P: Pair> Command<T, P>
-    for DonateWithoutFeeCommand
-where
-    <T as System>::AccountId: Ss58Codec,
-    <T as Org>::OrgId: From<u64> + Display,
-    <T as Donate>::DCurrency: From<u128> + Display,
-{
-    async fn exec(&self, client: &dyn AbstractClient<T, P>) -> Result<()> {
+impl DonateWithoutFeeCommand {
+    pub async fn exec<R: Runtime + Donate, C: DonateClient<R>>(
+        &self,
+        client: &C,
+    ) -> Result<(), C::Error>
+    where
+        <R as System>::AccountId: Ss58Codec,
+        <R as Org>::OrgId: From<u64> + Display,
+        <R as Donate>::DCurrency: From<u128> + Display,
+    {
         let event = client
             .make_prop_donation_without_fee(self.org.into(), self.amt.into())
-            .await?;
+            .await
+            .map_err(Error::Client)?;
         println!(
             "AccountId {:?} donated {} to OrgId {} (without the module fee)",
             event.sender, event.amt, event.org

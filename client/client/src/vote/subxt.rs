@@ -1,4 +1,4 @@
-use crate::srml::org::{
+use crate::org::{
     Org,
     OrgEventsDecoder,
 };
@@ -15,11 +15,18 @@ use sp_runtime::traits::{
     Zero,
 };
 use std::fmt::Debug;
-use substrate_subxt::system::{
-    System,
-    SystemEventsDecoder,
+use substrate_subxt::{
+    module,
+    sp_runtime,
+    system::{
+        System,
+        SystemEventsDecoder,
+    },
+    Call,
+    Event,
+    Store,
 };
-use util::vote::{
+use sunshine_bounty_utils::vote::{
     Vote as VoteVector,
     VoteState,
     VoterView,

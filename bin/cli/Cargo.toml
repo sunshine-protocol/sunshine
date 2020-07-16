@@ -8,17 +8,11 @@ edition = "2018"
 async-std = { version = "=1.5.0", features = ["attributes"] }
 exitfailure = "0.5.1"
 clap = "3.0.0-beta.1"
-bounty-cli = { package = "sunshine-bounty-cli", path = "../../client/cli" }
-dirs2 = "3.0.1"
+dirs = "3.0.1"
 env_logger = "0.7.1"
-ipfs-embed = {version = "0.1.1", default-features = false}
-ipld-block-builder = "0.3.0"
-keybase-keystore = {package = "keybase-keystore", git = "https://github.com/sunshine-protocol/substrate-identity"}
-qr2term = "0.2.1"
-rpassword = "4.0.5"
-sp-keyring = "2.0.0-rc4"
-pallet-indices = "2.0.0-rc4"
-sp-core = "2.0.0-rc4"
 substrate-subxt = "0.10.1"
-utils-identity = { package = "sunshine-identity-utils", git = "https://github.com/sunshine-protocol/sunshine-identity/" }
+sunshine-bounty-cli = { path = "../../client/cli" }
+sunshine-core = "0.2.0"
+sunshine-identity-cli = "0.2.2"
 test-client = { path = "../client" }
+thiserror = "1.0.20"
