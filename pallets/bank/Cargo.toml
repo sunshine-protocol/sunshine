@@ -1,6 +1,6 @@
 [package]
 name = "sunshine-bank"
-version = "0.0.6"
+version = "0.1.1"
 authors = ["Amar Singh <asinghchrony@protonmail.com>"]
 edition = "2018"
 
@@ -20,7 +20,6 @@ org = { package = "sunshine-org", path = "../org", default-features=false}
 vote = { package = "sunshine-vote", path = "../vote", default-features=false}
 donate = { package = "sunshine-donate", path = "../donate", default-features=false}
 clear_on_drop = { version = "0.2.4", features = ["no_cc"] } # https://github.com/paritytech/substrate/issues/4179
-# temp until ./bank.rs is merged into pallets-util
 
 [dev-dependencies]
 pallet-balances = { version = "2.0.0-rc4", default-features = false }

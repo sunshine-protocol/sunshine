@@ -6491,7 +6491,7 @@ checksum = "502d53007c02d7605a05df1c1a73ee436952781653da5d0bf57ad608f66932c1"
 
 [[package]]
 name = "sunshine-bank"
-version = "0.0.6"
+version = "0.1.1"
 dependencies = [
  "clear_on_drop",
  "frame-support",
@@ -6510,7 +6510,7 @@ dependencies = [
 
 [[package]]
 name = "sunshine-bounty"
-version = "0.0.6"
+version = "0.1.1"
 dependencies = [
  "clear_on_drop",
  "frame-support",
@@ -6565,7 +6565,7 @@ dependencies = [
 
 [[package]]
 name = "sunshine-bounty-utils"
-version = "0.0.6"
+version = "0.1.1"
 dependencies = [
  "clear_on_drop",
  "derive-new",
@@ -6595,7 +6595,7 @@ dependencies = [
 
 [[package]]
 name = "sunshine-court"
-version = "0.0.6"
+version = "0.1.1"
 dependencies = [
  "clear_on_drop",
  "frame-support",
@@ -6614,7 +6614,7 @@ dependencies = [
 
 [[package]]
 name = "sunshine-donate"
-version = "0.0.6"
+version = "0.1.1"
 dependencies = [
  "clear_on_drop",
  "frame-support",
@@ -6692,7 +6692,7 @@ dependencies = [
 
 [[package]]
 name = "sunshine-org"
-version = "0.0.6"
+version = "0.1.1"
 dependencies = [
  "clear_on_drop",
  "frame-support",
@@ -6710,7 +6710,7 @@ dependencies = [
 
 [[package]]
 name = "sunshine-vote"
-version = "0.0.6"
+version = "0.1.1"
 dependencies = [
  "clear_on_drop",
  "frame-support",
