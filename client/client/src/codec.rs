@@ -1,7 +1,4 @@
 use crate::error::Error;
-use libipld::cbor::DagCborCodec;
-use libipld::cid::Cid;
-use libipld::codec::Codec as _;
 use libipld::DagCbor;
 use std::str::FromStr;
 
@@ -55,13 +52,13 @@ impl FromStr for CustomCodec {
             "vote_topic" => Ok(CustomCodec::VoteTopic),
             "bounty_post" => Ok(CustomCodec::BountyPost),
             "milestone_post" => Ok(CustomCodec::MilestonePost),
-            _ => Err(Error::ParseCodecError)
+            _ => Err(Error::ParseCodecError),
         }
     }
 }
 
 /// Bounty Post Body Schema:
-/// ``` 
+/// ```
 /// struct BountyBody {
 ///     repo_owner: String,
 ///     repo_name: String,
@@ -108,7 +105,7 @@ impl CustomCodec {
                             if let Some(_) = lines.next() {
                                 // _ is the repo
                                 if let Some(s4) = lines.next() {
-                                    // s4 is the issue number so it must be parse-able into u64 
+                                    // s4 is the issue number so it must be parse-able into u64
                                     if let Ok(_) = s4.parse::<u64>() {
                                         true
                                     } else {

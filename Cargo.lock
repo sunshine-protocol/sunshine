@@ -2252,17 +2252,6 @@ dependencies = [
 
 [[package]]
 name = "ipld-block-builder"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e7bcc5d297e6bad03888889aab3661cb9860a5203a0d7303a0bf13e81a135d00"
-dependencies = [
- "async-std",
- "cached",
- "libipld",
-]
-
-[[package]]
-name = "ipld-block-builder"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "669637b2da39e8d04bfaf0aafcb7dd1eab8a33e7fd8770b62fe9a255e551bae6"
@@ -3139,9 +3128,9 @@ dependencies = [
 
 [[package]]
 name = "log"
-version = "0.4.8"
+version = "0.4.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "14b6052be84e6b71ab17edffc2eeabf5c2c3ae1fdb464aae35ac50c67a44e1f7"
+checksum = "4fabed175da42fed1fa0746b0ea71f412aa9d35e76e95e59b192c64b9dc2bf8b"
 dependencies = [
  "cfg-if",
 ]
@@ -7032,7 +7021,7 @@ dependencies = [
  "async-std",
  "async-trait",
  "frame-support",
- "ipld-block-builder 0.3.0",
+ "ipld-block-builder",
  "libipld",
  "parity-scale-codec",
  "serde",
@@ -7138,7 +7127,7 @@ dependencies = [
  "async-std",
  "async-trait",
  "frame-support",
- "ipld-block-builder 0.4.0",
+ "ipld-block-builder",
  "libipld",
  "log",
  "parity-scale-codec",
@@ -7153,7 +7142,7 @@ dependencies = [
 [[package]]
 name = "sunshine-identity-utils"
 version = "0.2.0"
-source = "git+https://github.com/sunshine-protocol/sunshine-identity/#f494f3e1247e73651b13ebaada03a56816d79cdf"
+source = "git+https://github.com/sunshine-protocol/sunshine-identity/#b67e638ac5a7cacb5c525302a04ca6076d78a25a"
 dependencies = [
  "libipld",
  "parity-scale-codec",

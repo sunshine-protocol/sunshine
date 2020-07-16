@@ -1,15 +1,31 @@
-use crate::error::Error;
-use crate::codec::Text;
-use crate::org::Org;
-use ipld_block_builder::{Cache, Codec};
-use substrate_subxt::{Runtime, SignedExtra};
-use substrate_subxt::sp_runtime::traits::SignedExtension;
+use crate::{
+    codec::Text,
+    error::Error,
+    org::Org,
+};
+use ipld_block_builder::{
+    Cache,
+    Codec,
+    ReadonlyCache,
+};
+use substrate_subxt::{
+    sp_runtime::traits::SignedExtension,
+    Runtime,
+    SignedExtra,
+};
 use sunshine_core::ChainClient;
 
-async fn post_ipfs_reference<T, C>(client: &C, text: Text) -> Result<T::IpfsReference, C::Error>
+pub async fn post_ipfs_reference<T, C>(
+    client: &C,
+    text: Text,
+) -> Result<T::IpfsReference, C::Error>
 where
-    T: Runtime + Org, // TODO? <T as Org>::IpfsReference: From<CidBytes>
-    <<T::Extra as SignedExtra<T>>::Extra as SignedExtension>::AdditionalSigned: Send + Sync,
+    T: Runtime + Org,
+    <T as Org>::IpfsReference: From<
+        libipld::cid::CidGeneric<libipld::cid::Codec, libipld::multihash::Code>,
+    >,
+    <<T::Extra as SignedExtra<T>>::Extra as SignedExtension>::AdditionalSigned:
+        Send + Sync,
     C: ChainClient<T>,
     C::OffchainClient: Cache<Codec, Text>,
     C::Error: From<Error>,
@@ -19,14 +35,21 @@ where
     Ok(ret_cid)
 }
 
-async fn resolve_ipfs_reference<T, C>(client: &C, cid: T::IpfsReference) -> Result<(), C::Error>
+pub async fn resolve_ipfs_reference<T, C>(
+    client: &C,
+    cid: T::IpfsReference,
+) -> Result<(), C::Error>
 where
     T: Runtime + Org,
-    <<T::Extra as SignedExtra<T>>::Extra as SignedExtension>::AdditionalSigned: Send + Sync,
+    <T as Org>::IpfsReference: Into<
+        libipld::cid::CidGeneric<libipld::cid::Codec, libipld::multihash::Code>,
+    >,
+    <<T::Extra as SignedExtra<T>>::Extra as SignedExtension>::AdditionalSigned:
+        Send + Sync,
     C: ChainClient<T>,
     C::OffchainClient: Cache<Codec, Text>,
     C::Error: From<Error>,
 {
-    let _ = client.offchain_client().get(cid).await?;
+    let _ = client.offchain_client().get(&cid.into()).await?;
     Ok(())
 }
