@@ -1,0 +1,19 @@
+[package]
+name = "bounty-bot"
+version = "0.1.0"
+authors = ["Amar Singh <asinghchrony@protonmail.com>"]
+edition = "2018"
+
+[dependencies]
+tokio = { version = "0.2.17", default-features = false, features = ["macros"] }
+octocrab = "0.4.2"
+substrate-subxt = { version = "0.10.1", features = ["client"] }
+sp-keyring = "2.0.0-rc4"
+keybase-keystore = {package = "keybase-keystore", git = "https://github.com/sunshine-protocol/substrate-identity"}
+ipfs-embed = {version = "0.1.1", default-features = false}
+env_logger = "0.7.1"
+exitfailure = "0.5.1"
+dirs = "3.0.1"
+thiserror = "1.0.20"
+clap = "3.0.0-beta.1"
+test-client = { path = "../client" }

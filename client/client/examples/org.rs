@@ -51,6 +51,7 @@ async fn main() -> Result<(), Error> {
     let _ = keystore.initialize(
         &DeviceKey::from_seed(alice_seed),
         &Password::from("password".to_string()),
+        true,
     )?;
     let client = Client::<Runtime>::new(keystore, subxt, ipld);
     let account_id = sp_keyring::AccountKeyring::Alice.to_account_id();

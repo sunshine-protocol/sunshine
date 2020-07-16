@@ -6,6 +6,7 @@ members = [
     "bin/cli",
     "bin/client",
     "bin/runtime",
+    "bin/bot",
     "bin/node",
     "client/cli",
     "client/client",

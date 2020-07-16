@@ -113,11 +113,12 @@ decl_event!(
     pub enum Event<T>
     where
         <T as frame_system::Trait>::AccountId,
+        <T as org::Trait>::IpfsReference,
         <T as vote::Trait>::VoteId,
         <T as Trait>::BountyId,
         Balance = BalanceOf<T>,
     {
-        BountyPosted(BountyId, AccountId, Balance),
+        BountyPosted(BountyId, AccountId, Balance, IpfsReference),
         BountyApplicationSubmitted(BountyId, BountyId, AccountId, Option<OnChainTreasuryID>, Balance),
         SudoApprovedBountyApplication(AccountId, BountyId, BountyId, ApplicationState<VoteId>),
         ApplicationReviewTriggered(AccountId, BountyId, BountyId, ApplicationState<VoteId>),
@@ -251,12 +252,12 @@ decl_module! {
             let new_bounty_id = Self::post_bounty(
                 poster.clone(),
                 None, // not posting on behalf of org
-                description,
+                description.clone(),
                 amount_reserved_for_bounty,
                 acceptance_committee,
                 supervision_committee,
             )?;
-            Self::deposit_event(RawEvent::BountyPosted(new_bounty_id, poster, amount_reserved_for_bounty));
+            Self::deposit_event(RawEvent::BountyPosted(new_bounty_id, poster, amount_reserved_for_bounty, description));
             Ok(())
         }
         #[weight = 0]
@@ -282,12 +283,12 @@ decl_module! {
             let new_bounty_id = Self::post_bounty(
                 poster.clone(),
                 Some(bank_id),
-                description,
+                description.clone(),
                 amount_reserved_for_bounty,
                 acceptance_committee,
                 supervision_committee,
             )?;
-            Self::deposit_event(RawEvent::BountyPosted(new_bounty_id, poster, amount_reserved_for_bounty));
+            Self::deposit_event(RawEvent::BountyPosted(new_bounty_id, poster, amount_reserved_for_bounty, description));
             Ok(())
         }
         #[weight = 0]
