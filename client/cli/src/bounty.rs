@@ -15,6 +15,7 @@ use substrate_subxt::{
     sp_core::crypto::Ss58Codec,
     system::System,
 };
+use bounty_client::client::*;
 use util::court::ResolutionMetadata;
 use utils_identity::cid::CidBytes;
 
