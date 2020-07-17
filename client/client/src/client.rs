@@ -32,9 +32,7 @@ pub async fn post_constitution<T, C>(
 ) -> Result<T::IpfsReference, C::Error>
 where
     T: Runtime + Org,
-    <T as Org>::IpfsReference: From<
-        libipld::cid::CidGeneric<libipld::cid::Codec, libipld::multihash::Code>,
-    >,
+    <T as Org>::IpfsReference: From<libipld::cid::Cid>,
     <<T::Extra as SignedExtra<T>>::Extra as SignedExtension>::AdditionalSigned:
         Send + Sync,
     C: ChainClient<T>,
@@ -52,9 +50,7 @@ pub async fn post_bounty<T, C>(
 ) -> Result<T::IpfsReference, C::Error>
 where
     T: Runtime + Org,
-    <T as Org>::IpfsReference: From<
-        libipld::cid::CidGeneric<libipld::cid::Codec, libipld::multihash::Code>,
-    >,
+    <T as Org>::IpfsReference: From<libipld::cid::Cid>,
     <<T::Extra as SignedExtra<T>>::Extra as SignedExtension>::AdditionalSigned:
         Send + Sync,
     C: ChainClient<T>,

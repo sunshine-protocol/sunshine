@@ -1,36 +1,32 @@
-use crate::{
-    async_trait,
-    error::Error,
-    AbstractClient,
-    Bank,
-    Bounty,
-    Command,
-    Donate,
-    Org,
-    Pair,
-    Permill,
+use crate::error::{
+    Error,
     Result,
-    Runtime,
-    Vote,
 };
 use clap::Clap;
 use core::fmt::{
     Debug,
     Display,
 };
-use libipld::{
-    cid::{
-        Cid,
-        Codec,
-    },
-    multihash::Blake2b256,
-};
 use substrate_subxt::{
     sp_core::crypto::Ss58Codec,
     system::System,
+    Runtime,
+    SignedExtension,
+    SignedExtra,
 };
-use util::vote::VoterView;
-use utils_identity::cid::CidBytes;
+use sunshine_bounty_client::{
+    client::*,
+    org::Org,
+    vote::{
+        Vote,
+        VoteClient,
+    },
+    Cache,
+    Codec,
+    Permill,
+};
+use sunshine_bounty_utils::vote::VoterView;
+use sunshine_core::ChainClient;
 
 #[derive(Clone, Debug, Clap)]
 pub struct VoteCreateSignalThresholdCommand {
@@ -41,34 +37,44 @@ pub struct VoteCreateSignalThresholdCommand {
     pub duration: Option<u32>,
 }
 
-#[async_trait]
-impl<T: Runtime + Org + Vote + Donate + Bank + Bounty, P: Pair> Command<T, P>
-    for VoteCreateSignalThresholdCommand
-where
-    <T as System>::AccountId: Ss58Codec,
-    <T as System>::BlockNumber: From<u32> + Display,
-    <T as Org>::OrgId: From<u64> + Display,
-    <T as Org>::IpfsReference: From<CidBytes> + Debug,
-    <T as Vote>::Signal: From<u64> + Display,
-    <T as Vote>::VoteId: From<u64> + Display,
-{
-    async fn exec(&self, client: &dyn AbstractClient<T, P>) -> Result<()> {
-        let topic: Option<T::IpfsReference> =
-            if let Some(topic_ref) = &self.topic {
-                let content = topic_ref.as_bytes();
-                let hash = Blake2b256::digest(&content[..]);
-                let cid = Cid::new_v1(Codec::Raw, hash);
-                Some(CidBytes::from(&cid).into())
-            } else {
-                None
-            };
-        let turnout_requirement: Option<T::Signal> =
+impl VoteCreateSignalThresholdCommand {
+    pub async fn exec<R: Runtime + Org + Vote, C: VoteClient<R>>(
+        &self,
+        client: &C,
+    ) -> Result<(), C::Error>
+    where
+        <R as System>::AccountId: Ss58Codec,
+        <R as System>::BlockNumber: From<u32>,
+        <R as Org>::OrgId: From<u64> + Display,
+        <R as Org>::IpfsReference: From<
+            libipld::cid::Cid,
+        >,
+        <R as Vote>::VoteId: From<u64> + Display,
+        <R as Vote>::Signal: From<u64> + Display,
+        <<<R as Runtime>::Extra as SignedExtra<R>>::Extra as SignedExtension>::AdditionalSigned: Send + Sync,
+        C: ChainClient<R>,
+        C::OffchainClient: Cache<Codec, OrgConstitution>,
+        C::Error: From<sunshine_bounty_client::Error>,
+    {
+        let topic = if let Some(top) = &self.topic {
+            Some(
+                post_constitution(
+                    client,
+                    OrgConstitution { text: top.clone() },
+                )
+                .await
+                .map_err(Error::Client)?,
+            )
+        } else {
+            None
+        };
+        let turnout_requirement: Option<R::Signal> =
             if let Some(req) = self.turnout_requirement {
                 Some(req.into())
             } else {
                 None
             };
-        let duration: Option<<T as System>::BlockNumber> =
+        let duration: Option<<R as System>::BlockNumber> =
             if let Some(req) = self.duration {
                 Some(req.into())
             } else {
@@ -82,7 +88,8 @@ where
                 turnout_requirement,
                 duration,
             )
-            .await?;
+            .await
+            .map_err(Error::Client)?;
         println!(
             "Account {} created a signal threshold vote for OrgId {} with VoteId {}",
             event.caller, event.org, event.new_vote_id
@@ -100,7 +107,7 @@ pub struct VoteCreatePercentThresholdCommand {
     pub duration: Option<u32>,
 }
 
-fn u8_to_permill(u: u8) -> Result<Permill> {
+fn u8_to_permill(u: u8) -> Result<Permill, sunshine_bounty_client::Error> {
     if u > 0u8 && u < 100u8 {
         Ok(Permill::from_percent(u.into()))
     } else {
@@ -108,35 +115,47 @@ fn u8_to_permill(u: u8) -> Result<Permill> {
     }
 }
 
-#[async_trait]
-impl<T: Runtime + Org + Vote + Donate + Bank + Bounty, P: Pair> Command<T, P>
-    for VoteCreatePercentThresholdCommand
-where
-    <T as System>::AccountId: Ss58Codec,
-    <T as System>::BlockNumber: From<u32> + Display,
-    <T as Org>::OrgId: From<u64> + Display,
-    <T as Org>::IpfsReference: From<CidBytes> + Debug,
-    <T as Vote>::VoteId: From<u64> + Display,
-{
-    async fn exec(&self, client: &dyn AbstractClient<T, P>) -> Result<()> {
-        let topic: Option<T::IpfsReference> =
-            if let Some(topic_ref) = &self.topic {
-                let content = topic_ref.as_bytes();
-                let hash = Blake2b256::digest(&content[..]);
-                let cid = Cid::new_v1(Codec::Raw, hash);
-                Some(CidBytes::from(&cid).into())
-            } else {
-                None
-            };
-        let support_threshold = u8_to_permill(self.support_threshold)?;
+impl VoteCreatePercentThresholdCommand {
+    pub async fn exec<R: Runtime + Org + Vote, C: VoteClient<R>>(
+        &self,
+        client: &C,
+    ) -> Result<(), C::Error>
+    where
+        <R as System>::AccountId: Ss58Codec,
+        <R as System>::BlockNumber: From<u32>,
+        <R as Org>::OrgId: From<u64> + Display,
+        <R as Org>::IpfsReference: From<
+            libipld::cid::Cid,
+        >,
+        <R as Vote>::VoteId: From<u64> + Display,
+        <<<R as Runtime>::Extra as SignedExtra<R>>::Extra as SignedExtension>::AdditionalSigned: Send + Sync,
+        C: ChainClient<R>,
+        C::OffchainClient: Cache<Codec, OrgConstitution>,
+        C::Error: From<sunshine_bounty_client::Error>,
+    {
+        let topic = if let Some(top) = &self.topic {
+            Some(
+                post_constitution(
+                    client,
+                    OrgConstitution { text: top.clone() },
+                )
+                .await
+                .map_err(Error::Client)?,
+            )
+        } else {
+            None
+        };
+        let support_threshold = u8_to_permill(self.support_threshold)
+            .map_err(|_| Error::VotePercentThresholdInputBoundError)?;
         let turnout_threshold: Option<Permill> =
             if let Some(req) = self.turnout_threshold {
-                let ret = u8_to_permill(req)?;
+                let ret = u8_to_permill(req)
+                    .map_err(|_| Error::VotePercentThresholdInputBoundError)?;
                 Some(ret)
             } else {
                 None
             };
-        let duration: Option<<T as System>::BlockNumber> =
+        let duration: Option<<R as System>::BlockNumber> =
             if let Some(req) = self.duration {
                 Some(req.into())
             } else {
@@ -150,7 +169,8 @@ where
                 turnout_threshold,
                 duration,
             )
-            .await?;
+            .await
+            .map_err(Error::Client)?;
         println!(
             "Account {} created a percent threshold vote for OrgId {} with VoteId {}",
             event.caller, event.org, event.new_vote_id
@@ -166,28 +186,36 @@ pub struct VoteCreateUnanimousConsentCommand {
     pub duration: Option<u32>,
 }
 
-#[async_trait]
-impl<T: Runtime + Org + Vote + Donate + Bank + Bounty, P: Pair> Command<T, P>
-    for VoteCreateUnanimousConsentCommand
-where
-    <T as System>::AccountId: Ss58Codec,
-    <T as System>::BlockNumber: From<u32> + Display,
-    <T as Org>::OrgId: From<u64> + Display,
-    <T as Org>::IpfsReference: From<CidBytes> + Debug,
-    <T as Vote>::Signal: From<u64> + Display,
-    <T as Vote>::VoteId: From<u64> + Display,
-{
-    async fn exec(&self, client: &dyn AbstractClient<T, P>) -> Result<()> {
-        let topic: Option<T::IpfsReference> =
-            if let Some(topic_ref) = &self.topic {
-                let content = topic_ref.as_bytes();
-                let hash = Blake2b256::digest(&content[..]);
-                let cid = Cid::new_v1(Codec::Raw, hash);
-                Some(CidBytes::from(&cid).into())
-            } else {
-                None
-            };
-        let duration: Option<<T as System>::BlockNumber> =
+impl VoteCreateUnanimousConsentCommand {
+    pub async fn exec<R: Runtime + Org + Vote, C: VoteClient<R>>(
+        &self,
+        client: &C,
+    ) -> Result<(), C::Error>
+    where
+        <R as System>::AccountId: Ss58Codec,
+        <R as Org>::OrgId: From<u64> + Display,
+        <R as Org>::IpfsReference: From<
+            libipld::cid::Cid,
+        >,
+        <R as Vote>::VoteId: From<u64> + Display,
+        <<<R as Runtime>::Extra as SignedExtra<R>>::Extra as SignedExtension>::AdditionalSigned: Send + Sync,
+        C: ChainClient<R>,
+        C::OffchainClient: Cache<Codec, OrgConstitution>,
+        C::Error: From<sunshine_bounty_client::Error>,
+    {
+        let topic = if let Some(top) = &self.topic {
+            Some(
+                post_constitution(
+                    client,
+                    OrgConstitution { text: top.clone() },
+                )
+                .await
+                .map_err(Error::Client)?,
+            )
+        } else {
+            None
+        };
+        let duration: Option<<R as System>::BlockNumber> =
             if let Some(req) = self.duration {
                 Some(req.into())
             } else {
@@ -199,7 +227,8 @@ where
                 self.organization.into(),
                 duration,
             )
-            .await?;
+            .await
+            .map_err(Error::Client)?;
         println!(
             "Account {} created a unanimous consent vote for OrgId {} with VoteId {}",
             event.caller, event.org, event.new_vote_id
@@ -215,24 +244,35 @@ pub struct VoteSubmitCommand {
     pub justification: Option<String>,
 }
 
-#[async_trait]
-impl<T: Runtime + Org + Vote + Donate + Bank + Bounty, P: Pair> Command<T, P>
-    for VoteSubmitCommand
-where
-    <T as System>::AccountId: Ss58Codec,
-    <T as Org>::IpfsReference: From<CidBytes> + Debug,
-    <T as Vote>::VoteId: From<u64> + Display,
-{
-    async fn exec(&self, client: &dyn AbstractClient<T, P>) -> Result<()> {
-        let justification: Option<T::IpfsReference> =
-            if let Some(topic_ref) = &self.justification {
-                let content = topic_ref.as_bytes();
-                let hash = Blake2b256::digest(&content[..]);
-                let cid = Cid::new_v1(Codec::Raw, hash);
-                Some(CidBytes::from(&cid).into())
-            } else {
-                None
-            };
+impl VoteSubmitCommand {
+    pub async fn exec<R: Runtime + Org + Vote, C: VoteClient<R>>(
+        &self,
+        client: &C,
+    ) -> Result<(), C::Error>
+    where
+        <R as System>::AccountId: Ss58Codec,
+        <R as Org>::OrgId: From<u64> + Display,
+        <R as Org>::IpfsReference: From<
+            libipld::cid::Cid,
+        >,
+        <R as Vote>::VoteId: From<u64> + Display,
+        <<<R as Runtime>::Extra as SignedExtra<R>>::Extra as SignedExtension>::AdditionalSigned: Send + Sync,
+        C: ChainClient<R>,
+        C::OffchainClient: Cache<Codec, OrgConstitution>,
+        C::Error: From<sunshine_bounty_client::Error>,
+    {
+        let justification = if let Some(note) = &self.justification {
+            Some(
+                post_constitution(
+                    client,
+                    OrgConstitution { text: note.clone() },
+                )
+                .await
+                .map_err(Error::Client)?,
+            )
+        } else {
+            None
+        };
         let voter_view = match self.direction {
             0u8 => VoterView::Against, // 0 == false
             1u8 => VoterView::InFavor, // 1 == true
@@ -240,7 +280,8 @@ where
         };
         let event = client
             .submit_vote(self.vote_id.into(), voter_view, justification.into())
-            .await?;
+            .await
+            .map_err(Error::Client)?;
         println!(
             "Account {} voted with view {:?} in VoteId {}",
             event.voter, event.view, event.vote_id

@@ -15,5 +15,6 @@ pub use ipld_block_builder::{
     Cache,
     Codec,
 };
+pub use substrate_subxt::sp_runtime::Permill;
 
 pub use error::Error;

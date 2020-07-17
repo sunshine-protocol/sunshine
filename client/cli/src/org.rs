@@ -46,7 +46,7 @@ impl OrgRegisterFlatCommand {
         <R as System>::AccountId: Ss58Codec,
         <R as Org>::OrgId: From<u64> + Display,
         <R as Org>::IpfsReference: From<
-            libipld::cid::CidGeneric<libipld::cid::Codec, libipld::multihash::Code>,
+            libipld::cid::Cid,
         >,
         <<<R as Runtime>::Extra as SignedExtra<R>>::Extra as SignedExtension>::AdditionalSigned: Send + Sync,
         C: ChainClient<R>,
@@ -110,7 +110,7 @@ impl OrgRegisterWeightedCommand {
         <R as Org>::OrgId: From<u64> + Display,
         <R as Org>::Shares: From<u64> + Display,
         <R as Org>::IpfsReference: From<
-            libipld::cid::CidGeneric<libipld::cid::Codec, libipld::multihash::Code>,
+            libipld::cid::Cid,
         >,
         <<<R as Runtime>::Extra as SignedExtra<R>>::Extra as SignedExtension>::AdditionalSigned: Send + Sync,
         C: ChainClient<R>,

@@ -4,6 +4,6 @@ pub mod donate;
 mod error;
 pub mod org;
 pub mod shares;
-// pub mod vote;
+pub mod vote;
 
 pub use crate::error::*;
