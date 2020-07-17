@@ -13,10 +13,6 @@ use sp_runtime::{
     traits::IdentityLookup,
     Perbill,
 };
-use util::{
-    organization::Organization,
-    traits::GroupMembership,
-};
 
 // type aliases
 pub type AccountId = u64;
@@ -26,7 +22,7 @@ impl_outer_origin! {
     pub enum Origin for Test where system = frame_system {}
 }
 
-mod donate {
+mod treasury {
     pub use super::super::*;
 }
 
@@ -34,8 +30,7 @@ impl_outer_event! {
     pub enum TestEvent for Test {
         system<T>,
         pallet_balances<T>,
-        org<T>,
-        donate<T>,
+        treasury<T>,
     }
 }
 
@@ -84,28 +79,24 @@ impl pallet_balances::Trait for Test {
     type ExistentialDeposit = ExistentialDeposit;
     type AccountStore = System;
 }
-impl org::Trait for Test {
-    type Event = TestEvent;
-    type IpfsReference = u32; // TODO: replace with utils_identity::Cid
-    type OrgId = u64;
-    type Shares = u64;
-    type ReservationLimit = ReservationLimit;
+parameter_types! {
+    pub const TreasuryModuleId: ModuleId = ModuleId(*b"py/trsry");
 }
 impl Trait for Test {
     type Event = TestEvent;
     type Currency = Balances;
+    type TreasuryAddress = TreasuryModuleId;
 }
 pub type System = system::Module<Test>;
 pub type Balances = pallet_balances::Module<Test>;
-pub type Org = org::Module<Test>;
-pub type Donate = Module<Test>;
+pub type Treasury = Module<Test>;
 
 fn get_last_event() -> RawEvent<u64, u64, u64> {
     System::events()
         .into_iter()
         .map(|r| r.event)
         .filter_map(|e| {
-            if let TestEvent::donate(inner) = e {
+            if let TestEvent::treasury(inner) = e {
                 Some(inner)
             } else {
                 None
@@ -124,13 +115,6 @@ fn new_test_ext() -> sp_io::TestExternalities {
     }
     .assimilate_storage(&mut t)
     .unwrap();
-    org::GenesisConfig::<Test> {
-        first_organization_supervisor: 1,
-        first_organization_value_constitution: 1738,
-        first_organization_flat_membership: vec![1, 2, 3, 4, 5, 6],
-    }
-    .assimilate_storage(&mut t)
-    .unwrap();
     let mut ext: sp_io::TestExternalities = t.into();
     ext.execute_with(|| System::set_block_number(1));
     ext
@@ -139,15 +123,6 @@ fn new_test_ext() -> sp_io::TestExternalities {
 #[test]
 fn genesis_config_works() {
     new_test_ext().execute_with(|| {
-        assert_eq!(Org::organization_counter(), 1);
-        let constitution = 1738;
-        let expected_organization =
-            Organization::new(Some(1), None, constitution);
-        let org_in_storage = Org::organization_states(1u64).unwrap();
-        assert_eq!(expected_organization, org_in_storage);
-        for i in 1u64..7u64 {
-            assert!(Org::is_member_of_group(1u64, &i));
-        }
         assert!(System::events().is_empty());
     });
 }
@@ -158,17 +133,5 @@ fn check_donation_accuracy() {
         let one = Origin::signed(1);
         let two = Origin::signed(2);
         assert_eq!(Balances::total_balance(&2), 98);
-        // only 54 actually transferred because it rounds down 1/6 * 60 = 9
-        assert_ok!(Donate::make_prop_donation(one, 1, 60));
-        // 98 + 9 = 107
-        assert_eq!(Balances::total_balance(&2), 107);
-        // 100 - 54 + 9 = 55
-        assert_eq!(Balances::total_balance(&1), 55);
-        assert_ok!(Donate::make_prop_donation(two, 1, 20));
-        // 55 + (20/6 ~= 3) = 53
-        assert_eq!(Balances::total_balance(&1), 58);
-        // 108 - 18 + 3 = 93
-        // the remainder 2 wasn't transferred
-        assert_eq!(Balances::total_balance(&2), 92);
     });
 }

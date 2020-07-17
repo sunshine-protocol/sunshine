@@ -389,16 +389,18 @@ impl court::Trait for Runtime {
     type DisputeId = u64;
     type MinimumDisputeAmount = MinimumDisputeAmount;
 }
-pub use donate;
 parameter_types! {
-    pub const TransactionFee: u128 = 3;
     pub const TreasuryModuleId: ModuleId = ModuleId(*b"py/trsry");
 }
+impl treasury::Trait for Runtime {
+    type Event = Event;
+    type Currency = Balances;
+    type TreasuryAddress = TreasuryModuleId;
+}
+pub use donate;
 impl donate::Trait for Runtime {
     type Event = Event;
     type Currency = Balances;
-    type TransactionFee = TransactionFee;
-    type Treasury = TreasuryModuleId;
 }
 pub use bank;
 parameter_types! {
@@ -441,6 +443,7 @@ construct_runtime!(
         Org: org::{Module, Call, Config<T>, Storage, Event<T>},
         Vote: vote::{Module, Call, Storage, Event<T>},
         Court: court::{Module, Call, Storage, Event<T>},
+        Treasury: treasury::{Module, Call, Config<T>, Storage, Event<T>},
         Donate: donate::{Module, Call, Event<T>},
         Bank: bank::{Module, Call, Storage, Event<T>},
         Bounty: bounty::{Module, Call, Storage, Event<T>},

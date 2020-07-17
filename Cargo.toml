@@ -10,11 +10,12 @@ members = [
     "bin/node",
     "client/cli",
     "client/client",
-    "pallets/vote",
     "pallets/bank",
     "pallets/bounty",
     "pallets/court",
     "pallets/donate",
     "pallets/org",
+    "pallets/treasury",
+    "pallets/vote",
     "utils",
 ]

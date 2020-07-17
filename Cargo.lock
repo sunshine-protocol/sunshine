@@ -7179,6 +7179,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "sunshine-treasury"
+version = "0.0.1"
+dependencies = [
+ "clear_on_drop",
+ "frame-support",
+ "frame-system",
+ "pallet-balances",
+ "parity-scale-codec",
+ "serde",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "sunshine-vote"
 version = "0.1.1"
 dependencies = [
@@ -7232,6 +7248,7 @@ dependencies = [
  "sunshine-donate",
  "sunshine-identity-utils 0.2.0 (git+https://github.com/sunshine-protocol/sunshine-identity/)",
  "sunshine-org",
+ "sunshine-treasury",
  "sunshine-vote",
 ]
 
