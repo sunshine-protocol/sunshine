@@ -12,10 +12,10 @@ use sp_runtime::traits::{
 };
 use suntime::{
     AccountId,
-    BlockNumber,
-    Balance,
     AuraConfig,
+    Balance,
     BalancesConfig,
+    BlockNumber,
     GenesisConfig,
     GrandpaConfig,
     IndicesConfig,
@@ -188,7 +188,7 @@ pub fn testnet_genesis(
                 .collect(),
         }),
         pallet_sudo: Some(SudoConfig { key: root_key }),
-        treasury: Some(TreasuryConfig { 
+        treasury: Some(TreasuryConfig {
             minting_interval: treasury_mint_rate.0,
             mint_amount: treasury_mint_rate.1,
         }),
