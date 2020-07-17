@@ -10,4 +10,10 @@ pub mod vote;
 // ipfs ops
 pub mod client;
 
+// re-export for usage by cli
+pub use ipld_block_builder::{
+    Cache,
+    Codec,
+};
+
 pub use error::Error;

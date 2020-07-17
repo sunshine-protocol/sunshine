@@ -1,37 +1,33 @@
-use crate::{
-    async_trait,
-    AbstractClient,
-    Bank,
-    Bounty,
-    Command,
-    Donate,
-    Org,
-    Pair,
+use crate::error::{
+    Error,
     Result,
-    Runtime,
-    Vote,
-};
-use bounty_client::{
-    Account,
-    AccountShare,
 };
 use clap::Clap;
 use core::fmt::{
     Debug,
     Display,
 };
-use libipld::{
-    cid::{
-        Cid,
-        Codec,
-    },
-    multihash::Blake2b256,
-};
 use substrate_subxt::{
     sp_core::crypto::Ss58Codec,
     system::System,
+    Runtime,
+    SignedExtension,
+    SignedExtra,
 };
-use utils_identity::cid::CidBytes;
+use sunshine_bounty_client::{
+    client::*,
+    org::{
+        AccountShare,
+        Org,
+        OrgClient,
+    },
+    Cache,
+    Codec,
+};
+use sunshine_core::{
+    ChainClient,
+    Ss58,
+};
 
 #[derive(Clone, Debug, Clap)]
 pub struct OrgRegisterFlatCommand {
@@ -41,44 +37,53 @@ pub struct OrgRegisterFlatCommand {
     pub members: Vec<String>,
 }
 
-#[async_trait]
-impl<T: Runtime + Org + Vote + Donate + Bank + Bounty, P: Pair> Command<T, P>
-    for OrgRegisterFlatCommand
-where
-    <T as System>::AccountId: Ss58Codec,
-    <T as Org>::OrgId: From<u64> + Display,
-    <T as Org>::Shares: From<u64> + Display,
-    <T as Org>::IpfsReference: From<CidBytes> + Debug,
-{
-    async fn exec(&self, client: &dyn AbstractClient<T, P>) -> Result<()> {
-        let sudo: Option<T::AccountId> = if let Some(acc) = &self.sudo {
-            let new_acc: Account<T> = acc.parse()?;
-            Some(new_acc.id)
+impl OrgRegisterFlatCommand {
+    pub async fn exec<R: Runtime + Org, C: OrgClient<R>>(
+        &self,
+        client: &C,
+    ) -> Result<(), C::Error>
+    where
+        <R as System>::AccountId: Ss58Codec,
+        <R as Org>::OrgId: From<u64> + Display,
+        <R as Org>::IpfsReference: From<
+            libipld::cid::CidGeneric<libipld::cid::Codec, libipld::multihash::Code>,
+        >,
+        <<<R as Runtime>::Extra as SignedExtra<R>>::Extra as SignedExtension>::AdditionalSigned: Send + Sync,
+        C: ChainClient<R>,
+        C::OffchainClient: Cache<Codec, OrgConstitution>,
+        C::Error: From<sunshine_bounty_client::Error>,
+    {
+        let sudo = if let Some(acc) = &self.sudo {
+            let new_acc: Ss58<R> = acc.parse()?;
+            Some(new_acc.0)
         } else {
             None
         };
-        let parent_org: Option<T::OrgId> = if let Some(org) = self.parent_org {
+        let parent_org: Option<R::OrgId> = if let Some(org) = self.parent_org {
             Some(org.into())
         } else {
             None
         };
-        let constitution: CidBytes = {
-            let content = self.constitution.as_bytes();
-            let hash = Blake2b256::digest(&content[..]);
-            let cid = Cid::new_v1(Codec::Raw, hash);
-            CidBytes::from(&cid)
-        };
+        let constitution = post_constitution(
+            client,
+            OrgConstitution {
+                text: self.constitution.clone(),
+            },
+        )
+        .await
+        .map_err(Error::Client)?;
         let members = self
             .members
             .iter()
-            .map(|acc| -> Result<T::AccountId> {
-                let mem: Account<T> = acc.parse()?;
-                Ok(mem.id)
+            .map(|acc| -> Result<R::AccountId, C::Error> {
+                let mem: Ss58<R> = acc.parse::<Ss58<R>>()?;
+                Ok(mem.0)
             })
-            .collect::<Result<Vec<T::AccountId>>>()?;
+            .collect::<Result<Vec<R::AccountId>, C::Error>>()?;
         let event = client
             .register_flat_org(sudo, parent_org, constitution.into(), &members)
-            .await?;
+            .await
+            .map_err(Error::Client)?;
         println!(
             "Account {} created a flat organization with OrgId: {}, constitution: {:?} and {} members of equal ownership weight",
             event.caller, event.new_id, event.constitution, event.total
@@ -95,42 +100,51 @@ pub struct OrgRegisterWeightedCommand {
     pub members: Vec<AccountShare>,
 }
 
-#[async_trait]
-impl<T: Runtime + Org + Vote + Donate + Bank + Bounty, P: Pair> Command<T, P>
-    for OrgRegisterWeightedCommand
-where
-    <T as System>::AccountId: Ss58Codec,
-    <T as Org>::OrgId: From<u64> + Display,
-    <T as Org>::Shares: From<u64> + Display,
-    <T as Org>::IpfsReference: From<CidBytes> + Debug,
-{
-    async fn exec(&self, client: &dyn AbstractClient<T, P>) -> Result<()> {
-        let sudo: Option<T::AccountId> = if let Some(acc) = &self.sudo {
-            let new_acc: Account<T> = acc.parse()?;
-            Some(new_acc.id)
+impl OrgRegisterWeightedCommand {
+    pub async fn exec<R: Runtime + Org, C: OrgClient<R>>(
+        &self,
+        client: &C,
+    ) -> Result<(), C::Error>
+    where
+        <R as System>::AccountId: Ss58Codec,
+        <R as Org>::OrgId: From<u64> + Display,
+        <R as Org>::Shares: From<u64> + Display,
+        <R as Org>::IpfsReference: From<
+            libipld::cid::CidGeneric<libipld::cid::Codec, libipld::multihash::Code>,
+        >,
+        <<<R as Runtime>::Extra as SignedExtra<R>>::Extra as SignedExtension>::AdditionalSigned: Send + Sync,
+        C: ChainClient<R>,
+        C::OffchainClient: Cache<Codec, OrgConstitution>,
+        C::Error: From<sunshine_bounty_client::Error>,
+    {
+        let sudo: Option<R::AccountId> = if let Some(acc) = &self.sudo {
+            let new_acc: Ss58<R> = acc.parse::<Ss58<R>>()?;
+            Some(new_acc.0)
         } else {
             None
         };
-        let parent_org: Option<T::OrgId> = if let Some(org) = self.parent_org {
+        let parent_org: Option<R::OrgId> = if let Some(org) = self.parent_org {
             Some(org.into())
         } else {
             None
         };
-        let constitution: CidBytes = {
-            let content = self.constitution.as_bytes();
-            let hash = Blake2b256::digest(&content[..]);
-            let cid = Cid::new_v1(Codec::Raw, hash);
-            CidBytes::from(&cid)
-        };
+        let constitution = post_constitution(
+            client,
+            OrgConstitution {
+                text: self.constitution.clone(),
+            },
+        )
+        .await
+        .map_err(Error::Client)?;
         let members = self
             .members
             .iter()
-            .map(|acc_share| -> Result<(T::AccountId, T::Shares)> {
-                let mem: Account<T> = acc_share.0.parse()?;
-                let amt_issued: T::Shares = (acc_share.1).into();
-                Ok((mem.id, amt_issued))
+            .map(|acc_share| -> Result<(R::AccountId, R::Shares), C::Error> {
+                let mem: Ss58<R> = acc_share.0.parse()?;
+                let amt_issued: R::Shares = (acc_share.1).into();
+                Ok((mem.0, amt_issued))
             })
-            .collect::<Result<Vec<(T::AccountId, T::Shares)>>>()?;
+            .collect::<Result<Vec<(R::AccountId, R::Shares)>, C::Error>>()?;
         let event = client
             .register_weighted_org(
                 sudo,
@@ -138,7 +152,8 @@ where
                 constitution.into(),
                 &members,
             )
-            .await?;
+            .await
+            .map_err(Error::Client)?;
         println!(
             "Account {} created a weighted organization with OrgId: {}, constitution: {:?} and {} total shares minted for new members",
             event.caller, event.new_id, event.constitution, event.total
