@@ -1,11 +1,22 @@
 use bounty_client::{
     bank::Bank,
     bounty::Bounty,
+    client::*,
     donate::Donate,
     org::Org,
     vote::Vote,
 };
 use identity_utils::cid::CidBytes;
+use ipfs_embed::{
+    Config,
+    Store as OffchainStore,
+};
+use ipld_block_builder::{
+    derive_cache,
+    Codec,
+    IpldCache,
+};
+use libipld::store::Store;
 use std::path::Path;
 use substrate_keybase_keystore::Keystore;
 use substrate_subxt::{
@@ -81,26 +92,39 @@ impl substrate_subxt::Runtime for Runtime {
     type Extra = substrate_subxt::DefaultExtra<Self>;
 }
 
-pub struct Client {
+pub struct Client<S = OffchainStore> {
     keystore: Keystore<Runtime, sp_core::sr25519::Pair>,
     chain: substrate_subxt::Client<Runtime>,
+    offchain: OffchainClient<S>,
 }
 
-impl Client {
+impl Client<OffchainStore> {
     pub async fn new(
         root: &Path,
         _chain_spec: Option<&Path>,
     ) -> Result<Self, Error> {
+        let db = sled::open(root.join("db"))?;
+        let db_ipfs = db.open_tree("ipfs")?;
+        let config = Config::from_tree(db_ipfs);
+        let store = OffchainStore::new(config)?;
         let keystore = Keystore::open(root.join("keystore")).await?;
         let chain = substrate_subxt::ClientBuilder::new().build().await?;
-        Ok(Self { keystore, chain })
+        let offchain = OffchainClient::new(store);
+        Ok(Self {
+            keystore,
+            chain,
+            offchain,
+        })
     }
+}
 
-    #[cfg(feature = "mock")]
+#[cfg(feature = "mock")]
+impl Client<libipld::mem::MemStore> {
     pub async fn mock(
         test_node: &mock::TestNode,
         account: sp_keyring::AccountKeyring,
     ) -> (Self, tempdir::TempDir) {
+        use libipld::mem::MemStore;
         use substrate_keybase_keystore::Key;
         use substrate_subxt::ClientBuilder;
         use sunshine_core::{
@@ -109,13 +133,14 @@ impl Client {
         };
         use tempdir::TempDir;
 
-        let tmp = TempDir::new("sunshine-identity-")
-            .expect("failed to create tempdir");
+        let tmp =
+            TempDir::new("sunshine-bounty-").expect("failed to create tempdir");
         let chain = ClientBuilder::new()
             .set_client(test_node.clone())
             .build()
             .await
             .unwrap();
+        let offchain = OffchainClient::new(MemStore::default());
         let mut keystore =
             Keystore::open(tmp.path().join("keystore")).await.unwrap();
         let key = Key::from_suri(&account.to_seed()).unwrap();
@@ -124,13 +149,20 @@ impl Client {
             .set_device_key(&key, &password, false)
             .await
             .unwrap();
-        (Self { keystore, chain }, tmp)
+        (
+            Self {
+                keystore,
+                chain,
+                offchain,
+            },
+            tmp,
+        )
     }
 }
 
-impl ChainClient<Runtime> for Client {
+impl<S: Store + Send + Sync> ChainClient<Runtime> for Client<S> {
     type Keystore = Keystore<Runtime, sp_core::sr25519::Pair>;
-    type OffchainClient = ();
+    type OffchainClient = OffchainClient<S>;
     type Error = Error;
 
     fn keystore(&self) -> &Self::Keystore {
@@ -154,7 +186,7 @@ impl ChainClient<Runtime> for Client {
     }
 
     fn offchain_client(&self) -> &Self::OffchainClient {
-        &()
+        &self.offchain
     }
 
     fn offchain_signer(
@@ -166,6 +198,23 @@ impl ChainClient<Runtime> for Client {
     }
 }
 
+pub struct OffchainClient<S> {
+    bounties: IpldCache<S, Codec, BountyBody>,
+    constitutions: IpldCache<S, Codec, OrgConstitution>,
+}
+
+impl<S: Store> OffchainClient<S> {
+    pub fn new(store: S) -> Self {
+        Self {
+            bounties: IpldCache::new(store.clone(), Codec::new(), 64),
+            constitutions: IpldCache::new(store, Codec::new(), 64),
+        }
+    }
+}
+
+derive_cache!(OffchainClient, bounties, Codec, BountyBody);
+derive_cache!(OffchainClient, constitutions, Codec, OrgConstitution);
+
 #[derive(Debug, Error)]
 pub enum Error {
     #[error(transparent)]
@@ -173,7 +222,11 @@ pub enum Error {
     #[error(transparent)]
     Chain(#[from] substrate_subxt::Error),
     #[error(transparent)]
+    Offchain(#[from] ipfs_embed::Error),
+    #[error(transparent)]
     Ipld(#[from] libipld::error::Error),
+    #[error(transparent)]
+    Db(#[from] sled::Error),
     #[error(transparent)]
     Bounty(#[from] bounty_client::Error),
 }

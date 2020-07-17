@@ -7376,9 +7376,12 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "env_logger",
+ "ipfs-embed",
+ "ipld-block-builder",
  "jsonrpsee",
  "libipld",
  "parity-scale-codec",
+ "sled",
  "sp-keyring",
  "substrate-keybase-keystore",
  "substrate-subxt",

@@ -18,7 +18,10 @@ async-trait = "0.1.36"
 bounty-client = { package = "sunshine-bounty-client", path = "../../client/client" }
 codec = { version = "1.3.1", package = "parity-scale-codec" }
 identity-utils = { package = "sunshine-identity-utils", version = "0.2.0" }
+ipfs-embed = "0.1.0"
+ipld-block-builder = "0.4.0"
 libipld = { version = "0.3.0", default-features = false }
+sled = "0.32.1"
 substrate-subxt = { version = "0.10.1", features = ["client"] }
 substrate-keybase-keystore = "0.2.0"
 sunshine-core = "0.2.0"

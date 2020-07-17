@@ -1,5 +1,5 @@
 pub mod bank;
-// pub mod bounty;
+pub mod bounty;
 pub mod donate;
 mod error;
 pub mod org;

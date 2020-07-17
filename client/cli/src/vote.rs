@@ -38,7 +38,7 @@ pub struct VoteCreateSignalThresholdCommand {
 }
 
 impl VoteCreateSignalThresholdCommand {
-    pub async fn exec<R: Runtime + Org + Vote, C: VoteClient<R>>(
+    pub async fn exec<R: Runtime + Vote, C: VoteClient<R>>(
         &self,
         client: &C,
     ) -> Result<(), C::Error>
@@ -116,7 +116,7 @@ fn u8_to_permill(u: u8) -> Result<Permill, sunshine_bounty_client::Error> {
 }
 
 impl VoteCreatePercentThresholdCommand {
-    pub async fn exec<R: Runtime + Org + Vote, C: VoteClient<R>>(
+    pub async fn exec<R: Runtime + Vote, C: VoteClient<R>>(
         &self,
         client: &C,
     ) -> Result<(), C::Error>
@@ -187,7 +187,7 @@ pub struct VoteCreateUnanimousConsentCommand {
 }
 
 impl VoteCreateUnanimousConsentCommand {
-    pub async fn exec<R: Runtime + Org + Vote, C: VoteClient<R>>(
+    pub async fn exec<R: Runtime + Vote, C: VoteClient<R>>(
         &self,
         client: &C,
     ) -> Result<(), C::Error>
@@ -245,7 +245,7 @@ pub struct VoteSubmitCommand {
 }
 
 impl VoteSubmitCommand {
-    pub async fn exec<R: Runtime + Org + Vote, C: VoteClient<R>>(
+    pub async fn exec<R: Runtime + Vote, C: VoteClient<R>>(
         &self,
         client: &C,
     ) -> Result<(), C::Error>
