@@ -33,14 +33,7 @@ pub struct TextBlock {
     pub text: String,
 }
 
-#[derive(Clone, DagCbor)]
-pub struct BountyBody {
-    pub repo_owner: String,
-    pub repo_name: String,
-    pub issue_number: u64,
-}
-
-pub async fn post_text<R, C, V>(
+pub(crate) async fn post_text<R, C, V>(
     client: &C,
     value: V,
 ) -> Result<R::IpfsReference, C::Error>
@@ -54,12 +47,20 @@ where
     C::Error: From<Error>,
     V: Clone + Encode<DagCborCodec> + Decode<DagCborCodec> + Send + Sync,
 {
+    client.offchain_client().flush().await?;
     let cid = client.offchain_client().insert(value).await?;
     let ret_cid = R::IpfsReference::from(cid);
     Ok(ret_cid)
 }
 
-pub async fn post_bounty<R, C>(
+#[derive(Clone, DagCbor)]
+pub struct BountyBody {
+    pub repo_owner: String,
+    pub repo_name: String,
+    pub issue_number: u64,
+}
+
+pub(crate) async fn post_bounty<R, C>(
     client: &C,
     bounty: BountyBody,
 ) -> Result<R::IpfsReference, C::Error>
@@ -72,6 +73,7 @@ where
     C::OffchainClient: Cache<Codec, BountyBody>,
     C::Error: From<Error>,
 {
+    client.offchain_client().flush().await?;
     let cid = client.offchain_client().insert(bounty).await?;
     let ret_cid = R::IpfsReference::from(cid);
     Ok(ret_cid)
