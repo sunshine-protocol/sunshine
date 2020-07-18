@@ -56,7 +56,6 @@ use sunshine_bounty_utils::{
         MilestoneStatus,
         MilestoneSubmission,
     },
-    court::ResolutionMetadata,
 };
 
 #[module]
@@ -74,8 +73,38 @@ pub trait Bounty: System + Org + Vote + Bank {
         + PartialEq
         + Zero;
 
-    /// The shape of bounty postings and milestone submissions
-    type BountyBody: 'static
+    /// The committees for bounty supervision
+    type VoteCommittee: 'static
+        + Codec
+        + Default
+        + Debug
+        + Clone
+        + Eq
+        + Send
+        + Sync;
+
+    /// The shape of bounty postings
+    type BountyPost: 'static
+        + Codec
+        + Default
+        + Clone
+        + DagEncode<DagCborCodec>
+        + DagDecode<DagCborCodec>
+        + Send
+        + Sync;
+
+    /// The shape of bounty application
+    type BountyApplication: 'static
+        + Codec
+        + Default
+        + Clone
+        + DagEncode<DagCborCodec>
+        + DagDecode<DagCborCodec>
+        + Send
+        + Sync;
+
+    /// The shape of milestone submissions
+    type MilestoneSubmission: 'static
         + Codec
         + Default
         + Clone
@@ -103,11 +132,7 @@ pub struct LiveBountiesStore<T: Bounty> {
         >,
         T::IpfsReference,
         BalanceOf<T>,
-        ResolutionMetadata<
-            T::OrgId,
-            T::Signal,
-            T::BlockNumber,
-        >,
+        <T as Bounty>::VoteCommittee,
     >)]
     pub id: T::BountyId,
 }
@@ -144,18 +169,8 @@ pub struct MilestoneSubmissionsStore<T: Bounty> {
 pub struct AccountPostsBountyCall<T: Bounty> {
     pub description: <T as Org>::IpfsReference,
     pub amount_reserved_for_bounty: BalanceOf<T>,
-    pub acceptance_committee: ResolutionMetadata<
-        <T as Org>::OrgId,
-        <T as Vote>::Signal,
-        <T as System>::BlockNumber,
-    >,
-    pub supervision_committee: Option<
-        ResolutionMetadata<
-            <T as Org>::OrgId,
-            <T as Vote>::Signal,
-            <T as System>::BlockNumber,
-        >,
-    >,
+    pub acceptance_committee: <T as Bounty>::VoteCommittee,
+    pub supervision_committee: Option<<T as Bounty>::VoteCommittee>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]

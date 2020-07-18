@@ -7,43 +7,28 @@ use crate::{
     bank::BalanceOf,
     error::Error,
     org::Org,
-    vote::Vote,
-    BountyBody,
-    TextBlock,
 };
 use async_trait::async_trait;
 use substrate_subxt::{
-    system::System,
     Runtime,
     SignedExtension,
     SignedExtra,
 };
-use sunshine_bounty_utils::court::ResolutionMetadata;
 use sunshine_core::ChainClient;
 
 #[async_trait]
 pub trait BountyClient<T: Runtime + Bounty>: ChainClient<T> {
     async fn account_posts_bounty(
         &self,
-        bounty: <T as Bounty>::BountyBody,
+        bounty: <T as Bounty>::BountyPost,
         amount_reserved_for_bounty: BalanceOf<T>,
-        acceptance_committee: ResolutionMetadata<
-            <T as Org>::OrgId,
-            <T as Vote>::Signal,
-            <T as System>::BlockNumber,
-        >,
-        supervision_committee: Option<
-            ResolutionMetadata<
-                <T as Org>::OrgId,
-                <T as Vote>::Signal,
-                <T as System>::BlockNumber,
-            >,
-        >,
+        acceptance_committee: <T as Bounty>::VoteCommittee,
+        supervision_committee: Option<<T as Bounty>::VoteCommittee>,
     ) -> Result<BountyPostedEvent<T>, Self::Error>;
     async fn account_applies_for_bounty(
         &self,
         bounty_id: <T as Bounty>::BountyId,
-        description: <T as Org>::TextBlock,
+        application: <T as Bounty>::BountyApplication,
         total_amount: BalanceOf<T>,
     ) -> Result<BountyApplicationSubmittedEvent<T>, Self::Error>;
     async fn account_triggers_application_review(
@@ -65,7 +50,7 @@ pub trait BountyClient<T: Runtime + Bounty>: ChainClient<T> {
         &self,
         bounty_id: <T as Bounty>::BountyId,
         application_id: <T as Bounty>::BountyId,
-        milestone: <T as Bounty>::BountyBody,
+        milestone: <T as Bounty>::MilestoneSubmission,
         amount_requested: BalanceOf<T>,
     ) -> Result<MilestoneSubmittedEvent<T>, Self::Error>;
     async fn trigger_milestone_review(
@@ -96,28 +81,21 @@ where
     C::Error: From<Error>,
     C::OffchainClient: ipld_block_builder::Cache<
             ipld_block_builder::Codec,
-            <T as Org>::TextBlock,
+            <T as Bounty>::BountyPost,
         > + ipld_block_builder::Cache<
             ipld_block_builder::Codec,
-            <T as Bounty>::BountyBody,
+            <T as Bounty>::BountyApplication,
+        > + ipld_block_builder::Cache<
+            ipld_block_builder::Codec,
+            <T as Bounty>::MilestoneSubmission,
         >,
 {
     async fn account_posts_bounty(
         &self,
-        bounty: <T as Bounty>::BountyBody,
+        bounty: <T as Bounty>::BountyPost,
         amount_reserved_for_bounty: BalanceOf<T>,
-        acceptance_committee: ResolutionMetadata<
-            <T as Org>::OrgId,
-            <T as Vote>::Signal,
-            <T as System>::BlockNumber,
-        >,
-        supervision_committee: Option<
-            ResolutionMetadata<
-                <T as Org>::OrgId,
-                <T as Vote>::Signal,
-                <T as System>::BlockNumber,
-            >,
-        >,
+        acceptance_committee: <T as Bounty>::VoteCommittee,
+        supervision_committee: Option<<T as Bounty>::VoteCommittee>,
     ) -> Result<BountyPostedEvent<T>, C::Error> {
         let signer = self.chain_signer()?;
         let description = crate::post(self, bounty).await?;
@@ -136,11 +114,11 @@ where
     async fn account_applies_for_bounty(
         &self,
         bounty_id: <T as Bounty>::BountyId,
-        description: <T as Org>::TextBlock,
+        application: <T as Bounty>::BountyApplication,
         total_amount: BalanceOf<T>,
     ) -> Result<BountyApplicationSubmittedEvent<T>, C::Error> {
         let signer = self.chain_signer()?;
-        let description = crate::post(self, description).await?;
+        let description = crate::post(self, application).await?;
         self.chain_client()
             .account_applies_for_bounty_and_watch(
                 signer,
@@ -200,7 +178,7 @@ where
         &self,
         bounty_id: <T as Bounty>::BountyId,
         application_id: <T as Bounty>::BountyId,
-        milestone: <T as Bounty>::BountyBody,
+        milestone: <T as Bounty>::MilestoneSubmission,
         amount_requested: BalanceOf<T>,
     ) -> Result<MilestoneSubmittedEvent<T>, C::Error> {
         let signer = self.chain_signer()?;

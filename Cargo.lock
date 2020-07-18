@@ -7142,6 +7142,7 @@ dependencies = [
  "substrate-keybase-keystore",
  "substrate-subxt",
  "sunshine-bounty-client",
+ "sunshine-bounty-utils",
  "sunshine-core",
  "sunshine-identity-utils 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "tempdir",

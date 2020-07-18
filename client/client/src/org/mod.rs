@@ -4,10 +4,7 @@ mod utils;
 pub use subxt::*;
 pub use utils::AccountShare;
 
-use crate::{
-    error::Error,
-    TextBlock,
-};
+use crate::error::Error;
 use async_trait::async_trait;
 use substrate_subxt::{
     system::System,
@@ -23,14 +20,14 @@ pub trait OrgClient<T: Runtime + Org>: ChainClient<T> {
         &self,
         sudo: Option<<T as System>::AccountId>,
         parent_org: Option<<T as Org>::OrgId>,
-        constitution: <T as Org>::TextBlock,
+        constitution: <T as Org>::Constitution,
         members: &[<T as System>::AccountId],
     ) -> Result<NewFlatOrganizationRegisteredEvent<T>, Self::Error>;
     async fn register_weighted_org(
         &self,
         sudo: Option<<T as System>::AccountId>,
         parent_org: Option<<T as Org>::OrgId>,
-        constitution: <T as Org>::TextBlock,
+        constitution: <T as Org>::Constitution,
         weighted_members: &[(<T as System>::AccountId, <T as Org>::Shares)],
     ) -> Result<NewWeightedOrganizationRegisteredEvent<T>, Self::Error>;
     async fn issue_shares(
@@ -88,14 +85,14 @@ where
     C::Error: From<Error>,
     C::OffchainClient: ipld_block_builder::Cache<
         ipld_block_builder::Codec,
-        <T as Org>::TextBlock,
+        <T as Org>::Constitution,
     >,
 {
     async fn register_flat_org(
         &self,
         sudo: Option<<T as System>::AccountId>,
         parent_org: Option<<T as Org>::OrgId>,
-        constitution: <T as Org>::TextBlock,
+        constitution: <T as Org>::Constitution,
         members: &[<T as System>::AccountId],
     ) -> Result<NewFlatOrganizationRegisteredEvent<T>, C::Error> {
         let signer = self.chain_signer()?;
@@ -116,7 +113,7 @@ where
         &self,
         sudo: Option<<T as System>::AccountId>,
         parent_org: Option<<T as Org>::OrgId>,
-        constitution: <T as Org>::TextBlock,
+        constitution: <T as Org>::Constitution,
         weighted_members: &[(<T as System>::AccountId, <T as Org>::Shares)],
     ) -> Result<NewWeightedOrganizationRegisteredEvent<T>, C::Error> {
         let signer = self.chain_signer()?;

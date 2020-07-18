@@ -20,6 +20,8 @@ use sunshine_bounty_client::{
     },
     org::Org,
     vote::Vote,
+    BountyBody,
+    TextBlock,
 };
 use sunshine_bounty_utils::court::ResolutionMetadata;
 
@@ -53,7 +55,21 @@ impl BountyPostCommand {
         <R as Org>::OrgId: From<u64> + Display,
         <R as Bank>::Currency: From<u128> + Display,
         <R as Bounty>::BountyId: Display,
+        <R as Bounty>::BountyPost: From<BountyBody>,
+        <R as Bounty>::VoteCommittee: From<
+            ResolutionMetadata<
+                <R as Org>::OrgId,
+                <R as Vote>::Signal,
+                <R as System>::BlockNumber,
+            >,
+        >,
     {
+        let bounty: <R as Bounty>::BountyPost = BountyBody {
+            repo_owner: (*self.repo_owner).to_string(),
+            repo_name: (*self.repo_name).to_string(),
+            issue_number: self.issue_number,
+        }
+        .into();
         let ac_rejection_threshold: Option<R::Signal> =
             if let Some(ac_r_t) = self.ac_rejection_threshold {
                 Some(ac_r_t.into())
@@ -66,52 +82,46 @@ impl BountyPostCommand {
             } else {
                 None
             };
-        let acceptance_committee: ResolutionMetadata<
-            <R as Org>::OrgId,
-            <R as Vote>::Signal,
-            <R as System>::BlockNumber,
-        > = ResolutionMetadata::new(
-            self.ac_org.into(),
-            self.ac_passage_threshold.into(),
-            ac_rejection_threshold,
-            ac_duration,
-        );
-        let supervision_committee: Option<
-            ResolutionMetadata<
-                <R as Org>::OrgId,
-                <R as Vote>::Signal,
-                <R as System>::BlockNumber,
-            >,
-        > = if let Some(org) = self.sc_org {
-            let passage_threshold = self
-                .sc_passage_threshold
-                .ok_or(Error::PostBountyInputError)?;
-            let sc_rejection_threshold: Option<R::Signal> =
-                if let Some(sc_r_t) = self.sc_rejection_threshold {
-                    Some(sc_r_t.into())
-                } else {
-                    None
-                };
-            let sc_duration: Option<R::BlockNumber> =
-                if let Some(sc_d) = self.sc_duration {
-                    Some(sc_d.into())
-                } else {
-                    None
-                };
-            Some(ResolutionMetadata::new(
-                org.into(),
-                passage_threshold.into(),
-                sc_rejection_threshold,
-                sc_duration,
-            ))
-        } else {
-            None
-        };
+        let acceptance_committee: <R as Bounty>::VoteCommittee =
+            ResolutionMetadata::new(
+                self.ac_org.into(),
+                self.ac_passage_threshold.into(),
+                ac_rejection_threshold,
+                ac_duration,
+            )
+            .into();
+        let supervision_committee: Option<<R as Bounty>::VoteCommittee> =
+            if let Some(org) = self.sc_org {
+                let passage_threshold = self
+                    .sc_passage_threshold
+                    .ok_or(Error::PostBountyInputError)?;
+                let sc_rejection_threshold: Option<R::Signal> =
+                    if let Some(sc_r_t) = self.sc_rejection_threshold {
+                        Some(sc_r_t.into())
+                    } else {
+                        None
+                    };
+                let sc_duration: Option<R::BlockNumber> =
+                    if let Some(sc_d) = self.sc_duration {
+                        Some(sc_d.into())
+                    } else {
+                        None
+                    };
+                Some(
+                    ResolutionMetadata::new(
+                        org.into(),
+                        passage_threshold.into(),
+                        sc_rejection_threshold,
+                        sc_duration,
+                    )
+                    .into(),
+                )
+            } else {
+                None
+            };
         let event = client
             .account_posts_bounty(
-                (*self.repo_owner).to_string(),
-                (*self.repo_name).to_string(),
-                self.issue_number,
+                bounty,
                 self.amount_reserved_for_bounty.into(),
                 acceptance_committee,
                 supervision_committee,
@@ -142,11 +152,15 @@ impl BountyApplicationCommand {
         <R as System>::AccountId: Ss58Codec,
         <R as Bank>::Currency: From<u128> + Display,
         <R as Bounty>::BountyId: From<u64> + Display,
+        <R as Bounty>::BountyApplication: From<TextBlock>,
     {
+        let application = TextBlock {
+            text: (*self.description).to_string(),
+        };
         let event = client
             .account_applies_for_bounty(
                 self.bounty_id.into(),
-                (*self.description).to_string(),
+                application.into(),
                 self.total_amount.into(),
             )
             .await
@@ -268,14 +282,19 @@ impl BountySubmitMilestoneCommand {
         <R as System>::AccountId: Ss58Codec,
         <R as Bank>::Currency: From<u128> + Display,
         <R as Bounty>::BountyId: From<u64> + Display,
+        <R as Bounty>::MilestoneSubmission: From<BountyBody>,
     {
+        let milestone: <R as Bounty>::MilestoneSubmission = BountyBody {
+            repo_owner: (*self.repo_owner).to_string(),
+            repo_name: (*self.repo_name).to_string(),
+            issue_number: self.issue_number,
+        }
+        .into();
         let event = client
             .submit_milestone(
                 self.bounty_id.into(),
                 self.application_id.into(),
-                (*self.repo_owner).to_string(),
-                (*self.repo_name).to_string(),
-                self.issue_number,
+                milestone,
                 self.amount_requested.into(),
             )
             .await

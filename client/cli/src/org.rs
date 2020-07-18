@@ -12,10 +12,13 @@ use substrate_subxt::{
     system::System,
     Runtime,
 };
-use sunshine_bounty_client::org::{
-    AccountShare,
-    Org,
-    OrgClient,
+use sunshine_bounty_client::{
+    org::{
+        AccountShare,
+        Org,
+        OrgClient,
+    },
+    TextBlock,
 };
 use sunshine_core::Ss58;
 
@@ -35,6 +38,7 @@ impl OrgRegisterFlatCommand {
     where
         <R as System>::AccountId: Ss58Codec,
         <R as Org>::OrgId: From<u64> + Display,
+        <R as Org>::Constitution: From<TextBlock>,
     {
         let sudo = if let Some(acc) = &self.sudo {
             let new_acc: Ss58<R> = acc.parse()?;
@@ -47,6 +51,9 @@ impl OrgRegisterFlatCommand {
         } else {
             None
         };
+        let constitution = TextBlock {
+            text: (*self.constitution).to_string(),
+        };
         let members = self
             .members
             .iter()
@@ -56,12 +63,7 @@ impl OrgRegisterFlatCommand {
             })
             .collect::<Result<Vec<R::AccountId>, C::Error>>()?;
         let event = client
-            .register_flat_org(
-                sudo,
-                parent_org,
-                (*self.constitution).to_string(),
-                &members,
-            )
+            .register_flat_org(sudo, parent_org, constitution.into(), &members)
             .await
             .map_err(Error::Client)?;
         println!(
@@ -89,6 +91,7 @@ impl OrgRegisterWeightedCommand {
         <R as System>::AccountId: Ss58Codec,
         <R as Org>::OrgId: From<u64> + Display,
         <R as Org>::Shares: From<u64> + Display,
+        <R as Org>::Constitution: From<TextBlock>,
     {
         let sudo: Option<R::AccountId> = if let Some(acc) = &self.sudo {
             let new_acc: Ss58<R> = acc.parse::<Ss58<R>>()?;
@@ -100,6 +103,9 @@ impl OrgRegisterWeightedCommand {
             Some(org.into())
         } else {
             None
+        };
+        let constitution = TextBlock {
+            text: (*self.constitution).to_string(),
         };
         let members = self
             .members
@@ -114,7 +120,7 @@ impl OrgRegisterWeightedCommand {
             .register_weighted_org(
                 sudo,
                 parent_org,
-                (*self.constitution).to_string(),
+                constitution.into(),
                 &members,
             )
             .await

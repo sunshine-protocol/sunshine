@@ -62,8 +62,8 @@ pub trait Org: System {
         + Debug
         + Zero;
 
-    /// Text block type for constitution
-    type TextBlock: 'static
+    /// Constitution associated type, text block
+    type Constitution: 'static
         + Codec
         + Default
         + Clone

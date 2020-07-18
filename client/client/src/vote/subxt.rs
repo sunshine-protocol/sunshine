@@ -8,11 +8,21 @@ use codec::{
     Encode,
 };
 use frame_support::Parameter;
-use sp_runtime::traits::{
-    AtLeast32Bit,
-    MaybeSerializeDeserialize,
-    Member,
-    Zero,
+use libipld::{
+    cbor::DagCborCodec,
+    codec::{
+        Decode as DagEncode,
+        Encode as DagDecode,
+    },
+};
+use sp_runtime::{
+    traits::{
+        AtLeast32Bit,
+        MaybeSerializeDeserialize,
+        Member,
+        Zero,
+    },
+    PerThing,
 };
 use std::fmt::Debug;
 use substrate_subxt::{
@@ -29,7 +39,6 @@ use substrate_subxt::{
 use sunshine_bounty_utils::vote::{
     Vote as VoteVector,
     VoteState,
-    VoterView,
 };
 
 /// The subset of the `vote::Trait` that a client must implement.
@@ -55,6 +64,40 @@ pub trait Vote: System + Org {
         + MaybeSerializeDeserialize
         + Debug
         + Zero;
+
+    /// The type for percentage vote thresholds
+    type Percent: 'static + PerThing + Codec + Send + Sync;
+
+    /// Vote topic associated type, text block
+    type VoteTopic: 'static
+        + Codec
+        + Default
+        + Clone
+        + DagEncode<DagCborCodec>
+        + DagDecode<DagCborCodec>
+        + Send
+        + Sync;
+
+    /// Vote views
+    type VoterView: 'static
+        + Codec
+        + Default
+        + Debug
+        + Eq
+        + Copy
+        + Clone
+        + Send
+        + Sync;
+
+    /// Vote justification
+    type VoteJustification: 'static
+        + Codec
+        + Default
+        + Clone
+        + DagEncode<DagCborCodec>
+        + DagDecode<DagCborCodec>
+        + Send
+        + Sync;
 }
 
 // ~~ Values ~~
@@ -105,8 +148,8 @@ pub struct CreateSignalThresholdVoteCall<T: Vote> {
 pub struct CreatePercentThresholdVoteCall<T: Vote> {
     pub topic: Option<<T as Org>::IpfsReference>,
     pub organization: T::OrgId,
-    pub support_requirement: sp_runtime::Permill,
-    pub turnout_requirement: Option<sp_runtime::Permill>,
+    pub support_requirement: <T as Vote>::Percent,
+    pub turnout_requirement: Option<<T as Vote>::Percent>,
     pub duration: Option<<T as System>::BlockNumber>,
 }
 
@@ -120,7 +163,7 @@ pub struct CreateUnanimousConsentVoteCall<T: Vote> {
 #[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
 pub struct SubmitVoteCall<T: Vote> {
     pub vote_id: T::VoteId,
-    pub direction: VoterView,
+    pub direction: <T as Vote>::VoterView,
     pub justification: Option<<T as Org>::IpfsReference>,
 }
 
@@ -137,5 +180,5 @@ pub struct NewVoteStartedEvent<T: Vote> {
 pub struct VotedEvent<T: Vote> {
     pub vote_id: T::VoteId,
     pub voter: <T as System>::AccountId,
-    pub view: VoterView,
+    pub view: <T as Vote>::VoterView,
 }
