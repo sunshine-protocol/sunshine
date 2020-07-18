@@ -8,6 +8,10 @@ pub mod donate;
 pub mod org;
 pub mod vote;
 
+use codec::{
+    Decode,
+    Encode,
+};
 use ipld_block_builder::{
     Cache,
     Codec,
@@ -15,8 +19,8 @@ use ipld_block_builder::{
 use libipld::{
     cbor::DagCborCodec,
     codec::{
-        Decode,
-        Encode,
+        Decode as DagDecode,
+        Encode as DagEncode,
     },
     DagCbor,
 };
@@ -28,12 +32,12 @@ use substrate_subxt::{
 };
 use sunshine_core::ChainClient;
 
-#[derive(Clone, DagCbor)]
+#[derive(Default, Clone, DagCbor, Encode, Decode)]
 pub struct TextBlock {
     pub text: String,
 }
 
-#[derive(Clone, DagCbor)]
+#[derive(Default, Clone, DagCbor, Encode, Decode)]
 pub struct BountyBody {
     pub repo_owner: String,
     pub repo_name: String,
@@ -52,7 +56,7 @@ where
     C: ChainClient<R>,
     C::OffchainClient: Cache<Codec, V>,
     C::Error: From<Error>,
-    V: Clone + Encode<DagCborCodec> + Decode<DagCborCodec> + Send + Sync,
+    V: Clone + DagEncode<DagCborCodec> + DagDecode<DagCborCodec> + Send + Sync,
 {
     let cid = client.offchain_client().insert(value).await?;
     client.offchain_client().flush().await?;

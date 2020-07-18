@@ -19,6 +19,13 @@ use codec::{
     Encode,
 };
 use frame_support::Parameter;
+use libipld::{
+    cbor::DagCborCodec,
+    codec::{
+        Decode as DagEncode,
+        Encode as DagDecode,
+    },
+};
 use sp_runtime::traits::{
     AtLeast32Bit,
     MaybeSerializeDeserialize,
@@ -66,6 +73,16 @@ pub trait Bounty: System + Org + Vote + Bank {
         + PartialOrd
         + PartialEq
         + Zero;
+
+    /// The shape of bounty postings and milestone submissions
+    type BountyBody: 'static
+        + Codec
+        + Default
+        + Clone
+        + DagEncode<DagCborCodec>
+        + DagDecode<DagCborCodec>
+        + Send
+        + Sync;
 }
 
 // ~~ Constants ~~

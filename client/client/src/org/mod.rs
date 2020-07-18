@@ -23,14 +23,14 @@ pub trait OrgClient<T: Runtime + Org>: ChainClient<T> {
         &self,
         sudo: Option<<T as System>::AccountId>,
         parent_org: Option<<T as Org>::OrgId>,
-        constitution: String,
+        constitution: <T as Org>::TextBlock,
         members: &[<T as System>::AccountId],
     ) -> Result<NewFlatOrganizationRegisteredEvent<T>, Self::Error>;
     async fn register_weighted_org(
         &self,
         sudo: Option<<T as System>::AccountId>,
         parent_org: Option<<T as Org>::OrgId>,
-        constitution: String,
+        constitution: <T as Org>::TextBlock,
         weighted_members: &[(<T as System>::AccountId, <T as Org>::Shares)],
     ) -> Result<NewWeightedOrganizationRegisteredEvent<T>, Self::Error>;
     async fn issue_shares(
@@ -86,19 +86,20 @@ where
     <T as Org>::IpfsReference: From<libipld::cid::Cid>,
     C: ChainClient<T>,
     C::Error: From<Error>,
-    C::OffchainClient:
-        ipld_block_builder::Cache<ipld_block_builder::Codec, TextBlock>,
+    C::OffchainClient: ipld_block_builder::Cache<
+        ipld_block_builder::Codec,
+        <T as Org>::TextBlock,
+    >,
 {
     async fn register_flat_org(
         &self,
         sudo: Option<<T as System>::AccountId>,
         parent_org: Option<<T as Org>::OrgId>,
-        constitution: String,
+        constitution: <T as Org>::TextBlock,
         members: &[<T as System>::AccountId],
     ) -> Result<NewFlatOrganizationRegisteredEvent<T>, C::Error> {
         let signer = self.chain_signer()?;
-        let constitution =
-            crate::post(self, TextBlock { text: constitution }).await?;
+        let constitution = crate::post(self, constitution).await?;
         self.chain_client()
             .register_flat_org_and_watch(
                 signer,
@@ -115,12 +116,11 @@ where
         &self,
         sudo: Option<<T as System>::AccountId>,
         parent_org: Option<<T as Org>::OrgId>,
-        constitution: String,
+        constitution: <T as Org>::TextBlock,
         weighted_members: &[(<T as System>::AccountId, <T as Org>::Shares)],
     ) -> Result<NewWeightedOrganizationRegisteredEvent<T>, C::Error> {
         let signer = self.chain_signer()?;
-        let constitution =
-            crate::post(self, TextBlock { text: constitution }).await?;
+        let constitution = crate::post(self, constitution).await?;
         self.chain_client()
             .register_weighted_org_and_watch(
                 signer,
