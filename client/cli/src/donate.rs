@@ -21,12 +21,12 @@ use sunshine_bounty_client::{
 };
 
 #[derive(Clone, Debug, Clap)]
-pub struct DonateWithFeeCommand {
+pub struct DonateCommand {
     pub org: u64,
     pub amt: u128,
 }
 
-impl DonateWithFeeCommand {
+impl DonateCommand {
     pub async fn exec<R: Runtime + Donate, C: DonateClient<R>>(
         &self,
         client: &C,
@@ -37,39 +37,11 @@ impl DonateWithFeeCommand {
         <R as Donate>::DCurrency: From<u128> + Display,
     {
         let event = client
-            .make_prop_donation_with_fee(self.org.into(), self.amt.into())
+            .make_prop_donation(self.org.into(), self.amt.into())
             .await
             .map_err(Error::Client)?;
         println!(
             "AccountId {:?} donated {} to OrgId {} (with the module fee)",
-            event.sender, event.amt, event.org
-        );
-        Ok(())
-    }
-}
-
-#[derive(Clone, Debug, Clap)]
-pub struct DonateWithoutFeeCommand {
-    pub org: u64,
-    pub amt: u128,
-}
-
-impl DonateWithoutFeeCommand {
-    pub async fn exec<R: Runtime + Donate, C: DonateClient<R>>(
-        &self,
-        client: &C,
-    ) -> Result<(), C::Error>
-    where
-        <R as System>::AccountId: Ss58Codec,
-        <R as Org>::OrgId: From<u64> + Display,
-        <R as Donate>::DCurrency: From<u128> + Display,
-    {
-        let event = client
-            .make_prop_donation_without_fee(self.org.into(), self.amt.into())
-            .await
-            .map_err(Error::Client)?;
-        println!(
-            "AccountId {:?} donated {} to OrgId {} (without the module fee)",
             event.sender, event.amt, event.org
         );
         Ok(())

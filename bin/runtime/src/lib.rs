@@ -362,7 +362,6 @@ impl pallet_sudo::Trait for Runtime {
     type Event = Event;
     type Call = Call;
 }
-pub use org;
 parameter_types! {
     pub const ReservationLimit: u32 = 10000;
 }
@@ -373,7 +372,6 @@ impl org::Trait for Runtime {
     type Shares = u64;
     type ReservationLimit = ReservationLimit;
 }
-pub use vote;
 impl vote::Trait for Runtime {
     type Event = Event;
     type VoteId = u64;
@@ -382,7 +380,6 @@ impl vote::Trait for Runtime {
 parameter_types! {
     pub const MinimumDisputeAmount: u128 = 10;
 }
-pub use court;
 impl court::Trait for Runtime {
     type Event = Event;
     type Currency = Balances;
@@ -397,12 +394,10 @@ impl treasury::Trait for Runtime {
     type Currency = Balances;
     type TreasuryAddress = TreasuryModuleId;
 }
-pub use donate;
 impl donate::Trait for Runtime {
     type Event = Event;
     type Currency = Balances;
 }
-pub use bank;
 parameter_types! {
     pub const MaxTreasuryPerOrg: u32 = 50;
     pub const MinimumInitialDeposit: u128 = 20;
@@ -414,7 +409,6 @@ impl bank::Trait for Runtime {
     type MaxTreasuryPerOrg = MaxTreasuryPerOrg;
     type MinimumInitialDeposit = MinimumInitialDeposit;
 }
-pub use bounty;
 parameter_types! {
     pub const BountyLowerBound: u128 = 5;
 }

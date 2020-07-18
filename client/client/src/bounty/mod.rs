@@ -8,6 +8,8 @@ use crate::{
     error::Error,
     org::Org,
     vote::Vote,
+    BountyBody,
+    TextBlock,
 };
 use async_trait::async_trait;
 use substrate_subxt::{
@@ -23,7 +25,9 @@ use sunshine_core::ChainClient;
 pub trait BountyClient<T: Runtime + Bounty>: ChainClient<T> {
     async fn account_posts_bounty(
         &self,
-        description: <T as Org>::IpfsReference,
+        repo_owner: String,
+        repo_name: String,
+        issue_number: u64,
         amount_reserved_for_bounty: BalanceOf<T>,
         acceptance_committee: ResolutionMetadata<
             <T as Org>::OrgId,
@@ -41,7 +45,7 @@ pub trait BountyClient<T: Runtime + Bounty>: ChainClient<T> {
     async fn account_applies_for_bounty(
         &self,
         bounty_id: <T as Bounty>::BountyId,
-        description: <T as Org>::IpfsReference,
+        description: String,
         total_amount: BalanceOf<T>,
     ) -> Result<BountyApplicationSubmittedEvent<T>, Self::Error>;
     async fn account_triggers_application_review(
@@ -63,7 +67,9 @@ pub trait BountyClient<T: Runtime + Bounty>: ChainClient<T> {
         &self,
         bounty_id: <T as Bounty>::BountyId,
         application_id: <T as Bounty>::BountyId,
-        submission_reference: <T as Org>::IpfsReference,
+        repo_owner: String,
+        repo_name: String,
+        issue_number: u64,
         amount_requested: BalanceOf<T>,
     ) -> Result<MilestoneSubmittedEvent<T>, Self::Error>;
     async fn trigger_milestone_review(
@@ -89,12 +95,17 @@ where
     T: Runtime + Bounty,
     <<T::Extra as SignedExtra<T>>::Extra as SignedExtension>::AdditionalSigned:
         Send + Sync,
+    <T as Org>::IpfsReference: From<libipld::cid::Cid>,
     C: ChainClient<T>,
     C::Error: From<Error>,
+    C::OffchainClient: ipld_block_builder::Cache<ipld_block_builder::Codec, TextBlock>
+        + ipld_block_builder::Cache<ipld_block_builder::Codec, BountyBody>,
 {
     async fn account_posts_bounty(
         &self,
-        description: <T as Org>::IpfsReference,
+        repo_owner: String,
+        repo_name: String,
+        issue_number: u64,
         amount_reserved_for_bounty: BalanceOf<T>,
         acceptance_committee: ResolutionMetadata<
             <T as Org>::OrgId,
@@ -110,6 +121,15 @@ where
         >,
     ) -> Result<BountyPostedEvent<T>, C::Error> {
         let signer = self.chain_signer()?;
+        let description = crate::post_bounty(
+            self,
+            BountyBody {
+                repo_owner,
+                repo_name,
+                issue_number,
+            },
+        )
+        .await?;
         self.chain_client()
             .account_posts_bounty_and_watch(
                 signer,
@@ -125,10 +145,12 @@ where
     async fn account_applies_for_bounty(
         &self,
         bounty_id: <T as Bounty>::BountyId,
-        description: <T as Org>::IpfsReference,
+        description: String,
         total_amount: BalanceOf<T>,
     ) -> Result<BountyApplicationSubmittedEvent<T>, C::Error> {
         let signer = self.chain_signer()?;
+        let description =
+            crate::post_text(self, TextBlock { text: description }).await?;
         self.chain_client()
             .account_applies_for_bounty_and_watch(
                 signer,
@@ -188,10 +210,21 @@ where
         &self,
         bounty_id: <T as Bounty>::BountyId,
         application_id: <T as Bounty>::BountyId,
-        submission_reference: <T as Org>::IpfsReference,
+        repo_owner: String,
+        repo_name: String,
+        issue_number: u64,
         amount_requested: BalanceOf<T>,
     ) -> Result<MilestoneSubmittedEvent<T>, C::Error> {
         let signer = self.chain_signer()?;
+        let submission_reference = crate::post_bounty(
+            self,
+            BountyBody {
+                repo_owner,
+                repo_name,
+                issue_number,
+            },
+        )
+        .await?;
         self.chain_client()
             .submit_milestone_and_watch(
                 signer,

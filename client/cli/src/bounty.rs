@@ -11,8 +11,6 @@ use substrate_subxt::{
     sp_core::crypto::Ss58Codec,
     system::System,
     Runtime,
-    SignedExtension,
-    SignedExtra,
 };
 use sunshine_bounty_client::{
     bank::Bank,
@@ -20,14 +18,10 @@ use sunshine_bounty_client::{
         Bounty,
         BountyClient,
     },
-    client::*,
     org::Org,
     vote::Vote,
-    Cache,
-    Codec,
 };
 use sunshine_bounty_utils::court::ResolutionMetadata;
-use sunshine_core::ChainClient;
 
 #[derive(Clone, Debug, Clap)]
 pub struct BountyPostCommand {
@@ -57,24 +51,9 @@ impl BountyPostCommand {
         <R as System>::BlockNumber: From<u32> + Display,
         <R as Vote>::Signal: From<u64> + Display,
         <R as Org>::OrgId: From<u64> + Display,
-        <R as Org>::IpfsReference: From<libipld::cid::Cid> + Debug,
         <R as Bank>::Currency: From<u128> + Display,
         <R as Bounty>::BountyId: Display,
-        <<<R as Runtime>::Extra as SignedExtra<R>>::Extra as SignedExtension>::AdditionalSigned: Send + Sync,
-        C: ChainClient<R>,
-        C::OffchainClient: Cache<Codec, BountyBody>,
-        C::Error: From<sunshine_bounty_client::Error>,
     {
-        let description = post_bounty(
-            client,
-            BountyBody {
-                repo_owner: self.repo_owner.clone(),
-                repo_name: self.repo_name.clone(),
-                issue_number: self.issue_number,
-            },
-        )
-        .await
-        .map_err(Error::Client)?;
         let ac_rejection_threshold: Option<R::Signal> =
             if let Some(ac_r_t) = self.ac_rejection_threshold {
                 Some(ac_r_t.into())
@@ -130,7 +109,9 @@ impl BountyPostCommand {
         };
         let event = client
             .account_posts_bounty(
-                description.into(),
+                (*self.repo_owner).to_string(),
+                (*self.repo_name).to_string(),
+                self.issue_number,
                 self.amount_reserved_for_bounty.into(),
                 acceptance_committee,
                 supervision_committee,
@@ -159,26 +140,13 @@ impl BountyApplicationCommand {
     ) -> Result<(), C::Error>
     where
         <R as System>::AccountId: Ss58Codec,
-        <R as Org>::IpfsReference: From<libipld::cid::Cid> + Debug,
         <R as Bank>::Currency: From<u128> + Display,
         <R as Bounty>::BountyId: From<u64> + Display,
-        <<<R as Runtime>::Extra as SignedExtra<R>>::Extra as SignedExtension>::AdditionalSigned: Send + Sync,
-        C: ChainClient<R>,
-        C::OffchainClient: Cache<Codec, OrgConstitution>,
-        C::Error: From<sunshine_bounty_client::Error>,
     {
-        let description = post_constitution(
-            client,
-            OrgConstitution {
-                text: self.description.clone(),
-            },
-        )
-        .await
-        .map_err(Error::Client)?;
         let event = client
             .account_applies_for_bounty(
                 self.bounty_id.into(),
-                description.into(),
+                (*self.description).to_string(),
                 self.total_amount.into(),
             )
             .await
@@ -205,9 +173,6 @@ impl BountyTriggerApplicationReviewCommand {
     where
         <R as System>::AccountId: Ss58Codec,
         <R as Bounty>::BountyId: From<u64> + Display,
-        <<<R as Runtime>::Extra as SignedExtra<R>>::Extra as SignedExtension>::AdditionalSigned: Send + Sync,
-        C: ChainClient<R>,
-        C::Error: From<sunshine_bounty_client::Error>,
     {
         let event = client
             .account_triggers_application_review(
@@ -239,9 +204,6 @@ impl BountySudoApproveApplicationCommand {
         <R as System>::AccountId: Ss58Codec,
         <R as Vote>::VoteId: Display,
         <R as Bounty>::BountyId: From<u64> + Display,
-        <<<R as Runtime>::Extra as SignedExtra<R>>::Extra as SignedExtension>::AdditionalSigned: Send + Sync,
-        C: ChainClient<R>,
-        C::Error: From<sunshine_bounty_client::Error>,
     {
         let event = client
             .account_sudo_approves_application(
@@ -273,9 +235,6 @@ impl BountyPollApplicationCommand {
         <R as System>::AccountId: Ss58Codec,
         <R as Vote>::VoteId: Display,
         <R as Bounty>::BountyId: From<u64> + Display,
-        <<<R as Runtime>::Extra as SignedExtra<R>>::Extra as SignedExtension>::AdditionalSigned: Send + Sync,
-        C: ChainClient<R>,
-        C::Error: From<sunshine_bounty_client::Error>,
     {
         let event = client
             .poll_application(self.bounty_id.into(), self.app_id.into())
@@ -307,29 +266,16 @@ impl BountySubmitMilestoneCommand {
     ) -> Result<(), C::Error>
     where
         <R as System>::AccountId: Ss58Codec,
-        <R as Org>::IpfsReference: From<libipld::cid::Cid>,
         <R as Bank>::Currency: From<u128> + Display,
         <R as Bounty>::BountyId: From<u64> + Display,
-        <<<R as Runtime>::Extra as SignedExtra<R>>::Extra as SignedExtension>::AdditionalSigned: Send + Sync,
-        C: ChainClient<R>,
-        C::OffchainClient: Cache<Codec, BountyBody>,
-        C::Error: From<sunshine_bounty_client::Error>,
     {
-        let submission_reference = post_bounty(
-            client,
-            BountyBody {
-                repo_owner: self.repo_owner.clone(),
-                repo_name: self.repo_name.clone(),
-                issue_number: self.issue_number,
-            },
-        )
-        .await
-        .map_err(Error::Client)?;
         let event = client
             .submit_milestone(
                 self.bounty_id.into(),
                 self.application_id.into(),
-                submission_reference.into(),
+                (*self.repo_owner).to_string(),
+                (*self.repo_name).to_string(),
+                self.issue_number,
                 self.amount_requested.into(),
             )
             .await
@@ -355,9 +301,6 @@ impl BountyTriggerMilestoneReviewCommand {
     ) -> Result<(), C::Error>
     where
         <R as Bounty>::BountyId: From<u64> + Display,
-        <<<R as Runtime>::Extra as SignedExtra<R>>::Extra as SignedExtension>::AdditionalSigned: Send + Sync,
-        C: ChainClient<R>,
-        C::Error: From<sunshine_bounty_client::Error>,
     {
         let event = client
             .trigger_milestone_review(
@@ -387,9 +330,6 @@ impl BountySudoApproveMilestoneCommand {
     ) -> Result<(), C::Error>
     where
         <R as Bounty>::BountyId: From<u64> + Display,
-        <<<R as Runtime>::Extra as SignedExtra<R>>::Extra as SignedExtension>::AdditionalSigned: Send + Sync,
-        C: ChainClient<R>,
-        C::Error: From<sunshine_bounty_client::Error>,
     {
         let event = client
             .sudo_approves_milestone(
@@ -419,9 +359,6 @@ impl BountyPollMilestoneCommand {
     ) -> Result<(), C::Error>
     where
         <R as Bounty>::BountyId: From<u64> + Display,
-        <<<R as Runtime>::Extra as SignedExtra<R>>::Extra as SignedExtension>::AdditionalSigned: Send + Sync,
-        C: ChainClient<R>,
-        C::Error: From<sunshine_bounty_client::Error>,
     {
         let event = client
             .poll_milestone(self.bounty_id.into(), self.milestone_id.into())

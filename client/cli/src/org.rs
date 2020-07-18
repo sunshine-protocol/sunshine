@@ -11,23 +11,13 @@ use substrate_subxt::{
     sp_core::crypto::Ss58Codec,
     system::System,
     Runtime,
-    SignedExtension,
-    SignedExtra,
 };
-use sunshine_bounty_client::{
-    client::*,
-    org::{
-        AccountShare,
-        Org,
-        OrgClient,
-    },
-    Cache,
-    Codec,
+use sunshine_bounty_client::org::{
+    AccountShare,
+    Org,
+    OrgClient,
 };
-use sunshine_core::{
-    ChainClient,
-    Ss58,
-};
+use sunshine_core::Ss58;
 
 #[derive(Clone, Debug, Clap)]
 pub struct OrgRegisterFlatCommand {
@@ -45,13 +35,6 @@ impl OrgRegisterFlatCommand {
     where
         <R as System>::AccountId: Ss58Codec,
         <R as Org>::OrgId: From<u64> + Display,
-        <R as Org>::IpfsReference: From<
-            libipld::cid::Cid,
-        >,
-        <<<R as Runtime>::Extra as SignedExtra<R>>::Extra as SignedExtension>::AdditionalSigned: Send + Sync,
-        C: ChainClient<R>,
-        C::OffchainClient: Cache<Codec, OrgConstitution>,
-        C::Error: From<sunshine_bounty_client::Error>,
     {
         let sudo = if let Some(acc) = &self.sudo {
             let new_acc: Ss58<R> = acc.parse()?;
@@ -64,14 +47,6 @@ impl OrgRegisterFlatCommand {
         } else {
             None
         };
-        let constitution = post_constitution(
-            client,
-            OrgConstitution {
-                text: self.constitution.clone(),
-            },
-        )
-        .await
-        .map_err(Error::Client)?;
         let members = self
             .members
             .iter()
@@ -81,7 +56,12 @@ impl OrgRegisterFlatCommand {
             })
             .collect::<Result<Vec<R::AccountId>, C::Error>>()?;
         let event = client
-            .register_flat_org(sudo, parent_org, constitution.into(), &members)
+            .register_flat_org(
+                sudo,
+                parent_org,
+                (*self.constitution).to_string(),
+                &members,
+            )
             .await
             .map_err(Error::Client)?;
         println!(
@@ -109,13 +89,6 @@ impl OrgRegisterWeightedCommand {
         <R as System>::AccountId: Ss58Codec,
         <R as Org>::OrgId: From<u64> + Display,
         <R as Org>::Shares: From<u64> + Display,
-        <R as Org>::IpfsReference: From<
-            libipld::cid::Cid,
-        >,
-        <<<R as Runtime>::Extra as SignedExtra<R>>::Extra as SignedExtension>::AdditionalSigned: Send + Sync,
-        C: ChainClient<R>,
-        C::OffchainClient: Cache<Codec, OrgConstitution>,
-        C::Error: From<sunshine_bounty_client::Error>,
     {
         let sudo: Option<R::AccountId> = if let Some(acc) = &self.sudo {
             let new_acc: Ss58<R> = acc.parse::<Ss58<R>>()?;
@@ -128,14 +101,6 @@ impl OrgRegisterWeightedCommand {
         } else {
             None
         };
-        let constitution = post_constitution(
-            client,
-            OrgConstitution {
-                text: self.constitution.clone(),
-            },
-        )
-        .await
-        .map_err(Error::Client)?;
         let members = self
             .members
             .iter()
@@ -149,7 +114,7 @@ impl OrgRegisterWeightedCommand {
             .register_weighted_org(
                 sudo,
                 parent_org,
-                constitution.into(),
+                (*self.constitution).to_string(),
                 &members,
             )
             .await

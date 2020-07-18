@@ -1,10 +1,11 @@
 use bounty_client::{
     bank::Bank,
     bounty::Bounty,
-    client::*,
     donate::Donate,
     org::Org,
     vote::Vote,
+    BountyBody,
+    TextBlock,
 };
 use identity_utils::cid::CidBytes;
 use ipfs_embed::{
@@ -200,7 +201,7 @@ impl<S: Store + Send + Sync> ChainClient<Runtime> for Client<S> {
 
 pub struct OffchainClient<S> {
     bounties: IpldCache<S, Codec, BountyBody>,
-    constitutions: IpldCache<S, Codec, OrgConstitution>,
+    constitutions: IpldCache<S, Codec, TextBlock>,
 }
 
 impl<S: Store> OffchainClient<S> {
@@ -213,7 +214,7 @@ impl<S: Store> OffchainClient<S> {
 }
 
 derive_cache!(OffchainClient, bounties, Codec, BountyBody);
-derive_cache!(OffchainClient, constitutions, Codec, OrgConstitution);
+derive_cache!(OffchainClient, constitutions, Codec, TextBlock);
 
 #[derive(Debug, Error)]
 pub enum Error {

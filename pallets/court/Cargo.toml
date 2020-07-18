@@ -1,6 +1,6 @@
 [package]
 name = "sunshine-court"
-version = "0.1.1"
+version = "0.2.0"
 authors = ["Amar Singh <asinghchrony@protonmail.com>"]
 edition = "2018"
 

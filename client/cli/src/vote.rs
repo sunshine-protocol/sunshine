@@ -11,22 +11,15 @@ use substrate_subxt::{
     sp_core::crypto::Ss58Codec,
     system::System,
     Runtime,
-    SignedExtension,
-    SignedExtra,
 };
 use sunshine_bounty_client::{
-    client::*,
     org::Org,
     vote::{
         Vote,
         VoteClient,
     },
-    Cache,
-    Codec,
-    Permill,
 };
 use sunshine_bounty_utils::vote::VoterView;
-use sunshine_core::ChainClient;
 
 #[derive(Clone, Debug, Clap)]
 pub struct VoteCreateSignalThresholdCommand {
@@ -46,28 +39,9 @@ impl VoteCreateSignalThresholdCommand {
         <R as System>::AccountId: Ss58Codec,
         <R as System>::BlockNumber: From<u32>,
         <R as Org>::OrgId: From<u64> + Display,
-        <R as Org>::IpfsReference: From<
-            libipld::cid::Cid,
-        >,
-        <R as Vote>::VoteId: From<u64> + Display,
         <R as Vote>::Signal: From<u64> + Display,
-        <<<R as Runtime>::Extra as SignedExtra<R>>::Extra as SignedExtension>::AdditionalSigned: Send + Sync,
-        C: ChainClient<R>,
-        C::OffchainClient: Cache<Codec, OrgConstitution>,
-        C::Error: From<sunshine_bounty_client::Error>,
+        <R as Vote>::VoteId: Display,
     {
-        let topic = if let Some(top) = &self.topic {
-            Some(
-                post_constitution(
-                    client,
-                    OrgConstitution { text: top.clone() },
-                )
-                .await
-                .map_err(Error::Client)?,
-            )
-        } else {
-            None
-        };
         let turnout_requirement: Option<R::Signal> =
             if let Some(req) = self.turnout_requirement {
                 Some(req.into())
@@ -82,7 +56,7 @@ impl VoteCreateSignalThresholdCommand {
             };
         let event = client
             .create_signal_threshold_vote(
-                topic,
+                self.topic.clone(),
                 self.organization.into(),
                 self.support_requirement.into(),
                 turnout_requirement,
@@ -107,14 +81,6 @@ pub struct VoteCreatePercentThresholdCommand {
     pub duration: Option<u32>,
 }
 
-fn u8_to_permill(u: u8) -> Result<Permill, sunshine_bounty_client::Error> {
-    if u > 0u8 && u < 100u8 {
-        Ok(Permill::from_percent(u.into()))
-    } else {
-        Err(Error::VotePercentThresholdInputBoundError)
-    }
-}
-
 impl VoteCreatePercentThresholdCommand {
     pub async fn exec<R: Runtime + Vote, C: VoteClient<R>>(
         &self,
@@ -124,37 +90,8 @@ impl VoteCreatePercentThresholdCommand {
         <R as System>::AccountId: Ss58Codec,
         <R as System>::BlockNumber: From<u32>,
         <R as Org>::OrgId: From<u64> + Display,
-        <R as Org>::IpfsReference: From<
-            libipld::cid::Cid,
-        >,
-        <R as Vote>::VoteId: From<u64> + Display,
-        <<<R as Runtime>::Extra as SignedExtra<R>>::Extra as SignedExtension>::AdditionalSigned: Send + Sync,
-        C: ChainClient<R>,
-        C::OffchainClient: Cache<Codec, OrgConstitution>,
-        C::Error: From<sunshine_bounty_client::Error>,
+        <R as Vote>::VoteId: Display,
     {
-        let topic = if let Some(top) = &self.topic {
-            Some(
-                post_constitution(
-                    client,
-                    OrgConstitution { text: top.clone() },
-                )
-                .await
-                .map_err(Error::Client)?,
-            )
-        } else {
-            None
-        };
-        let support_threshold = u8_to_permill(self.support_threshold)
-            .map_err(|_| Error::VotePercentThresholdInputBoundError)?;
-        let turnout_threshold: Option<Permill> =
-            if let Some(req) = self.turnout_threshold {
-                let ret = u8_to_permill(req)
-                    .map_err(|_| Error::VotePercentThresholdInputBoundError)?;
-                Some(ret)
-            } else {
-                None
-            };
         let duration: Option<<R as System>::BlockNumber> =
             if let Some(req) = self.duration {
                 Some(req.into())
@@ -163,10 +100,10 @@ impl VoteCreatePercentThresholdCommand {
             };
         let event = client
             .create_percent_threshold_vote(
-                topic,
+                self.topic.clone(),
                 self.organization.into(),
-                support_threshold,
-                turnout_threshold,
+                self.support_threshold,
+                self.turnout_threshold,
                 duration,
             )
             .await
@@ -194,27 +131,8 @@ impl VoteCreateUnanimousConsentCommand {
     where
         <R as System>::AccountId: Ss58Codec,
         <R as Org>::OrgId: From<u64> + Display,
-        <R as Org>::IpfsReference: From<
-            libipld::cid::Cid,
-        >,
-        <R as Vote>::VoteId: From<u64> + Display,
-        <<<R as Runtime>::Extra as SignedExtra<R>>::Extra as SignedExtension>::AdditionalSigned: Send + Sync,
-        C: ChainClient<R>,
-        C::OffchainClient: Cache<Codec, OrgConstitution>,
-        C::Error: From<sunshine_bounty_client::Error>,
+        <R as Vote>::VoteId: Display,
     {
-        let topic = if let Some(top) = &self.topic {
-            Some(
-                post_constitution(
-                    client,
-                    OrgConstitution { text: top.clone() },
-                )
-                .await
-                .map_err(Error::Client)?,
-            )
-        } else {
-            None
-        };
         let duration: Option<<R as System>::BlockNumber> =
             if let Some(req) = self.duration {
                 Some(req.into())
@@ -223,7 +141,7 @@ impl VoteCreateUnanimousConsentCommand {
             };
         let event = client
             .create_unanimous_consent_vote(
-                topic,
+                self.topic.clone(),
                 self.organization.into(),
                 duration,
             )
@@ -252,34 +170,19 @@ impl VoteSubmitCommand {
     where
         <R as System>::AccountId: Ss58Codec,
         <R as Org>::OrgId: From<u64> + Display,
-        <R as Org>::IpfsReference: From<
-            libipld::cid::Cid,
-        >,
         <R as Vote>::VoteId: From<u64> + Display,
-        <<<R as Runtime>::Extra as SignedExtra<R>>::Extra as SignedExtension>::AdditionalSigned: Send + Sync,
-        C: ChainClient<R>,
-        C::OffchainClient: Cache<Codec, OrgConstitution>,
-        C::Error: From<sunshine_bounty_client::Error>,
     {
-        let justification = if let Some(note) = &self.justification {
-            Some(
-                post_constitution(
-                    client,
-                    OrgConstitution { text: note.clone() },
-                )
-                .await
-                .map_err(Error::Client)?,
-            )
-        } else {
-            None
-        };
         let voter_view = match self.direction {
             0u8 => VoterView::Against, // 0 == false
             1u8 => VoterView::InFavor, // 1 == true
             _ => VoterView::Abstain,
         };
         let event = client
-            .submit_vote(self.vote_id.into(), voter_view, justification.into())
+            .submit_vote(
+                self.vote_id.into(),
+                voter_view,
+                self.justification.clone(),
+            )
             .await
             .map_err(Error::Client)?;
         println!(
