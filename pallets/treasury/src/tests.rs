@@ -106,12 +106,21 @@ fn get_last_event() -> RawEvent<u64, u64, u64> {
         .unwrap()
 }
 
+/// Auxiliary method for simulating block time passing
+fn run_to_block(n: u64) {
+    while System::block_number() < n {
+        Treasury::on_finalize(System::block_number());
+        System::set_block_number(System::block_number() + 1);
+    }
+}
+
 fn new_test_ext() -> sp_io::TestExternalities {
     let mut t = frame_system::GenesisConfig::default()
         .build_storage::<Test>()
         .unwrap();
-    pallet_balances::GenesisConfig::<Test> {
-        balances: vec![(1, 100), (2, 98), (3, 200), (4, 75), (5, 10), (6, 69)],
+    GenesisConfig::<Test> {
+        minting_interval: 10,
+        mint_amount: 10,
     }
     .assimilate_storage(&mut t)
     .unwrap();
@@ -121,17 +130,21 @@ fn new_test_ext() -> sp_io::TestExternalities {
 }
 
 #[test]
-fn genesis_config_works() {
+fn verify_issuance_rate() {
     new_test_ext().execute_with(|| {
-        assert!(System::events().is_empty());
-    });
-}
-
-#[test]
-fn check_donation_accuracy() {
-    new_test_ext().execute_with(|| {
-        let one = Origin::signed(1);
-        let two = Origin::signed(2);
-        assert_eq!(Balances::total_balance(&2), 98);
+        let treasury_account_id = Treasury::account_id();
+        assert_eq!(0, Balances::total_balance(&treasury_account_id));
+        run_to_block(11);
+        assert_eq!(10, Balances::total_balance(&treasury_account_id));
+        run_to_block(21);
+        assert_eq!(20, Balances::total_balance(&treasury_account_id));
+        run_to_block(31);
+        assert_eq!(30, Balances::total_balance(&treasury_account_id));
+        run_to_block(39);
+        assert_eq!(30, Balances::total_balance(&treasury_account_id));
+        run_to_block(40);
+        assert_eq!(30, Balances::total_balance(&treasury_account_id));
+        run_to_block(41);
+        assert_eq!(40, Balances::total_balance(&treasury_account_id));
     });
 }

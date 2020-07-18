@@ -10,6 +10,7 @@ use frame_support::{
     traits::{
         Currency,
         Get,
+        OnFinalize,
     },
 };
 use frame_system::{self as system,};

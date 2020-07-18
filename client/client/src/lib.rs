@@ -54,8 +54,8 @@ where
     C::Error: From<Error>,
     V: Clone + Encode<DagCborCodec> + Decode<DagCborCodec> + Send + Sync,
 {
-    client.offchain_client().flush().await?;
     let cid = client.offchain_client().insert(value).await?;
+    client.offchain_client().flush().await?;
     let ret_cid = R::IpfsReference::from(cid);
     Ok(ret_cid)
 }
