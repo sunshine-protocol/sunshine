@@ -4,6 +4,13 @@ use codec::{
     Encode,
 };
 use frame_support::Parameter;
+use libipld::{
+    cbor::DagCborCodec,
+    codec::{
+        Decode as DagEncode,
+        Encode as DagDecode,
+    },
+};
 use sp_runtime::traits::{
     AtLeast32Bit,
     MaybeSerializeDeserialize,
@@ -54,6 +61,16 @@ pub trait Org: System {
         + MaybeSerializeDeserialize
         + Debug
         + Zero;
+
+    /// Constitution associated type, text block
+    type Constitution: 'static
+        + Codec
+        + Default
+        + Clone
+        + DagEncode<DagCborCodec>
+        + DagDecode<DagCborCodec>
+        + Send
+        + Sync;
 }
 
 // ~~ Values ~~

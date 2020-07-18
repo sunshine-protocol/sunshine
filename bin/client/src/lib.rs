@@ -41,8 +41,6 @@ use sunshine_core::{
 };
 use thiserror::Error;
 
-pub use bounty_client as bounty;
-
 type AccountId = <<sp_runtime::MultiSignature as Verify>::Signer as IdentifyAccount>::AccountId;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -68,11 +66,16 @@ impl Org for Runtime {
     type IpfsReference = CidBytes;
     type OrgId = u64;
     type Shares = u64;
+    type Constitution = TextBlock;
 }
 
 impl Vote for Runtime {
     type VoteId = u64;
     type Signal = u64;
+    type Percent = sp_runtime::Permill;
+    type VoteTopic = TextBlock;
+    type VoterView = bounty_utils::vote::VoterView;
+    type VoteJustification = TextBlock;
 }
 
 impl Donate for Runtime {
@@ -86,6 +89,14 @@ impl Bank for Runtime {
 
 impl Bounty for Runtime {
     type BountyId = u64;
+    type VoteCommittee = bounty_utils::court::ResolutionMetadata<
+        Self::OrgId,
+        Self::Signal,
+        Self::BlockNumber,
+    >;
+    type BountyPost = BountyBody;
+    type BountyApplication = TextBlock;
+    type MilestoneSubmission = BountyBody;
 }
 
 impl substrate_subxt::Runtime for Runtime {

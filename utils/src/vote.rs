@@ -26,6 +26,12 @@ pub enum VoterView {
     Abstain,
 }
 
+impl Default for VoterView {
+    fn default() -> VoterView {
+        VoterView::NoVote
+    }
+}
+
 #[derive(
     new, Clone, Copy, PartialEq, Eq, Encode, Decode, sp_runtime::RuntimeDebug,
 )]
