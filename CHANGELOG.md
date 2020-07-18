@@ -6,10 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.2.0] - 202007-17
+## [0.2.0] - 2020-07-17
 
-- added minimal `sunshine-treasury` pallet, extracted from `sunshine-donate`
-- 
+- added minimal `sunshine-treasury` pallet, extracted from `sunshine-donate` pallet
+- adds `OffchainClient` to use ipfs-embed in a structured way (`client/client/src/lib.rs`)
 
 ## [0.1.1] - 2020-07-15
 

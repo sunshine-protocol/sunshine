@@ -121,7 +121,7 @@ where
         >,
     ) -> Result<BountyPostedEvent<T>, C::Error> {
         let signer = self.chain_signer()?;
-        let description = crate::post_bounty(
+        let description = crate::post(
             self,
             BountyBody {
                 repo_owner,
@@ -150,7 +150,7 @@ where
     ) -> Result<BountyApplicationSubmittedEvent<T>, C::Error> {
         let signer = self.chain_signer()?;
         let description =
-            crate::post_text(self, TextBlock { text: description }).await?;
+            crate::post(self, TextBlock { text: description }).await?;
         self.chain_client()
             .account_applies_for_bounty_and_watch(
                 signer,
@@ -216,7 +216,7 @@ where
         amount_requested: BalanceOf<T>,
     ) -> Result<MilestoneSubmittedEvent<T>, C::Error> {
         let signer = self.chain_signer()?;
-        let submission_reference = crate::post_bounty(
+        let submission_reference = crate::post(
             self,
             BountyBody {
                 repo_owner,

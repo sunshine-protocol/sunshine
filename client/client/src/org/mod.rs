@@ -98,7 +98,7 @@ where
     ) -> Result<NewFlatOrganizationRegisteredEvent<T>, C::Error> {
         let signer = self.chain_signer()?;
         let constitution =
-            crate::post_text(self, TextBlock { text: constitution }).await?;
+            crate::post(self, TextBlock { text: constitution }).await?;
         self.chain_client()
             .register_flat_org_and_watch(
                 signer,
@@ -120,7 +120,7 @@ where
     ) -> Result<NewWeightedOrganizationRegisteredEvent<T>, C::Error> {
         let signer = self.chain_signer()?;
         let constitution =
-            crate::post_text(self, TextBlock { text: constitution }).await?;
+            crate::post(self, TextBlock { text: constitution }).await?;
         self.chain_client()
             .register_weighted_org_and_watch(
                 signer,

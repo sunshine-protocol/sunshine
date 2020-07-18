@@ -33,7 +33,14 @@ pub struct TextBlock {
     pub text: String,
 }
 
-pub(crate) async fn post_text<R, C, V>(
+#[derive(Clone, DagCbor)]
+pub struct BountyBody {
+    pub repo_owner: String,
+    pub repo_name: String,
+    pub issue_number: u64,
+}
+
+pub(crate) async fn post<R, C, V>(
     client: &C,
     value: V,
 ) -> Result<R::IpfsReference, C::Error>
@@ -49,32 +56,6 @@ where
 {
     client.offchain_client().flush().await?;
     let cid = client.offchain_client().insert(value).await?;
-    let ret_cid = R::IpfsReference::from(cid);
-    Ok(ret_cid)
-}
-
-#[derive(Clone, DagCbor)]
-pub struct BountyBody {
-    pub repo_owner: String,
-    pub repo_name: String,
-    pub issue_number: u64,
-}
-
-pub(crate) async fn post_bounty<R, C>(
-    client: &C,
-    bounty: BountyBody,
-) -> Result<R::IpfsReference, C::Error>
-where
-    R: Runtime + Org,
-    <R as Org>::IpfsReference: From<libipld::cid::Cid>,
-    <<R::Extra as SignedExtra<R>>::Extra as SignedExtension>::AdditionalSigned:
-        Send + Sync,
-    C: ChainClient<R>,
-    C::OffchainClient: Cache<Codec, BountyBody>,
-    C::Error: From<Error>,
-{
-    client.offchain_client().flush().await?;
-    let cid = client.offchain_client().insert(bounty).await?;
     let ret_cid = R::IpfsReference::from(cid);
     Ok(ret_cid)
 }

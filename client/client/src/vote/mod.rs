@@ -80,7 +80,7 @@ where
     ) -> Result<NewVoteStartedEvent<T>, C::Error> {
         let signer = self.chain_signer()?;
         let topic = if let Some(t) = topic {
-            Some(crate::post_text(self, TextBlock { text: t }).await?)
+            Some(crate::post(self, TextBlock { text: t }).await?)
         } else {
             None
         };
@@ -107,7 +107,7 @@ where
     ) -> Result<NewVoteStartedEvent<T>, C::Error> {
         let signer = self.chain_signer()?;
         let topic = if let Some(t) = topic {
-            Some(crate::post_text(self, TextBlock { text: t }).await?)
+            Some(crate::post(self, TextBlock { text: t }).await?)
         } else {
             None
         };
@@ -142,7 +142,7 @@ where
     ) -> Result<NewVoteStartedEvent<T>, C::Error> {
         let signer = self.chain_signer()?;
         let topic = if let Some(t) = topic {
-            Some(crate::post_text(self, TextBlock { text: t }).await?)
+            Some(crate::post(self, TextBlock { text: t }).await?)
         } else {
             None
         };
@@ -165,7 +165,7 @@ where
     ) -> Result<VotedEvent<T>, C::Error> {
         let signer = self.chain_signer()?;
         let justification = if let Some(j) = justification {
-            Some(crate::post_text(self, TextBlock { text: j }).await?)
+            Some(crate::post(self, TextBlock { text: j }).await?)
         } else {
             None
         };
