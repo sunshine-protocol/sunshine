@@ -139,34 +139,32 @@ async fn run() -> Result<(), Error> {
                 }
                 OrgSubCommand::LockShares(cmd) => cmd.exec(&client).await?,
                 OrgSubCommand::UnlockShares(cmd) => cmd.exec(&client).await?,
-                //OrgSubCommand::RegisterFlatOrg(cmd) => cmd.exec(&client).await,
-                //OrgSubCommand::RegisterWeightedOrg(cmd) => {
-                //    cmd.exec(&client).await
-                //}
+                OrgSubCommand::RegisterFlatOrg(cmd) => {
+                    cmd.exec(&client).await?
+                }
+                OrgSubCommand::RegisterWeightedOrg(cmd) => {
+                    cmd.exec(&client).await?
+                }
             }
         }
-        // SubCommand::Vote(VoteCommand { cmd }) => {
-        // match cmd {
-        // VoteSubCommand::CreateSignalThresholdVote(cmd) => {
-        // cmd.exec(&client).await
-        // }
-        // VoteSubCommand::CreatePercentThresholdVote(cmd) => {
-        // cmd.exec(&client).await
-        // }
-        // VoteSubCommand::CreateUnanimousConsentVote(cmd) => {
-        // cmd.exec(&client).await
-        // }
-        // VoteSubCommand::SubmitVote(cmd) => cmd.exec(&client).await,
-        // }
-        // }
+        SubCommand::Vote(VoteCommand { cmd }) => {
+            match cmd {
+                VoteSubCommand::CreateSignalThresholdVote(cmd) => {
+                    cmd.exec(&client).await?
+                }
+                VoteSubCommand::CreatePercentThresholdVote(cmd) => {
+                    cmd.exec(&client).await?
+                }
+                VoteSubCommand::CreateUnanimousConsentVote(cmd) => {
+                    cmd.exec(&client).await?
+                }
+                VoteSubCommand::SubmitVote(cmd) => cmd.exec(&client).await?,
+            }
+        }
         SubCommand::Donate(DonateCommand { cmd }) => {
             match cmd {
-                DonateSubCommand::DonateWithFee(cmd) => {
-                    cmd.exec(&client).await?
-                }
-                DonateSubCommand::DonateWithoutFee(cmd) => {
-                    cmd.exec(&client).await?
-                }
+                DonateSubCommand::Donate(cmd) => cmd.exec(&client).await?,
+                DonateSubCommand::Donate2(cmd) => cmd.exec(&client).await?,
             }
         }
         SubCommand::Bank(BankCommand { cmd }) => {
@@ -174,33 +172,36 @@ async fn run() -> Result<(), Error> {
                 BankSubCommand::OpenAccount(cmd) => cmd.exec(&client).await?,
                 BankSubCommand::OpenAccount2(cmd) => cmd.exec(&client).await?,
             }
-        } /* SubCommand::Bounty(BountyCommand { cmd }) => {
-           * match cmd {
-           * BountySubCommand::PostBounty(cmd) => cmd.exec(&client).await,
-           * BountySubCommand::ApplyForBounty(cmd) => {
-           * cmd.exec(&client).await
-           * }
-           * BountySubCommand::TriggerApplicationReview(cmd) => {
-           * cmd.exec(&client).await
-           * }
-           * BountySubCommand::SudoApproveApplication(cmd) => {
-           * cmd.exec(&client).await
-           * }
-           * BountySubCommand::PollApplication(cmd) => {
-           * cmd.exec(&client).await
-           * }
-           * BountySubCommand::SubmitMilestone(cmd) => {
-           * cmd.exec(&client).await
-           * }
-           * BountySubCommand::TriggerMilestoneReview(cmd) => {
-           * cmd.exec(&client).await
-           * }
-           * BountySubCommand::SudoApproveMilestone(cmd) => {
-           * cmd.exec(&client).await
-           * }
-           * BountySubCommand::PollMilestone(cmd) => cmd.exec(&client).await,
-           * }
-           * } */
+        }
+        SubCommand::Bounty(BountyCommand { cmd }) => {
+            match cmd {
+                BountySubCommand::PostBounty(cmd) => cmd.exec(&client).await?,
+                BountySubCommand::ApplyForBounty(cmd) => {
+                    cmd.exec(&client).await?
+                }
+                BountySubCommand::TriggerApplicationReview(cmd) => {
+                    cmd.exec(&client).await?
+                }
+                BountySubCommand::SudoApproveApplication(cmd) => {
+                    cmd.exec(&client).await?
+                }
+                BountySubCommand::PollApplication(cmd) => {
+                    cmd.exec(&client).await?
+                }
+                BountySubCommand::SubmitMilestone(cmd) => {
+                    cmd.exec(&client).await?
+                }
+                BountySubCommand::TriggerMilestoneReview(cmd) => {
+                    cmd.exec(&client).await?
+                }
+                BountySubCommand::SudoApproveMilestone(cmd) => {
+                    cmd.exec(&client).await?
+                }
+                BountySubCommand::PollMilestone(cmd) => {
+                    cmd.exec(&client).await?
+                }
+            }
+        }
     }
     Ok(())
 }

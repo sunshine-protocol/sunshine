@@ -146,6 +146,7 @@ pub struct BountyPostedEvent<T: Bounty> {
     pub new_bounty_id: T::BountyId,
     pub poster: <T as System>::AccountId,
     pub amount_reserved_for_bounty: BalanceOf<T>,
+    pub description: T::IpfsReference,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]

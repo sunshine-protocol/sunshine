@@ -10,7 +10,6 @@ use frame_support::{
     traits::{
         Currency,
         ExistenceRequirement,
-        Get,
     },
 };
 use frame_system::{
@@ -19,13 +18,11 @@ use frame_system::{
 };
 use sp_runtime::{
     traits::{
-        AccountIdConversion,
         CheckedSub,
         Zero,
     },
     DispatchError,
     DispatchResult,
-    ModuleId,
     Permill,
 };
 use util::traits::GetGroup;
@@ -39,10 +36,6 @@ pub trait Trait: system::Trait + org::Trait {
     type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
     /// The currency type
     type Currency: Currency<Self::AccountId>;
-    //// Taxes for some transfers
-    type TransactionFee: Get<BalanceOf<Self>>;
-    /// Where the conditional taxes go
-    type Treasury: Get<ModuleId>;
 }
 
 decl_event!(
@@ -51,7 +44,7 @@ decl_event!(
         <T as org::Trait>::OrgId,
         Balance = BalanceOf<T>,
     {
-        DonationExecuted(AccountId, OrgId, Balance, bool),
+        DonationExecuted(AccountId, OrgId, Balance),
     }
 );
 
@@ -68,55 +61,30 @@ decl_module! {
         fn deposit_event() = default;
 
         #[weight = 0]
-        fn make_prop_donation_with_fee(
+        fn make_prop_donation(
             origin,
             org: T::OrgId,
             amt: BalanceOf<T>
         ) -> DispatchResult {
             let sender = ensure_signed(origin)?;
-            let remainder = Self::donate(&sender, org, amt, true)?;
+            let remainder = Self::donate(&sender, org, amt)?;
             let transferred_amt = amt - remainder;
-            Self::deposit_event(RawEvent::DonationExecuted(sender, org, transferred_amt, true));
-            Ok(())
-        }
-        #[weight = 0]
-        fn make_prop_donation_without_fee(
-            origin,
-            org: T::OrgId,
-            amt: BalanceOf<T>
-        ) -> DispatchResult {
-            let sender = ensure_signed(origin)?;
-            let remainder = Self::donate(&sender, org, amt, false)?;
-            let transferred_amt = amt - remainder;
-            Self::deposit_event(RawEvent::DonationExecuted(sender, org, transferred_amt, false));
+            Self::deposit_event(RawEvent::DonationExecuted(sender, org, transferred_amt));
             Ok(())
         }
     }
 }
 
 impl<T: Trait> Module<T> {
-    /// The account ID of this module's treasury
-    ///
-    /// This actually does computation. If you need to keep using it, then make sure you cache the
-    /// value and only call this once.
-    pub fn account_id() -> T::AccountId {
-        T::Treasury::get().into_account()
-    }
     /// Returns the remainder NOT transferred because the amount was not perfectly divisible
     pub fn donate(
         sender: &T::AccountId,
         recipient: T::OrgId,
         amt: BalanceOf<T>,
-        transaction_fee: bool,
     ) -> Result<BalanceOf<T>, DispatchError> {
         let free = T::Currency::free_balance(sender);
-        let total_transfer = if transaction_fee {
-            amt + T::TransactionFee::get()
-        } else {
-            amt
-        };
         let _ = free
-            .checked_sub(&total_transfer)
+            .checked_sub(&amt)
             .ok_or(Error::<T>::NotEnoughFundsInFreeToMakeTransfer)?;
         // Get the membership set of the Org
         let group = <org::Module<T>>::get_group(recipient)
@@ -143,15 +111,6 @@ impl<T: Trait> Module<T> {
             })
             .collect::<DispatchResult>()?;
         let remainder = amt - transferred_amt;
-        if transaction_fee {
-            // pay the transaction fee last
-            T::Currency::transfer(
-                &sender,
-                &Self::account_id(),
-                T::TransactionFee::get(),
-                ExistenceRequirement::KeepAlive,
-            )?;
-        }
         Ok(remainder)
     }
     fn calculate_proportional_amount_for_account(

@@ -6,8 +6,6 @@ pub enum Error<E: std::fmt::Debug + std::error::Error + 'static> {
     Client(E),
     #[error(transparent)]
     InvalidSs58(#[from] sunshine_core::InvalidSs58),
-    #[error("Vote percent threshold input must be 0 < x < 100")]
-    VotePercentThresholdInputBoundError,
     #[error("Input error for posting bounty.")]
     PostBountyInputError,
 }

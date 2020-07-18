@@ -62,13 +62,7 @@ pub struct TreasuryAddress {
 // ~~ Calls and Events ~~
 
 #[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
-pub struct MakePropDonationWithFeeCall<T: Donate> {
-    pub org: <T as Org>::OrgId,
-    pub amt: DonateBalanceOf<T>,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
-pub struct MakePropDonationWithoutFeeCall<T: Donate> {
+pub struct MakePropDonationCall<T: Donate> {
     pub org: <T as Org>::OrgId,
     pub amt: DonateBalanceOf<T>,
 }

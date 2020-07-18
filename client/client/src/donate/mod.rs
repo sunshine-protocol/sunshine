@@ -16,12 +16,7 @@ use sunshine_core::ChainClient;
 
 #[async_trait]
 pub trait DonateClient<T: Runtime + Donate>: ChainClient<T> {
-    async fn make_prop_donation_with_fee(
-        &self,
-        org: <T as Org>::OrgId,
-        amt: DonateBalanceOf<T>,
-    ) -> Result<DonationExecutedEvent<T>, Self::Error>;
-    async fn make_prop_donation_without_fee(
+    async fn make_prop_donation(
         &self,
         org: <T as Org>::OrgId,
         amt: DonateBalanceOf<T>,
@@ -37,26 +32,14 @@ where
     C: ChainClient<T>,
     C::Error: From<Error>,
 {
-    async fn make_prop_donation_with_fee(
+    async fn make_prop_donation(
         &self,
         org: <T as Org>::OrgId,
         amt: DonateBalanceOf<T>,
     ) -> Result<DonationExecutedEvent<T>, C::Error> {
         let signer = self.chain_signer()?;
         self.chain_client()
-            .make_prop_donation_with_fee_and_watch(signer, org, amt)
-            .await?
-            .donation_executed()?
-            .ok_or(Error::EventNotFound.into())
-    }
-    async fn make_prop_donation_without_fee(
-        &self,
-        org: <T as Org>::OrgId,
-        amt: DonateBalanceOf<T>,
-    ) -> Result<DonationExecutedEvent<T>, C::Error> {
-        let signer = self.chain_signer()?;
-        self.chain_client()
-            .make_prop_donation_without_fee_and_watch(signer, org, amt)
+            .make_prop_donation_and_watch(signer, org, amt)
             .await?
             .donation_executed()?
             .ok_or(Error::EventNotFound.into())

@@ -362,7 +362,6 @@ impl pallet_sudo::Trait for Runtime {
     type Event = Event;
     type Call = Call;
 }
-pub use org;
 parameter_types! {
     pub const ReservationLimit: u32 = 10000;
 }
@@ -373,7 +372,6 @@ impl org::Trait for Runtime {
     type Shares = u64;
     type ReservationLimit = ReservationLimit;
 }
-pub use vote;
 impl vote::Trait for Runtime {
     type Event = Event;
     type VoteId = u64;
@@ -382,25 +380,24 @@ impl vote::Trait for Runtime {
 parameter_types! {
     pub const MinimumDisputeAmount: u128 = 10;
 }
-pub use court;
 impl court::Trait for Runtime {
     type Event = Event;
     type Currency = Balances;
     type DisputeId = u64;
     type MinimumDisputeAmount = MinimumDisputeAmount;
 }
-pub use donate;
 parameter_types! {
-    pub const TransactionFee: u128 = 3;
     pub const TreasuryModuleId: ModuleId = ModuleId(*b"py/trsry");
+}
+impl treasury::Trait for Runtime {
+    type Event = Event;
+    type Currency = Balances;
+    type TreasuryAddress = TreasuryModuleId;
 }
 impl donate::Trait for Runtime {
     type Event = Event;
     type Currency = Balances;
-    type TransactionFee = TransactionFee;
-    type Treasury = TreasuryModuleId;
 }
-pub use bank;
 parameter_types! {
     pub const MaxTreasuryPerOrg: u32 = 50;
     pub const MinimumInitialDeposit: u128 = 20;
@@ -412,7 +409,6 @@ impl bank::Trait for Runtime {
     type MaxTreasuryPerOrg = MaxTreasuryPerOrg;
     type MinimumInitialDeposit = MinimumInitialDeposit;
 }
-pub use bounty;
 parameter_types! {
     pub const BountyLowerBound: u128 = 5;
 }
@@ -441,6 +437,7 @@ construct_runtime!(
         Org: org::{Module, Call, Config<T>, Storage, Event<T>},
         Vote: vote::{Module, Call, Storage, Event<T>},
         Court: court::{Module, Call, Storage, Event<T>},
+        Treasury: treasury::{Module, Call, Config<T>, Storage, Event<T>},
         Donate: donate::{Module, Call, Event<T>},
         Bank: bank::{Module, Call, Storage, Event<T>},
         Bounty: bounty::{Module, Call, Storage, Event<T>},

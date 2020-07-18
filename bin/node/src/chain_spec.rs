@@ -13,7 +13,9 @@ use sp_runtime::traits::{
 use suntime::{
     AccountId,
     AuraConfig,
+    Balance,
     BalancesConfig,
+    BlockNumber,
     GenesisConfig,
     GrandpaConfig,
     IndicesConfig,
@@ -21,6 +23,7 @@ use suntime::{
     Signature,
     SudoConfig,
     SystemConfig,
+    TreasuryConfig,
     WASM_BINARY,
 };
 use utils_identity::cid::CidBytes;
@@ -77,6 +80,7 @@ pub fn development_config() -> ChainSpec {
                     get_account_id_from_seed::<sr25519::Public>("Alice"),
                     get_account_id_from_seed::<sr25519::Public>("Bob"),
                 ],
+                (10, 10),
                 true,
             )
         },
@@ -132,6 +136,7 @@ pub fn local_testnet_config() -> ChainSpec {
                     get_account_id_from_seed::<sr25519::Public>("Eve"),
                     get_account_id_from_seed::<sr25519::Public>("Ferdie"),
                 ],
+                (10, 10),
                 true,
             )
         },
@@ -149,12 +154,18 @@ pub fn testnet_genesis(
     endowed_accounts: Vec<AccountId>,
     first_org_value_constitution: CidBytes,
     first_org_flat_membership: Vec<AccountId>,
+    treasury_mint_rate: (BlockNumber, Balance),
     _enable_println: bool,
 ) -> GenesisConfig {
     GenesisConfig {
         frame_system: Some(SystemConfig {
             code: WASM_BINARY.to_vec(),
             changes_trie_config: Default::default(),
+        }),
+        org: Some(OrgConfig {
+            first_organization_supervisor: root_key.clone(),
+            first_organization_value_constitution: first_org_value_constitution,
+            first_organization_flat_membership: first_org_flat_membership,
         }),
         pallet_balances: Some(BalancesConfig {
             balances: endowed_accounts
@@ -164,11 +175,6 @@ pub fn testnet_genesis(
                 .collect(),
         }),
         pallet_indices: Some(IndicesConfig { indices: vec![] }),
-        org: Some(OrgConfig {
-            first_organization_supervisor: root_key.clone(),
-            first_organization_value_constitution: first_org_value_constitution,
-            first_organization_flat_membership: first_org_flat_membership,
-        }),
         pallet_aura: Some(AuraConfig {
             authorities: initial_authorities
                 .iter()
@@ -182,5 +188,9 @@ pub fn testnet_genesis(
                 .collect(),
         }),
         pallet_sudo: Some(SudoConfig { key: root_key }),
+        treasury: Some(TreasuryConfig {
+            minting_interval: treasury_mint_rate.0,
+            mint_amount: treasury_mint_rate.1,
+        }),
     }
 }

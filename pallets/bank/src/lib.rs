@@ -277,7 +277,6 @@ decl_module! {
                 &bank_account_id,
                 bank.org(),
                 remaining_funds,
-                false,
             )?;
             // transfer the remainder to the closer (who is the organization supervisor)
             <T as donate::Trait>::Currency::transfer(

@@ -37,6 +37,7 @@ std = [
     'sp-version/std',
     'util/std',
     'org/std',
+    'treasury/std',
     'utils-identity/std',
 ]
 
@@ -73,6 +74,7 @@ util = { package = "sunshine-bounty-utils", path = "../../utils", default-featur
 org = {package = "sunshine-org", path = "../../pallets/org", default-features=false }
 vote = { package = "sunshine-vote", path = "../../pallets/vote", default-features=false}
 court = { package = "sunshine-court", path = "../../pallets/court", default-features=false}
+treasury = { package = "sunshine-treasury", path = "../../pallets/treasury", default-features=false}
 donate = { package = "sunshine-donate", path = "../../pallets/donate", default-features=false}
 bank = { package = "sunshine-bank", path = "../../pallets/bank", default-features=false}
 bounty = { package = "sunshine-bounty", path = "../../pallets/bounty", default-features=false}
