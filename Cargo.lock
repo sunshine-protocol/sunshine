@@ -564,21 +564,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bounty-bot"
-version = "0.1.0"
-dependencies = [
- "dirs",
- "env_logger",
- "exitfailure",
- "ipfs-embed",
- "keybase-keystore 0.2.0 (git+https://github.com/sunshine-protocol/substrate-identity)",
- "sp-keyring",
- "sunshine-github-bot",
- "test-client",
- "thiserror",
-]
-
-[[package]]
 name = "broadcaster"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2488,21 +2473,6 @@ checksum = "7507624b29483431c0ba2d82aece8ca6cdba9382bff4ddd0f7490560c056098d"
 dependencies = [
  "winapi 0.2.8",
  "winapi-build",
-]
-
-[[package]]
-name = "keybase-keystore"
-version = "0.2.0"
-source = "git+https://github.com/sunshine-protocol/substrate-identity#6683b4eaa4a22a00e036b153a58fb28704bab2f6"
-dependencies = [
- "async-std",
- "bip39",
- "fail",
- "rand 0.7.3",
- "secrecy",
- "strobe-rs",
- "thiserror",
- "zeroize",
 ]
 
 [[package]]
@@ -6856,7 +6826,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c32ec486a87da388759a76e8fb2f7c6da06b5d9a131c7fc7075f5cc0d4a134fa"
 dependencies = [
  "async-trait",
- "keybase-keystore 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "keybase-keystore",
  "substrate-subxt",
  "sunshine-core",
 ]
@@ -7052,7 +7022,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4c544c835d4b4b3d30cad8619da795a4a996e005561db2812d85ee9e184acaa1"
 dependencies = [
  "async-trait",
- "keybase-keystore 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "keybase-keystore",
  "libipld",
  "parity-scale-codec",
  "secrecy",

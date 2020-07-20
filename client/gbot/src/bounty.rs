@@ -1,3 +1,11 @@
+use substrate_subxt::{
+    sp_core::Decode,
+    Client,
+    Event,
+    EventSubscription,
+    EventsDecoder,
+    Runtime,
+};
 use sunshine_bounty_client::{
     bounty::{
         Bounty,
@@ -8,36 +16,17 @@ use sunshine_bounty_client::{
     },
     BountyBody,
 };
-use substrate_subxt::{
-    Runtime,
-    Client,
-    sp_core::Decode,
-    EventSubscription,
-    EventsDecoder,
-};
 
-pub async fn bounty_post_subscriber<R: Runtime + Bounty, C: BountyClient<R>>(
-    client: &C
-) -> Result<EventSubscription<R>, C::Error> 
-where
-    <R as Bounty>::BountyPost: From<BountyBody>,
-{
+pub async fn bounty_subscriber<
+    R: Runtime + Bounty,
+    C: BountyClient<R>,
+    E: Event<R>,
+>(
+    client: &C,
+    event: E,
+) -> Result<EventSubscription<R>, C::Error> {
     let sub = client.subscribe_events().await?;
-    let mut decoder = EventsDecoder::<R>::new(client.metadata().clone());
-    decoder.with_bounty();
+    let decoder = EventsDecoder::<R>::new(client.metadata().clone());
     let mut sub = EventSubscription::<R>::new(sub, decoder);
-    Ok(sub.filter_event::<BountyPostedEvent<_>>())
-}
-
-pub async fn milestone_submission_subscriber<R: Runtime + Bounty, C: BountyClient<R>>(
-    client: &C
-) -> Result<EventSubscription<R>, C::Error>
-where
-    <R as Bounty>::MilestoneSubmission: From<BountyBody>,
-{
-    let sub = client.subscribe_events().await?;
-    let mut decoder = EventsDecoder::<R>::new(client.metadata().clone());
-    decoder.with_bounty();
-    let mut sub = EventSubscription::<R>::new(sub, decoder);
-    Ok(sub.filter_event::<MilestoneSubmittedEvent<_>>())
+    Ok(sub.filter_event::<event>())
 }

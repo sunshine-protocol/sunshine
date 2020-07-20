@@ -1,5 +1,5 @@
-mod error;
 pub mod bounty;
+mod error;
 
 use crate::error::Result;
 use octocrab::Octocrab;
