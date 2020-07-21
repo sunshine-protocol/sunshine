@@ -19,7 +19,6 @@ impl GBot {
     }
 }
 
-// TODO: Parse from substrate-subxt event
 pub struct BountyContext {
     pub amount: u128,
     pub body: BountyBody,
