@@ -10,6 +10,8 @@ dirs = "3.0.1"
 env_logger = "0.7.1"
 gbot = { package = "sunshine-bounty-gbot", path = "../../client/gbot" }
 ipfs-embed = "0.1.0"
+ipld-block-builder = "0.4.1"
+libipld = "0.3.0"
 substrate-subxt = { version = "0.10.1", features = ["client"] }
 sunshine_bounty_client = { package = "sunshine-bounty-client", path = "../../client/client" }
 sunshine-bounty-cli = { path = "../../client/cli" }

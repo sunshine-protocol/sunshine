@@ -11,18 +11,24 @@ pub struct GBot {
 }
 
 impl GBot {
-    pub fn new() -> Result<Octocrab> {
-        let new_crab = Octocrab::builder()
+    pub fn new() -> Result<Self> {
+        let crab = Octocrab::builder()
             .personal_token(std::env::var("GITHUB_TOKEN").unwrap())
             .build()?;
-        Ok(new_crab)
+        Ok(GBot { crab })
     }
 }
 
 // TODO: Parse from substrate-subxt event
 pub struct BountyContext {
-    pub amount: u64,
+    pub amount: u128,
     pub body: BountyBody,
+}
+
+impl BountyContext {
+    pub fn new(amount: u128, body: BountyBody) -> BountyContext {
+        BountyContext { amount, body }
+    }
 }
 
 impl GBot {

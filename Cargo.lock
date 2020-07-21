@@ -7355,6 +7355,8 @@ dependencies = [
  "env_logger",
  "exitfailure",
  "ipfs-embed",
+ "ipld-block-builder",
+ "libipld",
  "substrate-subxt",
  "sunshine-bounty-cli",
  "sunshine-bounty-client",

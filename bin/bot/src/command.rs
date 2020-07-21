@@ -9,11 +9,15 @@ use sunshine_bounty_cli::{
 use sunshine_identity_cli::key;
 
 #[derive(Clone, Debug, Clap)]
-pub struct Opts {
-    #[clap(subcommand)]
-    pub cmd: SubCommand,
+pub struct PathOpts {
     #[clap(short = "p", long = "path")]
     pub path: Option<PathBuf>,
+}
+
+#[derive(Clone, Debug, Clap)]
+pub struct CommandOpts {
+    #[clap(subcommand)]
+    pub cmd: SubCommand,
 }
 
 #[derive(Clone, Debug, Clap)]
