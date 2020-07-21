@@ -1,16 +1,16 @@
-pub mod bounty;
 mod error;
+pub use error::Error;
+use error::Result;
 
-use crate::error::Result;
 use octocrab::Octocrab;
 use sunshine_bounty_client::BountyBody;
 
 #[derive(Debug, Clone)]
-pub struct Bot {
+pub struct GBot {
     crab: Octocrab,
 }
 
-impl Bot {
+impl GBot {
     pub fn new() -> Result<Octocrab> {
         let new_crab = Octocrab::builder()
             .personal_token(std::env::var("GITHUB_TOKEN").unwrap())
@@ -25,7 +25,7 @@ pub struct BountyContext {
     pub body: BountyBody,
 }
 
-impl Bot {
+impl GBot {
     pub async fn post_bounty_in_issue(&self, ctx: BountyContext) -> Result<()> {
         let new_issues_handler =
             self.crab.issues(ctx.body.repo_owner, ctx.body.repo_name);
