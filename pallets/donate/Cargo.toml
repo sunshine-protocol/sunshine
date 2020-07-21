@@ -33,4 +33,5 @@ std = [
     "frame-support/std",
     "frame-system/std",
     "org/std",
+    "pallet-balances/std",
 ]

@@ -91,7 +91,23 @@ async fn run_github_bot(mut bot: Bot, github: GBot) -> Result<Bot> {
             BountyContext::new(event.amount_reserved_for_bounty, bounty_body);
         github.post_bounty_in_issue(bounty_ctx).await?;
     } else if let Some(Ok(raw)) = bot.milestone_submit_sub.next().await {
-        todo!();
+        // get event data
+        let event =
+            MilestoneSubmittedEvent::<Runtime>::decode(&mut &raw.data[..])
+                .map_err(Error::SubxtCodec)?;
+        // fetch structured data from client
+        let event_cid =
+            event.submission_ref.to_cid().map_err(Error::CiDecode)?;
+        let milestone_body = bot
+            .client
+            .offchain_client()
+            .get(&event_cid)
+            .await
+            .map_err(Error::Libipld)?;
+        // form the full milestone context
+        let bounty_ctx =
+            BountyContext::new(event.amount_requested, milestone_body);
+        github.post_bounty_in_issue(bounty_ctx).await?;
     } else {
         time::delay_for(std::time::Duration::from_millis(100)).await;
     }

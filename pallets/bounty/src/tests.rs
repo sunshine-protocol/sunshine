@@ -11,7 +11,6 @@ use sp_core::H256;
 use sp_runtime::{
     testing::Header,
     traits::IdentityLookup,
-    ModuleId,
     Perbill,
 };
 
@@ -96,15 +95,9 @@ impl vote::Trait for Test {
     type VoteId = u64;
     type Signal = u64;
 }
-parameter_types! {
-    pub const TransactionFee: u64 = 3;
-    pub const TreasuryModuleId: ModuleId = ModuleId(*b"py/trsry");
-}
 impl donate::Trait for Test {
     type Event = TestEvent;
     type Currency = Balances;
-    type TransactionFee = TransactionFee;
-    type Treasury = TreasuryModuleId;
 }
 parameter_types! {
     pub const MaxTreasuryPerOrg: u32 = 50;
@@ -131,7 +124,7 @@ pub type Balances = pallet_balances::Module<Test>;
 pub type Org = org::Module<Test>;
 pub type Bounty = Module<Test>;
 
-fn get_last_event() -> RawEvent<u64, u64, u64, u64> {
+fn get_last_event() -> RawEvent<u64, u32, u64, u64, u64> {
     System::events()
         .into_iter()
         .map(|r| r.event)
@@ -211,7 +204,7 @@ fn account_posts_bounty_works() {
             new_resolution_metadata,
             None,
         ));
-        assert_eq!(get_last_event(), RawEvent::BountyPosted(1, 1, 10));
+        assert_eq!(get_last_event(), RawEvent::BountyPosted(1, 1, 10, 10));
     });
 }
 
@@ -245,7 +238,7 @@ fn account_applies_for_bounty_works() {
         ));
         assert_eq!(
             get_last_event(),
-            RawEvent::BountyApplicationSubmitted(1, 1, 2, None, 10)
+            RawEvent::BountyApplicationSubmitted(1, 1, 2, None, 10,)
         );
     });
 }
@@ -449,7 +442,7 @@ fn milestone_submission_works() {
         ));
         assert_eq!(
             get_last_event(),
-            RawEvent::MilestoneSubmitted(2, 1, 1, 1, 10,)
+            RawEvent::MilestoneSubmitted(2, 1, 1, 1, 10, 10)
         );
     });
 }

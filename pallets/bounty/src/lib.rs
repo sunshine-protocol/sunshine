@@ -123,7 +123,7 @@ decl_event!(
         SudoApprovedBountyApplication(AccountId, BountyId, BountyId, ApplicationState<VoteId>),
         ApplicationReviewTriggered(AccountId, BountyId, BountyId, ApplicationState<VoteId>),
         ApplicationPolled(AccountId, BountyId, BountyId, ApplicationState<VoteId>),
-        MilestoneSubmitted(AccountId, BountyId, BountyId, BountyId, Balance),
+        MilestoneSubmitted(AccountId, BountyId, BountyId, BountyId, Balance, IpfsReference),
         MilestoneReviewTriggered(AccountId, BountyId, BountyId, MilestoneStatus<VoteId>),
         SudoApprovedMilestone(AccountId, BountyId, BountyId, MilestoneStatus<VoteId>),
         MilestonePolled(AccountId, BountyId, BountyId, MilestoneStatus<VoteId>),
@@ -383,8 +383,8 @@ decl_module! {
             amount_requested: BalanceOf<T>,
         ) -> DispatchResult {
             let submitter = ensure_signed(origin)?;
-            let new_milestone_id = Self::submit_milestone(submitter.clone(), bounty_id, application_id, submission_reference, amount_requested)?;
-            Self::deposit_event(RawEvent::MilestoneSubmitted(submitter, bounty_id, application_id, new_milestone_id, amount_requested));
+            let new_milestone_id = Self::submit_milestone(submitter.clone(), bounty_id, application_id, submission_reference.clone(), amount_requested)?;
+            Self::deposit_event(RawEvent::MilestoneSubmitted(submitter, bounty_id, application_id, new_milestone_id, amount_requested, submission_reference.clone()));
             Ok(())
         }
         #[weight = 0]
