@@ -384,7 +384,7 @@ decl_module! {
         ) -> DispatchResult {
             let submitter = ensure_signed(origin)?;
             let new_milestone_id = Self::submit_milestone(submitter.clone(), bounty_id, application_id, submission_reference.clone(), amount_requested)?;
-            Self::deposit_event(RawEvent::MilestoneSubmitted(submitter, bounty_id, application_id, new_milestone_id, amount_requested, submission_reference.clone()));
+            Self::deposit_event(RawEvent::MilestoneSubmitted(submitter, bounty_id, application_id, new_milestone_id, amount_requested, submission_reference));
             Ok(())
         }
         #[weight = 0]
