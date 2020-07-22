@@ -4,12 +4,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 //! The bounty module allows registered organizations with on-chain bank accounts to
 //! register as a foundation to post bounties and supervise ongoing grant pursuits.
-//!
-//! # (Id, Id) Design Justification
-//! "WHY so many double_maps in storage with (BountyId, BountyId)?"
-//! We use this structure for efficient clean up via double_map.remove_prefix() once
-//! a bounty needs to be removed from the storage state so that we can efficiently remove all associated state
-//! i.e. applications for a bounty or milestones submitted under a bounty
 
 #[cfg(test)]
 mod tests;

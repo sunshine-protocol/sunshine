@@ -1,19 +1,13 @@
 use crate::error::Error;
 use ipfs_embed::Store;
 use substrate_subxt::{
-    sp_core::Decode,
-    Event,
     EventSubscription,
     EventsDecoder,
 };
-use sunshine_bounty_client::{
-    bounty::{
-        BountyClient,
-        BountyEventsDecoder,
-        BountyPostedEvent,
-        MilestoneSubmittedEvent,
-    },
-    BountyBody,
+use sunshine_bounty_client::bounty::{
+    BountyEventsDecoder,
+    BountyPostedEvent,
+    MilestoneSubmittedEvent,
 };
 use sunshine_core::ChainClient;
 use test_client::{

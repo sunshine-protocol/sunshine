@@ -6946,6 +6946,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "sunshine-bors"
+version = "0.0.1"
+dependencies = [
+ "dirs",
+ "env_logger",
+ "ipfs-embed",
+ "ipld-block-builder",
+ "libipld",
+ "substrate-subxt",
+ "sunshine-bounty-client",
+ "sunshine-bounty-gbot",
+ "sunshine-core",
+ "test-client",
+ "thiserror",
+ "tokio 0.2.21",
+]
+
+[[package]]
 name = "sunshine-bounty"
 version = "0.2.0"
 dependencies = [
@@ -7004,9 +7022,10 @@ dependencies = [
 name = "sunshine-bounty-gbot"
 version = "0.0.1"
 dependencies = [
+ "env_logger",
  "octocrab",
- "sunshine-bounty-client",
  "thiserror",
+ "tokio 0.2.21",
 ]
 
 [[package]]
@@ -7344,28 +7363,6 @@ checksum = "9a14cd9f8c72704232f0bfc8455c0e861f0ad4eb60cc9ec8a170e231414c1e13"
 dependencies = [
  "libc",
  "winapi 0.3.9",
-]
-
-[[package]]
-name = "test-bot"
-version = "0.0.1"
-dependencies = [
- "clap 3.0.0-beta.1",
- "dirs",
- "env_logger",
- "exitfailure",
- "ipfs-embed",
- "ipld-block-builder",
- "libipld",
- "substrate-subxt",
- "sunshine-bounty-cli",
- "sunshine-bounty-client",
- "sunshine-bounty-gbot",
- "sunshine-core",
- "sunshine-identity-cli",
- "test-client",
- "thiserror",
- "tokio 0.2.21",
 ]
 
 [[package]]

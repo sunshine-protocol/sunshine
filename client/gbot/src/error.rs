@@ -4,8 +4,8 @@ use thiserror::Error;
 pub enum Error {
     #[error(transparent)]
     Octocrab(#[from] octocrab::Error),
-    #[error("Other error")]
-    Other,
+    #[error(transparent)]
+    NoGithubToken(#[from] std::env::VarError),
 }
 
 pub type Result<T> = core::result::Result<T, Error>;

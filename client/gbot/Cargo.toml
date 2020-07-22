@@ -7,5 +7,8 @@ description = "github bot for sunshine bounty"
 
 [dependencies]
 octocrab = "0.4.2"
-sunshine-bounty-client = { path = "../client" }
 thiserror = "1.0.20"
+
+[dev-dependencies]
+tokio = { version = "0.2.17", default-features = false, features = ["macros"] }
+env_logger = "0.7.1"
