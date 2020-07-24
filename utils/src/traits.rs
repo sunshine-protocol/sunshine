@@ -263,37 +263,33 @@ pub trait CheckVoteStatus<Hash, VoteId>:
     fn check_vote_expired(state: &Self::State) -> bool;
 }
 
-pub trait MintableSignal<AccountId, OrgId, Threshold, BlockNumber, VoteId, Hash>:
-    OpenVote<OrgId, Threshold, BlockNumber, Hash> + ApplyVote<Hash>
-{
+pub trait MintableSignal<AccountId, OrgId, VoteId, Signal> {
     fn mint_custom_signal_for_account(
         vote_id: VoteId,
         who: &AccountId,
-        signal: Self::Signal,
+        signal: Signal,
     );
     fn batch_mint_equal_signal(
         vote_id: VoteId,
         organization: OrgId,
-    ) -> Result<Self::Signal>;
+    ) -> Result<Signal>;
     fn batch_mint_signal(
         vote_id: VoteId,
         organization: OrgId,
-    ) -> Result<Self::Signal>;
+    ) -> Result<Signal>;
 }
 
 /// Define the rate at which signal is burned to unreserve shares in an organization
-pub trait BurnableSignal<AccountId, OrgId, Threshold, BlockNumber, VoteId, Hash>:
-    MintableSignal<AccountId, OrgId, Threshold, BlockNumber, VoteId, Hash>
-{
+pub trait BurnableSignal<VoteId, AccountId, Signal> {
     fn burn_signal(
         vote_id: VoteId,
         who: &AccountId,
-        amount: Option<Self::Signal>, // if None, then all
+        amount: Option<Signal>, // if None, then all
     ) -> DispatchResult;
 }
 
-pub trait VoteOnProposal<AccountId, OrgId, Threshold, BlockNumber, VoteId, Hash>:
-    OpenVote<OrgId, Threshold, BlockNumber, Hash> + CheckVoteStatus<Hash, VoteId>
+pub trait VoteOnProposal<AccountId, VoteId, Hash>:
+    CheckVoteStatus<Hash, VoteId>
 {
     fn vote_on_proposal(
         vote_id: VoteId,

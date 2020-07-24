@@ -21,12 +21,12 @@ use sunshine_bounty_client::{
 };
 
 #[derive(Clone, Debug, Clap)]
-pub struct DonateCommand {
+pub struct PropDonateCommand {
     pub org: u64,
     pub amt: u128,
 }
 
-impl DonateCommand {
+impl PropDonateCommand {
     pub async fn exec<R: Runtime + Donate, C: DonateClient<R>>(
         &self,
         client: &C,
@@ -41,7 +41,35 @@ impl DonateCommand {
             .await
             .map_err(Error::Client)?;
         println!(
-            "AccountId {:?} donated {} to OrgId {} (with the module fee)",
+            "AccountId {:?} donated {} to weighted OrgId {} (with the module fee)",
+            event.sender, event.amt, event.org
+        );
+        Ok(())
+    }
+}
+
+#[derive(Clone, Debug, Clap)]
+pub struct EqualDonateCommand {
+    pub org: u64,
+    pub amt: u128,
+}
+
+impl EqualDonateCommand {
+    pub async fn exec<R: Runtime + Donate, C: DonateClient<R>>(
+        &self,
+        client: &C,
+    ) -> Result<(), C::Error>
+    where
+        <R as System>::AccountId: Ss58Codec,
+        <R as Org>::OrgId: From<u64> + Display,
+        <R as Donate>::DCurrency: From<u128> + Display,
+    {
+        let event = client
+            .make_equal_donation(self.org.into(), self.amt.into())
+            .await
+            .map_err(Error::Client)?;
+        println!(
+            "AccountId {:?} donated {} to flat OrgId {} (with the module fee)",
             event.sender, event.amt, event.org
         );
         Ok(())

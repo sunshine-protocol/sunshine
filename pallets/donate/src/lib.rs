@@ -10,6 +10,7 @@ use frame_support::{
     traits::{
         Currency,
         ExistenceRequirement,
+        ReservableCurrency,
     },
 };
 use frame_system::{
@@ -25,7 +26,10 @@ use sp_runtime::{
     DispatchResult,
     Permill,
 };
-use util::traits::GetGroup;
+use util::{
+    organization::OrgRep,
+    traits::GetGroup,
+};
 
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<
     <T as system::Trait>::AccountId,
@@ -35,7 +39,8 @@ pub trait Trait: system::Trait + org::Trait {
     /// The overarching event type
     type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
     /// The currency type
-    type Currency: Currency<Self::AccountId>;
+    type Currency: Currency<Self::AccountId>
+        + ReservableCurrency<Self::AccountId>;
 }
 
 decl_event!(
@@ -44,7 +49,8 @@ decl_event!(
         <T as org::Trait>::OrgId,
         Balance = BalanceOf<T>,
     {
-        DonationExecuted(AccountId, OrgId, Balance),
+        PropDonationExecuted(AccountId, OrgId, Balance),
+        EqualDonationExecuted(AccountId, OrgId, Balance),
     }
 );
 
@@ -67,9 +73,21 @@ decl_module! {
             amt: BalanceOf<T>
         ) -> DispatchResult {
             let sender = ensure_signed(origin)?;
-            let remainder = Self::donate(&sender, org, amt)?;
+            let remainder = Self::donate(&sender, OrgRep::Weighted(org), amt)?;
             let transferred_amt = amt - remainder;
-            Self::deposit_event(RawEvent::DonationExecuted(sender, org, transferred_amt));
+            Self::deposit_event(RawEvent::PropDonationExecuted(sender, org, transferred_amt));
+            Ok(())
+        }
+        #[weight = 0]
+        fn make_equal_donation(
+            origin,
+            org: T::OrgId,
+            amt: BalanceOf<T>,
+        ) -> DispatchResult {
+            let sender = ensure_signed(origin)?;
+            let remainder = Self::donate(&sender, OrgRep::Equal(org), amt)?;
+            let transferred_amt = amt - remainder;
+            Self::deposit_event(RawEvent::EqualDonationExecuted(sender, org, transferred_amt));
             Ok(())
         }
     }
@@ -79,41 +97,72 @@ impl<T: Trait> Module<T> {
     /// Returns the remainder NOT transferred because the amount was not perfectly divisible
     pub fn donate(
         sender: &T::AccountId,
-        recipient: T::OrgId,
+        recipient: OrgRep<T::OrgId>,
         amt: BalanceOf<T>,
     ) -> Result<BalanceOf<T>, DispatchError> {
         let free = T::Currency::free_balance(sender);
         let _ = free
             .checked_sub(&amt)
             .ok_or(Error::<T>::NotEnoughFundsInFreeToMakeTransfer)?;
-        // Get the membership set of the Org
-        let group = <org::Module<T>>::get_group(recipient)
-            .ok_or(Error::<T>::CannotDonateToOrgThatDNE)?;
-        // iterate through and pay the transfer out
-        let mut transferred_amt = BalanceOf::<T>::zero();
-        group
-            .0
-            .into_iter()
-            .map(|acc: T::AccountId| -> DispatchResult {
-                let amt_due = Self::calculate_proportional_amount_for_account(
-                    amt,
-                    acc.clone(),
-                    recipient,
-                )?;
-                T::Currency::transfer(
-                    sender,
-                    &acc,
-                    amt_due,
-                    ExistenceRequirement::KeepAlive,
-                )?;
-                transferred_amt += amt_due;
-                Ok(())
-            })
-            .collect::<DispatchResult>()?;
-        let remainder = amt - transferred_amt;
+        // match on recipient type to distribute the donation either in proportion
+        // to org ownership or equally among all members
+        let remainder = match recipient {
+            OrgRep::Weighted(org_id) => {
+                // Get the membership set of the Org
+                let group = <org::Module<T>>::get_group(org_id)
+                    .ok_or(Error::<T>::CannotDonateToOrgThatDNE)?;
+                // iterate through and pay the transfer
+                let mut transferred_amt = BalanceOf::<T>::zero();
+                group
+                    .0
+                    .into_iter()
+                    .map(|acc: T::AccountId| -> DispatchResult {
+                        let amt_due = Self::calculate_proportional_amount(
+                            amt,
+                            acc.clone(),
+                            org_id,
+                        )?;
+                        T::Currency::transfer(
+                            sender,
+                            &acc,
+                            amt_due,
+                            ExistenceRequirement::KeepAlive,
+                        )?;
+                        transferred_amt += amt_due;
+                        Ok(())
+                    })
+                    .collect::<DispatchResult>()?;
+                amt - transferred_amt
+            }
+            OrgRep::Equal(org_id) => {
+                // Get the membership set of the Org
+                let group = <org::Module<T>>::get_group(org_id)
+                    .ok_or(Error::<T>::CannotDonateToOrgThatDNE)?;
+                // amount for each member if equal payment per member
+                let equal_payment =
+                    Self::calculate_uniform_amount(amt, group.0.len())?;
+                // iterate through and pay the transfer
+                let mut transferred_amt = BalanceOf::<T>::zero();
+                group
+                    .0
+                    .into_iter()
+                    .map(|acc: T::AccountId| -> DispatchResult {
+                        T::Currency::transfer(
+                            sender,
+                            &acc,
+                            equal_payment,
+                            ExistenceRequirement::KeepAlive,
+                        )?;
+                        transferred_amt += equal_payment;
+                        Ok(())
+                    })
+                    .collect::<DispatchResult>()?;
+                amt - transferred_amt
+            }
+        };
         Ok(remainder)
     }
-    fn calculate_proportional_amount_for_account(
+    fn calculate_proportional_amount(
         amount: BalanceOf<T>,
         account: T::AccountId,
         group: T::OrgId,
@@ -126,5 +175,14 @@ impl<T: Trait> Module<T> {
             issuance,
         );
         Ok(ownership.mul_floor(amount))
+    }
+    fn calculate_uniform_amount(
+        amount: BalanceOf<T>,
+        group_count: usize,
+    ) -> Result<BalanceOf<T>, DispatchError> {
+        let group_size: BalanceOf<T> = (group_count as u32).into();
+        let equal_ownership =
+            Permill::from_rational_approximation(group_size, amount);
+        Ok(equal_ownership.mul_floor(amount))
     }
 }

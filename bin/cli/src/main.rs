@@ -163,8 +163,8 @@ async fn run() -> Result<(), Error> {
         }
         SubCommand::Donate(DonateCommand { cmd }) => {
             match cmd {
-                DonateSubCommand::Donate(cmd) => cmd.exec(&client).await?,
-                DonateSubCommand::Donate2(cmd) => cmd.exec(&client).await?,
+                DonateSubCommand::PropDonate(cmd) => cmd.exec(&client).await?,
+                DonateSubCommand::EqualDonate(cmd) => cmd.exec(&client).await?,
             }
         }
         SubCommand::Bank(BankCommand { cmd }) => {

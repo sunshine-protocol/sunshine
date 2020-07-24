@@ -47,6 +47,7 @@ use util::{
         DisputeState,
         ResolutionMetadata,
     },
+    organization::OrgRep,
     traits::{
         GenerateUniqueID,
         GetVoteOutcome,
@@ -102,8 +103,8 @@ decl_event!(
         Balance = BalanceOf<T>,
 
     {
-        RegisteredDisputeWithResolutionPath(DisputeId, AccountId, Balance, AccountId, OrgId),
-        DisputeRaisedAndVoteTriggered(DisputeId, AccountId, Balance, AccountId, OrgId, VoteId),
+        RegisteredDisputeWithResolutionPath(DisputeId, AccountId, Balance, AccountId, OrgRep<OrgId>),
+        DisputeRaisedAndVoteTriggered(DisputeId, AccountId, Balance, AccountId, OrgRep<OrgId>, VoteId),
         DisputeAcceptedAndLockedFundsTransferred(DisputeId, AccountId, Balance, AccountId, OrgId, VoteId),
         DisputeRejectedAndLockedFundsUnlocked(DisputeId, AccountId, Balance, AccountId, OrgId, VoteId),
     }
@@ -138,7 +139,7 @@ decl_storage! {
                         BalanceOf<T>,
                         T::BlockNumber,
                         ResolutionMetadata<
-                            T::OrgId,
+                            OrgRep<T::OrgId>,
                             Signal<T>,
                             T::BlockNumber
                         >,
@@ -158,7 +159,7 @@ decl_module! {
             origin,
             amount_to_lock: BalanceOf<T>,
             dispute_raiser: T::AccountId,
-            resolution_metadata: ResolutionMetadata<T::OrgId, Signal<T>, T::BlockNumber>,
+            resolution_metadata: ResolutionMetadata<OrgRep<T::OrgId>, Signal<T>, T::BlockNumber>,
             expiry: Option<T::BlockNumber>,
         ) -> DispatchResult {
             let locker = ensure_signed(origin)?;
@@ -272,7 +273,7 @@ impl<T: Trait>
     RegisterDisputeType<
         T::AccountId,
         BalanceOf<T>,
-        ResolutionMetadata<T::OrgId, Signal<T>, T::BlockNumber>,
+        ResolutionMetadata<OrgRep<T::OrgId>, Signal<T>, T::BlockNumber>,
         T::BlockNumber,
     > for Module<T>
 {
@@ -282,7 +283,7 @@ impl<T: Trait>
         amount_to_lock: BalanceOf<T>,
         dispute_raiser: T::AccountId,
         resolution_path: ResolutionMetadata<
-            T::OrgId,
+            OrgRep<T::OrgId>,
             Signal<T>,
             T::BlockNumber,
         >,

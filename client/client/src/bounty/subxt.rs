@@ -254,6 +254,7 @@ pub struct MilestoneSubmittedEvent<T: Bounty> {
     pub application_id: T::BountyId,
     pub new_milestone_id: T::BountyId,
     pub amount_requested: BalanceOf<T>,
+    pub submission_ref: <T as Org>::IpfsReference,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]

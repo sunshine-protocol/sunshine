@@ -101,8 +101,8 @@ pub struct DonateCommand {
 
 #[derive(Clone, Debug, Clap)]
 pub enum DonateSubCommand {
-    Donate(donate::DonateCommand),
-    Donate2(donate::DonateCommand),
+    PropDonate(donate::PropDonateCommand),
+    EqualDonate(donate::EqualDonateCommand),
 }
 
 #[derive(Clone, Debug, Clap)]

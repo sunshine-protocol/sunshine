@@ -4,12 +4,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 //! The bounty module allows registered organizations with on-chain bank accounts to
 //! register as a foundation to post bounties and supervise ongoing grant pursuits.
-//!
-//! # (Id, Id) Design Justification
-//! "WHY so many double_maps in storage with (BountyId, BountyId)?"
-//! We use this structure for efficient clean up via double_map.remove_prefix() once
-//! a bounty needs to be removed from the storage state so that we can efficiently remove all associated state
-//! i.e. applications for a bounty or milestones submitted under a bounty
 
 #[cfg(test)]
 mod tests;
@@ -61,6 +55,7 @@ use util::{
         MilestoneSubmission,
     },
     court::ResolutionMetadata,
+    organization::OrgRep,
     traits::{
         ApproveGrant,
         ApproveWithoutTransfer,
@@ -123,7 +118,7 @@ decl_event!(
         SudoApprovedBountyApplication(AccountId, BountyId, BountyId, ApplicationState<VoteId>),
         ApplicationReviewTriggered(AccountId, BountyId, BountyId, ApplicationState<VoteId>),
         ApplicationPolled(AccountId, BountyId, BountyId, ApplicationState<VoteId>),
-        MilestoneSubmitted(AccountId, BountyId, BountyId, BountyId, Balance),
+        MilestoneSubmitted(AccountId, BountyId, BountyId, BountyId, Balance, IpfsReference),
         MilestoneReviewTriggered(AccountId, BountyId, BountyId, MilestoneStatus<VoteId>),
         SudoApprovedMilestone(AccountId, BountyId, BountyId, MilestoneStatus<VoteId>),
         MilestonePolled(AccountId, BountyId, BountyId, MilestoneStatus<VoteId>),
@@ -190,7 +185,7 @@ decl_storage! {
                     T::IpfsReference,
                     BalanceOf<T>,
                     ResolutionMetadata<
-                        T::OrgId,
+                        OrgRep<T::OrgId>,
                         T::Signal,
                         T::BlockNumber,
                     >,
@@ -236,13 +231,13 @@ decl_module! {
             description: T::IpfsReference,
             amount_reserved_for_bounty: BalanceOf<T>,
             acceptance_committee: ResolutionMetadata<
-                T::OrgId,
+                OrgRep<T::OrgId>,
                 T::Signal,
                 T::BlockNumber,
             >,
             supervision_committee: Option<
                 ResolutionMetadata<
-                    T::OrgId,
+                    OrgRep<T::OrgId>,
                     T::Signal,
                     T::BlockNumber,
                 >,
@@ -267,13 +262,13 @@ decl_module! {
             description: T::IpfsReference,
             amount_reserved_for_bounty: BalanceOf<T>,
             acceptance_committee: ResolutionMetadata<
-                T::OrgId,
+                OrgRep<T::OrgId>,
                 T::Signal,
                 T::BlockNumber,
             >,
             supervision_committee: Option<
                 ResolutionMetadata<
-                    T::OrgId,
+                    OrgRep<T::OrgId>,
                     T::Signal,
                     T::BlockNumber,
                 >,
@@ -383,8 +378,8 @@ decl_module! {
             amount_requested: BalanceOf<T>,
         ) -> DispatchResult {
             let submitter = ensure_signed(origin)?;
-            let new_milestone_id = Self::submit_milestone(submitter.clone(), bounty_id, application_id, submission_reference, amount_requested)?;
-            Self::deposit_event(RawEvent::MilestoneSubmitted(submitter, bounty_id, application_id, new_milestone_id, amount_requested));
+            let new_milestone_id = Self::submit_milestone(submitter.clone(), bounty_id, application_id, submission_reference.clone(), amount_requested)?;
+            Self::deposit_event(RawEvent::MilestoneSubmitted(submitter, bounty_id, application_id, new_milestone_id, amount_requested, submission_reference));
             Ok(())
         }
         #[weight = 0]
@@ -569,14 +564,14 @@ impl<T: Trait>
         OnChainTreasuryID,
         BalanceOf<T>,
         T::IpfsReference,
-        ResolutionMetadata<T::OrgId, T::Signal, T::BlockNumber>,
+        ResolutionMetadata<OrgRep<T::OrgId>, T::Signal, T::BlockNumber>,
     > for Module<T>
 {
     type BountyInfo = BountyInformation<
         BankOrAccount<OnChainTreasuryID, T::AccountId>,
         T::IpfsReference,
         BalanceOf<T>,
-        ResolutionMetadata<T::OrgId, T::Signal, T::BlockNumber>,
+        ResolutionMetadata<OrgRep<T::OrgId>, T::Signal, T::BlockNumber>,
     >;
     fn post_bounty(
         poster: T::AccountId,
@@ -584,12 +579,12 @@ impl<T: Trait>
         description: T::IpfsReference,
         amount_reserved_for_bounty: BalanceOf<T>,
         acceptance_committee: ResolutionMetadata<
-            T::OrgId,
+            OrgRep<T::OrgId>,
             T::Signal,
             T::BlockNumber,
         >,
         supervision_committee: Option<
-            ResolutionMetadata<T::OrgId, T::Signal, T::BlockNumber>,
+            ResolutionMetadata<OrgRep<T::OrgId>, T::Signal, T::BlockNumber>,
         >,
     ) -> Result<Self::BountyId, DispatchError> {
         let bounty_poster: BankOrAccount<OnChainTreasuryID, T::AccountId> =
@@ -742,7 +737,7 @@ impl<T: Trait> SuperviseGrantApplication<T::BountyId, T::AccountId>
             .ok_or(Error::<T>::CannotSudoApproveIfBountyDNE)?;
         // verify that the caller is indeed the sudo
         let authentication = <org::Module<T>>::is_organization_supervisor(
-            bounty_info.acceptance_committee().org(),
+            bounty_info.acceptance_committee().org().org(),
             &caller,
         );
         ensure!(
@@ -934,7 +929,7 @@ impl<T: Trait>
         };
         ensure!(
             <org::Module<T>>::is_organization_supervisor(
-                review_board.org(),
+                review_board.org().org(),
                 &caller
             ),
             Error::<T>::CallerNotAuthorizedToSudoApproveMilestone

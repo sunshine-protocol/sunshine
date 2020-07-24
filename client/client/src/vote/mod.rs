@@ -17,7 +17,7 @@ use sunshine_core::ChainClient;
 
 #[async_trait]
 pub trait VoteClient<T: Runtime + Vote>: ChainClient<T> {
-    async fn create_signal_threshold_vote(
+    async fn create_signal_threshold_vote_weighted(
         &self,
         topic: Option<<T as Vote>::VoteTopic>,
         organization: T::OrgId,
@@ -25,7 +25,23 @@ pub trait VoteClient<T: Runtime + Vote>: ChainClient<T> {
         turnout_requirement: Option<T::Signal>,
         duration: Option<<T as System>::BlockNumber>,
     ) -> Result<NewVoteStartedEvent<T>, Self::Error>;
-    async fn create_percent_threshold_vote(
+    async fn create_signal_threshold_vote_flat(
+        &self,
+        topic: Option<<T as Vote>::VoteTopic>,
+        organization: T::OrgId,
+        support_requirement: T::Signal,
+        turnout_requirement: Option<T::Signal>,
+        duration: Option<<T as System>::BlockNumber>,
+    ) -> Result<NewVoteStartedEvent<T>, Self::Error>;
+    async fn create_percent_threshold_vote_weighted(
+        &self,
+        topic: Option<<T as Vote>::VoteTopic>,
+        organization: T::OrgId,
+        support_threshold: <T as Vote>::Percent,
+        turnout_threshold: Option<<T as Vote>::Percent>,
+        duration: Option<<T as System>::BlockNumber>,
+    ) -> Result<NewVoteStartedEvent<T>, Self::Error>;
+    async fn create_percent_threshold_vote_flat(
         &self,
         topic: Option<<T as Vote>::VoteTopic>,
         organization: T::OrgId,
@@ -64,7 +80,7 @@ where
             <T as Vote>::VoteJustification,
         >,
 {
-    async fn create_signal_threshold_vote(
+    async fn create_signal_threshold_vote_weighted(
         &self,
         topic: Option<<T as Vote>::VoteTopic>,
         organization: T::OrgId,
@@ -79,7 +95,7 @@ where
             None
         };
         self.chain_client()
-            .create_signal_threshold_vote_and_watch(
+            .create_signal_threshold_vote_weighted_and_watch(
                 signer,
                 topic,
                 organization,
@@ -91,7 +107,34 @@ where
             .new_vote_started()?
             .ok_or(Error::EventNotFound.into())
     }
-    async fn create_percent_threshold_vote(
+    async fn create_signal_threshold_vote_flat(
+        &self,
+        topic: Option<<T as Vote>::VoteTopic>,
+        organization: T::OrgId,
+        support_requirement: T::Signal,
+        turnout_requirement: Option<T::Signal>,
+        duration: Option<<T as System>::BlockNumber>,
+    ) -> Result<NewVoteStartedEvent<T>, C::Error> {
+        let signer = self.chain_signer()?;
+        let topic = if let Some(t) = topic {
+            Some(crate::post(self, t).await?)
+        } else {
+            None
+        };
+        self.chain_client()
+            .create_signal_threshold_vote_flat_and_watch(
+                signer,
+                topic,
+                organization,
+                support_requirement,
+                turnout_requirement,
+                duration,
+            )
+            .await?
+            .new_vote_started()?
+            .ok_or(Error::EventNotFound.into())
+    }
+    async fn create_percent_threshold_vote_weighted(
         &self,
         topic: Option<<T as Vote>::VoteTopic>,
         organization: T::OrgId,
@@ -106,7 +149,34 @@ where
             None
         };
         self.chain_client()
-            .create_percent_threshold_vote_and_watch(
+            .create_percent_threshold_vote_weighted_and_watch(
+                signer,
+                topic,
+                organization,
+                support_threshold,
+                turnout_threshold,
+                duration,
+            )
+            .await?
+            .new_vote_started()?
+            .ok_or(Error::EventNotFound.into())
+    }
+    async fn create_percent_threshold_vote_flat(
+        &self,
+        topic: Option<<T as Vote>::VoteTopic>,
+        organization: T::OrgId,
+        support_threshold: <T as Vote>::Percent,
+        turnout_threshold: Option<<T as Vote>::Percent>,
+        duration: Option<<T as System>::BlockNumber>,
+    ) -> Result<NewVoteStartedEvent<T>, C::Error> {
+        let signer = self.chain_signer()?;
+        let topic = if let Some(t) = topic {
+            Some(crate::post(self, t).await?)
+        } else {
+            None
+        };
+        self.chain_client()
+            .create_percent_threshold_vote_flat_and_watch(
                 signer,
                 topic,
                 organization,

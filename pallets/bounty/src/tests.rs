@@ -11,7 +11,6 @@ use sp_core::H256;
 use sp_runtime::{
     testing::Header,
     traits::IdentityLookup,
-    ModuleId,
     Perbill,
 };
 
@@ -96,15 +95,9 @@ impl vote::Trait for Test {
     type VoteId = u64;
     type Signal = u64;
 }
-parameter_types! {
-    pub const TransactionFee: u64 = 3;
-    pub const TreasuryModuleId: ModuleId = ModuleId(*b"py/trsry");
-}
 impl donate::Trait for Test {
     type Event = TestEvent;
     type Currency = Balances;
-    type TransactionFee = TransactionFee;
-    type Treasury = TreasuryModuleId;
 }
 parameter_types! {
     pub const MaxTreasuryPerOrg: u32 = 50;
@@ -131,7 +124,7 @@ pub type Balances = pallet_balances::Module<Test>;
 pub type Org = org::Module<Test>;
 pub type Bounty = Module<Test>;
 
-fn get_last_event() -> RawEvent<u64, u64, u64, u64> {
+fn get_last_event() -> RawEvent<u64, u32, u64, u64, u64> {
     System::events()
         .into_iter()
         .map(|r| r.event)
@@ -189,7 +182,8 @@ fn genesis_config_works() {
 fn account_posts_bounty_works() {
     new_test_ext().execute_with(|| {
         let one = Origin::signed(1);
-        let new_resolution_metadata = ResolutionMetadata::new(1, 1, None, None);
+        let new_resolution_metadata =
+            ResolutionMetadata::new(OrgRep::Equal(1), 1, None, None);
         assert_noop!(
             Bounty::account_posts_bounty(
                 one.clone(),
@@ -211,7 +205,7 @@ fn account_posts_bounty_works() {
             new_resolution_metadata,
             None,
         ));
-        assert_eq!(get_last_event(), RawEvent::BountyPosted(1, 1, 10));
+        assert_eq!(get_last_event(), RawEvent::BountyPosted(1, 1, 10, 10));
     });
 }
 
@@ -220,7 +214,8 @@ fn account_applies_for_bounty_works() {
     new_test_ext().execute_with(|| {
         let one = Origin::signed(1);
         let two = Origin::signed(2);
-        let new_resolution_metadata = ResolutionMetadata::new(1, 1, None, None);
+        let new_resolution_metadata =
+            ResolutionMetadata::new(OrgRep::Equal(1), 1, None, None);
         assert_ok!(Bounty::account_posts_bounty(
             one.clone(),
             10u32, // constitution
@@ -245,7 +240,7 @@ fn account_applies_for_bounty_works() {
         ));
         assert_eq!(
             get_last_event(),
-            RawEvent::BountyApplicationSubmitted(1, 1, 2, None, 10)
+            RawEvent::BountyApplicationSubmitted(1, 1, 2, None, 10,)
         );
     });
 }
@@ -255,7 +250,8 @@ fn account_triggers_application_review_works() {
     new_test_ext().execute_with(|| {
         let one = Origin::signed(1);
         let two = Origin::signed(2);
-        let new_resolution_metadata = ResolutionMetadata::new(1, 1, None, None);
+        let new_resolution_metadata =
+            ResolutionMetadata::new(OrgRep::Equal(1), 1, None, None);
         assert_ok!(Bounty::account_posts_bounty(
             one.clone(),
             10u32, // constitution
@@ -300,7 +296,8 @@ fn account_sudo_approves_application_works() {
     new_test_ext().execute_with(|| {
         let one = Origin::signed(1);
         let two = Origin::signed(2);
-        let new_resolution_metadata = ResolutionMetadata::new(1, 1, None, None);
+        let new_resolution_metadata =
+            ResolutionMetadata::new(OrgRep::Equal(1), 1, None, None);
         assert_ok!(Bounty::account_posts_bounty(
             one.clone(),
             10u32, // constitution
@@ -345,7 +342,8 @@ fn account_poll_application_works() {
     new_test_ext().execute_with(|| {
         let one = Origin::signed(1);
         let two = Origin::signed(2);
-        let new_resolution_metadata = ResolutionMetadata::new(1, 1, None, None);
+        let new_resolution_metadata =
+            ResolutionMetadata::new(OrgRep::Equal(1), 1, None, None);
         assert_ok!(Bounty::account_posts_bounty(
             one.clone(),
             10u32, // constitution
@@ -401,7 +399,8 @@ fn milestone_submission_works() {
     new_test_ext().execute_with(|| {
         let one = Origin::signed(1);
         let two = Origin::signed(2);
-        let new_resolution_metadata = ResolutionMetadata::new(1, 1, None, None);
+        let new_resolution_metadata =
+            ResolutionMetadata::new(OrgRep::Equal(1), 1, None, None);
         assert_ok!(Bounty::account_posts_bounty(
             one.clone(),
             10u32, // constitution
@@ -449,7 +448,7 @@ fn milestone_submission_works() {
         ));
         assert_eq!(
             get_last_event(),
-            RawEvent::MilestoneSubmitted(2, 1, 1, 1, 10,)
+            RawEvent::MilestoneSubmitted(2, 1, 1, 1, 10, 10)
         );
     });
 }
@@ -459,7 +458,8 @@ fn account_triggers_milestone_review_works() {
     new_test_ext().execute_with(|| {
         let one = Origin::signed(1);
         let two = Origin::signed(2);
-        let new_resolution_metadata = ResolutionMetadata::new(1, 1, None, None);
+        let new_resolution_metadata =
+            ResolutionMetadata::new(OrgRep::Equal(1), 1, None, None);
         assert_ok!(Bounty::account_posts_bounty(
             one.clone(),
             10u32, // constitution
@@ -507,7 +507,8 @@ fn account_sudo_approves_milestone_works() {
     new_test_ext().execute_with(|| {
         let one = Origin::signed(1);
         let two = Origin::signed(2);
-        let new_resolution_metadata = ResolutionMetadata::new(1, 1, None, None);
+        let new_resolution_metadata =
+            ResolutionMetadata::new(OrgRep::Equal(1), 1, None, None);
         assert_ok!(Bounty::account_posts_bounty(
             one.clone(),
             10u32, // constitution

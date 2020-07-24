@@ -1,0 +1,14 @@
+[package]
+name = "sunshine-bounty-gbot"
+version = "0.0.1"
+authors = ["Amar Singh <asinghchrony@protonmail.com>"]
+edition = "2018"
+description = "github bot for sunshine bounty"
+
+[dependencies]
+octocrab = "0.4.2"
+thiserror = "1.0.20"
+
+[dev-dependencies]
+tokio = { version = "0.2.17", default-features = false, features = ["macros"] }
+env_logger = "0.7.1"

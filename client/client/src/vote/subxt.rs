@@ -136,7 +136,7 @@ pub struct VoteLoggerStore<T: Vote> {
 // ~~ Calls ~~
 
 #[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
-pub struct CreateSignalThresholdVoteCall<T: Vote> {
+pub struct CreateSignalThresholdVoteWeightedCall<T: Vote> {
     pub topic: Option<<T as Org>::IpfsReference>,
     pub organization: T::OrgId,
     pub support_requirement: T::Signal,
@@ -145,7 +145,25 @@ pub struct CreateSignalThresholdVoteCall<T: Vote> {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
-pub struct CreatePercentThresholdVoteCall<T: Vote> {
+pub struct CreateSignalThresholdVoteFlatCall<T: Vote> {
+    pub topic: Option<<T as Org>::IpfsReference>,
+    pub organization: T::OrgId,
+    pub support_requirement: T::Signal,
+    pub turnout_requirement: Option<T::Signal>,
+    pub duration: Option<<T as System>::BlockNumber>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
+pub struct CreatePercentThresholdVoteWeightedCall<T: Vote> {
+    pub topic: Option<<T as Org>::IpfsReference>,
+    pub organization: T::OrgId,
+    pub support_requirement: <T as Vote>::Percent,
+    pub turnout_requirement: Option<<T as Vote>::Percent>,
+    pub duration: Option<<T as System>::BlockNumber>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
+pub struct CreatePercentThresholdVoteFlatCall<T: Vote> {
     pub topic: Option<<T as Org>::IpfsReference>,
     pub organization: T::OrgId,
     pub support_requirement: <T as Vote>::Percent,

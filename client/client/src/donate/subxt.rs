@@ -68,9 +68,21 @@ pub struct MakePropDonationCall<T: Donate> {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
-pub struct DonationExecutedEvent<T: Donate> {
+pub struct PropDonationExecutedEvent<T: Donate> {
     pub sender: <T as System>::AccountId,
     pub org: <T as Org>::OrgId,
     pub amt: DonateBalanceOf<T>,
-    pub fee: bool,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
+pub struct MakeEqualDonationCall<T: Donate> {
+    pub org: <T as Org>::OrgId,
+    pub amt: DonateBalanceOf<T>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
+pub struct EqualDonationExecutedEvent<T: Donate> {
+    pub sender: <T as System>::AccountId,
+    pub org: <T as Org>::OrgId,
+    pub amt: DonateBalanceOf<T>,
 }

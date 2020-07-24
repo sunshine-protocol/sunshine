@@ -20,7 +20,12 @@ pub trait DonateClient<T: Runtime + Donate>: ChainClient<T> {
         &self,
         org: <T as Org>::OrgId,
         amt: DonateBalanceOf<T>,
-    ) -> Result<DonationExecutedEvent<T>, Self::Error>;
+    ) -> Result<PropDonationExecutedEvent<T>, Self::Error>;
+    async fn make_equal_donation(
+        &self,
+        org: <T as Org>::OrgId,
+        amt: DonateBalanceOf<T>,
+    ) -> Result<EqualDonationExecutedEvent<T>, Self::Error>;
 }
 
 #[async_trait]
@@ -36,12 +41,24 @@ where
         &self,
         org: <T as Org>::OrgId,
         amt: DonateBalanceOf<T>,
-    ) -> Result<DonationExecutedEvent<T>, C::Error> {
+    ) -> Result<PropDonationExecutedEvent<T>, C::Error> {
         let signer = self.chain_signer()?;
         self.chain_client()
             .make_prop_donation_and_watch(signer, org, amt)
             .await?
-            .donation_executed()?
+            .prop_donation_executed()?
+            .ok_or(Error::EventNotFound.into())
+    }
+    async fn make_equal_donation(
+        &self,
+        org: <T as Org>::OrgId,
+        amt: DonateBalanceOf<T>,
+    ) -> Result<EqualDonationExecutedEvent<T>, C::Error> {
+        let signer = self.chain_signer()?;
+        self.chain_client()
+            .make_equal_donation_and_watch(signer, org, amt)
+            .await?
+            .equal_donation_executed()?
             .ok_or(Error::EventNotFound.into())
     }
 }

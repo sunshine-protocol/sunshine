@@ -9,6 +9,24 @@ use sp_runtime::{
 };
 use sp_std::prelude::*;
 
+#[derive(new, PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug)]
+/// Used in `vote` and `donate` to distinguish between configurations that acknowledge ownership and don't
+pub enum OrgRep<OrgId> {
+    // weighted by ownership
+    Weighted(OrgId),
+    // equal for all members
+    Equal(OrgId),
+}
+
+impl<OrgId: Copy> OrgRep<OrgId> {
+    pub fn org(&self) -> OrgId {
+        match self {
+            OrgRep::Weighted(o) => *o,
+            OrgRep::Equal(o) => *o,
+        }
+    }
+}
+
 #[derive(new, PartialEq, Eq, Default, Clone, Encode, Decode, RuntimeDebug)]
 /// The struct to track the organization's state
 pub struct Organization<

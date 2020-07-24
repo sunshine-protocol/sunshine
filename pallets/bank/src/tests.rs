@@ -11,7 +11,6 @@ use sp_core::H256;
 use sp_runtime::{
     testing::Header,
     traits::IdentityLookup,
-    ModuleId,
     Perbill,
 };
 use util::{
@@ -100,15 +99,9 @@ impl vote::Trait for Test {
     type VoteId = u64;
     type Signal = u64;
 }
-parameter_types! {
-    pub const TransactionFee: u64 = 3;
-    pub const TreasuryModuleId: ModuleId = ModuleId(*b"py/trsry");
-}
 impl donate::Trait for Test {
     type Event = TestEvent;
     type Currency = Balances;
-    type TransactionFee = TransactionFee;
-    type Treasury = TreasuryModuleId;
 }
 parameter_types! {
     pub const MaxTreasuryPerOrg: u32 = 50;
