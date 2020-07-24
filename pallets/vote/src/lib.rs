@@ -40,6 +40,7 @@ use sp_std::{
     prelude::*,
 };
 use util::{
+    organization::OrgRep,
     traits::{
         AccessGenesis,
         Apply,
@@ -155,7 +156,7 @@ decl_module! {
         fn deposit_event() = default;
 
         #[weight = 0]
-        pub fn create_signal_threshold_vote(
+        pub fn create_signal_threshold_vote_weighted(
             origin,
             topic: Option<T::IpfsReference>,
             organization: T::OrgId,
@@ -168,13 +169,32 @@ decl_module! {
             let authentication: bool = <org::Module<T>>::is_organization_supervisor(organization, &vote_creator);
             ensure!(authentication, Error::<T>::NotAuthorizedToCreateVoteForOrganization);
             // share weighted count threshold vote started
-            let new_vote_id = Self::open_vote(topic, organization, support_requirement, rejection_requirement, duration)?;
+            let new_vote_id = Self::open_vote(topic, OrgRep::Weighted(organization), support_requirement, rejection_requirement, duration)?;
             // emit event
             Self::deposit_event(RawEvent::NewVoteStarted(vote_creator, organization, new_vote_id));
             Ok(())
         }
         #[weight = 0]
-        pub fn create_percent_threshold_vote(
+        pub fn create_signal_threshold_vote_flat(
+            origin,
+            topic: Option<T::IpfsReference>,
+            organization: T::OrgId,
+            support_requirement: T::Signal,
+            rejection_requirement: Option<T::Signal>,
+            duration: Option<T::BlockNumber>,
+        ) -> DispatchResult {
+            let vote_creator = ensure_signed(origin)?;
+            // default authentication is organization supervisor
+            let authentication: bool = <org::Module<T>>::is_organization_supervisor(organization, &vote_creator);
+            ensure!(authentication, Error::<T>::NotAuthorizedToCreateVoteForOrganization);
+            // share weighted count threshold vote started
+            let new_vote_id = Self::open_vote(topic, OrgRep::Equal(organization), support_requirement, rejection_requirement, duration)?;
+            // emit event
+            Self::deposit_event(RawEvent::NewVoteStarted(vote_creator, organization, new_vote_id));
+            Ok(())
+        }
+        #[weight = 0]
+        pub fn create_percent_threshold_vote_weighted(
             origin,
             topic: Option<T::IpfsReference>,
             organization: T::OrgId,
@@ -187,7 +207,26 @@ decl_module! {
             let authentication: bool = <org::Module<T>>::is_organization_supervisor(organization, &vote_creator);
             ensure!(authentication, Error::<T>::NotAuthorizedToCreateVoteForOrganization);
             // percentage threshold vote started
-            let new_vote_id = Self::open_threshold_vote(topic, organization, support_threshold, rejection_threshold, duration)?;
+            let new_vote_id = Self::open_threshold_vote(topic, OrgRep::Weighted(organization), support_threshold, rejection_threshold, duration)?;
+            // emit event
+            Self::deposit_event(RawEvent::NewVoteStarted(vote_creator, organization, new_vote_id));
+            Ok(())
+        }
+        #[weight = 0]
+        pub fn create_percent_threshold_vote_flat(
+            origin,
+            topic: Option<T::IpfsReference>,
+            organization: T::OrgId,
+            support_threshold: Permill,
+            rejection_threshold: Option<Permill>,
+            duration: Option<T::BlockNumber>,
+        ) -> DispatchResult {
+            let vote_creator = ensure_signed(origin)?;
+            // default authentication is organization supervisor
+            let authentication: bool = <org::Module<T>>::is_organization_supervisor(organization, &vote_creator);
+            ensure!(authentication, Error::<T>::NotAuthorizedToCreateVoteForOrganization);
+            // percentage threshold vote started
+            let new_vote_id = Self::open_threshold_vote(topic, OrgRep::Equal(organization), support_threshold, rejection_threshold, duration)?;
             // emit event
             Self::deposit_event(RawEvent::NewVoteStarted(vote_creator, organization, new_vote_id));
             Ok(())
@@ -203,7 +242,7 @@ decl_module! {
             // default authentication is organization supervisor
             let authentication: bool = <org::Module<T>>::is_organization_supervisor(organization, &vote_creator);
             ensure!(authentication, Error::<T>::NotAuthorizedToCreateVoteForOrganization);
-            let new_vote_id = Self::open_unanimous_consent(topic, organization, duration)?;
+            let new_vote_id = Self::open_unanimous_consent(topic, OrgRep::Equal(organization), duration)?;
             // emit event
             Self::deposit_event(RawEvent::NewVoteStarted(vote_creator, organization, new_vote_id));
             Ok(())
@@ -251,13 +290,14 @@ impl<T: Trait> GetVoteOutcome<T::VoteId> for Module<T> {
     }
 }
 
-impl<T: Trait> OpenVote<T::OrgId, T::Signal, T::BlockNumber, T::IpfsReference>
+impl<T: Trait>
+    OpenVote<OrgRep<T::OrgId>, T::Signal, T::BlockNumber, T::IpfsReference>
     for Module<T>
 {
     type VoteIdentifier = T::VoteId;
     fn open_vote(
         topic: Option<T::IpfsReference>,
-        organization: T::OrgId,
+        organization: OrgRep<T::OrgId>,
         passage_threshold: T::Signal,
         rejection_threshold: Option<T::Signal>,
         duration: Option<T::BlockNumber>,
@@ -272,8 +312,14 @@ impl<T: Trait> OpenVote<T::OrgId, T::Signal, T::BlockNumber, T::IpfsReference>
         // generate new vote_id
         let new_vote_id = Self::generate_unique_id();
         // by default, this call mints signal based on weighted ownership in group
-        let total_possible_turnout =
-            Self::batch_mint_signal(new_vote_id, organization)?;
+        let total_possible_turnout = match organization {
+            OrgRep::Weighted(org_id) => {
+                Self::batch_mint_signal(new_vote_id, org_id)?
+            }
+            OrgRep::Equal(org_id) => {
+                Self::batch_mint_equal_signal(new_vote_id, org_id)?
+            }
+        };
         // instantiate new VoteState with threshold and temporal metadata
         let new_vote_state = VoteState::new(
             topic,
@@ -292,9 +338,11 @@ impl<T: Trait> OpenVote<T::OrgId, T::Signal, T::BlockNumber, T::IpfsReference>
     }
     fn open_unanimous_consent(
         topic: Option<T::IpfsReference>,
-        organization: T::OrgId,
+        organization: OrgRep<T::OrgId>,
         duration: Option<T::BlockNumber>,
     ) -> Result<Self::VoteIdentifier, DispatchError> {
+        // unwrap underlying org because input isn't relevant
+        let org_id = organization.org();
         // calculate `initialized` and `expires` fields for vote state
         let now = system::Module::<T>::block_number();
         let ends: Option<T::BlockNumber> = if let Some(time_to_add) = duration {
@@ -306,7 +354,7 @@ impl<T: Trait> OpenVote<T::OrgId, T::Signal, T::BlockNumber, T::IpfsReference>
         let new_vote_id = Self::generate_unique_id();
         // mints 1 signal per participant
         let total_possible_turnout =
-            Self::batch_mint_equal_signal(new_vote_id, organization)?;
+            Self::batch_mint_equal_signal(new_vote_id, org_id)?;
         // instantiate new VoteState for unanimous consent
         let new_vote_state = VoteState::new_unanimous_consent(
             topic,
@@ -341,15 +389,8 @@ impl<T: Trait> UpdateVoteTopic<T::VoteId, T::IpfsReference> for Module<T> {
     }
 }
 
-impl<T: Trait>
-    MintableSignal<
-        T::AccountId,
-        T::OrgId,
-        T::Signal,
-        T::BlockNumber,
-        T::VoteId,
-        T::IpfsReference,
-    > for Module<T>
+impl<T: Trait> MintableSignal<T::AccountId, T::OrgId, T::VoteId, T::Signal>
+    for Module<T>
 {
     /// Mints a custom amount of signal
     /// - may be useful for resetting voting rights
@@ -430,15 +471,8 @@ impl<T: Trait> CheckVoteStatus<T::IpfsReference, T::VoteId> for Module<T> {
     }
 }
 
-impl<T: Trait>
-    VoteOnProposal<
-        T::AccountId,
-        T::OrgId,
-        T::Signal,
-        T::BlockNumber,
-        T::VoteId,
-        T::IpfsReference,
-    > for Module<T>
+impl<T: Trait> VoteOnProposal<T::AccountId, T::VoteId, T::IpfsReference>
+    for Module<T>
 {
     fn vote_on_proposal(
         vote_id: T::VoteId,
@@ -478,7 +512,7 @@ impl<T: Trait>
 
 impl<T: Trait>
     OpenThresholdVote<
-        T::OrgId,
+        OrgRep<T::OrgId>,
         T::Signal,
         T::BlockNumber,
         T::IpfsReference,
@@ -492,7 +526,7 @@ impl<T: Trait>
     const NINETY_ONE_PERCENT: Permill = Permill::from_percent(91);
     fn open_threshold_vote(
         topic: Option<T::IpfsReference>,
-        organization: T::OrgId,
+        organization: OrgRep<T::OrgId>,
         passage_threshold_pct: Permill,
         rejection_threshold_pct: Option<Permill>,
         duration: Option<T::BlockNumber>,
@@ -506,9 +540,15 @@ impl<T: Trait>
         };
         // generate new vote_id
         let new_vote_id = Self::generate_unique_id();
-        // by default, this call mints signal based on weighted ownership in group
-        let total_possible_turnout =
-            Self::batch_mint_signal(new_vote_id, organization)?;
+        // mint signal
+        let total_possible_turnout = match organization {
+            OrgRep::Weighted(org_id) => {
+                Self::batch_mint_signal(new_vote_id, org_id)?
+            }
+            OrgRep::Equal(org_id) => {
+                Self::batch_mint_equal_signal(new_vote_id, org_id)?
+            }
+        };
         let passage_threshold =
             passage_threshold_pct.mul_ceil(total_possible_turnout);
         let rejection_threshold = if let Some(r_t) = rejection_threshold_pct {
@@ -534,7 +574,7 @@ impl<T: Trait>
     }
     fn open_34_pct_passage_threshold_vote(
         topic: Option<T::IpfsReference>,
-        organization: T::OrgId,
+        organization: OrgRep<T::OrgId>,
         duration: Option<T::BlockNumber>,
     ) -> Result<Self::VoteIdentifier, DispatchError> {
         // calculate `initialized` and `expires` fields for vote state
@@ -546,9 +586,15 @@ impl<T: Trait>
         };
         // generate new vote_id
         let new_vote_id = Self::generate_unique_id();
-        // by default, this call mints signal based on weighted ownership in group
-        let total_possible_turnout =
-            Self::batch_mint_signal(new_vote_id, organization)?;
+        // mint signal
+        let total_possible_turnout = match organization {
+            OrgRep::Weighted(org_id) => {
+                Self::batch_mint_signal(new_vote_id, org_id)?
+            }
+            OrgRep::Equal(org_id) => {
+                Self::batch_mint_equal_signal(new_vote_id, org_id)?
+            }
+        };
         let passage_threshold =
             Self::THIRTY_FOUR_PERCENT.mul_ceil(total_possible_turnout);
         // instantiate new VoteState with threshold and temporal metadata
@@ -569,7 +615,7 @@ impl<T: Trait>
     }
     fn open_51_pct_passage_threshold_vote(
         topic: Option<T::IpfsReference>,
-        organization: T::OrgId,
+        organization: OrgRep<T::OrgId>,
         duration: Option<T::BlockNumber>,
     ) -> Result<Self::VoteIdentifier, DispatchError> {
         // calculate `initialized` and `expires` fields for vote state
@@ -581,9 +627,15 @@ impl<T: Trait>
         };
         // generate new vote_id
         let new_vote_id = Self::generate_unique_id();
-        // by default, this call mints signal based on weighted ownership in group
-        let total_possible_turnout =
-            Self::batch_mint_signal(new_vote_id, organization)?;
+        // mint signal
+        let total_possible_turnout = match organization {
+            OrgRep::Weighted(org_id) => {
+                Self::batch_mint_signal(new_vote_id, org_id)?
+            }
+            OrgRep::Equal(org_id) => {
+                Self::batch_mint_equal_signal(new_vote_id, org_id)?
+            }
+        };
         let passage_threshold =
             Self::FIFTY_ONE_PERCENT.mul_ceil(total_possible_turnout);
         // instantiate new VoteState with threshold and temporal metadata
@@ -604,7 +656,7 @@ impl<T: Trait>
     }
     fn open_67_pct_passage_threshold_vote(
         topic: Option<T::IpfsReference>,
-        organization: T::OrgId,
+        organization: OrgRep<T::OrgId>,
         duration: Option<T::BlockNumber>,
     ) -> Result<Self::VoteIdentifier, DispatchError> {
         // calculate `initialized` and `expires` fields for vote state
@@ -616,9 +668,15 @@ impl<T: Trait>
         };
         // generate new vote_id
         let new_vote_id = Self::generate_unique_id();
-        // by default, this call mints signal based on weighted ownership in group
-        let total_possible_turnout =
-            Self::batch_mint_signal(new_vote_id, organization)?;
+        // mint signal
+        let total_possible_turnout = match organization {
+            OrgRep::Weighted(org_id) => {
+                Self::batch_mint_signal(new_vote_id, org_id)?
+            }
+            OrgRep::Equal(org_id) => {
+                Self::batch_mint_equal_signal(new_vote_id, org_id)?
+            }
+        };
         let passage_threshold =
             Self::SIXTY_SEVEN_PERCENT.mul_ceil(total_possible_turnout);
         // instantiate new VoteState with threshold and temporal metadata
@@ -639,7 +697,7 @@ impl<T: Trait>
     }
     fn open_76_pct_passage_threshold_vote(
         topic: Option<T::IpfsReference>,
-        organization: T::OrgId,
+        organization: OrgRep<T::OrgId>,
         duration: Option<T::BlockNumber>,
     ) -> Result<Self::VoteIdentifier, DispatchError> {
         // calculate `initialized` and `expires` fields for vote state
@@ -651,9 +709,15 @@ impl<T: Trait>
         };
         // generate new vote_id
         let new_vote_id = Self::generate_unique_id();
-        // by default, this call mints signal based on weighted ownership in group
-        let total_possible_turnout =
-            Self::batch_mint_signal(new_vote_id, organization)?;
+        // mint signal
+        let total_possible_turnout = match organization {
+            OrgRep::Weighted(org_id) => {
+                Self::batch_mint_signal(new_vote_id, org_id)?
+            }
+            OrgRep::Equal(org_id) => {
+                Self::batch_mint_equal_signal(new_vote_id, org_id)?
+            }
+        };
         let passage_threshold =
             Self::SEVENTY_SIX_PERCENT.mul_ceil(total_possible_turnout);
         // instantiate new VoteState with threshold and temporal metadata
@@ -674,7 +738,7 @@ impl<T: Trait>
     }
     fn open_91_pct_passage_threshold_vote(
         topic: Option<T::IpfsReference>,
-        organization: T::OrgId,
+        organization: OrgRep<T::OrgId>,
         duration: Option<T::BlockNumber>,
     ) -> Result<Self::VoteIdentifier, DispatchError> {
         // calculate `initialized` and `expires` fields for vote state
@@ -686,9 +750,15 @@ impl<T: Trait>
         };
         // generate new vote_id
         let new_vote_id = Self::generate_unique_id();
-        // by default, this call mints signal based on weighted ownership in group
-        let total_possible_turnout =
-            Self::batch_mint_signal(new_vote_id, organization)?;
+        // mint signal
+        let total_possible_turnout = match organization {
+            OrgRep::Weighted(org_id) => {
+                Self::batch_mint_signal(new_vote_id, org_id)?
+            }
+            OrgRep::Equal(org_id) => {
+                Self::batch_mint_equal_signal(new_vote_id, org_id)?
+            }
+        };
         let passage_threshold =
             Self::NINETY_ONE_PERCENT.mul_ceil(total_possible_turnout);
         // instantiate new VoteState with threshold and temporal metadata

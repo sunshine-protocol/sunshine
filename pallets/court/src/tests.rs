@@ -169,7 +169,8 @@ fn genesis_config_works() {
 fn dispute_registration_works() {
     new_test_ext().execute_with(|| {
         let one = Origin::signed(1);
-        let new_resolution_metadata = ResolutionMetadata::new(1, 1, None, None);
+        let new_resolution_metadata =
+            ResolutionMetadata::new(OrgRep::Equal(1), 1, None, None);
         assert_noop!(
             Court::register_dispute_type_with_resolution_path(
                 one.clone(),
@@ -203,7 +204,13 @@ fn dispute_registration_works() {
         ));
         assert_eq!(
             get_last_event(),
-            RawEvent::RegisteredDisputeWithResolutionPath(1, 1, 10, 2, 1)
+            RawEvent::RegisteredDisputeWithResolutionPath(
+                1,
+                1,
+                10,
+                2,
+                OrgRep::Equal(1)
+            )
         );
     });
 }
@@ -213,7 +220,8 @@ fn dispute_raised_works() {
     new_test_ext().execute_with(|| {
         let one = Origin::signed(1);
         let two = Origin::signed(2);
-        let new_resolution_metadata = ResolutionMetadata::new(1, 1, None, None);
+        let new_resolution_metadata =
+            ResolutionMetadata::new(OrgRep::Equal(1), 1, None, None);
         assert_noop!(
             Court::raise_dispute_to_trigger_vote(two.clone(), 1),
             Error::<Test>::CannotRaiseDisputeIfDisputeStateDNE
@@ -232,7 +240,14 @@ fn dispute_raised_works() {
         assert_ok!(Court::raise_dispute_to_trigger_vote(two.clone(), 1));
         assert_eq!(
             get_last_event(),
-            RawEvent::DisputeRaisedAndVoteTriggered(1, 1, 10, 2, 1, 1)
+            RawEvent::DisputeRaisedAndVoteTriggered(
+                1,
+                1,
+                10,
+                2,
+                OrgRep::Equal(1),
+                1
+            )
         );
     })
 }
@@ -242,7 +257,8 @@ fn poll_dispute_to_execute_outcome_works() {
     new_test_ext().execute_with(|| {
         let one = Origin::signed(1);
         let two = Origin::signed(2);
-        let new_resolution_metadata = ResolutionMetadata::new(1, 1, None, None);
+        let new_resolution_metadata =
+            ResolutionMetadata::new(OrgRep::Equal(1), 1, None, None);
         assert_ok!(Court::register_dispute_type_with_resolution_path(
             one.clone(),
             10,

@@ -55,6 +55,7 @@ use util::{
         MilestoneSubmission,
     },
     court::ResolutionMetadata,
+    organization::OrgRep,
     traits::{
         ApproveGrant,
         ApproveWithoutTransfer,
@@ -184,7 +185,7 @@ decl_storage! {
                     T::IpfsReference,
                     BalanceOf<T>,
                     ResolutionMetadata<
-                        T::OrgId,
+                        OrgRep<T::OrgId>,
                         T::Signal,
                         T::BlockNumber,
                     >,
@@ -230,13 +231,13 @@ decl_module! {
             description: T::IpfsReference,
             amount_reserved_for_bounty: BalanceOf<T>,
             acceptance_committee: ResolutionMetadata<
-                T::OrgId,
+                OrgRep<T::OrgId>,
                 T::Signal,
                 T::BlockNumber,
             >,
             supervision_committee: Option<
                 ResolutionMetadata<
-                    T::OrgId,
+                    OrgRep<T::OrgId>,
                     T::Signal,
                     T::BlockNumber,
                 >,
@@ -261,13 +262,13 @@ decl_module! {
             description: T::IpfsReference,
             amount_reserved_for_bounty: BalanceOf<T>,
             acceptance_committee: ResolutionMetadata<
-                T::OrgId,
+                OrgRep<T::OrgId>,
                 T::Signal,
                 T::BlockNumber,
             >,
             supervision_committee: Option<
                 ResolutionMetadata<
-                    T::OrgId,
+                    OrgRep<T::OrgId>,
                     T::Signal,
                     T::BlockNumber,
                 >,
@@ -563,14 +564,14 @@ impl<T: Trait>
         OnChainTreasuryID,
         BalanceOf<T>,
         T::IpfsReference,
-        ResolutionMetadata<T::OrgId, T::Signal, T::BlockNumber>,
+        ResolutionMetadata<OrgRep<T::OrgId>, T::Signal, T::BlockNumber>,
     > for Module<T>
 {
     type BountyInfo = BountyInformation<
         BankOrAccount<OnChainTreasuryID, T::AccountId>,
         T::IpfsReference,
         BalanceOf<T>,
-        ResolutionMetadata<T::OrgId, T::Signal, T::BlockNumber>,
+        ResolutionMetadata<OrgRep<T::OrgId>, T::Signal, T::BlockNumber>,
     >;
     fn post_bounty(
         poster: T::AccountId,
@@ -578,12 +579,12 @@ impl<T: Trait>
         description: T::IpfsReference,
         amount_reserved_for_bounty: BalanceOf<T>,
         acceptance_committee: ResolutionMetadata<
-            T::OrgId,
+            OrgRep<T::OrgId>,
             T::Signal,
             T::BlockNumber,
         >,
         supervision_committee: Option<
-            ResolutionMetadata<T::OrgId, T::Signal, T::BlockNumber>,
+            ResolutionMetadata<OrgRep<T::OrgId>, T::Signal, T::BlockNumber>,
         >,
     ) -> Result<Self::BountyId, DispatchError> {
         let bounty_poster: BankOrAccount<OnChainTreasuryID, T::AccountId> =
@@ -736,7 +737,7 @@ impl<T: Trait> SuperviseGrantApplication<T::BountyId, T::AccountId>
             .ok_or(Error::<T>::CannotSudoApproveIfBountyDNE)?;
         // verify that the caller is indeed the sudo
         let authentication = <org::Module<T>>::is_organization_supervisor(
-            bounty_info.acceptance_committee().org(),
+            bounty_info.acceptance_committee().org().org(),
             &caller,
         );
         ensure!(
@@ -928,7 +929,7 @@ impl<T: Trait>
         };
         ensure!(
             <org::Module<T>>::is_organization_supervisor(
-                review_board.org(),
+                review_board.org().org(),
                 &caller
             ),
             Error::<T>::CallerNotAuthorizedToSudoApproveMilestone

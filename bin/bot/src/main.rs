@@ -50,8 +50,8 @@ async fn main() -> std::result::Result<(), Error> {
         bounty_post_sub,
         milestone_submit_sub,
     };
-    // String buffer for possible std input
-    println!("Press `q` to quit the bounty bot");
+    // TODO: how can I read input so that the user doesn't have to press enter
+    println!("Press `q` then `Enter` to quit the bounty bot");
     while keep_running_bot() {
         bot = run_github_bot(bot, github_bot.clone()).await?;
     }
@@ -71,6 +71,7 @@ fn keep_running_bot() -> bool {
     }
 }
 
+// TODO: PRINT CONFIRMATION
 async fn run_github_bot(mut bot: Bot, github: GBot) -> Result<Bot> {
     if let Some(Ok(raw)) = bot.bounty_post_sub.next().await {
         // get event data

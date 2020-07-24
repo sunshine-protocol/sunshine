@@ -182,7 +182,8 @@ fn genesis_config_works() {
 fn account_posts_bounty_works() {
     new_test_ext().execute_with(|| {
         let one = Origin::signed(1);
-        let new_resolution_metadata = ResolutionMetadata::new(1, 1, None, None);
+        let new_resolution_metadata =
+            ResolutionMetadata::new(OrgRep::Equal(1), 1, None, None);
         assert_noop!(
             Bounty::account_posts_bounty(
                 one.clone(),
@@ -213,7 +214,8 @@ fn account_applies_for_bounty_works() {
     new_test_ext().execute_with(|| {
         let one = Origin::signed(1);
         let two = Origin::signed(2);
-        let new_resolution_metadata = ResolutionMetadata::new(1, 1, None, None);
+        let new_resolution_metadata =
+            ResolutionMetadata::new(OrgRep::Equal(1), 1, None, None);
         assert_ok!(Bounty::account_posts_bounty(
             one.clone(),
             10u32, // constitution
@@ -248,7 +250,8 @@ fn account_triggers_application_review_works() {
     new_test_ext().execute_with(|| {
         let one = Origin::signed(1);
         let two = Origin::signed(2);
-        let new_resolution_metadata = ResolutionMetadata::new(1, 1, None, None);
+        let new_resolution_metadata =
+            ResolutionMetadata::new(OrgRep::Equal(1), 1, None, None);
         assert_ok!(Bounty::account_posts_bounty(
             one.clone(),
             10u32, // constitution
@@ -293,7 +296,8 @@ fn account_sudo_approves_application_works() {
     new_test_ext().execute_with(|| {
         let one = Origin::signed(1);
         let two = Origin::signed(2);
-        let new_resolution_metadata = ResolutionMetadata::new(1, 1, None, None);
+        let new_resolution_metadata =
+            ResolutionMetadata::new(OrgRep::Equal(1), 1, None, None);
         assert_ok!(Bounty::account_posts_bounty(
             one.clone(),
             10u32, // constitution
@@ -338,7 +342,8 @@ fn account_poll_application_works() {
     new_test_ext().execute_with(|| {
         let one = Origin::signed(1);
         let two = Origin::signed(2);
-        let new_resolution_metadata = ResolutionMetadata::new(1, 1, None, None);
+        let new_resolution_metadata =
+            ResolutionMetadata::new(OrgRep::Equal(1), 1, None, None);
         assert_ok!(Bounty::account_posts_bounty(
             one.clone(),
             10u32, // constitution
@@ -394,7 +399,8 @@ fn milestone_submission_works() {
     new_test_ext().execute_with(|| {
         let one = Origin::signed(1);
         let two = Origin::signed(2);
-        let new_resolution_metadata = ResolutionMetadata::new(1, 1, None, None);
+        let new_resolution_metadata =
+            ResolutionMetadata::new(OrgRep::Equal(1), 1, None, None);
         assert_ok!(Bounty::account_posts_bounty(
             one.clone(),
             10u32, // constitution
@@ -452,7 +458,8 @@ fn account_triggers_milestone_review_works() {
     new_test_ext().execute_with(|| {
         let one = Origin::signed(1);
         let two = Origin::signed(2);
-        let new_resolution_metadata = ResolutionMetadata::new(1, 1, None, None);
+        let new_resolution_metadata =
+            ResolutionMetadata::new(OrgRep::Equal(1), 1, None, None);
         assert_ok!(Bounty::account_posts_bounty(
             one.clone(),
             10u32, // constitution
@@ -500,7 +507,8 @@ fn account_sudo_approves_milestone_works() {
     new_test_ext().execute_with(|| {
         let one = Origin::signed(1);
         let two = Origin::signed(2);
-        let new_resolution_metadata = ResolutionMetadata::new(1, 1, None, None);
+        let new_resolution_metadata =
+            ResolutionMetadata::new(OrgRep::Equal(1), 1, None, None);
         assert_ok!(Bounty::account_posts_bounty(
             one.clone(),
             10u32, // constitution

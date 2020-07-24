@@ -7044,6 +7044,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "sunshine-bounty2"
+version = "0.0.1"
+dependencies = [
+ "clear_on_drop",
+ "frame-support",
+ "frame-system",
+ "pallet-balances",
+ "parity-scale-codec",
+ "serde",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+ "sunshine-bounty-utils",
+ "sunshine-donate",
+ "sunshine-org",
+ "sunshine-vote",
+]
+
+[[package]]
 name = "sunshine-core"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

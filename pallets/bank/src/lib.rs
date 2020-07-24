@@ -50,6 +50,7 @@ use util::{
         SpendProposal,
         SpendState,
     },
+    organization::OrgRep,
     traits::{
         BankPermissions,
         GenerateUniqueID,
@@ -272,10 +273,10 @@ decl_module! {
             );
             let bank_account_id = Self::account_id(bank_id);
             let remaining_funds = <T as donate::Trait>::Currency::total_balance(&bank_account_id);
-            // distributes remaining funds equally among members
+            // distributes remaining funds equally among members in proportion to ownership (PropDonation)
             let remainder = <donate::Module<T>>::donate(
                 &bank_account_id,
-                bank.org(),
+                OrgRep::Weighted(bank.org()),
                 remaining_funds,
             )?;
             // transfer the remainder to the closer (who is the organization supervisor)
@@ -482,7 +483,7 @@ impl<T: Trait> SpendGovernance<OnChainTreasuryID, BalanceOf<T>, T::AccountId>
                 // default unanimous passage \forall spend proposals; TODO: add more default thresholds after more user research and consider adding local storage item for the threshold
                 let new_vote_id = <vote::Module<T>>::open_unanimous_consent(
                     None,
-                    bank.org(),
+                    OrgRep::Equal(bank.org()),
                     None,
                 )?;
                 let new_spend_proposal =
