@@ -4,8 +4,8 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 //! The bounty module allows any `AccountId` to post bounties with rules for approval
 
-// #[cfg(test)]
-// mod tests;
+#[cfg(test)]
+mod tests;
 
 use codec::Codec;
 use frame_support::{

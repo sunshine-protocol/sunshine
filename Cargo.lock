@@ -564,6 +564,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "bounty-cli"
+version = "0.2.0"
+dependencies = [
+ "async-std",
+ "clap 3.0.0-beta.1",
+ "dirs",
+ "env_logger",
+ "exitfailure",
+ "substrate-subxt",
+ "sunshine-bounty-cli",
+ "sunshine-core",
+ "sunshine-identity-cli",
+ "test-client",
+ "thiserror",
+]
+
+[[package]]
 name = "broadcaster"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7383,23 +7400,6 @@ checksum = "9a14cd9f8c72704232f0bfc8455c0e861f0ad4eb60cc9ec8a170e231414c1e13"
 dependencies = [
  "libc",
  "winapi 0.3.9",
-]
-
-[[package]]
-name = "test-cli"
-version = "0.1.0"
-dependencies = [
- "async-std",
- "clap 3.0.0-beta.1",
- "dirs",
- "env_logger",
- "exitfailure",
- "substrate-subxt",
- "sunshine-bounty-cli",
- "sunshine-core",
- "sunshine-identity-cli",
- "test-client",
- "thiserror",
 ]
 
 [[package]]

@@ -27,8 +27,7 @@ use sunshine_bounty_utils::vote::VoterView;
 #[derive(Clone, Debug, Clap)]
 pub struct VoteCreateSignalThresholdCommand {
     pub topic: Option<String>,
-    #[clap(long, parse(try_from_str))]
-    pub weighted: bool,
+    pub weighted: u8,
     pub organization: u64,
     pub support_requirement: u64,
     pub turnout_requirement: Option<u64>,
@@ -71,7 +70,8 @@ impl VoteCreateSignalThresholdCommand {
             } else {
                 None
             };
-        if self.weighted {
+        // 0 is false, every other integer is true
+        if self.weighted != 0 {
             let event = client
                 .create_signal_threshold_vote_weighted(
                     topic,
@@ -109,8 +109,7 @@ impl VoteCreateSignalThresholdCommand {
 #[derive(Clone, Debug, Clap)]
 pub struct VoteCreatePercentThresholdCommand {
     pub topic: Option<String>,
-    #[clap(long, parse(try_from_str))]
-    pub weighted: bool,
+    pub weighted: u8,
     pub organization: u64,
     pub support_threshold: u8,
     pub turnout_threshold: Option<u8>,
@@ -167,7 +166,8 @@ impl VoteCreatePercentThresholdCommand {
             } else {
                 None
             };
-        if self.weighted {
+        // 0 is false and everything else is true
+        if self.weighted != 0 {
             let event = client
                 .create_percent_threshold_vote_weighted(
                     topic,
