@@ -41,6 +41,9 @@ use sunshine_core::{
 };
 use thiserror::Error;
 
+pub use bounty_client as bounty;
+pub use bounty_client::org;
+
 type AccountId = <<sp_runtime::MultiSignature as Verify>::Signer as IdentifyAccount>::AccountId;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -172,6 +175,46 @@ impl Client<libipld::mem::MemStore> {
     }
 }
 
+#[cfg(feature = "mock")]
+impl ChainClient<Runtime> for Client<libipld::mem::MemStore> {
+    type Keystore = Keystore<Runtime, sp_core::sr25519::Pair>;
+    type OffchainClient = OffchainClient<libipld::mem::MemStore>;
+    type Error = Error;
+
+    fn keystore(&self) -> &Self::Keystore {
+        &self.keystore
+    }
+
+    fn keystore_mut(&mut self) -> &mut Self::Keystore {
+        &mut self.keystore
+    }
+
+    fn chain_client(&self) -> &substrate_subxt::Client<Runtime> {
+        &self.chain
+    }
+
+    fn chain_signer(
+        &self,
+    ) -> Result<&(dyn ChainSigner<Runtime> + Send + Sync), Self::Error> {
+        self.keystore
+            .chain_signer()
+            .ok_or(Error::Keystore(substrate_keybase_keystore::Error::Locked))
+    }
+
+    fn offchain_client(&self) -> &Self::OffchainClient {
+        &self.offchain
+    }
+
+    fn offchain_signer(
+        &self,
+    ) -> Result<&dyn OffchainSigner<Runtime>, Self::Error> {
+        self.keystore
+            .offchain_signer()
+            .ok_or(Error::Keystore(substrate_keybase_keystore::Error::Locked))
+    }
+}
+
+#[cfg(not(feature = "mock"))]
 impl<S: Store + Send + Sync> ChainClient<Runtime> for Client<S> {
     type Keystore = Keystore<Runtime, sp_core::sr25519::Pair>;
     type OffchainClient = OffchainClient<S>;
