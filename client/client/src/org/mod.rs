@@ -229,3 +229,55 @@ where
             .ok_or(Error::EventNotFound.into())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::TextBlock;
+    use subxt::{Org, RegisterFlatOrgCallExt};
+    use rand::{thread_rng, RngCore, rngs::OsRng};
+    use test_client::mock::{test_node, AccountKeyring};
+    use test_client::Client;
+    use sunshine_core::ChainClient;
+
+    // For testing purposes only, NEVER use this to generate AccountIds in practice because it's random
+    pub fn random_account_id() -> substrate_subxt::sp_runtime::AccountId32 {
+        let mut buf = [0u8; 32];
+        OsRng.fill_bytes(&mut buf);
+        buf.into()
+    }
+
+    #[async_std::test]
+    async fn register_flat_org() {
+        let (node, _node_tmp) = test_node();
+        let (client, _client_tmp) = Client::mock(&node, AccountKeyring::Alice).await;
+        let alice_account_id = AccountKeyring::Alice.to_account_id();
+        // insert constitution into 
+        let raw_const = TextBlock {
+            text: "good code lives forever".to_string(),
+        };
+        let constitution = crate::post(&client, raw_const).await.unwrap();
+        let (two, three, four, five, six, seven) = (
+            random_account_id(),
+            random_account_id(),
+            random_account_id(),
+            random_account_id(),
+            random_account_id(),
+            random_account_id(),
+        );
+        let members = vec![alice_account_id, two, three, four, five, six, seven];
+        let event = client.chain_client().register_flat_org(
+            Some(alice_account_id),
+            None,
+            constitution,
+            &members,
+        ).await.unwrap();
+        let expected_event = subxt::NewFlatOrganizationRegisteredEvent {
+            caller: alice_account_id,
+            new_id: 2,
+            constitution,
+            total: 7,
+        };
+        assert_eq!(event, expected_event);
+    }
+}

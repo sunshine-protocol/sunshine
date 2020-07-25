@@ -147,7 +147,7 @@ impl Client<libipld::mem::MemStore> {
 
         let tmp =
             TempDir::new("sunshine-bounty-").expect("failed to create tempdir");
-        let chain = ClientBuilder::new()
+        let chain = ClientBuilder::<Runtime>::new()
             .set_client(test_node.clone())
             .build()
             .await

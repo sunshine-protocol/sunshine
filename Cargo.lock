@@ -7026,6 +7026,7 @@ dependencies = [
  "ipld-block-builder",
  "libipld",
  "parity-scale-codec",
+ "rand 0.7.3",
  "serde",
  "serde_json",
  "substrate-subxt",

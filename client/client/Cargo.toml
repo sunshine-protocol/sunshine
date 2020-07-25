@@ -25,4 +25,5 @@ thiserror = "1.0.20"
 
 [dev-dependencies]
 async-std = { version = "=1.5.0", features = ["attributes"] }
+rand = "0.7.3"
 test-client = { path = "../../bin/client", features = ["mock"] }
