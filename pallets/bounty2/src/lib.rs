@@ -34,6 +34,7 @@ use sp_runtime::{
         Member,
         Zero,
     },
+    DispatchError,
     DispatchResult,
 };
 use sp_std::{
@@ -50,7 +51,12 @@ use util::{
     },
     organization::OrgRep,
     traits::{
+        bounty2::{
+            PostBounty,
+            SubmitForBounty,
+        },
         GroupMembership,
+        IDIsAvailable,
         OpenThresholdVote,
     },
 };
@@ -123,6 +129,7 @@ decl_error! {
     pub enum Error for Module<T: Trait> {
         // Bounty Does Not Exist
         BountyDNE,
+        DisputeResolvingOrgMustExistToPostBounty,
         SubmissionDNE,
         SubmissionRequestExceedsBounty,
         SubmissionNotInValidStateToApprove,
@@ -193,11 +200,8 @@ decl_module! {
             >,
         ) -> DispatchResult {
             let poster = ensure_signed(origin)?;
-            T::Currency::reserve(&poster, funding)?;
             let (sudo, org) = (permissions.sudo(), permissions.org());
-            let bounty = BountyInformation::new(info.clone(), poster.clone(), funding, permissions);
-            let id: T::BountyId = Self::bounty_generate_unique_id();
-            <Bounties<T>>::insert(id, bounty);
+            let id = Self::post_bounty2(poster.clone(), info.clone(), funding, permissions)?;
             Self::deposit_event(RawEvent::BountyPosted(poster, funding, sudo, org, id, info));
             Ok(())
         }
@@ -210,12 +214,7 @@ decl_module! {
             amount: BalanceOf<T>,
         ) -> DispatchResult {
             let submitter = ensure_signed(origin)?;
-            // get bounty and make sure less than amount
-            let bounty = <Bounties<T>>::get(bounty_id).ok_or(Error::<T>::BountyDNE)?;
-            ensure!(amount <= bounty.funding_reserved(), Error::<T>::SubmissionRequestExceedsBounty);
-            let submission = BountySubmission::new(bounty_id, submitter.clone(), team, submission_ref.clone(), amount);
-            let id: T::SubmissionId = Self::submission_generate_unique_id();
-            <Submissions<T>>::insert(id, submission);
+            let id = Self::submit_for_bounty2(submitter.clone(), bounty_id, team, submission_ref.clone(), amount)?;
             Self::deposit_event(RawEvent::BountySubmissionPosted(submitter, team, bounty_id, amount, id, submission_ref));
             Ok(())
         }
@@ -384,5 +383,81 @@ impl<T: Trait> Module<T> {
                 Some(amount)
             }
         }
+    }
+}
+
+impl<T: Trait>
+    PostBounty<
+        T::AccountId,
+        T::IpfsReference,
+        BalanceOf<T>,
+        ResolutionMetadata<
+            T::AccountId,
+            OrgRep<T::OrgId>,
+            PercentageThreshold<sp_runtime::Permill>,
+        >,
+    > for Module<T>
+{
+    type BountyId = T::BountyId;
+    fn post_bounty2(
+        poster: T::AccountId,
+        info: T::IpfsReference,
+        funding: BalanceOf<T>,
+        permissions: ResolutionMetadata<
+            T::AccountId,
+            OrgRep<T::OrgId>,
+            PercentageThreshold<sp_runtime::Permill>,
+        >,
+    ) -> Result<Self::BountyId, DispatchError> {
+        ensure!(
+            !<org::Module<T>>::id_is_available(permissions.org().org()),
+            Error::<T>::DisputeResolvingOrgMustExistToPostBounty
+        );
+        T::Currency::reserve(&poster, funding)?;
+        let bounty = BountyInformation::new(
+            info.clone(),
+            poster.clone(),
+            funding,
+            permissions,
+        );
+        let id: T::BountyId = Self::bounty_generate_unique_id();
+        <Bounties<T>>::insert(id, bounty);
+        Ok(id)
+    }
+}
+
+impl<T: Trait>
+    SubmitForBounty<
+        T::AccountId,
+        T::BountyId,
+        OrgRep<T::OrgId>,
+        T::IpfsReference,
+        BalanceOf<T>,
+    > for Module<T>
+{
+    type SubmissionId = T::SubmissionId;
+    fn submit_for_bounty2(
+        submitter: T::AccountId,
+        bounty_id: T::BountyId,
+        team: Option<OrgRep<T::OrgId>>,
+        submission_ref: T::IpfsReference,
+        amount: BalanceOf<T>,
+    ) -> Result<Self::SubmissionId, DispatchError> {
+        let bounty =
+            <Bounties<T>>::get(bounty_id).ok_or(Error::<T>::BountyDNE)?;
+        ensure!(
+            amount <= bounty.funding_reserved(),
+            Error::<T>::SubmissionRequestExceedsBounty
+        );
+        let submission = BountySubmission::new(
+            bounty_id,
+            submitter,
+            team,
+            submission_ref.clone(),
+            amount,
+        );
+        let id: T::SubmissionId = Self::submission_generate_unique_id();
+        <Submissions<T>>::insert(id, submission);
+        Ok(id)
     }
 }

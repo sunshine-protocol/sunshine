@@ -1,4 +1,4 @@
-use crate::traits::{
+use crate::traits::bounty::{
     ApproveGrant,
     ApproveWithoutTransfer,
     SpendApprovedGrant,

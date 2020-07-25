@@ -33,7 +33,6 @@ impl_outer_event! {
         org<T>,
         vote<T>,
         donate<T>,
-        bank<T>,
         bounty<T>,
     }
 }
@@ -85,7 +84,7 @@ impl pallet_balances::Trait for Test {
 }
 impl org::Trait for Test {
     type Event = TestEvent;
-    type IpfsReference = u32; // TODO: replace with utils_identity::Cid
+    type IpfsReference = u32;
     type OrgId = u64;
     type Shares = u64;
     type ReservationLimit = ReservationLimit;
@@ -100,31 +99,23 @@ impl donate::Trait for Test {
     type Currency = Balances;
 }
 parameter_types! {
-    pub const MaxTreasuryPerOrg: u32 = 50;
-    pub const MinimumInitialDeposit: u64 = 20;
-}
-impl bank::Trait for Test {
-    type Event = TestEvent;
-    type SpendId = u64;
-    type Currency = Balances;
-    type MaxTreasuryPerOrg = MaxTreasuryPerOrg;
-    type MinimumInitialDeposit = MinimumInitialDeposit;
-}
-parameter_types! {
-    // minimum deposit to register an on-chain bank
     pub const BountyLowerBound: u64 = 5;
+    pub const ChallengePeriod: BlockNumber = 100;
 }
 impl Trait for Test {
     type Event = TestEvent;
     type BountyId = u64;
+    type SubmissionId = u64;
     type BountyLowerBound = BountyLowerBound;
+    type ChallengePeriod = ChallengePeriod;
 }
 pub type System = system::Module<Test>;
 pub type Balances = pallet_balances::Module<Test>;
 pub type Org = org::Module<Test>;
-pub type Bounty = Module<Test>;
+pub type Vote = vote::Module<Test>;
+pub type Bounty2 = Module<Test>;
 
-fn get_last_event() -> RawEvent<u64, u32, u64, u64, u64> {
+fn get_last_event() -> RawEvent<u64, u64, u64, u32, u64, u64, u64, u64> {
     System::events()
         .into_iter()
         .map(|r| r.event)
@@ -158,4 +149,158 @@ fn new_test_ext() -> sp_io::TestExternalities {
     let mut ext: sp_io::TestExternalities = t.into();
     ext.execute_with(|| System::set_block_number(1));
     ext
+}
+
+use util::organization::Organization;
+
+#[test]
+fn genesis_config_works() {
+    new_test_ext().execute_with(|| {
+        assert_eq!(Org::organization_counter(), 1);
+        let constitution = 1738;
+        let expected_organization =
+            Organization::new(Some(1), None, constitution);
+        let org_in_storage = Org::organization_states(1u64).unwrap();
+        assert_eq!(expected_organization, org_in_storage);
+        for i in 1u64..7u64 {
+            assert!(Org::is_member_of_group(1u64, &i));
+        }
+        assert!(System::events().is_empty());
+    });
+}
+
+#[test]
+fn post_bounty_works() {
+    new_test_ext().execute_with(|| {
+        let fifty_one_pct_threshold = PercentageThreshold::new(
+            sp_runtime::Permill::from_percent(51),
+            None,
+        );
+        // 51% threshold with equal weight for every account
+        let dispute_resolution = ResolutionMetadata::new(
+            Some(1),
+            OrgRep::Equal(1),
+            fifty_one_pct_threshold,
+        );
+        assert_noop!(
+            Bounty2::post_bounty(
+                Origin::signed(1),
+                10u32, // constitution
+                101,   // funding reserved
+                dispute_resolution.clone()
+            ),
+            sp_runtime::DispatchError::Module {
+                index: 0,
+                error: 3,
+                message: Some("InsufficientBalance",),
+            },
+        );
+        let fake_dispute_resolution = ResolutionMetadata::new(
+            Some(1),
+            OrgRep::Equal(2),
+            fifty_one_pct_threshold,
+        );
+        assert_noop!(
+            Bounty2::post_bounty(
+                Origin::signed(1),
+                10u32, // constitution
+                10,    // funding reserved
+                fake_dispute_resolution
+            ),
+            Error::<Test>::DisputeResolvingOrgMustExistToPostBounty,
+        );
+        assert_ok!(Bounty2::post_bounty(
+            Origin::signed(1),
+            10u32, // constitution
+            10,    // funding reserved
+            dispute_resolution
+        ));
+    });
+}
+
+#[test]
+fn submission_works() {
+    new_test_ext().execute_with(|| {
+        assert_noop!(
+            Bounty2::submit_for_bounty(
+                Origin::signed(1),
+                1,
+                None,
+                10u32,
+                15u64,
+            ),
+            Error::<Test>::BountyDNE
+        );
+        let fifty_one_pct_threshold = PercentageThreshold::new(
+            sp_runtime::Permill::from_percent(51),
+            None,
+        );
+        // 51% threshold with equal weight for every account
+        let dispute_resolution = ResolutionMetadata::new(
+            Some(1),
+            OrgRep::Equal(1),
+            fifty_one_pct_threshold,
+        );
+        assert_ok!(Bounty2::post_bounty(
+            Origin::signed(1),
+            10u32, // constitution
+            10,    // funding reserved
+            dispute_resolution
+        ));
+        assert_noop!(
+            Bounty2::submit_for_bounty(
+                Origin::signed(1),
+                1,
+                None,
+                10u32,
+                15u64,
+            ),
+            Error::<Test>::SubmissionRequestExceedsBounty,
+        );
+        assert_ok!(Bounty2::submit_for_bounty(
+            Origin::signed(1),
+            1,
+            None,
+            10u32,
+            10u64,
+        ));
+    });
+}
+
+#[test]
+fn submission_approval_works() {
+    new_test_ext().execute_with(|| {
+        let fifty_one_pct_threshold = PercentageThreshold::new(
+            sp_runtime::Permill::from_percent(51),
+            None,
+        );
+        // 51% threshold with equal weight for every account
+        let dispute_resolution = ResolutionMetadata::new(
+            Some(1),
+            OrgRep::Equal(1),
+            fifty_one_pct_threshold,
+        );
+        assert_ok!(Bounty2::post_bounty(
+            Origin::signed(1),
+            10u32, // constitution
+            10,    // funding reserved
+            dispute_resolution
+        ));
+        assert_ok!(Bounty2::submit_for_bounty(
+            Origin::signed(1),
+            1,
+            None,
+            10u32,
+            10u64,
+        ));
+        assert_noop!(
+            Bounty2::approve_bounty_submission(Origin::signed(1), 2,),
+            Error::<Test>::SubmissionDNE
+        );
+        assert_noop!(
+            Bounty2::approve_bounty_submission(Origin::signed(2), 1,),
+            Error::<Test>::NotAuthorizedToApproveBountySubmissions
+        );
+        assert_ok!(Bounty2::approve_bounty_submission(Origin::signed(1), 1,));
+    });
 }
