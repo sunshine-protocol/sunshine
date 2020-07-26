@@ -7133,6 +7133,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "sunshine-drip"
+version = "0.2.0"
+dependencies = [
+ "clear_on_drop",
+ "frame-support",
+ "frame-system",
+ "pallet-balances",
+ "parity-scale-codec",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+ "sunshine-bounty-utils",
+]
+
+[[package]]
 name = "sunshine-identity-cli"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
