@@ -6,6 +6,7 @@ use frame_support::{
     impl_outer_origin,
     parameter_types,
     weights::Weight,
+    traits::OnFinalize,
 };
 use sp_core::H256;
 use sp_runtime::{
