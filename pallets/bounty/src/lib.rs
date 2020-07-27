@@ -23,10 +23,7 @@ use frame_support::{
     },
     Parameter,
 };
-use frame_system::{
-    self as system,
-    ensure_signed,
-};
+use frame_system::ensure_signed;
 use sp_runtime::{
     traits::{
         AtLeast32Bit,

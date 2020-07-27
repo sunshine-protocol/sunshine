@@ -42,7 +42,6 @@ parameter_types! {
     pub const MaximumBlockWeight: Weight = 1024;
     pub const MaximumBlockLength: u32 = 2 * 1024;
     pub const AvailableBlockRatio: Perbill = Perbill::one();
-    pub const ReservationLimit: u32 = 10000;
 }
 impl frame_system::Trait for Test {
     type Origin = Origin;
@@ -69,6 +68,7 @@ impl frame_system::Trait for Test {
     type OnNewAccount = ();
     type OnKilledAccount = ();
     type BaseCallFilter = ();
+    type SystemWeightInfo = ();
 }
 parameter_types! {
     pub const ExistentialDeposit: u64 = 1;
@@ -79,6 +79,7 @@ impl pallet_balances::Trait for Test {
     type DustRemoval = ();
     type ExistentialDeposit = ExistentialDeposit;
     type AccountStore = System;
+    type WeightInfo = ();
 }
 parameter_types! {
     pub const TreasuryModuleId: ModuleId = ModuleId(*b"py/trsry");

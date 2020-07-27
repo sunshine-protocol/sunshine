@@ -139,7 +139,7 @@ decl_module! {
             let source = ensure_signed(origin)?;
             let first_payment_block = Self::first_next_block_mod_period_is_zero(rate.period_length())
                 .ok_or(Error::<T>::RatePeriodLengthMustBeGreaterThanZero)?;
-            ensure!(&source != &destination, Error::<T>::DoNotDripToSelf);
+            ensure!(source != destination, Error::<T>::DoNotDripToSelf);
             ensure!(rate.amount() > 0u32.into(), Error::<T>::RateAmountMustBeGreaterThanZero);
             let drip = Drip::new(source.clone(), destination.clone(), rate);
             let id = Self::generate_unique_id();
@@ -165,7 +165,7 @@ decl_module! {
         ) -> DispatchResult {
             let caller = ensure_signed(origin)?;
             let drip = <Drips<T>>::get(id).ok_or(Error::<T>::DripDNE)?;
-            ensure!(&drip.source() == &caller, Error::<T>::NotAuthorizedToCancelDrip);
+            ensure!(drip.source() == caller, Error::<T>::NotAuthorizedToCancelDrip);
             <Drips<T>>::remove(id);
             OpenDripCounter::mutate(|n| *n -= 1u32);
             let now = <system::Module<T>>::block_number();
@@ -212,12 +212,14 @@ impl<T: Trait> Module<T> {
     fn pay(drip: Drip<T::AccountId, DripRate<T::BlockNumber, BalanceOf<T>>>) {
         let (src, dest, amt) =
             (&drip.source(), &drip.destination(), drip.rate().amount());
-        if let Ok(_) = T::Currency::transfer(
+        if T::Currency::transfer(
             src,
             dest,
             amt,
             ExistenceRequirement::KeepAlive,
-        ) {
+        )
+        .is_ok()
+        {
             Self::deposit_event(RawEvent::Dripped(
                 drip.source(),
                 drip.destination(),

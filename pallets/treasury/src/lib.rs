@@ -40,7 +40,6 @@ decl_event!(
         <T as system::Trait>::BlockNumber,
         Balance = BalanceOf<T>,
     {
-        // TODO: I would like for this to emit the rate of minting as well?
         TreasuryMinting(Balance, BlockNumber, AccountId),
     }
 );

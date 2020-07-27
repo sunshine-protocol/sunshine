@@ -286,6 +286,7 @@ impl frame_system::Trait for Runtime {
     /// The data to be stored in an account.
     type AccountData = pallet_balances::AccountData<Balance>;
     type BaseCallFilter = ();
+    type SystemWeightInfo = ();
 }
 
 impl pallet_aura::Trait for Runtime {
@@ -320,6 +321,7 @@ impl pallet_indices::Trait for Runtime {
     type Event = Event;
     type Currency = Balances;
     type Deposit = IndexDeposit;
+    type WeightInfo = ();
 }
 
 parameter_types! {
@@ -331,6 +333,7 @@ impl pallet_timestamp::Trait for Runtime {
     type Moment = u64;
     type OnTimestampSet = Aura;
     type MinimumPeriod = MinimumPeriod;
+    type WeightInfo = ();
 }
 
 parameter_types! {
@@ -345,6 +348,7 @@ impl pallet_balances::Trait for Runtime {
     type DustRemoval = ();
     type ExistentialDeposit = ExistentialDeposit;
     type AccountStore = System;
+    type WeightInfo = ();
 }
 
 parameter_types! {
@@ -362,15 +366,11 @@ impl pallet_sudo::Trait for Runtime {
     type Event = Event;
     type Call = Call;
 }
-parameter_types! {
-    pub const ReservationLimit: u32 = 10000;
-}
 impl org::Trait for Runtime {
     type Event = Event;
     type IpfsReference = CidBytes;
     type OrgId = u64;
     type Shares = u64;
-    type ReservationLimit = ReservationLimit;
 }
 impl vote::Trait for Runtime {
     type Event = Event;
@@ -385,6 +385,11 @@ impl court::Trait for Runtime {
     type Currency = Balances;
     type DisputeId = u64;
     type MinimumDisputeAmount = MinimumDisputeAmount;
+}
+impl drip::Trait for Runtime {
+    type Event = Event;
+    type DripId = u64;
+    type Currency = Balances;
 }
 parameter_types! {
     pub const TreasuryModuleId: ModuleId = ModuleId(*b"py/trsry");
@@ -427,7 +432,7 @@ construct_runtime!(
         System: frame_system::{Module, Call, Config, Storage, Event<T>},
         RandomnessCollectiveFlip: pallet_randomness_collective_flip::{Module, Call, Storage},
         Timestamp: pallet_timestamp::{Module, Call, Storage, Inherent},
-        Aura: pallet_aura::{Module, Config<T>, Inherent(Timestamp)},
+        Aura: pallet_aura::{Module, Config<T>, Inherent},
         Grandpa: pallet_grandpa::{Module, Call, Storage, Config, Event},
         Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
         TransactionPayment: pallet_transaction_payment::{Module, Storage},
@@ -437,6 +442,7 @@ construct_runtime!(
         Org: org::{Module, Call, Config<T>, Storage, Event<T>},
         Vote: vote::{Module, Call, Storage, Event<T>},
         Court: court::{Module, Call, Storage, Event<T>},
+        Drip: drip::{Module, Call, Storage, Event<T>},
         Treasury: treasury::{Module, Call, Config<T>, Storage, Event<T>},
         Donate: donate::{Module, Call, Event<T>},
         Bank: bank::{Module, Call, Storage, Event<T>},
@@ -564,7 +570,7 @@ impl_runtime_apis! {
         fn grandpa_authorities() -> GrandpaAuthorityList {
             Grandpa::grandpa_authorities()
         }
-        fn submit_report_equivocation_extrinsic(
+        fn submit_report_equivocation_unsigned_extrinsic(
             _equivocation_proof: fg_primitives::EquivocationProof<
                 <Block as BlockT>::Hash,
                 NumberFor<Block>,

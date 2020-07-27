@@ -22,3 +22,8 @@ members = [
     "pallets/vote",
     "utils",
 ]
+
+[patch.crates-io]
+substrate-subxt = { git = "https://github.com/paritytech/substrate-subxt" }
+sunshine-identity-cli = { git = "https://github.com/sunshine-protocol/sunshine-identity" }
+keybase-keystore = { git = "https://github.com/sunshine-protocol/sunshine-identity" }

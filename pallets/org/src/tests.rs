@@ -40,7 +40,6 @@ parameter_types! {
     pub const MaximumBlockWeight: Weight = 1024;
     pub const MaximumBlockLength: u32 = 2 * 1024;
     pub const AvailableBlockRatio: Perbill = Perbill::one();
-    pub const ReservationLimit: u32 = 10000;
 }
 impl frame_system::Trait for TestRuntime {
     type Origin = Origin;
@@ -67,13 +66,13 @@ impl frame_system::Trait for TestRuntime {
     type OnNewAccount = ();
     type OnKilledAccount = ();
     type BaseCallFilter = ();
+    type SystemWeightInfo = ();
 }
 impl Trait for TestRuntime {
     type Event = TestEvent;
     type IpfsReference = u32; // TODO: replace with utils_identity::Cid
     type OrgId = u64;
     type Shares = u64;
-    type ReservationLimit = ReservationLimit;
 }
 pub type System = system::Module<TestRuntime>;
 pub type Org = Module<TestRuntime>;

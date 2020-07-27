@@ -6,8 +6,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- minimal `sunshine-treasury` pallet, extracted from `sunshine-donate` pallet
-- `OffchainClient` to use ipfs-embed in a structured way (`client/client/src/lib.rs`)
+- `OffchainClient` uses ipfs-embed in a structured way (`client/client/src/lib.rs`)
 
 ## [0.1.1] - 2020-07-15
 
