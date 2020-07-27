@@ -4,9 +4,9 @@ version = '0.0.1'
 authors = ['4meta5']
 edition = '2018'
 
-license = 'GPL3'
-description = 'Sunshine substrate node.'
-homepage = 'https://joinsunshine.com'
+license = 'GPL-3.0'
+description = 'sunshine bounty node'
+homepage = 'https://sunshine.foundation'
 repository = 'https://github.com/sunshine-protocol/sunshine-bounty'
 
 [build-dependencies]

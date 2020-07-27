@@ -55,13 +55,17 @@ pub fn get_authority_keys_from_seed(s: &str) -> (AuraId, GrandpaId) {
     (get_from_seed::<AuraId>(s), get_from_seed::<GrandpaId>(s))
 }
 
-pub fn development_config() -> ChainSpec {
-    ChainSpec::from_genesis(
+pub fn development_config() -> Result<ChainSpec, String> {
+    let wasm_binary = WASM_BINARY
+        .ok_or("Development wasm binary not available".to_string())?;
+
+    Ok(ChainSpec::from_genesis(
         "Development",
         "dev",
         ChainType::Development,
-        || {
+        move || {
             testnet_genesis(
+                wasm_binary,
                 // initial authorities
                 vec![get_authority_keys_from_seed("Alice")],
                 // root key
@@ -89,16 +93,20 @@ pub fn development_config() -> ChainSpec {
         None,
         None,
         None,
-    )
+    ))
 }
 
-pub fn local_testnet_config() -> ChainSpec {
-    ChainSpec::from_genesis(
+pub fn local_testnet_config() -> Result<ChainSpec, String> {
+    let wasm_binary = WASM_BINARY
+        .ok_or("Development wasm binary not available".to_string())?;
+
+    Ok(ChainSpec::from_genesis(
         "Local Testnet",
         "local_testnet",
         ChainType::Local,
-        || {
+        move || {
             testnet_genesis(
+                wasm_binary,
                 // initial authorities
                 vec![
                     get_authority_keys_from_seed("Alice"),
@@ -145,10 +153,11 @@ pub fn local_testnet_config() -> ChainSpec {
         None,
         None,
         None,
-    )
+    ))
 }
 
 pub fn testnet_genesis(
+    wasm_binary: &[u8],
     initial_authorities: Vec<(AuraId, GrandpaId)>,
     root_key: AccountId,
     endowed_accounts: Vec<AccountId>,
@@ -159,7 +168,7 @@ pub fn testnet_genesis(
 ) -> GenesisConfig {
     GenesisConfig {
         frame_system: Some(SystemConfig {
-            code: WASM_BINARY.to_vec(),
+            code: wasm_binary.to_vec(),
             changes_trie_config: Default::default(),
         }),
         org: Some(OrgConfig {
