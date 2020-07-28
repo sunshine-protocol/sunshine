@@ -69,11 +69,37 @@ use util::{
     },
 };
 
-/// The balances type for this module
+// type aliases
 type BalanceOf<T> = <<T as donate::Trait>::Currency as Currency<
     <T as frame_system::Trait>::AccountId,
 >>::Balance;
 type FoundationIndex = u32;
+type FoundationOf<T> = Foundation<
+    <T as org::Trait>::IpfsReference,
+    <T as frame_system::Trait>::AccountId,
+    BalanceOf<T>,
+    ResolutionMetadata<
+        <T as frame_system::Trait>::AccountId,
+        OrgRep<<T as org::Trait>::OrgId>,
+        PercentageThreshold<Permill>,
+    >,
+>;
+type ApplicationOf<T> = GrantApplication<
+    FoundationIndex,
+    <T as org::Trait>::IpfsReference,
+    <T as frame_system::Trait>::AccountId,
+    <T as org::Trait>::OrgId,
+    BalanceOf<T>,
+    ApplicationState<<T as vote::Trait>::VoteId>,
+>;
+type MilestoneOf<T> = MilestoneSubmission<
+    <T as Trait>::ApplicationId,
+    <T as org::Trait>::IpfsReference,
+    <T as frame_system::Trait>::AccountId,
+    <T as org::Trait>::OrgId,
+    BalanceOf<T>,
+    MilestoneStatus<<T as vote::Trait>::VoteId>,
+>;
 
 pub trait Trait:
     frame_system::Trait + org::Trait + vote::Trait + donate::Trait
@@ -139,6 +165,7 @@ decl_error! {
         // Foundation Does Not Exist
         FoundationDNE,
         ApplicationDNE,
+        MilestoneDNE,
         NotAuthorizedToApplyForOutsideTeam,
         NotAuthorizedToSubmitMilestone,
     }
@@ -157,47 +184,18 @@ decl_storage! {
 
         // Foundations
         pub Foundations get(fn foundations): map
-            hasher(blake2_128_concat) FoundationIndex => Option<
-                Foundation<
-                    T::IpfsReference,
-                    T::AccountId,
-                    BalanceOf<T>,
-                    ResolutionMetadata<
-                        T::AccountId,
-                        OrgRep<T::OrgId>,
-                        PercentageThreshold<Permill>,
-                    >,
-                >
-            >;
+            hasher(blake2_128_concat) FoundationIndex => Option<FoundationOf<T>>;
 
         /// Total number of open foundations
         pub FoundationCounter get(fn foundation_counter): u32;
 
         // Applications
         pub Applications get(fn applications): map
-            hasher(blake2_128_concat) T::ApplicationId => Option<
-                GrantApplication<
-                    FoundationIndex,
-                    T::IpfsReference,
-                    T::AccountId,
-                    T::OrgId,
-                    BalanceOf<T>,
-                    ApplicationState<T::VoteId>,
-                >
-            >;
+            hasher(blake2_128_concat) T::ApplicationId => Option<ApplicationOf<T>>;
 
         // Milestones
         pub Milestones get(fn milestones): map
-            hasher(blake2_128_concat) T::MilestoneId => Option<
-                MilestoneSubmission<
-                    T::ApplicationId,
-                    T::IpfsReference,
-                    T::AccountId,
-                    T::OrgId,
-                    BalanceOf<T>,
-                    MilestoneStatus<T::VoteId>,
-                >
-            >;
+            hasher(blake2_128_concat) T::MilestoneId => Option<MilestoneOf<T>>;
 
         /// Frequency with which applications are polled and dealt with
         pub ApplicationPollFrequency get(fn application_poll_frequency) config(): T::BlockNumber;
@@ -281,6 +279,19 @@ decl_module! {
             Self::deposit_event(RawEvent::MilestoneSubmitted(application, id, submitter, team, payment, submission));
             Ok(())
         } // TODO: trigger review -> poll in on_finalize
+        #[weight = 0]
+        fn trigger_milestone_review(
+            origin,
+            milestone_id: T::MilestoneId,
+        ) -> DispatchResult {
+            let trigger = ensure_signed(origin)?;
+            // TODO: extract into separate method
+            let milestone = <Milestones<T>>::get(milestone_id).ok_or(Error::<T>::MilestoneDNE)?;
+            let app = <Applications<T>>::get(milestone.app_ref()).ok_or(Error::<T>::ApplicationDNE)?;
+            let foundation = <Foundations<T>>::get(app.foundation()).ok_or(Error::<T>::FoundationDNE)?;
+
+            Ok(())
+        }
     }
 }
 
@@ -319,6 +330,10 @@ impl<T: Trait> Module<T> {
         <MilestoneNonce<T>>::put(id_counter);
         id_counter
     }
+}
+
+// Submission and trigger helper methods
+impl<T: Trait> Module<T> {
     fn can_submit_milestone(
         app: T::ApplicationId,
         submitter: &T::AccountId,
@@ -326,7 +341,53 @@ impl<T: Trait> Module<T> {
     ) -> Result<bool, DispatchError> {
         let application =
             <Applications<T>>::get(app).ok_or(Error::<T>::ApplicationDNE)?;
+        // ensure that the application is approved?
         todo!() // use `is_child_org()`
+    }
+    fn can_trigger_app_review(
+        app: T::ApplicationId,
+        trigger: &T::AccountId,
+    ) -> Result<
+        (
+            T::IpfsReference,
+            T::ApplicationId,
+            ApplicationOf<T>,
+            FoundationOf<T>,
+        ),
+        DispatchError,
+    > {
+        todo!()
+    }
+    fn can_trigger_milestone_review(
+        milestone: T::MilestoneId,
+        trigger: &T::AccountId,
+    ) -> Result<
+        (
+            T::IpfsReference,
+            T::MilestoneId,
+            MilestoneOf<T>,
+            FoundationOf<T>,
+        ),
+        DispatchError,
+    > {
+        todo!()
+    }
+    fn dispatch_app_review(
+        id: T::ApplicationId,
+        app: ApplicationOf<T>,
+        foundation: FoundationOf<T>,
+    ) -> Result<T::VoteId, DispatchError> {
+        // update Foundation
+        todo!()
+    }
+    fn dispatch_milestone_review(
+        id: T::MilestoneId,
+        mile: MilestoneOf<T>,
+        foundation: FoundationOf<T>,
+        reviewer: Option<T::OrgId>,
+    ) -> Result<T::VoteId, DispatchError> {
+        // update and insert
+        todo!()
     }
 }
 
