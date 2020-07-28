@@ -97,6 +97,8 @@ pub enum SubmissionState<BlockNumber, VoteId> {
     ApprovedAndScheduled(BlockNumber),
     // wraps a vote_id for the acceptance committee
     ChallengedAndUnderReview(VoteId),
+    // challenged and accepted again, scheduled for execution
+    ApprovedAfterChallenge(BlockNumber),
     // closed for some reason, either approved or rejected
     Closed,
 }
@@ -118,6 +120,12 @@ impl<
     pub fn under_review(&self) -> Option<VoteId> {
         match self {
             SubmissionState::ChallengedAndUnderReview(n) => Some(*n),
+            _ => None,
+        }
+    }
+    pub fn approved_after_challenge(&self) -> Option<BlockNumber> {
+        match self {
+            SubmissionState::ApprovedAfterChallenge(n) => Some(*n),
             _ => None,
         }
     }
@@ -239,6 +247,9 @@ impl<
     }
     pub fn under_review(&self) -> Option<VoteId> {
         self.state.under_review()
+    }
+    pub fn approved_after_challenge(&self) -> Option<BlockNumber> {
+        self.state.approved_after_challenge()
     }
     pub fn closed(&self) -> bool {
         self.state.closed()

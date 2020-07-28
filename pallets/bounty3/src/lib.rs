@@ -4,8 +4,8 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 //! The bounty module allows any `AccountId` to post bounties with rules for approval
 
-#[cfg(test)]
-mod tests;
+// #[cfg(test)]
+// mod tests;
 
 use codec::Codec;
 use frame_support::{
@@ -52,12 +52,10 @@ use util::{
             PostBounty,
             SubmitForBounty,
         },
-        GetVoteOutcome,
         GroupMembership,
         IDIsAvailable,
         OpenThresholdVote,
     },
-    vote::VoteOutcome,
 };
 
 /// The balances type for this module
@@ -265,13 +263,11 @@ decl_module! {
         fn on_finalize(n: T::BlockNumber) {
             let now = <frame_system::Module<T>>::block_number();
             if now % Self::submission_poll_frequency() == Zero::zero() {
-                // iterate through the submissions
-                // (1) execute approved && past || equal to scheduled execution time
-                <Submissions<T>>::iter().filter(|(_, sub)| {
+                // go through the submissions
+                let sub_iter = <Submissions<T>>::iter();
+                sub_iter.filter(|(_, sub)| {
                     if let Some(execute) = sub.approved_and_scheduled() {
                         execute >= now
-                    } else if let Some(exec) = sub.approved_after_challenge() {
-                        exec >= now
                     } else {
                         false
                     }
@@ -280,6 +276,7 @@ decl_module! {
                     if let Some(bounty) = <Bounties<T>>::get(sub.bounty()) {
                         let expected_amt = sub.amount();
                         if let Some(paid_bounty) = bounty.pay_out_funding(expected_amt) {
+                            // TODO: if let Some make bounty transfer
                             if let Some(remainder) = Self::make_bounty_transfer(
                                 &bounty.poster(),
                                 &sub.submitter(),
@@ -296,8 +293,8 @@ decl_module! {
                             } else {
                                 // update storage items to reflect paid out submission
                                 if paid_bounty.funding_reserved() == Zero::zero() {
-                                    // TODO: add notification option for supervisor to top up bounty
-                                    Self::recursive_remove_bounty(sub.bounty());
+                                    <Bounties<T>>::remove(sub.bounty());
+                                    // TODO: remove all submissions with this bounty identifier
                                 } else {
                                     <Bounties<T>>::insert(sub.bounty(), paid_bounty);
                                 }
@@ -306,27 +303,10 @@ decl_module! {
                         }
                     }
                 });
-                // (2) poll challenged submission approvals and deal with outcome
-                let _ = <Submissions<T>>::iter().filter(|(_, sub)| sub.under_review().is_some())
-                    .map(|(id, app)| -> DispatchResult {
-                        if let Some(vote_id) = app.under_review() {
-                            let status = <vote::Module<T>>::get_vote_outcome(vote_id)?;
-                            match status {
-                                VoteOutcome::Approved => {
-                                    let scheduled_time = now + T::ChallengePeriod::get();
-                                    // approve and schedule
-                                    let approved_app = app.set_state(SubmissionState::ApprovedAfterChallenge(scheduled_time));
-                                    <Submissions<T>>::insert(id, approved_app);
-                                    Ok(())
-                                }
-                                VoteOutcome::Rejected => {
-                                    <Submissions<T>>::remove(id);
-                                    Ok(())
-                                }
-                                _ => Ok(()),
-                            }
-                        } else { Ok(()) }
-                    }).collect::<DispatchResult>();
+                // TODO
+                // if approved && past challenge period, execute payment
+                // if challenged, poll and get response
+                // if rejected, remove the submission
             }
         }
     }
@@ -355,12 +335,6 @@ impl<T: Trait> Module<T> {
         <SubmissionNonce<T>>::put(id_counter);
         id_counter
     }
-    fn recursive_remove_bounty(id: T::BountyId) {
-        <Bounties<T>>::remove(id);
-        <Submissions<T>>::iter()
-            .filter(|(_, app)| app.bounty() == id)
-            .for_each(|(app_id, _)| <Submissions<T>>::remove(app_id));
-    }
     fn make_bounty_transfer(
         poster: &T::AccountId,
         submitter: &T::AccountId,
@@ -385,7 +359,18 @@ impl<T: Trait> Module<T> {
                 }
             } else {
                 // if donate fails, just try to transfer to submitter
-                Some(amount)
+                if T::Currency::transfer(
+                    poster,
+                    submitter,
+                    amount,
+                    ExistenceRequirement::KeepAlive,
+                )
+                .is_ok()
+                {
+                    None
+                } else {
+                    Some(amount)
+                }
             }
         } else if T::Currency::transfer(
             poster,
