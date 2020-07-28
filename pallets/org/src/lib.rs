@@ -146,6 +146,7 @@ decl_event!(
 
 decl_error! {
     pub enum Error for Module<T: Trait> {
+        OrgDNE,
         UnAuthorizedSwapSudoRequest,
         NoExistingSudoKey,
         OrganizationMustExistToClearSupervisor,
@@ -376,6 +377,17 @@ decl_module! {
     }
 }
 
+impl<T: Trait> Module<T> {
+    pub fn is_child_org(
+        parent: Option<T::OrgId>,
+        child: T::OrgId,
+    ) -> Result<bool, DispatchError> {
+        let child_org =
+            <OrganizationStates<T>>::get(child).ok_or(Error::<T>::OrgDNE)?;
+        Ok(child_org.parent() == parent)
+    }
+}
+
 impl<T: Trait> GroupMembership<T::OrgId, T::AccountId> for Module<T> {
     fn is_member_of_group(org_id: T::OrgId, who: &T::AccountId) -> bool {
         <Members<T>>::get(org_id, who).is_some()
@@ -485,7 +497,7 @@ impl<T: Trait> RegisterOrganization<T::OrgId, T::AccountId, T::IpfsReference>
         value_constitution: T::IpfsReference,
     ) -> Result<T::OrgId, DispatchError> {
         let new_org_id = Self::generate_unique_id();
-        // TODO: could check if parent has a child_id and limit depth with a module constant; seems like a good idea, unbounded size not good in runtime context
+        // TODO: bound depth instead of current unbounded size
         let new_organization = Self::organization_from_src(
             source,
             new_org_id,
