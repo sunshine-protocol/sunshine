@@ -22,7 +22,7 @@ identity-utils = { package = "sunshine-identity-utils", version = "0.2.0" }
 ipfs-embed = "0.3.0"
 ipld-block-builder = "0.4.1"
 libipld = { version = "0.3.0", default-features = false }
-sled = "0.32.1"
+sled = "0.34.0"
 substrate-subxt = { version = "0.10.1", features = ["client"] }
 substrate-keybase-keystore = "0.2.0"
 sunshine-core = "0.2.0"
