@@ -107,10 +107,7 @@ impl<
     > SubmissionState<BlockNumber, VoteId>
 {
     pub fn awaiting_review(&self) -> bool {
-        match self {
-            SubmissionState::SubmittedAwaitingResponse => true,
-            _ => false,
-        }
+        matches!(self, SubmissionState::SubmittedAwaitingResponse)
     }
     pub fn approved_and_scheduled(&self) -> Option<BlockNumber> {
         match self {
@@ -125,10 +122,7 @@ impl<
         }
     }
     pub fn closed(&self) -> bool {
-        match self {
-            SubmissionState::Closed => true,
-            _ => false,
-        }
+        matches!(self, SubmissionState::Closed)
     }
 }
 
