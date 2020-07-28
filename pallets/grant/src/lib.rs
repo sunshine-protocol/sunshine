@@ -39,13 +39,6 @@ use sp_std::{
     prelude::*,
 };
 use util::{
-    bounty2::{
-        BountyInformation,
-        BountySubmission,
-        PercentageThreshold,
-        ResolutionMetadata,
-        SubmissionState,
-    },
     organization::OrgRep,
     traits::{
         bounty2::{

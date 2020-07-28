@@ -143,7 +143,7 @@ pub trait RegisterOrganization<OrgId, AccountId, Hash> {
 }
 pub trait RemoveOrganization<OrgId> {
     // returns Ok(Some(child_id)) or Ok(None) if leaf org
-    fn remove_organization(id: OrgId) -> Result<Option<Vec<OrgId>>>;
+    fn remove_organization(id: OrgId) -> DispatchResult;
     fn recursive_remove_organization(id: OrgId) -> DispatchResult;
 }
 
