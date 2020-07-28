@@ -1,11 +1,11 @@
 [package]
-name = "test-cli"
-version = "0.1.0"
+name = "bounty-cli"
+version = "0.2.0"
 authors = ["David Craven <david@craven.ch>, Amar Singh <asinghchrony@protonmail.com>"]
 edition = "2018"
 
 [dependencies]
-async-std = { version = "=1.5.0", features = ["attributes"] }
+async-std = { version = "1.6.2", features = ["attributes"] }
 exitfailure = "0.5.1"
 clap = "3.0.0-beta.1"
 dirs = "3.0.1"

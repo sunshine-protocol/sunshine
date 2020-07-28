@@ -105,7 +105,7 @@ where
             )
             .await?
             .new_vote_started()?
-            .ok_or(Error::EventNotFound.into())
+            .ok_or_else(|| Error::EventNotFound.into())
     }
     async fn create_signal_threshold_vote_flat(
         &self,
@@ -132,7 +132,7 @@ where
             )
             .await?
             .new_vote_started()?
-            .ok_or(Error::EventNotFound.into())
+            .ok_or_else(|| Error::EventNotFound.into())
     }
     async fn create_percent_threshold_vote_weighted(
         &self,
@@ -159,7 +159,7 @@ where
             )
             .await?
             .new_vote_started()?
-            .ok_or(Error::EventNotFound.into())
+            .ok_or_else(|| Error::EventNotFound.into())
     }
     async fn create_percent_threshold_vote_flat(
         &self,
@@ -186,7 +186,7 @@ where
             )
             .await?
             .new_vote_started()?
-            .ok_or(Error::EventNotFound.into())
+            .ok_or_else(|| Error::EventNotFound.into())
     }
     async fn create_unanimous_consent_vote(
         &self,
@@ -209,7 +209,7 @@ where
             )
             .await?
             .new_vote_started()?
-            .ok_or(Error::EventNotFound.into())
+            .ok_or_else(|| Error::EventNotFound.into())
     }
     async fn submit_vote(
         &self,
@@ -227,6 +227,6 @@ where
             .submit_vote_and_watch(signer, vote_id, direction, justification)
             .await?
             .voted()?
-            .ok_or(Error::EventNotFound.into())
+            .ok_or_else(|| Error::EventNotFound.into())
     }
 }

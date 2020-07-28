@@ -47,7 +47,7 @@ where
             .make_prop_donation_and_watch(signer, org, amt)
             .await?
             .prop_donation_executed()?
-            .ok_or(Error::EventNotFound.into())
+            .ok_or_else(|| Error::EventNotFound.into())
     }
     async fn make_equal_donation(
         &self,
@@ -59,6 +59,6 @@ where
             .make_equal_donation_and_watch(signer, org, amt)
             .await?
             .equal_donation_executed()?
-            .ok_or(Error::EventNotFound.into())
+            .ok_or_else(|| Error::EventNotFound.into())
     }
 }

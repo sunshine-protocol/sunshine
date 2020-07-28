@@ -3,36 +3,37 @@ use crate::{
     cli::Cli,
     service,
 };
-use sc_cli::SubstrateCli;
-use sp_consensus_aura::sr25519::AuthorityPair as AuraPair;
+use sc_cli::{
+    ChainSpec,
+    Role,
+    RuntimeVersion,
+    SubstrateCli,
+};
+use sc_service::ServiceParams;
 
 impl SubstrateCli for Cli {
-    fn impl_name() -> &'static str {
-        crate::IMPL_NAME
+    fn impl_name() -> String {
+        crate::IMPL_NAME.to_string()
     }
 
-    fn impl_version() -> &'static str {
-        crate::IMPL_VERSION
+    fn impl_version() -> String {
+        crate::IMPL_VERSION.to_string()
     }
 
-    fn description() -> &'static str {
-        crate::DESCRIPTION
+    fn description() -> String {
+        crate::DESCRIPTION.to_string()
     }
 
-    fn author() -> &'static str {
-        crate::AUTHOR
+    fn author() -> String {
+        crate::AUTHOR.to_string()
     }
 
-    fn support_url() -> &'static str {
-        crate::SUPPORT_URL
+    fn support_url() -> String {
+        crate::SUPPORT_URL.to_string()
     }
 
     fn copyright_start_year() -> i32 {
         crate::COPYRIGHT_START_YEAR
-    }
-
-    fn executable_name() -> &'static str {
-        crate::EXECUTABLE_NAME
     }
 
     fn load_spec(
@@ -49,6 +50,12 @@ impl SubstrateCli for Cli {
             }
         })
     }
+
+    fn native_runtime_version(
+        _: &Box<dyn ChainSpec>,
+    ) -> &'static RuntimeVersion {
+        &suntime::VERSION
+    }
 }
 
 /// Parse and run command line arguments
@@ -59,16 +66,25 @@ pub fn run() -> sc_cli::Result<()> {
         Some(subcommand) => {
             let runner = cli.create_runner(subcommand)?;
             runner.run_subcommand(subcommand, |config| {
-                Ok(new_full_start!(config).0)
+                let ServiceParams {
+                    client,
+                    backend,
+                    task_manager,
+                    import_queue,
+                    ..
+                } = service::new_full_params(config)?.0;
+                Ok((client, backend, import_queue, task_manager))
             })
         }
         None => {
             let runner = cli.create_runner(&cli.run)?;
-            runner.run_node(
-                service::new_light,
-                service::new_full,
-                suntime::VERSION,
-            )
+            runner.run_node_until_exit(|config| {
+                match config.role {
+                    Role::Light => service::new_light(config),
+                    _ => service::new_full(config),
+                }
+                .map(|service| service.0)
+            })
         }
     }
 }

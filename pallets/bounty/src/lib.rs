@@ -23,10 +23,7 @@ use frame_support::{
     },
     Parameter,
 };
-use frame_system::{
-    self as system,
-    ensure_signed,
-};
+use frame_system::ensure_signed;
 use sp_runtime::{
     traits::{
         AtLeast32Bit,
@@ -57,21 +54,23 @@ use util::{
     court::ResolutionMetadata,
     organization::OrgRep,
     traits::{
-        ApproveGrant,
-        ApproveWithoutTransfer,
+        bounty::{
+            ApproveGrant,
+            ApproveWithoutTransfer,
+            PostBounty,
+            ReturnsBountyIdentifier,
+            StartReview,
+            SubmitGrantApplication,
+            SubmitMilestone,
+            SuperviseGrantApplication,
+        },
         GenerateUniqueID,
         GetVoteOutcome,
         GroupMembership,
         IDIsAvailable,
         OpenVote,
         OrganizationSupervisorPermissions,
-        PostBounty,
-        ReturnsBountyIdentifier,
         SeededGenerateUniqueID,
-        StartReview,
-        SubmitGrantApplication,
-        SubmitMilestone,
-        SuperviseGrantApplication,
     },
     vote::VoteOutcome,
 };

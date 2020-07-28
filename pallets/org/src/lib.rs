@@ -45,7 +45,6 @@ use frame_support::{
         IterableStorageDoubleMap,
         IterableStorageMap,
     },
-    traits::Get,
     Parameter,
 };
 use frame_system::{
@@ -104,10 +103,6 @@ pub trait Trait: system::Trait {
         + CheckedSub
         + Zero
         + AtLeast32BitUnsigned;
-
-    /// The hard limit on the number of times shares can be reserved
-    /// - why? we need to track how much the group check is called and limit it somehow and this is the best I've come up with for now...TODO: make issue and get feedback
-    type ReservationLimit: Get<u32>;
 }
 
 decl_event!(
@@ -162,7 +157,6 @@ decl_error! {
         IssuanceWouldOverflowShares,
         IssuanceGoesNegativeWhileRemovingMember,
         CannotReserveMoreThanShareTotal,
-        ReservationWouldExceedHardLimit,
         CannotUnReserveMoreThanShareTotal,
         CannotLockIfAlreadyLocked,
         CannotUnLockIfAlreadyUnLocked,
@@ -699,13 +693,6 @@ impl<T: Trait> ReserveProfile<T::OrgId, T::AccountId, T::Shares> for Module<T> {
         } else {
             old_profile.total()
         };
-        // increment times_reserved
-        let times_reserved = old_profile.times_reserved() + 1u32;
-        // make sure it's below the hard reservation limit
-        ensure!(
-            times_reserved < T::ReservationLimit::get(),
-            Error::<T>::ReservationWouldExceedHardLimit
-        );
         // instantiate new share profile which just iterates times_reserved
         let new_share_profile = old_profile.increment_times_reserved();
         <Members<T>>::insert(organization, who, new_share_profile);
@@ -727,11 +714,6 @@ impl<T: Trait> ReserveProfile<T::OrgId, T::AccountId, T::Shares> for Module<T> {
         } else {
             old_profile.total()
         };
-        // make sure there is some existing reservation which is being closed
-        ensure!(
-            old_profile.times_reserved() > 0,
-            Error::<T>::ReservationWouldExceedHardLimit
-        );
         // instantiate new share profile which just iterates times_reserved
         let new_share_profile = old_profile.decrement_times_reserved();
         <Members<T>>::insert(organization, who, new_share_profile);

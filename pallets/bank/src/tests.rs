@@ -7,6 +7,7 @@ use frame_support::{
     parameter_types,
     weights::Weight,
 };
+use frame_system::{self as system,};
 use sp_core::H256;
 use sp_runtime::{
     testing::Header,
@@ -49,7 +50,6 @@ parameter_types! {
     pub const MaximumBlockWeight: Weight = 1024;
     pub const MaximumBlockLength: u32 = 2 * 1024;
     pub const AvailableBlockRatio: Perbill = Perbill::one();
-    pub const ReservationLimit: u32 = 10000;
 }
 impl frame_system::Trait for Test {
     type Origin = Origin;
@@ -76,6 +76,7 @@ impl frame_system::Trait for Test {
     type OnNewAccount = ();
     type OnKilledAccount = ();
     type BaseCallFilter = ();
+    type SystemWeightInfo = ();
 }
 parameter_types! {
     pub const ExistentialDeposit: u64 = 1;
@@ -86,13 +87,13 @@ impl pallet_balances::Trait for Test {
     type DustRemoval = ();
     type ExistentialDeposit = ExistentialDeposit;
     type AccountStore = System;
+    type WeightInfo = ();
 }
 impl org::Trait for Test {
     type Event = TestEvent;
     type IpfsReference = u32; // TODO: replace with utils_identity::Cid
     type OrgId = u64;
     type Shares = u64;
-    type ReservationLimit = ReservationLimit;
 }
 impl vote::Trait for Test {
     type Event = TestEvent;

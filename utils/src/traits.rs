@@ -358,142 +358,191 @@ pub trait SpendGovernance<BankId, Currency, AccountId> {
 
 // ~~~~~~~~ Bounty Module ~~~~~~~~
 
-pub trait ReturnsBountyIdentifier {
-    type BountyId;
+pub mod bounty {
+    use super::Result;
+    pub trait ReturnsBountyIdentifier {
+        type BountyId;
+    }
+
+    pub trait PostBounty<
+        AccountId,
+        OrgId,
+        SpendableBank,
+        Currency,
+        Hash,
+        ReviewCommittee,
+    >: ReturnsBountyIdentifier
+    {
+        type BountyInfo;
+        fn post_bounty(
+            poster: AccountId,
+            on_behalf_of: Option<SpendableBank>,
+            description: Hash,
+            amount_reserved_for_bounty: Currency,
+            acceptance_committee: ReviewCommittee,
+            supervision_committee: Option<ReviewCommittee>,
+        ) -> Result<Self::BountyId>;
+    }
+    // TODO: make an issue for this and prefer an impl that presents a multisig
+    pub trait UseTermsOfAgreement<OrgId> {
+        type VoteIdentifier;
+        fn request_consent_on_terms_of_agreement(
+            team_org: OrgId,
+        ) -> Result<Self::VoteIdentifier>;
+    }
+    pub trait StartTeamConsentPetition<VoteIdentifier>: Sized {
+        fn start_team_consent_petition(
+            &self,
+            vote_id: VoteIdentifier,
+        ) -> Option<Self>;
+        fn get_team_consent_vote_id(&self) -> Option<VoteIdentifier>;
+    }
+
+    pub trait StartReview<VoteIdentifier>: Sized {
+        fn start_review(&self, vote_id: VoteIdentifier) -> Option<Self>;
+        fn get_review_id(&self) -> Option<VoteIdentifier>;
+    }
+
+    pub trait ApproveWithoutTransfer: Sized {
+        // infallible
+        fn approve_without_transfer(&self) -> Self;
+    }
+
+    pub trait ApproveGrant: Sized {
+        fn approve_grant(&self) -> Self;
+        fn grant_approved(&self) -> bool;
+    }
+    // TODO: RevokeApprovedGrant<VoteID> => vote to take away the team's grant and clean storage
+
+    pub trait SpendApprovedGrant<Currency>: Sized {
+        fn spend_approved_grant(&self, amount: Currency) -> Option<Self>;
+    }
+
+    pub trait SubmitGrantApplication<AccountId, VoteId, BankId, Currency, Hash>:
+        ReturnsBountyIdentifier
+    {
+        type GrantApp: StartReview<VoteId> + ApproveGrant; //+ StartTeamConsentPetition<VoteId>
+        fn submit_grant_application(
+            submitter: AccountId,
+            bank: Option<BankId>,
+            bounty_id: Self::BountyId,
+            description: Hash,
+            total_amount: Currency,
+        ) -> Result<Self::BountyId>; // returns application identifier
+    }
+
+    pub trait SuperviseGrantApplication<BountyId, AccountId> {
+        type AppState;
+        fn trigger_application_review(
+            bounty_id: BountyId,
+            application_id: BountyId,
+        ) -> Result<Self::AppState>;
+        fn sudo_approve_application(
+            sudo: AccountId,
+            bounty_id: BountyId,
+            application_id: BountyId,
+        ) -> Result<Self::AppState>;
+        fn poll_application(
+            bounty_id: BountyId,
+            application_id: BountyId,
+        ) -> Result<Self::AppState>;
+    }
+
+    pub trait SubmitMilestone<
+        AccountId,
+        BountyId,
+        Hash,
+        Currency,
+        VoteId,
+        BankId,
+    >
+    {
+        type Milestone: StartReview<VoteId> + ApproveWithoutTransfer;
+        type MilestoneState;
+        fn submit_milestone(
+            submitter: AccountId,
+            bounty_id: BountyId,
+            application_id: BountyId,
+            submission_reference: Hash,
+            amount_requested: Currency,
+        ) -> Result<BountyId>; // returns milestone identifier
+        fn trigger_milestone_review(
+            bounty_id: BountyId,
+            milestone_id: BountyId,
+        ) -> Result<Self::MilestoneState>;
+        fn sudo_approves_milestone(
+            caller: AccountId,
+            bounty_id: BountyId,
+            milestone_id: BountyId,
+        ) -> Result<Self::MilestoneState>;
+        fn poll_milestone(
+            bounty_id: BountyId,
+            milestone_id: BountyId,
+        ) -> Result<Self::MilestoneState>;
+    }
+
+    // We could remove`can_submit_grant_app` or `can_submit_milestone` because both of these paths log the submitter
+    // in the associated state anyway so we might as well pass the caller into the methods that do this logic and
+    // perform any context-based authentication there, but readability is more important at this point
+    pub trait BountyPermissions<OrgId, TermsOfAgreement, AccountId, BountyId>:
+        UseTermsOfAgreement<OrgId>
+    {
+        fn can_create_bounty(who: &AccountId, hosting_org: OrgId) -> bool;
+        fn can_submit_grant_app(
+            who: &AccountId,
+            terms: TermsOfAgreement,
+        ) -> bool;
+        fn can_trigger_grant_app_review(
+            who: &AccountId,
+            bounty_id: BountyId,
+        ) -> Result<bool>;
+        fn can_poll_grant_app(
+            who: &AccountId,
+            bounty_id: BountyId,
+        ) -> Result<bool>;
+        fn can_submit_milestone(
+            who: &AccountId,
+            bounty_id: BountyId,
+            application_id: BountyId,
+        ) -> Result<bool>;
+        fn can_poll_milestone(
+            who: &AccountId,
+            bounty_id: BountyId,
+        ) -> Result<bool>;
+        fn can_trigger_milestone_review(
+            who: &AccountId,
+            bounty_id: BountyId,
+        ) -> Result<bool>;
+    }
 }
 
-pub trait PostBounty<
-    AccountId,
-    OrgId,
-    SpendableBank,
-    Currency,
-    Hash,
-    ReviewCommittee,
->: ReturnsBountyIdentifier
-{
-    type BountyInfo;
-    fn post_bounty(
-        poster: AccountId,
-        on_behalf_of: Option<SpendableBank>,
-        description: Hash,
-        amount_reserved_for_bounty: Currency,
-        acceptance_committee: ReviewCommittee,
-        supervision_committee: Option<ReviewCommittee>,
-    ) -> Result<Self::BountyId>;
-}
-// TODO: make an issue for this and prefer an impl that presents a multisig
-pub trait UseTermsOfAgreement<OrgId> {
-    type VoteIdentifier;
-    fn request_consent_on_terms_of_agreement(
-        team_org: OrgId,
-    ) -> Result<Self::VoteIdentifier>;
-}
-pub trait StartTeamConsentPetition<VoteIdentifier>: Sized {
-    fn start_team_consent_petition(
-        &self,
-        vote_id: VoteIdentifier,
-    ) -> Option<Self>;
-    fn get_team_consent_vote_id(&self) -> Option<VoteIdentifier>;
-}
-
-pub trait StartReview<VoteIdentifier>: Sized {
-    fn start_review(&self, vote_id: VoteIdentifier) -> Option<Self>;
-    fn get_review_id(&self) -> Option<VoteIdentifier>;
-}
-
-pub trait ApproveWithoutTransfer: Sized {
-    // infallible
-    fn approve_without_transfer(&self) -> Self;
-}
-
-pub trait ApproveGrant: Sized {
-    fn approve_grant(&self) -> Self;
-    fn grant_approved(&self) -> bool;
-}
-// TODO: RevokeApprovedGrant<VoteID> => vote to take away the team's grant and clean storage
-
-pub trait SpendApprovedGrant<Currency>: Sized {
-    fn spend_approved_grant(&self, amount: Currency) -> Option<Self>;
-}
-
-pub trait SubmitGrantApplication<AccountId, VoteId, BankId, Currency, Hash>:
-    ReturnsBountyIdentifier
-{
-    type GrantApp: StartReview<VoteId> + ApproveGrant; //+ StartTeamConsentPetition<VoteId>
-    fn submit_grant_application(
-        submitter: AccountId,
-        bank: Option<BankId>,
-        bounty_id: Self::BountyId,
-        description: Hash,
-        total_amount: Currency,
-    ) -> Result<Self::BountyId>; // returns application identifier
-}
-
-pub trait SuperviseGrantApplication<BountyId, AccountId> {
-    type AppState;
-    fn trigger_application_review(
-        bounty_id: BountyId,
-        application_id: BountyId,
-    ) -> Result<Self::AppState>;
-    fn sudo_approve_application(
-        sudo: AccountId,
-        bounty_id: BountyId,
-        application_id: BountyId,
-    ) -> Result<Self::AppState>;
-    fn poll_application(
-        bounty_id: BountyId,
-        application_id: BountyId,
-    ) -> Result<Self::AppState>;
-}
-
-pub trait SubmitMilestone<AccountId, BountyId, Hash, Currency, VoteId, BankId> {
-    type Milestone: StartReview<VoteId> + ApproveWithoutTransfer;
-    type MilestoneState;
-    fn submit_milestone(
-        submitter: AccountId,
-        bounty_id: BountyId,
-        application_id: BountyId,
-        submission_reference: Hash,
-        amount_requested: Currency,
-    ) -> Result<BountyId>; // returns milestone identifier
-    fn trigger_milestone_review(
-        bounty_id: BountyId,
-        milestone_id: BountyId,
-    ) -> Result<Self::MilestoneState>;
-    fn sudo_approves_milestone(
-        caller: AccountId,
-        bounty_id: BountyId,
-        milestone_id: BountyId,
-    ) -> Result<Self::MilestoneState>;
-    fn poll_milestone(
-        bounty_id: BountyId,
-        milestone_id: BountyId,
-    ) -> Result<Self::MilestoneState>;
-}
-
-// We could remove`can_submit_grant_app` or `can_submit_milestone` because both of these paths log the submitter
-// in the associated state anyway so we might as well pass the caller into the methods that do this logic and
-// perform any context-based authentication there, but readability is more important at this point
-pub trait BountyPermissions<OrgId, TermsOfAgreement, AccountId, BountyId>:
-    UseTermsOfAgreement<OrgId>
-{
-    fn can_create_bounty(who: &AccountId, hosting_org: OrgId) -> bool;
-    fn can_submit_grant_app(who: &AccountId, terms: TermsOfAgreement) -> bool;
-    fn can_trigger_grant_app_review(
-        who: &AccountId,
-        bounty_id: BountyId,
-    ) -> Result<bool>;
-    fn can_poll_grant_app(who: &AccountId, bounty_id: BountyId)
-        -> Result<bool>;
-    fn can_submit_milestone(
-        who: &AccountId,
-        bounty_id: BountyId,
-        application_id: BountyId,
-    ) -> Result<bool>;
-    fn can_poll_milestone(who: &AccountId, bounty_id: BountyId)
-        -> Result<bool>;
-    fn can_trigger_milestone_review(
-        who: &AccountId,
-        bounty_id: BountyId,
-    ) -> Result<bool>;
+pub mod bounty2 {
+    use super::Result;
+    pub trait PostBounty<AccountId, IpfsReference, Currency, DisputeResolution>
+    {
+        type BountyId;
+        fn post_bounty2(
+            poster: AccountId,
+            info: IpfsReference,
+            amount: Currency,
+            permissions: DisputeResolution,
+        ) -> Result<Self::BountyId>;
+    }
+    pub trait SubmitForBounty<
+        AccountId,
+        BountyId,
+        TeamId,
+        IpfsReference,
+        Currency,
+    >
+    {
+        type SubmissionId;
+        fn submit_for_bounty2(
+            submitter: AccountId,
+            bounty: BountyId,
+            team: Option<TeamId>,
+            submission_ref: IpfsReference,
+            amount: Currency,
+        ) -> Result<Self::SubmissionId>;
+    }
 }

@@ -69,6 +69,6 @@ jobs:
 
     - name: FMT checks
       run: cargo fmt --all -- --check
-
+    
     - name: Clippy checks
-      run: cargo clippy -- #-D warnings
+      run: cargo clippy -- -D warnings

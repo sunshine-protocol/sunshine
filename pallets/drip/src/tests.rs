@@ -23,7 +23,7 @@ impl_outer_origin! {
     pub enum Origin for Test where system = frame_system {}
 }
 
-mod treasury {
+mod drip {
     pub use super::super::*;
 }
 
@@ -31,7 +31,7 @@ impl_outer_event! {
     pub enum TestEvent for Test {
         system<T>,
         pallet_balances<T>,
-        treasury<T>,
+        drip<T>,
     }
 }
 
@@ -81,24 +81,21 @@ impl pallet_balances::Trait for Test {
     type AccountStore = System;
     type WeightInfo = ();
 }
-parameter_types! {
-    pub const TreasuryModuleId: ModuleId = ModuleId(*b"py/trsry");
-}
 impl Trait for Test {
     type Event = TestEvent;
+    type DripId = u64;
     type Currency = Balances;
-    type TreasuryAddress = TreasuryModuleId;
 }
 pub type System = system::Module<Test>;
 pub type Balances = pallet_balances::Module<Test>;
-pub type Treasury = Module<Test>;
+pub type Drip = Module<Test>;
 
-fn get_last_event() -> RawEvent<u64, u64, u64> {
+fn get_last_event() -> RawEvent<u64, u64, u64, u64> {
     System::events()
         .into_iter()
         .map(|r| r.event)
         .filter_map(|e| {
-            if let TestEvent::treasury(inner) = e {
+            if let TestEvent::drip(inner) = e {
                 Some(inner)
             } else {
                 None
@@ -111,7 +108,7 @@ fn get_last_event() -> RawEvent<u64, u64, u64> {
 /// Auxiliary method for simulating block time passing
 fn run_to_block(n: u64) {
     while System::block_number() < n {
-        Treasury::on_finalize(System::block_number());
+        Drip::on_finalize(System::block_number());
         System::set_block_number(System::block_number() + 1);
     }
 }
@@ -120,9 +117,15 @@ fn new_test_ext() -> sp_io::TestExternalities {
     let mut t = frame_system::GenesisConfig::default()
         .build_storage::<Test>()
         .unwrap();
-    GenesisConfig::<Test> {
-        minting_interval: 10,
-        mint_amount: 10,
+    pallet_balances::GenesisConfig::<Test> {
+        balances: vec![
+            (1, 1000),
+            (2, 100),
+            (3, 100),
+            (4, 100),
+            (5, 100),
+            (6, 100),
+        ],
     }
     .assimilate_storage(&mut t)
     .unwrap();
@@ -132,21 +135,70 @@ fn new_test_ext() -> sp_io::TestExternalities {
 }
 
 #[test]
-fn verify_issuance_rate() {
+fn genesis_config_works() {
     new_test_ext().execute_with(|| {
-        let treasury_account_id = Treasury::account_id();
-        assert_eq!(0, Balances::total_balance(&treasury_account_id));
-        run_to_block(11);
-        assert_eq!(10, Balances::total_balance(&treasury_account_id));
+        assert!(System::events().is_empty());
+    });
+}
+
+#[test]
+fn drip_started() {
+    new_test_ext().execute_with(|| {
+        assert_eq!(Balances::total_balance(&1), 1000);
+        assert_eq!(Balances::total_balance(&2), 100);
+        let ten_ten = DripRate::new(10, 10);
+        let zero_ten = DripRate::new(10, 0);
+        assert_noop!(
+            Drip::start_drip(Origin::signed(1), 2, zero_ten),
+            Error::<Test>::RatePeriodLengthMustBeGreaterThanZero
+        );
+        assert_noop!(
+            Drip::start_drip(Origin::signed(1), 1, ten_ten),
+            Error::<Test>::DoNotDripToSelf
+        );
+        assert_noop!(
+            Drip::start_drip(Origin::signed(1), 1, ten_ten),
+            Error::<Test>::DoNotDripToSelf
+        );
+        System::set_block_number(8);
+        assert_ok!(Drip::start_drip(Origin::signed(1), 2, ten_ten));
+        run_to_block(14);
+        assert_eq!(Balances::total_balance(&1), 990);
+        assert_eq!(Balances::total_balance(&2), 110);
         run_to_block(21);
-        assert_eq!(20, Balances::total_balance(&treasury_account_id));
+        assert_eq!(Balances::total_balance(&1), 980);
+        assert_eq!(Balances::total_balance(&2), 120);
         run_to_block(31);
-        assert_eq!(30, Balances::total_balance(&treasury_account_id));
-        run_to_block(39);
-        assert_eq!(30, Balances::total_balance(&treasury_account_id));
-        run_to_block(40);
-        assert_eq!(30, Balances::total_balance(&treasury_account_id));
-        run_to_block(41);
-        assert_eq!(40, Balances::total_balance(&treasury_account_id));
+        assert_eq!(Balances::total_balance(&1), 970);
+        assert_eq!(Balances::total_balance(&2), 130);
+    });
+}
+
+#[test]
+fn drip_cancelled() {
+    new_test_ext().execute_with(|| {
+        assert_eq!(Balances::total_balance(&1), 1000);
+        assert_eq!(Balances::total_balance(&2), 100);
+        let ten_ten = DripRate::new(10, 10);
+        System::set_block_number(8);
+        assert_ok!(Drip::start_drip(Origin::signed(1), 2, ten_ten));
+        run_to_block(14);
+        assert_eq!(Balances::total_balance(&1), 990);
+        assert_eq!(Balances::total_balance(&2), 110);
+        assert_noop!(
+            Drip::cancel_drip(Origin::signed(2), 1),
+            Error::<Test>::NotAuthorizedToCancelDrip
+        );
+        run_to_block(21);
+        assert_eq!(Balances::total_balance(&1), 980);
+        assert_eq!(Balances::total_balance(&2), 120);
+        assert_noop!(
+            Drip::cancel_drip(Origin::signed(1), 2),
+            Error::<Test>::DripDNE
+        );
+        assert_ok!(Drip::cancel_drip(Origin::signed(1), 1));
+        run_to_block(31);
+        assert_eq!(Balances::total_balance(&1), 980);
+        assert_eq!(Balances::total_balance(&2), 120);
     });
 }

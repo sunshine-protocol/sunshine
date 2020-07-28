@@ -25,6 +25,7 @@ use substrate_subxt::{
         AccountData,
         Balances,
     },
+    extrinsic,
     sp_core,
     sp_runtime,
     sp_runtime::traits::{
@@ -40,6 +41,9 @@ use sunshine_core::{
     OffchainSigner,
 };
 use thiserror::Error;
+
+pub use bounty_client as bounty;
+pub use bounty_client::org;
 
 type AccountId = <<sp_runtime::MultiSignature as Verify>::Signer as IdentifyAccount>::AccountId;
 
@@ -101,7 +105,7 @@ impl Bounty for Runtime {
 
 impl substrate_subxt::Runtime for Runtime {
     type Signature = sp_runtime::MultiSignature;
-    type Extra = substrate_subxt::DefaultExtra<Self>;
+    type Extra = extrinsic::DefaultExtra<Self>;
 }
 
 pub struct Client<S = OffchainStore> {
@@ -117,7 +121,7 @@ impl Client<OffchainStore> {
     ) -> Result<Self, Error> {
         let db = sled::open(root.join("db"))?;
         let db_ipfs = db.open_tree("ipfs")?;
-        let config = Config::from_tree(db_ipfs);
+        let config = Config::new(db_ipfs, Default::default());
         let store = OffchainStore::new(config)?;
         let keystore = Keystore::open(root.join("keystore")).await?;
         let chain = substrate_subxt::ClientBuilder::new().build().await?;
@@ -147,7 +151,7 @@ impl Client<libipld::mem::MemStore> {
 
         let tmp =
             TempDir::new("sunshine-bounty-").expect("failed to create tempdir");
-        let chain = ClientBuilder::new()
+        let chain = ClientBuilder::<Runtime>::new()
             .set_client(test_node.clone())
             .build()
             .await
@@ -254,6 +258,7 @@ pub mod mock {
     pub use sp_keyring::AccountKeyring;
     use substrate_subxt::client::{
         DatabaseConfig,
+        KeystoreConfig,
         Role,
         SubxtClient,
         SubxtClientConfig,
@@ -275,11 +280,14 @@ pub mod mock {
                 path: tmp.path().into(),
                 cache_size: 128,
             },
-            builder: test_node::service::new_full,
+            keystore: KeystoreConfig::InMemory,
             chain_spec: test_node::chain_spec::development_config(),
             role: Role::Authority(AccountKeyring::Alice),
-        };
-        let client = SubxtClient::new(config).unwrap().into();
+            enable_telemetry: false,
+        }
+        .to_service_config();
+        let (task_manager, rpc) = test_node::service::new_full(config).unwrap();
+        let client = SubxtClient::new(task_manager, rpc).into();
         (client, tmp)
     }
 }

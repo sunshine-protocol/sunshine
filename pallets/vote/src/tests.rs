@@ -54,16 +54,13 @@ impl frame_system::Trait for Test {
     type OnNewAccount = ();
     type OnKilledAccount = ();
     type BaseCallFilter = ();
-}
-parameter_types! {
-    pub const ReservationLimit: u32 = 10000;
+    type SystemWeightInfo = ();
 }
 impl org::Trait for Test {
     type Event = TestEvent;
     type IpfsReference = u32;
     type OrgId = u64;
     type Shares = u64;
-    type ReservationLimit = ReservationLimit;
 }
 impl Trait for Test {
     type Event = TestEvent;
@@ -123,12 +120,12 @@ fn vote_creation_works() {
         let one = Origin::signed(1);
         let twentytwo = Origin::signed(22);
         assert_noop!(
-            VoteThreshold::create_signal_threshold_vote_1account1vote(
+            VoteThreshold::create_signal_threshold_vote_flat(
                 twentytwo, None, 1, 4, None, None
             ),
             Error::<Test>::NotAuthorizedToCreateVoteForOrganization
         );
-        assert_ok!(VoteThreshold::create_signal_threshold_vote_1account1vote(
+        assert_ok!(VoteThreshold::create_signal_threshold_vote_flat(
             one.clone(),
             None,
             1,
@@ -181,7 +178,7 @@ fn vote_pct_threshold_works() {
     new_test_ext().execute_with(|| {
         let one = Origin::signed(1);
         // 34% passage requirement => 3 people at least
-        assert_ok!(VoteThreshold::create_percent_threshold_vote_1account1vote(
+        assert_ok!(VoteThreshold::create_percent_threshold_vote_flat(
             one.clone(),
             None,
             1,

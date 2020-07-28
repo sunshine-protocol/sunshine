@@ -14,11 +14,6 @@ use sp_runtime::{
     traits::IdentityLookup,
     Perbill,
 };
-use util::{
-    organization::Organization,
-    traits::GroupMembership,
-    vote::VoterView,
-};
 
 // type aliases
 pub type AccountId = u64;
@@ -28,7 +23,7 @@ impl_outer_origin! {
     pub enum Origin for Test where system = frame_system {}
 }
 
-mod court {
+mod bounty {
     pub use super::super::*;
 }
 
@@ -38,7 +33,8 @@ impl_outer_event! {
         pallet_balances<T>,
         org<T>,
         vote<T>,
-        court<T>,
+        donate<T>,
+        bounty<T>,
     }
 }
 
@@ -90,7 +86,7 @@ impl pallet_balances::Trait for Test {
 }
 impl org::Trait for Test {
     type Event = TestEvent;
-    type IpfsReference = u32; // TODO: replace with utils_identity::Cid
+    type IpfsReference = u32;
     type OrgId = u64;
     type Shares = u64;
 }
@@ -99,27 +95,33 @@ impl vote::Trait for Test {
     type VoteId = u64;
     type Signal = u64;
 }
+impl donate::Trait for Test {
+    type Event = TestEvent;
+    type Currency = Balances;
+}
 parameter_types! {
-    pub const MinimumDisputeAmount: u64 = 10;
+    pub const BountyLowerBound: u64 = 5;
+    pub const ChallengePeriod: BlockNumber = 100;
 }
 impl Trait for Test {
     type Event = TestEvent;
-    type Currency = Balances;
-    type DisputeId = u64;
-    type MinimumDisputeAmount = MinimumDisputeAmount;
+    type BountyId = u64;
+    type SubmissionId = u64;
+    type BountyLowerBound = BountyLowerBound;
+    type ChallengePeriod = ChallengePeriod;
 }
 pub type System = system::Module<Test>;
 pub type Balances = pallet_balances::Module<Test>;
 pub type Org = org::Module<Test>;
 pub type Vote = vote::Module<Test>;
-pub type Court = Module<Test>;
+pub type Bounty2 = Module<Test>;
 
-fn get_last_event() -> RawEvent<u64, u64, u64, u64, u64> {
+fn get_last_event() -> RawEvent<u64, u64, u64, u32, u64, u64, u64, u64> {
     System::events()
         .into_iter()
         .map(|r| r.event)
         .filter_map(|e| {
-            if let TestEvent::court(inner) = e {
+            if let TestEvent::bounty(inner) = e {
                 Some(inner)
             } else {
                 None
@@ -150,6 +152,8 @@ fn new_test_ext() -> sp_io::TestExternalities {
     ext
 }
 
+use util::organization::Organization;
+
 #[test]
 fn genesis_config_works() {
     new_test_ext().execute_with(|| {
@@ -167,118 +171,137 @@ fn genesis_config_works() {
 }
 
 #[test]
-fn dispute_registration_works() {
+fn post_bounty_works() {
     new_test_ext().execute_with(|| {
-        let one = Origin::signed(1);
-        let new_resolution_metadata =
-            ResolutionMetadata::new(OrgRep::Equal(1), 1, None, None);
-        assert_noop!(
-            Court::register_dispute_type_with_resolution_path(
-                one.clone(),
-                9,
-                2,
-                new_resolution_metadata.clone(),
-                None,
-            ),
-            Error::<Test>::DisputeMustExceedModuleMinimum
+        let fifty_one_pct_threshold = PercentageThreshold::new(
+            sp_runtime::Permill::from_percent(51),
+            None,
+        );
+        // 51% threshold with equal weight for every account
+        let dispute_resolution = ResolutionMetadata::new(
+            Some(1),
+            OrgRep::Equal(1),
+            fifty_one_pct_threshold,
         );
         assert_noop!(
-            Court::register_dispute_type_with_resolution_path(
-                one.clone(),
-                101,
-                2,
-                new_resolution_metadata.clone(),
-                None,
+            Bounty2::post_bounty(
+                Origin::signed(1),
+                10u32, // constitution
+                101,   // funding reserved
+                dispute_resolution.clone()
             ),
-            DispatchError::Module {
+            sp_runtime::DispatchError::Module {
                 index: 0,
                 error: 3,
-                message: Some("InsufficientBalance")
-            }
+                message: Some("InsufficientBalance",),
+            },
         );
-        assert_ok!(Court::register_dispute_type_with_resolution_path(
-            one.clone(),
-            10,
-            2,
-            new_resolution_metadata,
-            None,
+        let fake_dispute_resolution = ResolutionMetadata::new(
+            Some(1),
+            OrgRep::Equal(2),
+            fifty_one_pct_threshold,
+        );
+        assert_noop!(
+            Bounty2::post_bounty(
+                Origin::signed(1),
+                10u32, // constitution
+                10,    // funding reserved
+                fake_dispute_resolution
+            ),
+            Error::<Test>::DisputeResolvingOrgMustExistToPostBounty,
+        );
+        assert_ok!(Bounty2::post_bounty(
+            Origin::signed(1),
+            10u32, // constitution
+            10,    // funding reserved
+            dispute_resolution
         ));
-        assert_eq!(
-            get_last_event(),
-            RawEvent::RegisteredDisputeWithResolutionPath(
-                1,
-                1,
-                10,
-                2,
-                OrgRep::Equal(1)
-            )
-        );
     });
 }
 
 #[test]
-fn dispute_raised_works() {
+fn submission_works() {
     new_test_ext().execute_with(|| {
-        let one = Origin::signed(1);
-        let two = Origin::signed(2);
-        let new_resolution_metadata =
-            ResolutionMetadata::new(OrgRep::Equal(1), 1, None, None);
         assert_noop!(
-            Court::raise_dispute_to_trigger_vote(two.clone(), 1),
-            Error::<Test>::CannotRaiseDisputeIfDisputeStateDNE
+            Bounty2::submit_for_bounty(
+                Origin::signed(1),
+                1,
+                None,
+                10u32,
+                15u64,
+            ),
+            Error::<Test>::BountyDNE
         );
-        assert_ok!(Court::register_dispute_type_with_resolution_path(
-            one.clone(),
-            10,
-            2,
-            new_resolution_metadata,
+        let fifty_one_pct_threshold = PercentageThreshold::new(
+            sp_runtime::Permill::from_percent(51),
             None,
+        );
+        // 51% threshold with equal weight for every account
+        let dispute_resolution = ResolutionMetadata::new(
+            Some(1),
+            OrgRep::Equal(1),
+            fifty_one_pct_threshold,
+        );
+        assert_ok!(Bounty2::post_bounty(
+            Origin::signed(1),
+            10u32, // constitution
+            10,    // funding reserved
+            dispute_resolution
         ));
         assert_noop!(
-            Court::raise_dispute_to_trigger_vote(one.clone(), 1),
-            Error::<Test>::SignerNotAuthorizedToRaiseThisDispute
-        );
-        assert_ok!(Court::raise_dispute_to_trigger_vote(two.clone(), 1));
-        assert_eq!(
-            get_last_event(),
-            RawEvent::DisputeRaisedAndVoteTriggered(
+            Bounty2::submit_for_bounty(
+                Origin::signed(1),
                 1,
-                1,
-                10,
-                2,
-                OrgRep::Equal(1),
-                1
-            )
+                None,
+                10u32,
+                15u64,
+            ),
+            Error::<Test>::SubmissionRequestExceedsBounty,
         );
-    })
+        assert_ok!(Bounty2::submit_for_bounty(
+            Origin::signed(1),
+            1,
+            None,
+            10u32,
+            10u64,
+        ));
+    });
 }
 
 #[test]
-fn poll_dispute_to_execute_outcome_works() {
+fn submission_approval_works() {
     new_test_ext().execute_with(|| {
-        let one = Origin::signed(1);
-        let two = Origin::signed(2);
-        let new_resolution_metadata =
-            ResolutionMetadata::new(OrgRep::Equal(1), 1, None, None);
-        assert_ok!(Court::register_dispute_type_with_resolution_path(
-            one.clone(),
-            10,
-            2,
-            new_resolution_metadata,
+        let fifty_one_pct_threshold = PercentageThreshold::new(
+            sp_runtime::Permill::from_percent(51),
             None,
+        );
+        // 51% threshold with equal weight for every account
+        let dispute_resolution = ResolutionMetadata::new(
+            Some(1),
+            OrgRep::Equal(1),
+            fifty_one_pct_threshold,
+        );
+        assert_ok!(Bounty2::post_bounty(
+            Origin::signed(1),
+            10u32, // constitution
+            10,    // funding reserved
+            dispute_resolution
+        ));
+        assert_ok!(Bounty2::submit_for_bounty(
+            Origin::signed(1),
+            1,
+            None,
+            10u32,
+            10u64,
         ));
         assert_noop!(
-            Court::poll_dispute_to_execute_outcome(one.clone(), 1),
-            Error::<Test>::ActiveDisputeCannotBePolledFromCurrentState
+            Bounty2::approve_bounty_submission(Origin::signed(1), 2,),
+            Error::<Test>::SubmissionDNE
         );
-        assert_ok!(Court::raise_dispute_to_trigger_vote(two.clone(), 1));
         assert_noop!(
-            Court::poll_dispute_to_execute_outcome(one.clone(), 1),
-            Error::<Test>::VoteOutcomeInconclusiveSoPollCannotExecuteOutcome
+            Bounty2::approve_bounty_submission(Origin::signed(2), 1,),
+            Error::<Test>::NotAuthorizedToApproveBountySubmissions
         );
-        // use vote to pass the proposal
-        assert_ok!(Vote::submit_vote(one.clone(), 1, VoterView::InFavor, None));
-        // then poll again to execute
-        assert_ok!(Court::poll_dispute_to_execute_outcome(one.clone(), 1));
+        assert_ok!(Bounty2::approve_bounty_submission(Origin::signed(1), 1,));
     });
 }

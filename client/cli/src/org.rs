@@ -24,9 +24,9 @@ use sunshine_core::Ss58;
 
 #[derive(Clone, Debug, Clap)]
 pub struct OrgRegisterFlatCommand {
+    pub constitution: String,
     pub sudo: Option<String>,
     pub parent_org: Option<u64>,
-    pub constitution: String,
     pub members: Vec<String>,
 }
 
@@ -76,9 +76,9 @@ impl OrgRegisterFlatCommand {
 
 #[derive(Clone, Debug, Clap)]
 pub struct OrgRegisterWeightedCommand {
+    pub constitution: String,
     pub sudo: Option<String>,
     pub parent_org: Option<u64>,
-    pub constitution: String,
     pub members: Vec<AccountShare>,
 }
 

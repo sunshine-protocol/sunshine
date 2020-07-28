@@ -1,12 +1,12 @@
 [package]
-name = "sunshine-donate"
-version = "0.2.0"
+name = "sunshine-drip"
+version = "0.0.1"
 authors = ["Amar Singh <asinghchrony@protonmail.com>"]
 edition = "2018"
 
 license = "GPL-3.0"
-repository = "https://github.com/sunshine-protocol/sunshine-bounty"
-description = "transfer to org that transfers to members in proportion to ownership"
+repository = "https://github.com/sunshine-protocol/sunshine-defi"
+description = "Drips a cash flow between accounts"
 keywords = ["sunshine", "substrate"]
 
 [dependencies]
@@ -16,7 +16,6 @@ sp-runtime = { version = "2.0.0-rc5", default-features = false }
 frame-support = { version = "2.0.0-rc5", default-features = false }
 frame-system = { version = "2.0.0-rc5", default-features = false }
 util = { package = "sunshine-bounty-utils", path = "../../utils", default-features=false}
-org = { package = "sunshine-org", path = "../org", default-features=false}
 clear_on_drop = { version = "0.2.4", features = ["no_cc"] } # https://github.com/paritytech/substrate/issues/4179
 
 [dev-dependencies]
@@ -32,6 +31,5 @@ std = [
     "sp-runtime/std",
     "frame-support/std",
     "frame-system/std",
-    "org/std",
     "pallet-balances/std",
 ]

@@ -107,7 +107,7 @@ where
             )
             .await?
             .new_flat_organization_registered()?
-            .ok_or(Error::EventNotFound.into())
+            .ok_or_else(|| Error::EventNotFound.into())
     }
     async fn register_weighted_org(
         &self,
@@ -128,7 +128,7 @@ where
             )
             .await?
             .new_weighted_organization_registered()?
-            .ok_or(Error::EventNotFound.into())
+            .ok_or_else(|| Error::EventNotFound.into())
     }
     async fn issue_shares(
         &self,
@@ -141,7 +141,7 @@ where
             .issue_shares_and_watch(signer, organization, &who, shares)
             .await?
             .shares_issued()?
-            .ok_or(Error::EventNotFound.into())
+            .ok_or_else(|| Error::EventNotFound.into())
     }
     async fn burn_shares(
         &self,
@@ -154,7 +154,7 @@ where
             .burn_shares_and_watch(signer, organization, &who, shares)
             .await?
             .shares_burned()?
-            .ok_or(Error::EventNotFound.into())
+            .ok_or_else(|| Error::EventNotFound.into())
     }
     async fn batch_issue_shares(
         &self,
@@ -166,7 +166,7 @@ where
             .batch_issue_shares_and_watch(signer, organization, new_accounts)
             .await?
             .shares_batch_issued()?
-            .ok_or(Error::EventNotFound.into())
+            .ok_or_else(|| Error::EventNotFound.into())
     }
     async fn batch_burn_shares(
         &self,
@@ -178,7 +178,7 @@ where
             .batch_burn_shares_and_watch(signer, organization, old_accounts)
             .await?
             .shares_batch_burned()?
-            .ok_or(Error::EventNotFound.into())
+            .ok_or_else(|| Error::EventNotFound.into())
     }
     async fn reserve_shares(
         &self,
@@ -190,7 +190,7 @@ where
             .reserve_shares_and_watch(signer, org, who)
             .await?
             .shares_reserved()?
-            .ok_or(Error::EventNotFound.into())
+            .ok_or_else(|| Error::EventNotFound.into())
     }
     async fn unreserve_shares(
         &self,
@@ -202,7 +202,7 @@ where
             .unreserve_shares_and_watch(signer, org, who)
             .await?
             .shares_un_reserved()?
-            .ok_or(Error::EventNotFound.into())
+            .ok_or_else(|| Error::EventNotFound.into())
     }
     async fn lock_shares(
         &self,
@@ -214,7 +214,7 @@ where
             .lock_shares_and_watch(signer, org, who)
             .await?
             .shares_locked()?
-            .ok_or(Error::EventNotFound.into())
+            .ok_or_else(|| Error::EventNotFound.into())
     }
     async fn unlock_shares(
         &self,
@@ -226,6 +226,77 @@ where
             .unlock_shares_and_watch(signer, org, who)
             .await?
             .shares_unlocked()?
-            .ok_or(Error::EventNotFound.into())
+            .ok_or_else(|| Error::EventNotFound.into())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use rand::{
+        rngs::OsRng,
+        RngCore,
+    };
+    use sunshine_core::ChainClient;
+    use test_client::{
+        bounty::{
+            self,
+            TextBlock,
+        },
+        mock::{
+            test_node,
+            AccountKeyring,
+        },
+        org::{
+            NewFlatOrganizationRegisteredEvent,
+            Org,
+            OrgClient,
+        },
+        Client,
+        OffchainClient,
+    };
+
+    // For testing purposes only, NEVER use this to generate AccountIds in practice because it's random
+    pub fn random_account_id() -> substrate_subxt::sp_runtime::AccountId32 {
+        let mut buf = [0u8; 32];
+        OsRng.fill_bytes(&mut buf);
+        buf.into()
+    }
+
+    #[async_std::test]
+    async fn register_flat_org() {
+        let (node, _node_tmp) = test_node();
+        let (client, _client_tmp) =
+            Client::mock(&node, AccountKeyring::Alice).await;
+        let alice_account_id = AccountKeyring::Alice.to_account_id();
+        // insert constitution into
+        let raw_const = TextBlock {
+            text: "good code lives forever".to_string(),
+        };
+        let (two, three, four, five, six, seven) = (
+            random_account_id(),
+            random_account_id(),
+            random_account_id(),
+            random_account_id(),
+            random_account_id(),
+            random_account_id(),
+        );
+        let members =
+            vec![alice_account_id.clone(), two, three, four, five, six, seven];
+        let event = client
+            .register_flat_org(
+                Some(alice_account_id.clone()),
+                None,
+                raw_const,
+                &members,
+            )
+            .await
+            .unwrap();
+        let expected_event = NewFlatOrganizationRegisteredEvent {
+            caller: alice_account_id,
+            new_id: 2,
+            constitution: event.constitution.clone(),
+            total: 7,
+        };
+        assert_eq!(event, expected_event);
     }
 }

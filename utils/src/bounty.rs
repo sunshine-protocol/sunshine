@@ -1,4 +1,4 @@
-use crate::traits::{
+use crate::traits::bounty::{
     ApproveGrant,
     ApproveWithoutTransfer,
     SpendApprovedGrant,
@@ -79,10 +79,7 @@ impl<VoteId: Codec + PartialEq + Zero + From<u32> + Copy>
     ApplicationState<VoteId>
 {
     pub fn awaiting_review(&self) -> bool {
-        match self {
-            ApplicationState::SubmittedAwaitingResponse => true,
-            _ => false,
-        }
+        matches!(self, ApplicationState::SubmittedAwaitingResponse)
     }
     // basically, can be approved (notably not when already approved)
     pub fn under_review_by_acceptance_committee(self) -> Option<VoteId> {
@@ -95,10 +92,7 @@ impl<VoteId: Codec + PartialEq + Zero + From<u32> + Copy>
         }
     }
     pub fn approved_and_live(self) -> bool {
-        match self {
-            ApplicationState::ApprovedAndLive => true,
-            _ => false,
-        }
+        matches!(self, ApplicationState::ApprovedAndLive)
     }
 }
 
@@ -237,10 +231,7 @@ impl<
         }
     }
     fn grant_approved(&self) -> bool {
-        match self.state {
-            ApplicationState::ApprovedAndLive => true,
-            _ => false,
-        }
+        matches!(self.state, ApplicationState::ApprovedAndLive)
     }
 }
 
@@ -370,10 +361,7 @@ impl<
         }
     }
     pub fn ready_for_review(&self) -> bool {
-        match self.state {
-            MilestoneStatus::SubmittedAwaitingResponse => true,
-            _ => false,
-        }
+        matches!(self.state, MilestoneStatus::SubmittedAwaitingResponse)
     }
 }
 
