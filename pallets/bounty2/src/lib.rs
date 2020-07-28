@@ -23,10 +23,7 @@ use frame_support::{
     },
     Parameter,
 };
-use frame_system::{
-    self as system,
-    ensure_signed,
-};
+use frame_system::ensure_signed;
 use sp_runtime::{
     traits::{
         AtLeast32Bit,
@@ -230,7 +227,7 @@ decl_module! {
             let bounty = <Bounties<T>>::get(bounty_id).ok_or(Error::<T>::BountyDNE)?;
             let permissions = bounty.permissions();
             let authorization = if let Some(s) = permissions.sudo() {
-                &approver == &s
+                approver == s
             } else {
                 <org::Module<T>>::is_member_of_group(permissions.org().org(), &approver)
             };
@@ -348,40 +345,44 @@ impl<T: Trait> Module<T> {
             if let Ok(remainder) =
                 <donate::Module<T>>::donate(poster, o, amount)
             {
-                if let Ok(_) = T::Currency::transfer(
+                if T::Currency::transfer(
                     poster,
                     submitter,
                     remainder,
                     ExistenceRequirement::KeepAlive,
-                ) {
+                )
+                .is_ok()
+                {
                     None
                 } else {
                     Some(amount - remainder)
                 }
             } else {
                 // if donate fails, just try to transfer to submitter
-                if let Ok(_) = T::Currency::transfer(
+                if T::Currency::transfer(
                     poster,
                     submitter,
                     amount,
                     ExistenceRequirement::KeepAlive,
-                ) {
+                )
+                .is_ok()
+                {
                     None
                 } else {
                     Some(amount)
                 }
             }
+        } else if T::Currency::transfer(
+            poster,
+            submitter,
+            amount,
+            ExistenceRequirement::KeepAlive,
+        )
+        .is_ok()
+        {
+            None
         } else {
-            if let Ok(_) = T::Currency::transfer(
-                poster,
-                submitter,
-                amount,
-                ExistenceRequirement::KeepAlive,
-            ) {
-                None
-            } else {
-                Some(amount)
-            }
+            Some(amount)
         }
     }
 }
@@ -414,12 +415,7 @@ impl<T: Trait>
             Error::<T>::DisputeResolvingOrgMustExistToPostBounty
         );
         T::Currency::reserve(&poster, funding)?;
-        let bounty = BountyInformation::new(
-            info.clone(),
-            poster.clone(),
-            funding,
-            permissions,
-        );
+        let bounty = BountyInformation::new(info, poster, funding, permissions);
         let id: T::BountyId = Self::bounty_generate_unique_id();
         <Bounties<T>>::insert(id, bounty);
         Ok(id)
@@ -453,7 +449,7 @@ impl<T: Trait>
             bounty_id,
             submitter,
             team,
-            submission_ref.clone(),
+            submission_ref,
             amount,
         );
         let id: T::SubmissionId = Self::submission_generate_unique_id();

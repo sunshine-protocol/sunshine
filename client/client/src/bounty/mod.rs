@@ -109,7 +109,7 @@ where
             )
             .await?
             .bounty_posted()?
-            .ok_or(Error::EventNotFound.into())
+            .ok_or_else(|| Error::EventNotFound.into())
     }
     async fn account_applies_for_bounty(
         &self,
@@ -128,7 +128,7 @@ where
             )
             .await?
             .bounty_application_submitted()?
-            .ok_or(Error::EventNotFound.into())
+            .ok_or_else(|| Error::EventNotFound.into())
     }
     async fn account_triggers_application_review(
         &self,
@@ -144,7 +144,7 @@ where
             )
             .await?
             .application_review_triggered()?
-            .ok_or(Error::EventNotFound.into())
+            .ok_or_else(|| Error::EventNotFound.into())
     }
     async fn account_sudo_approves_application(
         &self,
@@ -160,7 +160,7 @@ where
             )
             .await?
             .sudo_approved_application()?
-            .ok_or(Error::EventNotFound.into())
+            .ok_or_else(|| Error::EventNotFound.into())
     }
     async fn poll_application(
         &self,
@@ -172,7 +172,7 @@ where
             .poll_application_and_watch(signer, bounty_id, application_id)
             .await?
             .application_polled()?
-            .ok_or(Error::EventNotFound.into())
+            .ok_or_else(|| Error::EventNotFound.into())
     }
     async fn submit_milestone(
         &self,
@@ -193,7 +193,7 @@ where
             )
             .await?
             .milestone_submitted()?
-            .ok_or(Error::EventNotFound.into())
+            .ok_or_else(|| Error::EventNotFound.into())
     }
     async fn trigger_milestone_review(
         &self,
@@ -205,7 +205,7 @@ where
             .trigger_milestone_review_and_watch(signer, bounty_id, milestone_id)
             .await?
             .milestone_review_triggered()?
-            .ok_or(Error::EventNotFound.into())
+            .ok_or_else(|| Error::EventNotFound.into())
     }
     async fn sudo_approves_milestone(
         &self,
@@ -217,7 +217,7 @@ where
             .sudo_approves_milestone_and_watch(signer, bounty_id, milestone_id)
             .await?
             .milestone_sudo_approved()?
-            .ok_or(Error::EventNotFound.into())
+            .ok_or_else(|| Error::EventNotFound.into())
     }
     async fn poll_milestone(
         &self,
@@ -229,6 +229,6 @@ where
             .poll_milestone_and_watch(signer, bounty_id, milestone_id)
             .await?
             .milestone_polled()?
-            .ok_or(Error::EventNotFound.into())
+            .ok_or_else(|| Error::EventNotFound.into())
     }
 }

@@ -1,4 +1,5 @@
 //! Service and ServiceFactory implementation. Specialized wrapper over substrate service.
+#![allow(clippy::type_complexity)]
 
 use sc_client_api::{
     ExecutorProvider,
@@ -13,6 +14,7 @@ use sc_finality_grandpa::{
 use sc_service::{
     error::Error as ServiceError,
     Configuration,
+    RpcHandlers,
     ServiceComponents,
     TaskManager,
 };
@@ -24,7 +26,7 @@ use std::{
 };
 use suntime::{
     self,
-    Block,
+    opaque::Block,
     RuntimeApi,
 };
 
@@ -64,10 +66,13 @@ pub fn new_full_params(
     ServiceError,
 > {
     let inherent_data_providers = sp_inherents::InherentDataProviders::new();
+
     let (client, backend, keystore, task_manager) =
         sc_service::new_full_parts::<Block, RuntimeApi, Executor>(&config)?;
     let client = Arc::new(client);
+
     let select_chain = sc_consensus::LongestChain::new(backend.clone());
+
     let pool_api = sc_transaction_pool::FullChainApi::new(
         client.clone(),
         config.prometheus_registry(),
@@ -79,17 +84,20 @@ pub fn new_full_params(
         task_manager.spawn_handle(),
         client.clone(),
     );
+
     let (grandpa_block_import, grandpa_link) =
         sc_finality_grandpa::block_import(
             client.clone(),
             &(client.clone() as Arc<_>),
             select_chain.clone(),
         )?;
+
     let aura_block_import =
         sc_consensus_aura::AuraBlockImport::<_, _, _, AuraPair>::new(
             grandpa_block_import.clone(),
             client.clone(),
         );
+
     let import_queue = sc_consensus_aura::import_queue::<_, _, _, AuraPair, _>(
         sc_consensus_aura::slot_duration(&*client)?,
         aura_block_import,
@@ -100,6 +108,7 @@ pub fn new_full_params(
         &task_manager.spawn_handle(),
         config.prometheus_registry(),
     )?;
+
     let provider = client.clone() as Arc<dyn StorageAndProofProvider<_, _>>;
     let finality_proof_provider =
         Arc::new(GrandpaFinalityProofProvider::new(backend.clone(), provider));
@@ -130,7 +139,9 @@ pub fn new_full_params(
 }
 
 /// Builds a new service for a full client.
-pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
+pub fn new_full(
+    config: Configuration,
+) -> Result<(TaskManager, Arc<RpcHandlers>), ServiceError> {
     let (
         params,
         select_chain,
@@ -171,6 +182,7 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 
     let ServiceComponents {
         task_manager,
+        rpc_handlers,
         network,
         telemetry_on_connect_sinks,
         ..
@@ -225,7 +237,7 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
         // FIXME #1578 make this available through chainspec
         gossip_duration: Duration::from_millis(333),
         justification_period: 512,
-        name: Some(name.to_string()),
+        name: Some(name),
         observer_enabled: false,
         keystore,
         is_authority: role.is_network_authority(),
@@ -266,11 +278,13 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
         )?;
     }
 
-    Ok(task_manager)
+    Ok((task_manager, rpc_handlers))
 }
 
 /// Builds a new service for a light client.
-pub fn new_light(config: Configuration) -> Result<TaskManager, ServiceError> {
+pub fn new_light(
+    config: Configuration,
+) -> Result<(TaskManager, Arc<RpcHandlers>), ServiceError> {
     let (client, backend, keystore, task_manager, on_demand) =
         sc_service::new_light_parts::<Block, RuntimeApi, Executor>(&config)?;
 
@@ -306,10 +320,12 @@ pub fn new_light(config: Configuration) -> Result<TaskManager, ServiceError> {
         &task_manager.spawn_handle(),
         config.prometheus_registry(),
     )?;
+
     let finality_proof_provider = Arc::new(GrandpaFinalityProofProvider::new(
         backend.clone(),
         client.clone() as Arc<_>,
     ));
+
     sc_service::build(sc_service::ServiceParams {
         block_announce_validator_builder: None,
         finality_proof_request_builder: Some(finality_proof_request_builder),
@@ -325,5 +341,11 @@ pub fn new_light(config: Configuration) -> Result<TaskManager, ServiceError> {
         backend,
         task_manager,
     })
-    .map(|ServiceComponents { task_manager, .. }| task_manager)
+    .map(
+        |ServiceComponents {
+             task_manager,
+             rpc_handlers,
+             ..
+         }| (task_manager, rpc_handlers),
+    )
 }

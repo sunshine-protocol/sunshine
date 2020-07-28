@@ -105,11 +105,7 @@ async fn run() -> Result<(), Error> {
                         client.chain_signer().map_err(Error::Client)?;
                     let event = client
                         .chain_client()
-                        .transfer_and_watch(
-                            signer,
-                            &account_id.0.into(),
-                            amount,
-                        )
+                        .transfer_and_watch(signer, &account_id.0, amount)
                         .await
                         .map_err(|e| Error::Client(e.into()))?
                         .transfer()

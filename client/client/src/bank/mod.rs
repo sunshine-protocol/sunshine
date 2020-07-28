@@ -50,6 +50,6 @@ where
             )
             .await?
             .org_bank_account_opened()?
-            .ok_or(Error::EventNotFound.into())
+            .ok_or_else(|| Error::EventNotFound.into())
     }
 }

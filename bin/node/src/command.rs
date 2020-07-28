@@ -1,10 +1,7 @@
 use crate::{
     chain_spec,
     cli::Cli,
-    service::{
-        self,
-        new_full_params,
-    },
+    service,
 };
 use sc_cli::{
     ChainSpec,
@@ -44,8 +41,8 @@ impl SubstrateCli for Cli {
         id: &str,
     ) -> Result<Box<dyn sc_service::ChainSpec>, String> {
         Ok(match id {
-            "dev" => Box::new(chain_spec::development_config()?),
-            "" | "local" => Box::new(chain_spec::local_testnet_config()?),
+            "dev" => Box::new(chain_spec::development_config()),
+            "" | "local" => Box::new(chain_spec::local_testnet_config()),
             path => {
                 Box::new(chain_spec::ChainSpec::from_json_file(
                     std::path::PathBuf::from(path),
@@ -69,16 +66,13 @@ pub fn run() -> sc_cli::Result<()> {
         Some(subcommand) => {
             let runner = cli.create_runner(subcommand)?;
             runner.run_subcommand(subcommand, |config| {
-                let (
-                    ServiceParams {
-                        client,
-                        backend,
-                        task_manager,
-                        import_queue,
-                        ..
-                    },
-                    ..,
-                ) = new_full_params(config)?;
+                let ServiceParams {
+                    client,
+                    backend,
+                    task_manager,
+                    import_queue,
+                    ..
+                } = service::new_full_params(config)?.0;
                 Ok((client, backend, import_queue, task_manager))
             })
         }
@@ -89,6 +83,7 @@ pub fn run() -> sc_cli::Result<()> {
                     Role::Light => service::new_light(config),
                     _ => service::new_full(config),
                 }
+                .map(|service| service.0)
             })
         }
     }

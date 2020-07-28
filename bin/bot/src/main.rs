@@ -60,12 +60,8 @@ async fn main() -> std::result::Result<(), Error> {
 
 fn keep_running_bot() -> bool {
     let mut input = String::new();
-    if let Ok(_) = std::io::stdin().read_line(&mut input) {
-        if let Some(_) = input.find("q") {
-            false
-        } else {
-            true
-        }
+    if std::io::stdin().read_line(&mut input).is_ok() {
+        input.find('q').is_none()
     } else {
         true
     }
