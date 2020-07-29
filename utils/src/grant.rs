@@ -177,8 +177,17 @@ impl<
     pub fn approved_and_live(&self) -> bool {
         self.state.approved_and_live()
     }
+    pub fn under_review(&self) -> Option<VoteId> {
+        self.state.under_review_by_acceptance_committee()
+    }
     pub fn state(&self) -> ApplicationState<VoteId> {
         self.state
+    }
+    pub fn set_state(&self, s: ApplicationState<VoteId>) -> Self {
+        GrantApplication {
+            state: s,
+            ..self.clone()
+        }
     }
 }
 
@@ -198,6 +207,7 @@ impl<VoteId> Default for MilestoneStatus<VoteId> {
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub struct MilestoneSubmission<
+    FoundationId,
     ApplicationId,
     IpfsReference,
     AccountId,
@@ -205,8 +215,7 @@ pub struct MilestoneSubmission<
     Payment,
     State,
 > {
-    // the approved application from which the milestone derives its legitimacy
-    app_ref: ApplicationId,
+    base: (FoundationId, ApplicationId),
     submission: IpfsReference,
     submitter: AccountId,
     team: Option<OrgId>,
@@ -216,6 +225,7 @@ pub struct MilestoneSubmission<
 }
 
 impl<
+        FoundationId: From<u32> + Copy,
         ApplicationId: Codec + Copy,
         IpfsReference: Clone,
         AccountId: Clone + PartialEq,
@@ -224,6 +234,7 @@ impl<
         VoteId: Codec + Copy,
     >
     MilestoneSubmission<
+        FoundationId,
         ApplicationId,
         IpfsReference,
         AccountId,
@@ -233,12 +244,13 @@ impl<
     >
 {
     pub fn new(
-        app_ref: ApplicationId,
+        base: (FoundationId, ApplicationId),
         submission: IpfsReference,
         submitter: AccountId,
         team: Option<OrgId>,
         payment: Payment,
     ) -> MilestoneSubmission<
+        FoundationId,
         ApplicationId,
         IpfsReference,
         AccountId,
@@ -247,7 +259,7 @@ impl<
         MilestoneStatus<VoteId>,
     > {
         MilestoneSubmission {
-            app_ref,
+            base,
             submission,
             submitter,
             team,
@@ -255,8 +267,11 @@ impl<
             state: MilestoneStatus::SubmittedAwaitingResponse,
         }
     }
-    pub fn app_ref(&self) -> ApplicationId {
-        self.app_ref
+    pub fn base_foundation(&self) -> FoundationId {
+        self.base.0
+    }
+    pub fn base_application(&self) -> ApplicationId {
+        self.base.1
     }
     pub fn submission(&self) -> IpfsReference {
         self.submission.clone()

@@ -25,7 +25,6 @@ use frame_support::{
         Currency,
         ExistenceRequirement,
         Get,
-        ReservableCurrency,
         WithdrawReason,
         WithdrawReasons,
     },
@@ -65,9 +64,11 @@ use util::{
     },
     organization::OrgRep,
     traits::{
+        GetVoteOutcome,
         GroupMembership,
         OpenThresholdVote,
     },
+    vote::VoteOutcome,
 };
 
 // type aliases
@@ -95,6 +96,7 @@ type ApplicationOf<T> = GrantApplication<
     ApplicationState<<T as vote::Trait>::VoteId>,
 >;
 type MilestoneOf<T> = MilestoneSubmission<
+    FoundationIndex,
     <T as Trait>::ApplicationId,
     <T as org::Trait>::IpfsReference,
     <T as frame_system::Trait>::AccountId,
@@ -165,6 +167,7 @@ decl_event!(
         FoundationContribution(FoundationIndex, AccountId, Balance, Balance),
         // index, who, amount_revoked, total_raised
         FoundationContributionRevoked(FoundationIndex, AccountId, Balance, Balance),
+        FoundationClosed(FoundationIndex),
         ApplicationSubmitted(FoundationIndex, ApplicationId, AccountId, Option<OrgId>, Balance, IpfsReference),
         ApplicationReviewTriggered(ApplicationId, VoteId, IpfsReference),
         MilestoneSubmitted(ApplicationId, MilestoneId, AccountId, Option<OrgId>, Balance, IpfsReference),
@@ -182,10 +185,13 @@ decl_error! {
         NotAuthorizedToSubmitMilestone,
         NotAuthorizedToTriggerReview,
         ApplicationMustBeApprovedAndLiveToSubmitMilestone,
-        // TODO: relax this requirement once we determine how to prove relationships between teams more efficiently (i.e. if both are children)
+        // TODO: relax this requirement once we determine how to prove
+        // relationships between teams more efficiently (i.e. if both are children)
         MilestoneMustMatchApplicationTeam,
         ContributionMustExceedModuleMinimum,
         CannotRevokeIfContributionDNE,
+        DepositerMustCloseFoundationInsteadOfRevokingContribution,
+        OnlyDepositerCanCloseFoundation,
     }
 }
 
@@ -257,14 +263,6 @@ decl_module! {
             Ok(())
         }
         #[weight = 0]
-        fn close_foundation(
-            origin,
-            id: FoundationIndex,
-        ) -> DispatchResult {
-            let depositer = ensure_signed(origin)?;
-            todo!()
-        }
-        #[weight = 0]
         fn contribute_to_foundation(
             origin,
             foundation_id: FoundationIndex,
@@ -295,6 +293,7 @@ decl_module! {
         ) -> DispatchResult {
             let revoker = ensure_signed(origin)?;
             let foundation = <Foundations<T>>::get(foundation_id).ok_or(Error::<T>::FoundationDNE)?;
+            ensure!(revoker != foundation.depositer(), Error::<T>::DepositerMustCloseFoundationInsteadOfRevokingContribution);
             let balance = Self::contribution_get(foundation_id, &revoker);
             ensure!(balance > BalanceOf::<T>::zero(), Error::<T>::CannotRevokeIfContributionDNE);
             T::Currency::transfer(
@@ -307,6 +306,32 @@ decl_module! {
             let new_raise = new_foundation.raised();
             Self::contribution_kill(foundation_id, &revoker);
             Self::deposit_event(RawEvent::FoundationContributionRevoked(foundation_id, revoker, balance, new_raise));
+            Ok(())
+        }
+        #[weight = 0]
+        fn close_foundation(
+            origin,
+            id: FoundationIndex,
+            donate_to: OrgRep<T::OrgId>,
+        ) -> DispatchResult {
+            let depositer = ensure_signed(origin)?;
+            let foundation = <Foundations<T>>::get(id).ok_or(Error::<T>::FoundationDNE)?;
+            ensure!(depositer == foundation.depositer(), Error::<T>::OnlyDepositerCanCloseFoundation);
+            let sender = Self::fund_account_id(id);
+            let remainder = <donate::Module<T>>::donate(&sender, donate_to, foundation.raised())?;
+            // return deposit + remainder to depositer
+            // <problem here if previous call succeeds and this call fails/>
+            T::Currency::transfer(
+                &sender,
+                &depositer,
+                foundation.deposit() + remainder,
+                ExistenceRequirement::KeepAlive,
+            )?;
+            // kill child trie
+            Self::foundation_kill(id);
+            // remove all storage items related to this foundation
+            Self::recursive_remove_foundation(id);
+            Self::deposit_event(RawEvent::FoundationClosed(id));
             Ok(())
         }
         #[weight = 0]
@@ -337,6 +362,8 @@ decl_module! {
             let trigger = ensure_signed(origin)?;
             let (application, foundation) = Self::can_trigger_app_review(application_id, &trigger)?;
             let new_vote_id = <vote::Module<T>>::open_threshold_vote(Some(application.submission().clone()), foundation.gov().org(), foundation.gov().threshold().pct_to_pass(), foundation.gov().threshold().pct_to_fail(), None)?;
+            let new_app = application.set_state(ApplicationState::UnderReviewByAcceptanceCommittee(new_vote_id));
+            <Applications<T>>::insert(application_id, new_app);
             Self::deposit_event(RawEvent::ApplicationReviewTriggered(application_id, new_vote_id, application.submission()));
             Ok(())
         }
@@ -349,9 +376,9 @@ decl_module! {
             payment: BalanceOf<T>,
         ) -> DispatchResult {
             let submitter = ensure_signed(origin)?;
-            let auth = Self::can_submit_milestone(application, &submitter, team)?;
+            let (foundation_id, auth) = Self::can_submit_milestone(application, &submitter, team)?;
             ensure!(auth, Error::<T>::NotAuthorizedToSubmitMilestone);
-            let milestone = MilestoneSubmission::new(application, submission.clone(), submitter.clone(), team, payment);
+            let milestone = MilestoneSubmission::new((foundation_id, application), submission.clone(), submitter.clone(), team, payment);
             let id = Self::milestone_generate_uid();
             <Milestones<T>>::insert(id, milestone);
             Self::deposit_event(RawEvent::MilestoneSubmitted(application, id, submitter, team, payment, submission));
@@ -371,6 +398,74 @@ decl_module! {
             let new_vote_id = <vote::Module<T>>::open_threshold_vote(Some(milestone.submission().clone()), review_board.org(), review_board.threshold().pct_to_pass(), review_board.threshold().pct_to_fail(), None)?;
             Self::deposit_event(RawEvent::MilestoneReviewTriggered(milestone_id, new_vote_id, milestone.submission()));
             Ok(())
+        }
+        // TODO: move inner logic into helper methods
+        fn on_finalize(_n: T::BlockNumber) {
+            if <frame_system::Module<T>>::block_number() % Self::application_poll_frequency() == Zero::zero() {
+                let _ = <Applications<T>>::iter()
+                    .filter(|(_, app)| app.under_review().is_some())
+                    .map(|(id, app)| -> DispatchResult {
+                        if let Some(v) = app.under_review() {
+                            let status = <vote::Module<T>>::get_vote_outcome(v)?;
+                            match status {
+                                VoteOutcome::Approved => {
+                                    let new_app = app.set_state(ApplicationState::ApprovedAndLive);
+                                    <Applications<T>>::insert(id, new_app);
+                                }
+                                VoteOutcome::Rejected => {
+                                    <Applications<T>>::remove(id);
+                                }
+                                _ => (),
+                            }
+                        }
+                        Ok(())
+                    });
+            }
+
+            if <frame_system::Module<T>>::block_number() % Self::milestone_poll_frequency() == Zero::zero() {
+                let _ = <Milestones<T>>::iter()
+                    .filter(|(_, mile)| mile.under_review().is_some())
+                    .map(|(id, mile)| -> DispatchResult {
+                        if let Some(v) = mile.under_review() {
+                            let status = <vote::Module<T>>::get_vote_outcome(v)?;
+                            match status {
+                                VoteOutcome::Approved => {
+                                    let fid = Self::fund_account_id(mile.base_foundation());
+                                    if let Some(t) = mile.team() {
+                                        let remainder = <donate::Module<T>>::donate(&fid, OrgRep::Weighted(t), mile.payment())?;
+                                        if remainder > BalanceOf::<T>::zero() {
+                                            T::Currency::transfer(
+                                                &fid,
+                                                &mile.submitter(),
+                                                remainder,
+                                                ExistenceRequirement::KeepAlive
+                                            )?;
+                                        }
+                                    } else {
+                                        T::Currency::transfer(
+                                            &fid,
+                                            &mile.submitter(),
+                                            mile.payment(),
+                                            ExistenceRequirement::KeepAlive
+                                        )?;
+                                    }
+                                    // update foundation based on spend
+                                    let foundation = <Foundations<T>>::get(mile.base_foundation()).ok_or(Error::<T>::FoundationDNE)?;
+                                    let new_foundation = foundation.subtract_raised(mile.payment());
+                                    <Foundations<T>>::insert(mile.base_foundation(), new_foundation);
+                                    // update milestone
+                                    let new_mile = mile.set_state(MilestoneStatus::ApprovedAndTransferExecuted);
+                                    <Milestones<T>>::insert(id, new_mile);
+                                }
+                                VoteOutcome::Rejected => {
+                                    <Milestones<T>>::remove(id);
+                                }
+                                _ => (),
+                            }
+                        }
+                        Ok(())
+                    });
+            }
         }
     }
 }
@@ -412,13 +507,13 @@ impl<T: Trait> Module<T> {
     }
 }
 
-// Submission and trigger helper methods
+// Permissions
 impl<T: Trait> Module<T> {
     fn can_submit_milestone(
         app: T::ApplicationId,
         submitter: &T::AccountId,
         team: Option<T::OrgId>,
-    ) -> Result<bool, DispatchError> {
+    ) -> Result<(FoundationIndex, bool), DispatchError> {
         let application =
             <Applications<T>>::get(app).ok_or(Error::<T>::ApplicationDNE)?;
         ensure!(
@@ -436,7 +531,7 @@ impl<T: Trait> Module<T> {
         } else {
             application.is_submitter(submitter)
         };
-        Ok(auth)
+        Ok((application.foundation(), auth))
     }
     fn can_trigger_app_review(
         app: T::ApplicationId,
@@ -460,7 +555,7 @@ impl<T: Trait> Module<T> {
     ) -> Result<(MilestoneOf<T>, FoundationOf<T>), DispatchError> {
         let milestone = <Milestones<T>>::get(milestone_id)
             .ok_or(Error::<T>::MilestoneDNE)?;
-        let app = <Applications<T>>::get(milestone.app_ref())
+        let app = <Applications<T>>::get(milestone.base_application())
             .ok_or(Error::<T>::ApplicationDNE)?;
         let foundation = <Foundations<T>>::get(app.foundation())
             .ok_or(Error::<T>::FoundationDNE)?;
@@ -471,6 +566,20 @@ impl<T: Trait> Module<T> {
             );
         ensure!(auth, Error::<T>::NotAuthorizedToTriggerReview);
         Ok((milestone, foundation))
+    }
+}
+
+// Storage helper for removing all storage items associated with a foundation
+impl<T: Trait> Module<T> {
+    pub fn recursive_remove_foundation(id: FoundationIndex) {
+        <Foundations<T>>::remove(id);
+        FoundationCounter::mutate(|n| *n -= 1);
+        <Applications<T>>::iter()
+            .filter(|(_, app)| app.foundation() == id)
+            .for_each(|(i, _)| <Applications<T>>::remove(i));
+        <Milestones<T>>::iter()
+            .filter(|(_, mile)| mile.base_foundation() == id)
+            .for_each(|(i, _)| <Milestones<T>>::remove(i));
     }
 }
 
