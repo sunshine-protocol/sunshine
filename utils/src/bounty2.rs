@@ -31,11 +31,18 @@ pub struct ResolutionMetadata<AccountId, OrgId, Threshold> {
     threshold: Threshold,
 }
 
-impl<AccountId: Clone, OrgId: Copy, Threshold: Copy>
+impl<AccountId: Clone + PartialEq, OrgId: Copy, Threshold: Copy>
     ResolutionMetadata<AccountId, OrgId, Threshold>
 {
     pub fn sudo(&self) -> Option<AccountId> {
         self.sudo.clone()
+    }
+    pub fn is_sudo(&self, who: &AccountId) -> bool {
+        if let Some(s) = self.sudo() {
+            &s == who
+        } else {
+            false
+        }
     }
     pub fn org(&self) -> OrgId {
         self.org

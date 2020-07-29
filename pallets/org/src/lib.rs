@@ -378,13 +378,24 @@ decl_module! {
 }
 
 impl<T: Trait> Module<T> {
-    pub fn is_child_org(
+    pub fn is_immediate_child(
         parent: Option<T::OrgId>,
         child: T::OrgId,
     ) -> Result<bool, DispatchError> {
         let child_org =
             <OrganizationStates<T>>::get(child).ok_or(Error::<T>::OrgDNE)?;
         Ok(child_org.parent() == parent)
+    }
+    pub fn get_immediate_children(parent: T::OrgId) -> Option<Vec<T::OrgId>> {
+        let ret = <OrganizationStates<T>>::iter()
+            .filter(|(_, org)| org.parent() == Some(parent))
+            .map(|(id, _)| id)
+            .collect::<Vec<T::OrgId>>();
+        if ret.is_empty() {
+            None
+        } else {
+            Some(ret)
+        }
     }
 }
 

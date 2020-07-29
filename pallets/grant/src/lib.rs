@@ -38,6 +38,7 @@ use sp_runtime::{
         AtLeast32Bit,
         MaybeSerializeDeserialize,
         Member,
+        Saturating,
         Zero,
     },
     DispatchError,
@@ -73,16 +74,17 @@ use util::{
 type BalanceOf<T> = <<T as donate::Trait>::Currency as Currency<
     <T as frame_system::Trait>::AccountId,
 >>::Balance;
+type VoteCallData<T> = ResolutionMetadata<
+    <T as frame_system::Trait>::AccountId,
+    OrgRep<<T as org::Trait>::OrgId>,
+    PercentageThreshold<Permill>,
+>;
 type FoundationIndex = u32;
 type FoundationOf<T> = Foundation<
     <T as org::Trait>::IpfsReference,
     <T as frame_system::Trait>::AccountId,
     BalanceOf<T>,
-    ResolutionMetadata<
-        <T as frame_system::Trait>::AccountId,
-        OrgRep<<T as org::Trait>::OrgId>,
-        PercentageThreshold<Permill>,
-    >,
+    VoteCallData<T>,
 >;
 type ApplicationOf<T> = GrantApplication<
     FoundationIndex,
@@ -139,6 +141,9 @@ pub trait Trait:
     /// The amount to be held on deposit by the owner of a foundation
     type FoundationDeposit: Get<BalanceOf<Self>>;
 
+    /// The minimum outside contribution to a foundation
+    type MinContribution: Get<BalanceOf<Self>>;
+
     /// The period of time (in blocks) after closing during which
     /// contributors are able to withdraw their funds. After this period, their funds are lost.
     type RetirementPeriod: Get<Self::BlockNumber>;
@@ -150,13 +155,20 @@ decl_event!(
         <T as frame_system::Trait>::AccountId,
         <T as org::Trait>::OrgId,
         <T as org::Trait>::IpfsReference,
+        <T as vote::Trait>::VoteId,
         <T as Trait>::ApplicationId,
         <T as Trait>::MilestoneId,
         Balance = BalanceOf<T>,
     {
         FoundationOpened(FoundationIndex, Balance, IpfsReference),
-        GrantApplicationSubmitted(FoundationIndex, ApplicationId, AccountId, Option<OrgId>, Balance, IpfsReference),
+        // index, who, amount_contributed, total_raised
+        FoundationContribution(FoundationIndex, AccountId, Balance, Balance),
+        // index, who, amount_revoked, total_raised
+        FoundationContributionRevoked(FoundationIndex, AccountId, Balance, Balance),
+        ApplicationSubmitted(FoundationIndex, ApplicationId, AccountId, Option<OrgId>, Balance, IpfsReference),
+        ApplicationReviewTriggered(ApplicationId, VoteId, IpfsReference),
         MilestoneSubmitted(ApplicationId, MilestoneId, AccountId, Option<OrgId>, Balance, IpfsReference),
+        MilestoneReviewTriggered(MilestoneId, VoteId, IpfsReference),
     }
 );
 
@@ -168,6 +180,12 @@ decl_error! {
         MilestoneDNE,
         NotAuthorizedToApplyForOutsideTeam,
         NotAuthorizedToSubmitMilestone,
+        NotAuthorizedToTriggerReview,
+        ApplicationMustBeApprovedAndLiveToSubmitMilestone,
+        // TODO: relax this requirement once we determine how to prove relationships between teams more efficiently (i.e. if both are children)
+        MilestoneMustMatchApplicationTeam,
+        ContributionMustExceedModuleMinimum,
+        CannotRevokeIfContributionDNE,
     }
 }
 
@@ -214,11 +232,7 @@ decl_module! {
             origin,
             info: T::IpfsReference,
             raise_contribution: Option<BalanceOf<T>>,
-            gov: ResolutionMetadata<
-                T::AccountId,
-                OrgRep<T::OrgId>,
-                PercentageThreshold<Permill>,
-            >,
+            gov: VoteCallData<T>,
         ) -> DispatchResult {
             let depositer = ensure_signed(origin)?;
             let min_deposit = T::FoundationDeposit::get();
@@ -241,14 +255,67 @@ decl_module! {
             FoundationCounter::mutate(|n| *n+=1);
             Self::deposit_event(RawEvent::FoundationOpened(index, initial_deposit, info));
             Ok(())
-        }// TODO: fn contribute to foundation
+        }
+        #[weight = 0]
+        fn close_foundation(
+            origin,
+            id: FoundationIndex,
+        ) -> DispatchResult {
+            let depositer = ensure_signed(origin)?;
+            todo!()
+        }
+        #[weight = 0]
+        fn contribute_to_foundation(
+            origin,
+            foundation_id: FoundationIndex,
+            amount: BalanceOf<T>
+        ) -> DispatchResult {
+            let contributor = ensure_signed(origin)?;
+            ensure!(amount >= T::MinContribution::get(), Error::<T>::ContributionMustExceedModuleMinimum);
+            let foundation = <Foundations<T>>::get(foundation_id).ok_or(Error::<T>::FoundationDNE)?;
+            T::Currency::transfer(
+                &contributor,
+                &Self::fund_account_id(foundation_id),
+                amount,
+                ExistenceRequirement::KeepAlive
+            )?;
+            let new_foundation = foundation.add_raised(amount);
+            let new_raised = new_foundation.raised();
+            <Foundations<T>>::insert(foundation_id, new_foundation);
+            let balance = Self::contribution_get(foundation_id, &contributor);
+            let balance = balance.saturating_add(amount);
+            Self::contribution_put(foundation_id, &contributor, &amount);
+            Self::deposit_event(RawEvent::FoundationContribution(foundation_id, contributor, balance, new_raised));
+            Ok(())
+        }
+        #[weight = 0]
+        fn revoke_contribution_from_foundation(
+            origin,
+            foundation_id: FoundationIndex,
+        ) -> DispatchResult {
+            let revoker = ensure_signed(origin)?;
+            let foundation = <Foundations<T>>::get(foundation_id).ok_or(Error::<T>::FoundationDNE)?;
+            let balance = Self::contribution_get(foundation_id, &revoker);
+            ensure!(balance > BalanceOf::<T>::zero(), Error::<T>::CannotRevokeIfContributionDNE);
+            T::Currency::transfer(
+                &Self::fund_account_id(foundation_id),
+                &revoker,
+                balance,
+                ExistenceRequirement::KeepAlive
+            )?;
+            let new_foundation = foundation.subtract_raised(balance);
+            let new_raise = new_foundation.raised();
+            Self::contribution_kill(foundation_id, &revoker);
+            Self::deposit_event(RawEvent::FoundationContributionRevoked(foundation_id, revoker, balance, new_raise));
+            Ok(())
+        }
         #[weight = 0]
         fn apply_for_grant(
             origin,
             foundation: FoundationIndex,
             description: T::IpfsReference,
             team: Option<T::OrgId>,
-            payment: BalanceOf<T>, // TODO: change to enum with drip
+            payment: BalanceOf<T>,
         ) -> DispatchResult {
             let applicant = ensure_signed(origin)?;
             ensure!(!Self::foundation_index_is_available(foundation), Error::<T>::FoundationDNE);
@@ -259,9 +326,20 @@ decl_module! {
             let application = GrantApplication::new(foundation, description.clone(), applicant.clone(), team, payment);
             let id = Self::application_generate_uid();
             <Applications<T>>::insert(id, application);
-            Self::deposit_event(RawEvent::GrantApplicationSubmitted(foundation, id, applicant, team, payment, description));
+            Self::deposit_event(RawEvent::ApplicationSubmitted(foundation, id, applicant, team, payment, description));
             Ok(())
-        } // TODO: trigger review -> poll in on_finalize
+        }
+        #[weight = 0]
+        fn trigger_application_review(
+            origin,
+            application_id: T::ApplicationId,
+        ) -> DispatchResult {
+            let trigger = ensure_signed(origin)?;
+            let (application, foundation) = Self::can_trigger_app_review(application_id, &trigger)?;
+            let new_vote_id = <vote::Module<T>>::open_threshold_vote(Some(application.submission().clone()), foundation.gov().org(), foundation.gov().threshold().pct_to_pass(), foundation.gov().threshold().pct_to_fail(), None)?;
+            Self::deposit_event(RawEvent::ApplicationReviewTriggered(application_id, new_vote_id, application.submission()));
+            Ok(())
+        }
         #[weight = 0]
         fn submit_milestone(
             origin,
@@ -278,18 +356,20 @@ decl_module! {
             <Milestones<T>>::insert(id, milestone);
             Self::deposit_event(RawEvent::MilestoneSubmitted(application, id, submitter, team, payment, submission));
             Ok(())
-        } // TODO: trigger review -> poll in on_finalize
+        }
         #[weight = 0]
         fn trigger_milestone_review(
             origin,
             milestone_id: T::MilestoneId,
+            supervisor: Option<VoteCallData<T>>,
         ) -> DispatchResult {
             let trigger = ensure_signed(origin)?;
-            // TODO: extract into separate method
-            let milestone = <Milestones<T>>::get(milestone_id).ok_or(Error::<T>::MilestoneDNE)?;
-            let app = <Applications<T>>::get(milestone.app_ref()).ok_or(Error::<T>::ApplicationDNE)?;
-            let foundation = <Foundations<T>>::get(app.foundation()).ok_or(Error::<T>::FoundationDNE)?;
-
+            let (milestone, foundation) = Self::can_trigger_milestone_review(milestone_id, &trigger)?;
+            let review_board = if let Some(s) = supervisor {
+                s
+            } else { foundation.gov() };
+            let new_vote_id = <vote::Module<T>>::open_threshold_vote(Some(milestone.submission().clone()), review_board.org(), review_board.threshold().pct_to_pass(), review_board.threshold().pct_to_fail(), None)?;
+            Self::deposit_event(RawEvent::MilestoneReviewTriggered(milestone_id, new_vote_id, milestone.submission()));
             Ok(())
         }
     }
@@ -341,53 +421,56 @@ impl<T: Trait> Module<T> {
     ) -> Result<bool, DispatchError> {
         let application =
             <Applications<T>>::get(app).ok_or(Error::<T>::ApplicationDNE)?;
-        // ensure that the application is approved?
-        todo!() // use `is_child_org()`
+        ensure!(
+            application.approved_and_live(),
+            Error::<T>::ApplicationMustBeApprovedAndLiveToSubmitMilestone
+        );
+        // TODO: relax strict equality for some provable relation (co-children)
+        ensure!(
+            application.team() == team,
+            Error::<T>::MilestoneMustMatchApplicationTeam
+        );
+        let auth = if let Some(t) = team {
+            <org::Module<T>>::is_member_of_group(t, submitter)
+                || application.is_submitter(submitter)
+        } else {
+            application.is_submitter(submitter)
+        };
+        Ok(auth)
     }
     fn can_trigger_app_review(
         app: T::ApplicationId,
         trigger: &T::AccountId,
-    ) -> Result<
-        (
-            T::IpfsReference,
-            T::ApplicationId,
-            ApplicationOf<T>,
-            FoundationOf<T>,
-        ),
-        DispatchError,
-    > {
-        todo!()
+    ) -> Result<(ApplicationOf<T>, FoundationOf<T>), DispatchError> {
+        let application =
+            <Applications<T>>::get(app).ok_or(Error::<T>::ApplicationDNE)?;
+        let foundation = <Foundations<T>>::get(application.foundation())
+            .ok_or(Error::<T>::FoundationDNE)?;
+        let auth = foundation.gov().is_sudo(trigger)
+            || <org::Module<T>>::is_member_of_group(
+                foundation.gov().org().org(),
+                trigger,
+            );
+        ensure!(auth, Error::<T>::NotAuthorizedToTriggerReview);
+        Ok((application, foundation))
     }
     fn can_trigger_milestone_review(
-        milestone: T::MilestoneId,
+        milestone_id: T::MilestoneId,
         trigger: &T::AccountId,
-    ) -> Result<
-        (
-            T::IpfsReference,
-            T::MilestoneId,
-            MilestoneOf<T>,
-            FoundationOf<T>,
-        ),
-        DispatchError,
-    > {
-        todo!()
-    }
-    fn dispatch_app_review(
-        id: T::ApplicationId,
-        app: ApplicationOf<T>,
-        foundation: FoundationOf<T>,
-    ) -> Result<T::VoteId, DispatchError> {
-        // update Foundation
-        todo!()
-    }
-    fn dispatch_milestone_review(
-        id: T::MilestoneId,
-        mile: MilestoneOf<T>,
-        foundation: FoundationOf<T>,
-        reviewer: Option<T::OrgId>,
-    ) -> Result<T::VoteId, DispatchError> {
-        // update and insert
-        todo!()
+    ) -> Result<(MilestoneOf<T>, FoundationOf<T>), DispatchError> {
+        let milestone = <Milestones<T>>::get(milestone_id)
+            .ok_or(Error::<T>::MilestoneDNE)?;
+        let app = <Applications<T>>::get(milestone.app_ref())
+            .ok_or(Error::<T>::ApplicationDNE)?;
+        let foundation = <Foundations<T>>::get(app.foundation())
+            .ok_or(Error::<T>::FoundationDNE)?;
+        let auth = foundation.gov().is_sudo(trigger)
+            || <org::Module<T>>::is_member_of_group(
+                foundation.gov().org().org(),
+                trigger,
+            );
+        ensure!(auth, Error::<T>::NotAuthorizedToTriggerReview);
+        Ok((milestone, foundation))
     }
 }
 

@@ -27,7 +27,10 @@ pub struct Foundation<IpfsReference, AccountId, Currency, Governance> {
 impl<
         IpfsReference: Clone,
         AccountId: Clone,
-        Currency: Copy + PartialOrd + sp_std::ops::Sub<Output = Currency>,
+        Currency: Copy
+            + PartialOrd
+            + sp_std::ops::Sub<Output = Currency>
+            + sp_std::ops::Add<Output = Currency>,
         Governance: Clone,
     > Foundation<IpfsReference, AccountId, Currency, Governance>
 {
@@ -42,6 +45,18 @@ impl<
     }
     pub fn raised(&self) -> Currency {
         self.raised
+    }
+    pub fn add_raised(&self, a: Currency) -> Self {
+        Foundation {
+            raised: self.raised + a,
+            ..self.clone()
+        }
+    }
+    pub fn subtract_raised(&self, a: Currency) -> Self {
+        Foundation {
+            raised: self.raised - a,
+            ..self.clone()
+        }
     }
     pub fn gov(&self) -> Governance {
         self.gov.clone()
@@ -89,7 +104,7 @@ pub struct GrantApplication<
 > {
     foundation: FoundationId,
     /// The IPFS reference to the application information
-    description: IpfsReference,
+    submission: IpfsReference,
     /// The submitter is logged with submission
     submitter: AccountId,
     /// The org identifier for this team to receive funds that enforce an
@@ -120,7 +135,7 @@ impl<
 {
     pub fn new(
         foundation: FoundationId,
-        description: IpfsReference,
+        submission: IpfsReference,
         submitter: AccountId,
         team: Option<OrgId>,
         payment: Payment,
@@ -134,7 +149,7 @@ impl<
     > {
         GrantApplication {
             foundation,
-            description,
+            submission,
             submitter,
             team,
             payment,
@@ -143,6 +158,9 @@ impl<
     }
     pub fn foundation(&self) -> FoundationId {
         self.foundation
+    }
+    pub fn submission(&self) -> IpfsReference {
+        self.submission.clone()
     }
     pub fn submitter(&self) -> AccountId {
         self.submitter.clone()
@@ -155,6 +173,9 @@ impl<
     }
     pub fn payment(&self) -> Payment {
         self.payment.clone()
+    }
+    pub fn approved_and_live(&self) -> bool {
+        self.state.approved_and_live()
     }
     pub fn state(&self) -> ApplicationState<VoteId> {
         self.state
