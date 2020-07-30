@@ -4,8 +4,8 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 //! The grant module provides structured governance of grant programs
 
-// #[cfg(test)]
-// mod tests;
+#[cfg(test)]
+mod tests;
 
 use codec::{
     Codec,

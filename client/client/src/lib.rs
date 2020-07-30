@@ -3,6 +3,7 @@ mod error;
 pub use error::Error;
 pub mod bank;
 pub mod bounty;
+pub mod bounty3;
 pub mod court;
 pub mod donate;
 pub mod org;

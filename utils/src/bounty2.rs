@@ -67,7 +67,10 @@ pub struct BountyInformation<IpfsReference, AccountId, Currency, ReviewBoard> {
 impl<
         IpfsReference: Clone,
         AccountId: Clone,
-        Currency: Copy + PartialOrd + sp_std::ops::Sub<Output = Currency>,
+        Currency: Copy
+            + PartialOrd
+            + sp_std::ops::Sub<Output = Currency>
+            + sp_std::ops::Add<Output = Currency>,
         ReviewBoard: Clone,
     > BountyInformation<IpfsReference, AccountId, Currency, ReviewBoard>
 {
@@ -80,15 +83,17 @@ impl<
     pub fn funding_reserved(&self) -> Currency {
         self.funding_reserved
     }
-    pub fn pay_out_funding(&self, c: Currency) -> Option<Self> {
-        if c <= self.funding_reserved() {
-            let new_funding_reserved = self.funding_reserved() - c;
-            Some(BountyInformation {
-                funding_reserved: new_funding_reserved,
-                ..self.clone()
-            })
-        } else {
-            None
+    pub fn add_funding(&self, c: Currency) -> Self {
+        BountyInformation {
+            funding_reserved: self.funding_reserved + c,
+            ..self.clone()
+        }
+    }
+    pub fn pay_out_funding(&self, c: Currency) -> Self {
+        let new_funding_reserved = self.funding_reserved() - c;
+        BountyInformation {
+            funding_reserved: new_funding_reserved,
+            ..self.clone()
         }
     }
     pub fn permissions(&self) -> ReviewBoard {

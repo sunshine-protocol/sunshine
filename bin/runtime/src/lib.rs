@@ -422,6 +422,21 @@ impl bounty::Trait for Runtime {
     type BountyId = u64;
     type BountyLowerBound = BountyLowerBound;
 }
+parameter_types! {
+    pub const Foundation: ModuleId = ModuleId(*b"fundacon");
+    pub const MinDeposit: u128 = 10;
+    pub const MinContribution: u128 = 5;
+}
+impl bounty3::Trait for Runtime {
+    type Event = Event;
+    type IpfsReference = CidBytes;
+    type Currency = Balances;
+    type BountyId = u64;
+    type SubmissionId = u64;
+    type Foundation = Foundation;
+    type MinDeposit = MinDeposit;
+    type MinContribution = MinContribution;
+}
 
 construct_runtime!(
     pub enum Runtime where
@@ -447,6 +462,7 @@ construct_runtime!(
         Donate: donate::{Module, Call, Event<T>},
         Bank: bank::{Module, Call, Storage, Event<T>},
         Bounty: bounty::{Module, Call, Storage, Event<T>},
+        Bounty3: bounty3::{Module, Call, Storage, Event<T>},
     }
 );
 

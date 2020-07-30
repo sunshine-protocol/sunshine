@@ -19,13 +19,15 @@ use frame_support::{
         Currency,
         ExistenceRequirement,
         Get,
-        ReservableCurrency,
+        WithdrawReason,
+        WithdrawReasons,
     },
     Parameter,
 };
 use frame_system::ensure_signed;
 use sp_runtime::{
     traits::{
+        AccountIdConversion,
         AtLeast32Bit,
         MaybeSerializeDeserialize,
         Member,
@@ -33,6 +35,7 @@ use sp_runtime::{
     },
     DispatchError,
     DispatchResult,
+    ModuleId,
 };
 use sp_std::{
     fmt::Debug,
@@ -97,6 +100,12 @@ pub trait Trait:
         + PartialEq
         + Zero;
 
+    /// The foundational foundation
+    type Foundation: Get<ModuleId>;
+
+    /// Minimum contribution to posted bounty
+    type MinContribution: Get<BalanceOf<Self>>;
+
     /// Unambiguous lower bound for bounties posted
     type BountyLowerBound: Get<BalanceOf<Self>>;
 
@@ -117,6 +126,8 @@ decl_event!(
         Balance = BalanceOf<T>,
     {
         BountyPosted(AccountId, Balance, Option<AccountId>, OrgRep<OrgId>, BountyId, IpfsReference),
+        BountyToppedUp(AccountId, Balance, BountyId, Balance),
+        BountyContributionRevoked(AccountId, Balance, BountyId, Balance),
         BountySubmissionPosted(AccountId, Option<OrgRep<OrgId>>, BountyId, Balance, SubmissionId, IpfsReference),
         BountySubmissionApprovedAndScheduled(AccountId, BountyId, SubmissionId, AccountId, Balance, AccountId, Option<OrgRep<OrgId>>, BlockNumber, IpfsReference),
         BountySubmissionApprovalChallenged(AccountId, BountyId, SubmissionId, OrgRep<OrgId>, VoteId, IpfsReference),
@@ -136,6 +147,7 @@ decl_error! {
         CannotChallengeAfterChallengePeriodEnds,
         SubmissionNotInValidStateForChallenge,
         NotAuthorizedToChallengeApproval,
+        MustContributeToRevokeContribution,
     }
 }
 
@@ -161,6 +173,10 @@ decl_storage! {
                     >,
                 >
             >;
+        // Tips for existing Bounties
+        pub BountyTips get(fn bounty_tips): double_map
+            hasher(blake2_128_concat) T::BountyId,
+            hasher(blake2_128_concat) T::AccountId => Option<BalanceOf<T>>;
 
         /// Posted Submissions
         pub Submissions get(fn submissions): map
@@ -202,6 +218,53 @@ decl_module! {
             let (sudo, org) = (permissions.sudo(), permissions.org());
             let id = Self::post_bounty2(poster.clone(), info.clone(), funding, permissions)?;
             Self::deposit_event(RawEvent::BountyPosted(poster, funding, sudo, org, id, info));
+            Ok(())
+        }
+        #[weight = 0]
+        fn top_up_bounty(
+            origin,
+            bounty_id: T::BountyId,
+            amount: BalanceOf<T>,
+        ) -> DispatchResult {
+            let contributor = ensure_signed(origin)?;
+            let bounty = <Bounties<T>>::get(bounty_id).ok_or(Error::<T>::BountyDNE)?;
+            T::Currency::transfer(
+                &contributor,
+                &Self::bounty_account_id(bounty_id),
+                amount,
+                ExistenceRequirement::KeepAlive,
+            )?;
+            let new_amount = if let Some(a) = <BountyTips<T>>::get(bounty_id, &contributor) {
+                amount + a
+            } else {
+                amount
+            };
+            let new_bounty = bounty.add_funding(amount);
+            let new_funding_reserved = new_bounty.funding_reserved();
+            <BountyTips<T>>::insert(bounty_id, &contributor, new_amount);
+            <Bounties<T>>::insert(bounty_id, new_bounty);
+            Self::deposit_event(RawEvent::BountyToppedUp(contributor, new_amount, bounty_id, new_funding_reserved));
+            Ok(())
+        }
+        #[weight = 0]
+        fn revoke_bounty_contribution(
+            origin,
+            bounty_id: T::BountyId,
+        ) -> DispatchResult {
+            let revoker = ensure_signed(origin)?;
+            let bounty = <Bounties<T>>::get(bounty_id).ok_or(Error::<T>::BountyDNE)?;
+            let revoked_amount = <BountyTips<T>>::get(bounty_id, &revoker).ok_or(Error::<T>::MustContributeToRevokeContribution)?;
+            T::Currency::transfer(
+                &Self::bounty_account_id(bounty_id),
+                &revoker,
+                revoked_amount,
+                ExistenceRequirement::KeepAlive,
+            )?;
+            let new_bounty = bounty.pay_out_funding(revoked_amount);
+            let new_bounty_amt = bounty.funding_reserved();
+            <Bounties<T>>::insert(bounty_id, new_bounty);
+            <BountyTips<T>>::remove(bounty_id, &revoker);
+            Self::deposit_event(RawEvent::BountyContributionRevoked(revoker, revoked_amount, bounty_id, new_bounty_amt));
             Ok(())
         }
         #[weight = 0]
@@ -333,6 +396,9 @@ decl_module! {
 }
 
 impl<T: Trait> Module<T> {
+    pub fn bounty_account_id(index: T::BountyId) -> T::AccountId {
+        T::Foundation::get().into_sub_account(index)
+    }
     fn bounty_id_is_available(id: T::BountyId) -> bool {
         <Bounties<T>>::get(id).is_none()
     }
@@ -429,9 +495,18 @@ impl<T: Trait>
             !<org::Module<T>>::id_is_available(permissions.org().org()),
             Error::<T>::DisputeResolvingOrgMustExistToPostBounty
         );
-        T::Currency::reserve(&poster, funding)?;
-        let bounty = BountyInformation::new(info, poster, funding, permissions);
+        let imb = <T as donate::Trait>::Currency::withdraw(
+            &poster,
+            funding,
+            WithdrawReasons::from(WithdrawReason::Transfer),
+            ExistenceRequirement::AllowDeath,
+        )?;
         let id: T::BountyId = Self::bounty_generate_unique_id();
+        <T as donate::Trait>::Currency::resolve_creating(
+            &Self::bounty_account_id(id),
+            imb,
+        );
+        let bounty = BountyInformation::new(info, poster, funding, permissions);
         <Bounties<T>>::insert(id, bounty);
         Ok(id)
     }

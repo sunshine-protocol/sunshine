@@ -23,7 +23,7 @@ impl_outer_origin! {
     pub enum Origin for Test where system = frame_system {}
 }
 
-mod bounty {
+mod bounty2 {
     pub use super::super::*;
 }
 
@@ -34,7 +34,7 @@ impl_outer_event! {
         org<T>,
         vote<T>,
         donate<T>,
-        bounty<T>,
+        bounty2<T>,
     }
 }
 
@@ -121,7 +121,7 @@ fn get_last_event() -> RawEvent<u64, u64, u64, u32, u64, u64, u64, u64> {
         .into_iter()
         .map(|r| r.event)
         .filter_map(|e| {
-            if let TestEvent::bounty(inner) = e {
+            if let TestEvent::bounty2(inner) = e {
                 Some(inner)
             } else {
                 None
