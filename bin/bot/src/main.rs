@@ -16,8 +16,10 @@ use substrate_subxt::{
 };
 use sunshine_bounty_client::{
     bounty::{
+        BountyPaymentExecutedEvent,
         BountyPostedEvent,
-        MilestoneSubmittedEvent,
+        BountyRaiseContributionEvent,
+        BountySubmissionPostedEvent,
     },
     BountyBody,
 };
@@ -31,7 +33,9 @@ use tokio::time;
 pub struct Bot {
     pub client: Client<Store>,
     pub bounty_post_sub: EventSubscription<Runtime>,
-    pub milestone_submit_sub: EventSubscription<Runtime>,
+    pub bounty_contrib_sub: EventSubscription<Runtime>,
+    pub bounty_submit_sub: EventSubscription<Runtime>,
+    pub bounty_approval_sub: EventSubscription<Runtime>,
 }
 
 #[tokio::main]
@@ -42,13 +46,19 @@ async fn main() -> std::result::Result<(), Error> {
     let client = Client::new(&root, None).await.map_err(Error::Client)?;
     // subscribe to bounty posts
     let bounty_post_sub = bounty_post_subscriber(&client).await?;
-    // subscribe to milestone submissions
-    let milestone_submit_sub = milestone_submission_subscriber(&client).await?;
+    // subscribe to bounty contributions
+    let bounty_contrib_sub = bounty_contribution_subscriber(&client).await?;
+    // subscribe to bounty submissions
+    let bounty_submit_sub = bounty_submission_subscriber(&client).await?;
+    // subscribe to bounty payments
+    let bounty_approval_sub = bounty_approval_subscriber(&client).await?;
     // instantiate local bot
     let mut bot = Bot {
         client,
         bounty_post_sub,
-        milestone_submit_sub,
+        bounty_contrib_sub,
+        bounty_submit_sub,
+        bounty_approval_sub,
     };
     // TODO: how can I read input so that the user doesn't have to press enter
     println!("Press `q` then `Enter` to quit the bounty bot");
@@ -67,7 +77,6 @@ fn keep_running_bot() -> bool {
     }
 }
 
-// TODO: PRINT CONFIRMATION
 async fn run_github_bot(mut bot: Bot, github: GBot) -> Result<Bot> {
     if let Some(Ok(raw)) = bot.bounty_post_sub.next().await {
         // get event data
@@ -84,22 +93,21 @@ async fn run_github_bot(mut bot: Bot, github: GBot) -> Result<Bot> {
         // issue comment
         github
             .issue_comment_bounty_post(
-                event.amount_reserved_for_bounty,
-                event.new_bounty_id,
+                event.amount,
+                event.id,
                 bounty_body.repo_owner,
                 bounty_body.repo_name,
                 bounty_body.issue_number,
             )
             .await?;
-    } else if let Some(Ok(raw)) = bot.milestone_submit_sub.next().await {
+    } else if let Some(Ok(raw)) = bot.bounty_contrib_sub.next().await {
         // get event data
         let event =
-            MilestoneSubmittedEvent::<Runtime>::decode(&mut &raw.data[..])
+            BountyRaiseContributionEvent::<Runtime>::decode(&mut &raw.data[..])
                 .map_err(Error::SubxtCodec)?;
         // fetch structured data from client
-        let event_cid =
-            event.submission_ref.to_cid().map_err(Error::CiDecode)?;
-        let milestone_body: BountyBody = bot
+        let event_cid = event.bounty_ref.to_cid().map_err(Error::CiDecode)?;
+        let bounty_body: BountyBody = bot
             .client
             .offchain_client()
             .get(&event_cid)
@@ -107,13 +115,61 @@ async fn run_github_bot(mut bot: Bot, github: GBot) -> Result<Bot> {
             .map_err(Error::Libipld)?;
         // issue comment
         github
-            .issue_comment_milestone_submission(
-                event.amount_requested,
+            .issue_comment_bounty_contribute(
                 event.bounty_id,
-                event.new_milestone_id,
-                milestone_body.repo_owner,
-                milestone_body.repo_name,
-                milestone_body.issue_number,
+                event.total,
+                bounty_body.repo_owner,
+                bounty_body.repo_name,
+                bounty_body.issue_number,
+            )
+            .await?;
+    } else if let Some(Ok(raw)) = bot.bounty_submit_sub.next().await {
+        // get event data
+        let event =
+            BountySubmissionPostedEvent::<Runtime>::decode(&mut &raw.data[..])
+                .map_err(Error::SubxtCodec)?;
+        // fetch structured data from client
+        let event_cid = event.bounty_ref.to_cid().map_err(Error::CiDecode)?;
+        let bounty_body: BountyBody = bot
+            .client
+            .offchain_client()
+            .get(&event_cid)
+            .await
+            .map_err(Error::Libipld)?;
+        // issue comment
+        github
+            .issue_comment_bounty_submission(
+                event.amount,
+                event.bounty_id,
+                event.id,
+                bounty_body.repo_owner,
+                bounty_body.repo_name,
+                bounty_body.issue_number,
+            )
+            .await?;
+    } else if let Some(Ok(raw)) = bot.bounty_approval_sub.next().await {
+        // get event data
+        let event =
+            BountyPaymentExecutedEvent::<Runtime>::decode(&mut &raw.data[..])
+                .map_err(Error::SubxtCodec)?;
+        // fetch structured data from client
+        let event_cid = event.bounty_ref.to_cid().map_err(Error::CiDecode)?;
+        let bounty_body: BountyBody = bot
+            .client
+            .offchain_client()
+            .get(&event_cid)
+            .await
+            .map_err(Error::Libipld)?;
+        // issue comment
+        github
+            .issue_comment_submission_approval(
+                event.bounty_id,
+                event.submission_id,
+                event.amount,
+                event.new_total,
+                bounty_body.repo_owner,
+                bounty_body.repo_name,
+                bounty_body.issue_number,
             )
             .await?;
     } else {

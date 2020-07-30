@@ -31,10 +31,6 @@ impl_outer_event! {
     pub enum TestEvent for Test {
         system<T>,
         pallet_balances<T>,
-        org<T>,
-        vote<T>,
-        donate<T>,
-        bank<T>,
         bounty<T>,
     }
 }
@@ -85,44 +81,23 @@ impl pallet_balances::Trait for Test {
     type AccountStore = System;
     type WeightInfo = ();
 }
-impl org::Trait for Test {
-    type Event = TestEvent;
-    type IpfsReference = u32;
-    type OrgId = u64;
-    type Shares = u64;
-}
-impl vote::Trait for Test {
-    type Event = TestEvent;
-    type VoteId = u64;
-    type Signal = u64;
-}
-impl donate::Trait for Test {
-    type Event = TestEvent;
-    type Currency = Balances;
-}
 parameter_types! {
-    pub const MaxTreasuryPerOrg: u32 = 50;
-    pub const MinimumInitialDeposit: u64 = 20;
-}
-impl bank::Trait for Test {
-    type Event = TestEvent;
-    type SpendId = u64;
-    type Currency = Balances;
-    type MaxTreasuryPerOrg = MaxTreasuryPerOrg;
-    type MinimumInitialDeposit = MinimumInitialDeposit;
-}
-parameter_types! {
-    // minimum deposit to register an on-chain bank
-    pub const BountyLowerBound: u64 = 5;
+    pub const Foundation: ModuleId = ModuleId(*b"fundacon");
+    pub const MinDeposit: u64 = 10;
+    pub const MinContribution: u64 = 5;
 }
 impl Trait for Test {
     type Event = TestEvent;
+    type IpfsReference = u32;
+    type Currency = Balances;
     type BountyId = u64;
-    type BountyLowerBound = BountyLowerBound;
+    type SubmissionId = u64;
+    type Foundation = Foundation;
+    type MinDeposit = MinDeposit;
+    type MinContribution = MinContribution;
 }
 pub type System = system::Module<Test>;
 pub type Balances = pallet_balances::Module<Test>;
-pub type Org = org::Module<Test>;
 pub type Bounty = Module<Test>;
 
 fn get_last_event() -> RawEvent<u64, u32, u64, u64, u64> {
@@ -149,401 +124,145 @@ fn new_test_ext() -> sp_io::TestExternalities {
     }
     .assimilate_storage(&mut t)
     .unwrap();
-    org::GenesisConfig::<Test> {
-        first_organization_supervisor: 1,
-        first_organization_value_constitution: 1738,
-        first_organization_flat_membership: vec![1, 2, 3, 4, 5, 6],
-    }
-    .assimilate_storage(&mut t)
-    .unwrap();
     let mut ext: sp_io::TestExternalities = t.into();
     ext.execute_with(|| System::set_block_number(1));
     ext
 }
 
-use util::organization::Organization;
-
 #[test]
 fn genesis_config_works() {
     new_test_ext().execute_with(|| {
-        assert_eq!(Org::organization_counter(), 1);
-        let constitution = 1738;
-        let expected_organization =
-            Organization::new(Some(1), None, constitution);
-        let org_in_storage = Org::organization_states(1u64).unwrap();
-        assert_eq!(expected_organization, org_in_storage);
-        for i in 1u64..7u64 {
-            assert!(Org::is_member_of_group(1u64, &i));
-        }
         assert!(System::events().is_empty());
     });
 }
 
 #[test]
-fn account_posts_bounty_works() {
+fn post_bounty_works() {
     new_test_ext().execute_with(|| {
-        let one = Origin::signed(1);
-        let new_resolution_metadata =
-            ResolutionMetadata::new(OrgRep::Equal(1), 1, None, None);
         assert_noop!(
-            Bounty::account_posts_bounty(
-                one.clone(),
-                10u32, // constitution
-                101,   // amount reserved for bounty
-                new_resolution_metadata.clone(),
-                None,
+            Bounty::post_bounty(
+                Origin::signed(1),
+                10u32, // cid
+                9,     // amount
             ),
-            DispatchError::Module {
+            Error::<Test>::BountyPostMustExceedMinDeposit,
+        );
+        assert_noop!(
+            Bounty::post_bounty(
+                Origin::signed(1),
+                10u32, // cid
+                101,   // amount
+            ),
+            sp_runtime::DispatchError::Module {
                 index: 0,
                 error: 3,
                 message: Some("InsufficientBalance",),
-            }
+            },
         );
-        assert_ok!(Bounty::account_posts_bounty(
-            one.clone(),
+        assert_ok!(Bounty::post_bounty(
+            Origin::signed(1),
             10u32, // constitution
-            10,    // amount reserved for bounty
-            new_resolution_metadata,
-            None,
+            10,    // funding reserved
         ));
-        assert_eq!(get_last_event(), RawEvent::BountyPosted(1, 1, 10, 10));
+        assert_eq!(RawEvent::BountyPosted(1, 10, 1, 10), get_last_event());
     });
 }
 
 #[test]
-fn account_applies_for_bounty_works() {
+fn contribution_works() {
     new_test_ext().execute_with(|| {
-        let one = Origin::signed(1);
-        let two = Origin::signed(2);
-        let new_resolution_metadata =
-            ResolutionMetadata::new(OrgRep::Equal(1), 1, None, None);
-        assert_ok!(Bounty::account_posts_bounty(
-            one.clone(),
+        assert_ok!(Bounty::post_bounty(
+            Origin::signed(1),
             10u32, // constitution
-            10,    // amount reserved for bounty
-            new_resolution_metadata,
-            None,
+            10,    // funding reserved
         ));
         assert_noop!(
-            Bounty::account_applies_for_bounty(
-                two.clone(),
-                1,
-                15u32, // application description
-                11
-            ),
-            Error::<Test>::GrantApplicationRequestExceedsBountyFundingReserved
-        );
-        assert_ok!(Bounty::account_applies_for_bounty(
-            two.clone(),
-            1,
-            15u32, // application description
-            10
-        ));
-        assert_eq!(
-            get_last_event(),
-            RawEvent::BountyApplicationSubmitted(1, 1, 2, None, 10,)
-        );
-    });
-}
-
-#[test]
-fn account_triggers_application_review_works() {
-    new_test_ext().execute_with(|| {
-        let one = Origin::signed(1);
-        let two = Origin::signed(2);
-        let new_resolution_metadata =
-            ResolutionMetadata::new(OrgRep::Equal(1), 1, None, None);
-        assert_ok!(Bounty::account_posts_bounty(
-            one.clone(),
-            10u32, // constitution
-            10,    // amount reserved for bounty
-            new_resolution_metadata,
-            None,
-        ));
-        assert_noop!(
-            Bounty::account_applies_for_bounty(
-                two.clone(),
-                1,
-                15u32, // application description
-                11
-            ),
-            Error::<Test>::GrantApplicationRequestExceedsBountyFundingReserved
-        );
-        assert_ok!(Bounty::account_applies_for_bounty(
-            two.clone(),
-            1,
-            15u32, // application description
-            10
-        ));
-        assert_ok!(Bounty::account_triggers_application_review(
-            one.clone(),
-            1,
-            1,
-        ));
-        assert_eq!(
-            get_last_event(),
-            RawEvent::ApplicationReviewTriggered(
-                1,
-                1,
-                1,
-                ApplicationState::UnderReviewByAcceptanceCommittee(1)
-            )
-        );
-    });
-}
-
-#[test]
-fn account_sudo_approves_application_works() {
-    new_test_ext().execute_with(|| {
-        let one = Origin::signed(1);
-        let two = Origin::signed(2);
-        let new_resolution_metadata =
-            ResolutionMetadata::new(OrgRep::Equal(1), 1, None, None);
-        assert_ok!(Bounty::account_posts_bounty(
-            one.clone(),
-            10u32, // constitution
-            10,    // amount reserved for bounty
-            new_resolution_metadata,
-            None,
-        ));
-        assert_noop!(
-            Bounty::account_applies_for_bounty(
-                two.clone(),
-                1,
-                15u32, // application description
-                11
-            ),
-            Error::<Test>::GrantApplicationRequestExceedsBountyFundingReserved
-        );
-        assert_ok!(Bounty::account_applies_for_bounty(
-            two.clone(),
-            1,
-            15u32, // application description
-            10
-        ));
-        assert_ok!(Bounty::account_sudo_approves_application(
-            one.clone(),
-            1,
-            1,
-        ));
-        assert_eq!(
-            get_last_event(),
-            RawEvent::SudoApprovedBountyApplication(
-                1,
-                1,
-                1,
-                ApplicationState::ApprovedAndLive
-            )
-        );
-    });
-}
-
-#[test]
-fn account_poll_application_works() {
-    new_test_ext().execute_with(|| {
-        let one = Origin::signed(1);
-        let two = Origin::signed(2);
-        let new_resolution_metadata =
-            ResolutionMetadata::new(OrgRep::Equal(1), 1, None, None);
-        assert_ok!(Bounty::account_posts_bounty(
-            one.clone(),
-            10u32, // constitution
-            10,    // amount reserved for bounty
-            new_resolution_metadata,
-            None,
-        ));
-        assert_ok!(Bounty::account_applies_for_bounty(
-            two.clone(),
-            1,
-            15u32, // application description
-            10
-        ));
-        assert_ok!(Bounty::account_poll_application(one.clone(), 1, 1,));
-        assert_eq!(
-            get_last_event(),
-            RawEvent::ApplicationPolled(
-                1,
-                1,
-                1,
-                ApplicationState::SubmittedAwaitingResponse
-            )
-        );
-        assert_ok!(Bounty::account_sudo_approves_application(
-            one.clone(),
-            1,
-            1,
-        ));
-        assert_eq!(
-            get_last_event(),
-            RawEvent::SudoApprovedBountyApplication(
-                1,
-                1,
-                1,
-                ApplicationState::ApprovedAndLive
-            )
-        );
-        assert_ok!(Bounty::account_poll_application(one.clone(), 1, 1,));
-        assert_eq!(
-            get_last_event(),
-            RawEvent::ApplicationPolled(
-                1,
-                1,
-                1,
-                ApplicationState::ApprovedAndLive
-            )
-        );
-    });
-}
-
-#[test]
-fn milestone_submission_works() {
-    new_test_ext().execute_with(|| {
-        let one = Origin::signed(1);
-        let two = Origin::signed(2);
-        let new_resolution_metadata =
-            ResolutionMetadata::new(OrgRep::Equal(1), 1, None, None);
-        assert_ok!(Bounty::account_posts_bounty(
-            one.clone(),
-            10u32, // constitution
-            10,    // amount reserved for bounty
-            new_resolution_metadata,
-            None,
-        ));
-        assert_ok!(Bounty::account_applies_for_bounty(
-            two.clone(),
-            1,
-            15u32, // application description
-            10
-        ));
-        assert_ok!(Bounty::account_sudo_approves_application(
-            one.clone(),
-            1,
-            1,
-        ));
-        assert_noop!(
-            Bounty::grantee_submits_milestone(
-                two.clone(),
-                2,
-                1,
-                10u32, // milestone reference
-                10
-            ),
-            Error::<Test>::CannotSubmitMilestoneIfBaseBountyDNE
+            Bounty::contribute_to_bounty(Origin::signed(2), 2, 5),
+            Error::<Test>::BountyDNE
         );
         assert_noop!(
-            Bounty::grantee_submits_milestone(
-                two.clone(),
-                1,
-                2,
-                10u32, // milestone reference
-                10
-            ),
-            Error::<Test>::CannotSubmitMilestoneIfApplicationDNE
+            Bounty::contribute_to_bounty(Origin::signed(2), 1, 4),
+            Error::<Test>::ContributionMustExceedModuleMin
         );
-        assert_ok!(Bounty::grantee_submits_milestone(
-            two.clone(),
-            1,
-            1,
-            10u32, // milestone reference
-            10
-        ));
+        assert_noop!(
+            Bounty::contribute_to_bounty(Origin::signed(2), 1, 99),
+            sp_runtime::DispatchError::Module {
+                index: 0,
+                error: 3,
+                message: Some("InsufficientBalance",),
+            },
+        );
+        assert_ok!(Bounty::contribute_to_bounty(Origin::signed(2), 1, 5));
         assert_eq!(
-            get_last_event(),
-            RawEvent::MilestoneSubmitted(2, 1, 1, 1, 10, 10)
+            RawEvent::BountyRaiseContribution(2, 5, 1, 15, 10),
+            get_last_event()
         );
     });
 }
 
 #[test]
-fn account_triggers_milestone_review_works() {
+fn submission_works() {
     new_test_ext().execute_with(|| {
-        let one = Origin::signed(1);
-        let two = Origin::signed(2);
-        let new_resolution_metadata =
-            ResolutionMetadata::new(OrgRep::Equal(1), 1, None, None);
-        assert_ok!(Bounty::account_posts_bounty(
-            one.clone(),
+        assert_noop!(
+            Bounty::submit_for_bounty(Origin::signed(2), 1, 10u32, 15u64,),
+            Error::<Test>::BountyDNE
+        );
+        assert_ok!(Bounty::post_bounty(
+            Origin::signed(1),
             10u32, // constitution
-            10,    // amount reserved for bounty
-            new_resolution_metadata,
-            None,
+            21,    // funding reserved
         ));
-        assert_ok!(Bounty::account_applies_for_bounty(
-            two.clone(),
+        assert_noop!(
+            Bounty::submit_for_bounty(Origin::signed(1), 1, 10u32, 15u64,),
+            Error::<Test>::DepositerCannotSubmitForBounty
+        );
+        assert_noop!(
+            Bounty::submit_for_bounty(Origin::signed(2), 1, 10u32, 22u64,),
+            Error::<Test>::BountySubmissionExceedsTotalAvailableFunding,
+        );
+        assert_ok!(Bounty::submit_for_bounty(
+            Origin::signed(2),
             1,
-            15u32, // application description
-            10
-        ));
-        assert_ok!(Bounty::account_sudo_approves_application(
-            one.clone(),
-            1,
-            1,
-        ));
-        assert_ok!(Bounty::grantee_submits_milestone(
-            two.clone(),
-            1,
-            1,
-            10u32, // milestone reference
-            10
-        ));
-        assert_ok!(Bounty::account_triggers_milestone_review(
-            one.clone(),
-            1,
-            1,
+            10u32,
+            10u64,
         ));
         assert_eq!(
-            get_last_event(),
-            RawEvent::MilestoneReviewTriggered(
-                1,
-                1,
-                1,
-                MilestoneStatus::SubmittedReviewStarted(1)
-            )
+            RawEvent::BountySubmissionPosted(2, 1, 10, 1, 10, 10),
+            get_last_event()
         );
     });
 }
 
 #[test]
-fn account_sudo_approves_milestone_works() {
+fn submission_approval_works() {
     new_test_ext().execute_with(|| {
-        let one = Origin::signed(1);
-        let two = Origin::signed(2);
-        let new_resolution_metadata =
-            ResolutionMetadata::new(OrgRep::Equal(1), 1, None, None);
-        assert_ok!(Bounty::account_posts_bounty(
-            one.clone(),
-            10u32, // constitution
-            10,    // amount reserved for bounty
-            new_resolution_metadata,
-            None,
-        ));
-        assert_ok!(Bounty::account_applies_for_bounty(
-            two.clone(),
-            1,
-            15u32, // application description
-            10
-        ));
-        assert_ok!(Bounty::account_sudo_approves_application(
-            one.clone(),
-            1,
-            1,
-        ));
-        assert_ok!(Bounty::grantee_submits_milestone(
-            two.clone(),
-            1,
-            1,
-            10u32, // milestone reference
-            10
-        ));
-        assert_ok!(Bounty::account_approved_milestone(one.clone(), 1, 1,));
-        assert_eq!(
-            get_last_event(),
-            RawEvent::SudoApprovedMilestone(
-                1,
-                1,
-                1,
-                MilestoneStatus::ApprovedAndTransferExecuted,
-            )
+        assert_noop!(
+            Bounty::approve_bounty_submission(Origin::signed(1), 1),
+            Error::<Test>::SubmissionDNE
         );
+        assert_ok!(Bounty::post_bounty(
+            Origin::signed(1),
+            10u32, // constitution
+            21,    // funding reserved
+        ));
+        assert_noop!(
+            Bounty::approve_bounty_submission(Origin::signed(1), 1),
+            Error::<Test>::SubmissionDNE
+        );
+        assert_ok!(Bounty::submit_for_bounty(
+            Origin::signed(2),
+            1,
+            10u32,
+            10u64,
+        ));
+        assert_noop!(
+            Bounty::approve_bounty_submission(Origin::signed(2), 1),
+            Error::<Test>::NotAuthorizedToApproveBountySubmissions
+        );
+        assert_eq!(Balances::total_balance(&2), 98);
+        assert_eq!(Balances::total_balance(&1), 79);
+        assert_ok!(Bounty::approve_bounty_submission(Origin::signed(1), 1));
+        assert_eq!(Balances::total_balance(&2), 108);
+        assert_eq!(Balances::total_balance(&1), 79);
     });
 }

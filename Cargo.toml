@@ -13,7 +13,6 @@ members = [
     "client/gbot",
     "pallets/bank",
     "pallets/bounty",
-    "pallets/bounty3",
     "pallets/court",
     "pallets/donate",
     "pallets/drip",

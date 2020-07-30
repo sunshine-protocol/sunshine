@@ -172,28 +172,13 @@ async fn run() -> Result<(), Error> {
         SubCommand::Bounty(BountyCommand { cmd }) => {
             match cmd {
                 BountySubCommand::PostBounty(cmd) => cmd.exec(&client).await?,
-                BountySubCommand::ApplyForBounty(cmd) => {
+                BountySubCommand::ContributeToBounty(cmd) => {
                     cmd.exec(&client).await?
                 }
-                BountySubCommand::TriggerApplicationReview(cmd) => {
+                BountySubCommand::SubmitForBounty(cmd) => {
                     cmd.exec(&client).await?
                 }
-                BountySubCommand::SudoApproveApplication(cmd) => {
-                    cmd.exec(&client).await?
-                }
-                BountySubCommand::PollApplication(cmd) => {
-                    cmd.exec(&client).await?
-                }
-                BountySubCommand::SubmitMilestone(cmd) => {
-                    cmd.exec(&client).await?
-                }
-                BountySubCommand::TriggerMilestoneReview(cmd) => {
-                    cmd.exec(&client).await?
-                }
-                BountySubCommand::SudoApproveMilestone(cmd) => {
-                    cmd.exec(&client).await?
-                }
-                BountySubCommand::PollMilestone(cmd) => {
+                BountySubCommand::ApproveApplication(cmd) => {
                     cmd.exec(&client).await?
                 }
             }

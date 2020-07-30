@@ -126,12 +126,7 @@ pub struct BountyCommand {
 #[derive(Clone, Debug, Clap)]
 pub enum BountySubCommand {
     PostBounty(bounty::BountyPostCommand),
-    ApplyForBounty(bounty::BountyApplicationCommand),
-    TriggerApplicationReview(bounty::BountyTriggerApplicationReviewCommand),
-    SudoApproveApplication(bounty::BountySudoApproveApplicationCommand),
-    PollApplication(bounty::BountyPollApplicationCommand),
-    SubmitMilestone(bounty::BountySubmitMilestoneCommand),
-    TriggerMilestoneReview(bounty::BountyTriggerMilestoneReviewCommand),
-    SudoApproveMilestone(bounty::BountySudoApproveMilestoneCommand),
-    PollMilestone(bounty::BountyPollMilestoneCommand),
+    ContributeToBounty(bounty::BountyContributeCommand),
+    SubmitForBounty(bounty::BountySubmitCommand),
+    ApproveApplication(bounty::BountyApproveCommand),
 }
