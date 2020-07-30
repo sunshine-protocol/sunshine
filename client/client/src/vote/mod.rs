@@ -90,7 +90,9 @@ where
     ) -> Result<NewVoteStartedEvent<T>, C::Error> {
         let signer = self.chain_signer()?;
         let topic = if let Some(t) = topic {
-            Some(crate::post(self, t).await?)
+            let iref: <T as Org>::IpfsReference =
+                crate::post(self, t).await?.into();
+            Some(iref)
         } else {
             None
         };
@@ -117,7 +119,9 @@ where
     ) -> Result<NewVoteStartedEvent<T>, C::Error> {
         let signer = self.chain_signer()?;
         let topic = if let Some(t) = topic {
-            Some(crate::post(self, t).await?)
+            let iref: <T as Org>::IpfsReference =
+                crate::post(self, t).await?.into();
+            Some(iref)
         } else {
             None
         };
@@ -144,7 +148,9 @@ where
     ) -> Result<NewVoteStartedEvent<T>, C::Error> {
         let signer = self.chain_signer()?;
         let topic = if let Some(t) = topic {
-            Some(crate::post(self, t).await?)
+            let iref: <T as Org>::IpfsReference =
+                crate::post(self, t).await?.into();
+            Some(iref)
         } else {
             None
         };
@@ -171,7 +177,9 @@ where
     ) -> Result<NewVoteStartedEvent<T>, C::Error> {
         let signer = self.chain_signer()?;
         let topic = if let Some(t) = topic {
-            Some(crate::post(self, t).await?)
+            let iref: <T as Org>::IpfsReference =
+                crate::post(self, t).await?.into();
+            Some(iref)
         } else {
             None
         };
@@ -196,7 +204,9 @@ where
     ) -> Result<NewVoteStartedEvent<T>, C::Error> {
         let signer = self.chain_signer()?;
         let topic = if let Some(t) = topic {
-            Some(crate::post(self, t).await?)
+            let iref: <T as Org>::IpfsReference =
+                crate::post(self, t).await?.into();
+            Some(iref)
         } else {
             None
         };
@@ -219,7 +229,9 @@ where
     ) -> Result<VotedEvent<T>, C::Error> {
         let signer = self.chain_signer()?;
         let justification = if let Some(j) = justification {
-            Some(crate::post(self, j).await?)
+            let iref: <T as Org>::IpfsReference =
+                crate::post(self, j).await?.into();
+            Some(iref)
         } else {
             None
         };

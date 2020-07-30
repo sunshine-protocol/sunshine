@@ -25,7 +25,6 @@ use libipld::{
     },
     DagCbor,
 };
-use org::Org;
 use substrate_subxt::{
     sp_runtime::traits::SignedExtension,
     Runtime,
@@ -48,10 +47,9 @@ pub struct BountyBody {
 pub(crate) async fn post<R, C, V>(
     client: &C,
     value: V,
-) -> Result<R::IpfsReference, C::Error>
+) -> Result<libipld::cid::Cid, C::Error>
 where
-    R: Runtime + Org,
-    <R as Org>::IpfsReference: From<libipld::cid::Cid>,
+    R: Runtime,
     <<R::Extra as SignedExtra<R>>::Extra as SignedExtension>::AdditionalSigned:
         Send + Sync,
     C: ChainClient<R>,
@@ -61,6 +59,5 @@ where
 {
     let cid = client.offchain_client().insert(value).await?;
     client.offchain_client().flush().await?;
-    let ret_cid = R::IpfsReference::from(cid);
-    Ok(ret_cid)
+    Ok(cid)
 }

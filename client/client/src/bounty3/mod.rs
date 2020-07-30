@@ -13,10 +13,10 @@ use substrate_subxt::{
 use sunshine_core::ChainClient;
 
 #[async_trait]
-pub trait BountyClient<T: Runtime + Bounty3>: ChainClient<T> {
+pub trait Bounty3Client<T: Runtime + Bounty3>: ChainClient<T> {
     async fn post_bounty(
         &self,
-        info: T::IpfsReference,
+        bounty: T::BountyPost,
         amount: BalanceOf<T>,
     ) -> Result<BountyPostedEvent<T>, Self::Error>;
     async fn contribute_to_bounty(
@@ -27,7 +27,7 @@ pub trait BountyClient<T: Runtime + Bounty3>: ChainClient<T> {
     async fn submit_for_bounty(
         &self,
         bounty_id: T::BountyId,
-        submission_ref: T::IpfsReference,
+        submission: T::BountySubmission,
         amount: BalanceOf<T>,
     ) -> Result<BountySubmissionPostedEvent<T>, Self::Error>;
     async fn approve_bounty_submission(
@@ -37,7 +37,7 @@ pub trait BountyClient<T: Runtime + Bounty3>: ChainClient<T> {
 }
 
 #[async_trait]
-impl<T, C> BountyClient<T> for C
+impl<T, C> Bounty3Client<T> for C
 where
     T: Runtime + Bounty3,
     <<T::Extra as SignedExtra<T>>::Extra as SignedExtension>::AdditionalSigned:
@@ -55,12 +55,13 @@ where
 {
     async fn post_bounty(
         &self,
-        info: T::IpfsReference,
+        bounty: T::BountyPost,
         amount: BalanceOf<T>,
     ) -> Result<BountyPostedEvent<T>, C::Error> {
         let signer = self.chain_signer()?;
+        let info = crate::post(self, bounty).await?;
         self.chain_client()
-            .post_bounty_and_watch(signer, info, amount)
+            .post_bounty_and_watch(signer, info.into(), amount)
             .await?
             .bounty_posted()?
             .ok_or_else(|| Error::EventNotFound.into())
@@ -80,15 +81,16 @@ where
     async fn submit_for_bounty(
         &self,
         bounty_id: T::BountyId,
-        submission_ref: T::IpfsReference,
+        submission: T::BountySubmission,
         amount: BalanceOf<T>,
     ) -> Result<BountySubmissionPostedEvent<T>, C::Error> {
         let signer = self.chain_signer()?;
+        let submission_ref = crate::post(self, submission).await?;
         self.chain_client()
             .submit_for_bounty_and_watch(
                 signer,
                 bounty_id,
-                submission_ref,
+                submission_ref.into(),
                 amount,
             )
             .await?

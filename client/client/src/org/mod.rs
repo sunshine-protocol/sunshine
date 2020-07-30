@@ -102,7 +102,7 @@ where
                 signer,
                 sudo,
                 parent_org,
-                constitution,
+                constitution.into(),
                 members,
             )
             .await?
@@ -123,7 +123,7 @@ where
                 signer,
                 sudo,
                 parent_org,
-                constitution,
+                constitution.into(),
                 weighted_members,
             )
             .await?

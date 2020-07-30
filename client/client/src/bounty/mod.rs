@@ -102,7 +102,7 @@ where
         self.chain_client()
             .account_posts_bounty_and_watch(
                 signer,
-                description,
+                description.into(),
                 amount_reserved_for_bounty,
                 acceptance_committee,
                 supervision_committee,
@@ -123,7 +123,7 @@ where
             .account_applies_for_bounty_and_watch(
                 signer,
                 bounty_id,
-                description,
+                description.into(),
                 total_amount,
             )
             .await?
@@ -188,7 +188,7 @@ where
                 signer,
                 bounty_id,
                 application_id,
-                submission_reference,
+                submission_reference.into(),
                 amount_requested,
             )
             .await?
