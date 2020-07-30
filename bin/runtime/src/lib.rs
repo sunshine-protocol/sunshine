@@ -415,12 +415,19 @@ impl bank::Trait for Runtime {
     type MinimumInitialDeposit = MinimumInitialDeposit;
 }
 parameter_types! {
-    pub const BountyLowerBound: u128 = 5;
+    pub const Foundation: ModuleId = ModuleId(*b"fundacon");
+    pub const MinDeposit: u128 = 10;
+    pub const MinContribution: u128 = 5;
 }
 impl bounty::Trait for Runtime {
     type Event = Event;
+    type IpfsReference = CidBytes;
+    type Currency = Balances;
     type BountyId = u64;
-    type BountyLowerBound = BountyLowerBound;
+    type SubmissionId = u64;
+    type Foundation = Foundation;
+    type MinDeposit = MinDeposit;
+    type MinContribution = MinContribution;
 }
 
 construct_runtime!(

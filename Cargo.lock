@@ -7084,7 +7084,7 @@ dependencies = [
 
 [[package]]
 name = "sunshine-bounty"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "clear_on_drop",
  "frame-support",
@@ -7096,11 +7096,7 @@ dependencies = [
  "sp-io",
  "sp-runtime",
  "sp-std",
- "sunshine-bank",
  "sunshine-bounty-utils",
- "sunshine-donate",
- "sunshine-org",
- "sunshine-vote",
 ]
 
 [[package]]
@@ -7161,26 +7157,6 @@ dependencies = [
  "sp-io",
  "sp-runtime",
  "sp-std",
-]
-
-[[package]]
-name = "sunshine-bounty2"
-version = "0.0.1"
-dependencies = [
- "clear_on_drop",
- "frame-support",
- "frame-system",
- "pallet-balances",
- "parity-scale-codec",
- "serde",
- "sp-core",
- "sp-io",
- "sp-runtime",
- "sp-std",
- "sunshine-bounty-utils",
- "sunshine-donate",
- "sunshine-org",
- "sunshine-vote",
 ]
 
 [[package]]

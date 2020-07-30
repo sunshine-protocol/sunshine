@@ -20,7 +20,7 @@ async fn main() -> std::result::Result<(), Error> {
     println!("Bounty Post Succeeded");
     // make the call to post in the given issue
     github_bot
-        .issue_comment_milestone_submission(
+        .issue_comment_bounty_submission(
             333u128,
             1u64,
             1u64,
@@ -29,6 +29,6 @@ async fn main() -> std::result::Result<(), Error> {
             124u64,
         )
         .await?;
-    println!("Milestone Post Succeeded");
+    println!("Bounty Submission Succeeded");
     Ok(())
 }

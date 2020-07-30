@@ -30,7 +30,7 @@ Enables orgs to create joint bank accounts with spends governed by group votes.
 
 ### Bounty
 
-Allows orgs or individuals to post bounties and govern/supervise execution. Allows orgs or individuals to apply for bounties.
+Allows individual accounts to post bounties and govern/supervise execution. Supports outside contributions.
 
 ## Rust/Substrate Onboarding
 

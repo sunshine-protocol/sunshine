@@ -92,15 +92,12 @@ impl Bank for Runtime {
 }
 
 impl Bounty for Runtime {
+    type IpfsReference = CidBytes;
+    type Currency = u128;
     type BountyId = u64;
-    type VoteCommittee = bounty_utils::court::ResolutionMetadata<
-        Self::OrgId,
-        Self::Signal,
-        Self::BlockNumber,
-    >;
     type BountyPost = BountyBody;
-    type BountyApplication = TextBlock;
-    type MilestoneSubmission = BountyBody;
+    type SubmissionId = u64;
+    type BountySubmission = BountyBody;
 }
 
 impl substrate_subxt::Runtime for Runtime {

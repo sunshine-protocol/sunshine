@@ -146,6 +146,7 @@ decl_event!(
 
 decl_error! {
     pub enum Error for Module<T: Trait> {
+        OrgDNE,
         UnAuthorizedSwapSudoRequest,
         NoExistingSudoKey,
         OrganizationMustExistToClearSupervisor,
@@ -376,6 +377,28 @@ decl_module! {
     }
 }
 
+impl<T: Trait> Module<T> {
+    pub fn is_immediate_child(
+        parent: Option<T::OrgId>,
+        child: T::OrgId,
+    ) -> Result<bool, DispatchError> {
+        let child_org =
+            <OrganizationStates<T>>::get(child).ok_or(Error::<T>::OrgDNE)?;
+        Ok(child_org.parent() == parent)
+    }
+    pub fn get_immediate_children(parent: T::OrgId) -> Option<Vec<T::OrgId>> {
+        let ret = <OrganizationStates<T>>::iter()
+            .filter(|(_, org)| org.parent() == Some(parent))
+            .map(|(id, _)| id)
+            .collect::<Vec<T::OrgId>>();
+        if ret.is_empty() {
+            None
+        } else {
+            Some(ret)
+        }
+    }
+}
+
 impl<T: Trait> GroupMembership<T::OrgId, T::AccountId> for Module<T> {
     fn is_member_of_group(org_id: T::OrgId, who: &T::AccountId) -> bool {
         <Members<T>>::get(org_id, who).is_some()
@@ -485,7 +508,7 @@ impl<T: Trait> RegisterOrganization<T::OrgId, T::AccountId, T::IpfsReference>
         value_constitution: T::IpfsReference,
     ) -> Result<T::OrgId, DispatchError> {
         let new_org_id = Self::generate_unique_id();
-        // TODO: could check if parent has a child_id and limit depth with a module constant; seems like a good idea, unbounded size not good in runtime context
+        // TODO: bound depth instead of current unbounded size
         let new_organization = Self::organization_from_src(
             source,
             new_org_id,
@@ -500,27 +523,31 @@ impl<T: Trait> RegisterOrganization<T::OrgId, T::AccountId, T::IpfsReference>
     }
 }
 impl<T: Trait> RemoveOrganization<T::OrgId> for Module<T> {
-    fn remove_organization(
-        id: T::OrgId,
-    ) -> Result<Option<Vec<T::OrgId>>, DispatchError> {
+    fn remove_organization(id: T::OrgId) -> DispatchResult {
         ensure!(
             !Self::id_is_available(id),
             Error::<T>::OrganizationCannotBeRemovedIfInputIdIsAvailable
         );
+        <OrganizationStates<T>>::remove(id);
         let new_org_count = <OrganizationCounter>::get().saturating_sub(1u32);
         <OrganizationCounter>::put(new_org_count);
-        let ret: Vec<T::OrgId> = <OrganizationStates<T>>::iter()
-            .filter(|(_, org_state)| (*org_state).parent() == Some(id))
-            .map(|(child_id, _)| child_id)
-            .collect::<Vec<_>>();
-        if !ret.is_empty() {
-            Ok(Some(ret))
-        } else {
-            Ok(None)
-        }
+        Ok(())
     }
-    fn recursive_remove_organization(_id: T::OrgId) -> DispatchResult {
-        todo!()
+    fn recursive_remove_organization(id: T::OrgId) -> DispatchResult {
+        ensure!(
+            !Self::id_is_available(id),
+            Error::<T>::OrganizationCannotBeRemovedIfInputIdIsAvailable
+        );
+        <OrganizationStates<T>>::iter()
+            .filter(|(_, org)| (*org).parent() == Some(id))
+            .map(|(child_id, _)| -> DispatchResult {
+                <OrganizationStates<T>>::remove(child_id);
+                let new_org_count =
+                    <OrganizationCounter>::get().saturating_sub(1u32);
+                <OrganizationCounter>::put(new_org_count);
+                Self::recursive_remove_organization(child_id)
+            })
+            .collect::<DispatchResult>()
     }
 }
 

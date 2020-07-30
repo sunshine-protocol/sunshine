@@ -6,8 +6,10 @@ use substrate_subxt::{
 };
 use sunshine_bounty_client::bounty::{
     BountyEventsDecoder,
+    BountyPaymentExecutedEvent,
     BountyPostedEvent,
-    MilestoneSubmittedEvent,
+    BountyRaiseContributionEvent,
+    BountySubmissionPostedEvent,
 };
 use sunshine_core::ChainClient;
 use test_client::{
@@ -27,7 +29,7 @@ pub async fn bounty_post_subscriber(
     Ok(sub)
 }
 
-pub async fn milestone_submission_subscriber(
+pub async fn bounty_contribution_subscriber(
     client: &Client<Store>,
 ) -> Result<EventSubscription<Runtime>, Error> {
     let sub = client.chain_client().subscribe_events().await?;
@@ -35,6 +37,30 @@ pub async fn milestone_submission_subscriber(
         EventsDecoder::<Runtime>::new(client.chain_client().metadata().clone());
     decoder.with_bounty();
     let mut sub = EventSubscription::<Runtime>::new(sub, decoder);
-    sub.filter_event::<MilestoneSubmittedEvent<Runtime>>();
+    sub.filter_event::<BountyRaiseContributionEvent<Runtime>>();
+    Ok(sub)
+}
+
+pub async fn bounty_submission_subscriber(
+    client: &Client<Store>,
+) -> Result<EventSubscription<Runtime>, Error> {
+    let sub = client.chain_client().subscribe_events().await?;
+    let mut decoder =
+        EventsDecoder::<Runtime>::new(client.chain_client().metadata().clone());
+    decoder.with_bounty();
+    let mut sub = EventSubscription::<Runtime>::new(sub, decoder);
+    sub.filter_event::<BountySubmissionPostedEvent<Runtime>>();
+    Ok(sub)
+}
+
+pub async fn bounty_approval_subscriber(
+    client: &Client<Store>,
+) -> Result<EventSubscription<Runtime>, Error> {
+    let sub = client.chain_client().subscribe_events().await?;
+    let mut decoder =
+        EventsDecoder::<Runtime>::new(client.chain_client().metadata().clone());
+    decoder.with_bounty();
+    let mut sub = EventSubscription::<Runtime>::new(sub, decoder);
+    sub.filter_event::<BountyPaymentExecutedEvent<Runtime>>();
     Ok(sub)
 }
