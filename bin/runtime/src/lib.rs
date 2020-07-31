@@ -404,15 +404,18 @@ impl donate::Trait for Runtime {
     type Currency = Balances;
 }
 parameter_types! {
+    pub const BigBank: ModuleId = ModuleId(*b"big/bank");
     pub const MaxTreasuryPerOrg: u32 = 50;
-    pub const MinimumInitialDeposit: u128 = 20;
+    pub const MinimumDeposit: u128 = 20;
 }
 impl bank::Trait for Runtime {
     type Event = Event;
-    type SpendId = u64;
     type Currency = Balances;
+    type BigBank = BigBank;
+    type BankId = u64;
+    type SpendId = u64;
     type MaxTreasuryPerOrg = MaxTreasuryPerOrg;
-    type MinimumInitialDeposit = MinimumInitialDeposit;
+    type MinDeposit = MinimumDeposit;
 }
 parameter_types! {
     pub const Foundation: ModuleId = ModuleId(*b"fundacon");

@@ -20,10 +20,6 @@ pub trait SeededGenerateUniqueID<Id, Seed> {
     fn seeded_generate_unique_id(seed: Seed) -> Id;
 }
 
-pub trait Increment: Sized {
-    fn increment(self) -> Self;
-}
-
 // ====== Permissions ACL ======
 
 pub trait OrganizationSupervisorPermissions<OrgId, AccountId> {

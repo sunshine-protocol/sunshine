@@ -1,37 +1,10 @@
-use crate::traits::Increment;
 use codec::{
     Codec,
     Decode,
     Encode,
 };
-use sp_core::TypeId;
 use sp_runtime::traits::Zero;
 use sp_std::prelude::*;
-
-/// An on-chain treasury identifier, exactly like `ModuleId`
-#[derive(
-    Clone,
-    Copy,
-    Eq,
-    PartialEq,
-    Default,
-    Encode,
-    Decode,
-    sp_runtime::RuntimeDebug,
-)]
-pub struct OnChainTreasuryID(pub [u8; 8]);
-
-impl Increment for OnChainTreasuryID {
-    fn increment(self) -> OnChainTreasuryID {
-        let old_inner = u64::from_be_bytes(self.0);
-        let new_inner = old_inner.saturating_add(1u64);
-        OnChainTreasuryID(new_inner.to_be_bytes())
-    }
-}
-
-impl TypeId for OnChainTreasuryID {
-    const TYPE_ID: [u8; 4] = *b"bank";
-}
 
 #[derive(
     new, Clone, Copy, Eq, PartialEq, Encode, Decode, sp_runtime::RuntimeDebug,
@@ -39,25 +12,6 @@ impl TypeId for OnChainTreasuryID {
 pub struct BankSpend<BankId, SpendId> {
     pub bank: BankId,
     pub spend: SpendId,
-}
-
-#[derive(
-    Clone, Copy, Eq, PartialEq, Encode, Decode, sp_runtime::RuntimeDebug,
-)]
-pub enum BankOrAccount<BankId, AccountId> {
-    Bank(BankId),
-    Account(AccountId),
-}
-
-impl<OnChainTreasuryID, AccountId: Clone>
-    BankOrAccount<OnChainTreasuryID, AccountId>
-{
-    pub fn bank_id(self) -> Option<OnChainTreasuryID> {
-        match self {
-            BankOrAccount::Bank(id) => Some(id),
-            BankOrAccount::Account(_) => None,
-        }
-    }
 }
 
 #[derive(

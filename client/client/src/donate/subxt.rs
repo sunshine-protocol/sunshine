@@ -25,7 +25,6 @@ use substrate_subxt::{
     Call,
     Event,
 };
-use sunshine_bounty_utils::bank::OnChainTreasuryID;
 
 /// The donation balance type
 pub type DonateBalanceOf<T> = <T as Donate>::DCurrency; // as Currency<<T as System>::AccountId>>::Balance;
@@ -51,12 +50,6 @@ pub trait Donate: System + Org {
 #[derive(Clone, Debug, Eq, PartialEq, Encode)]
 pub struct TransactionFee<T: Donate> {
     pub amount: DonateBalanceOf<T>,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Encode)]
-pub struct TreasuryAddress {
-    // ModuleId type which implements Debug
-    pub module_id: OnChainTreasuryID,
 }
 
 // ~~ Calls and Events ~~
