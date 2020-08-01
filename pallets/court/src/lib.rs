@@ -33,6 +33,7 @@ use sp_runtime::{
     },
     DispatchError,
     DispatchResult,
+    Permill,
 };
 use sp_std::{
     fmt::Debug,
@@ -42,13 +43,14 @@ use util::{
     court::{
         Dispute,
         DisputeState,
-        ResolutionMetadata,
     },
+    meta::VoteMetadata,
     organization::OrgRep,
     traits::{
         GenerateUniqueID,
         GetVoteOutcome,
         IDIsAvailable,
+        OpenThresholdVote,
         OpenVote,
         RegisterDisputeType,
     },
@@ -59,17 +61,18 @@ use util::{
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<
     <T as frame_system::Trait>::AccountId,
 >>::Balance;
-/// The vote identifier for the vote module
-type VoteId<T> = <T as vote::Trait>::VoteId;
-/// The signal type for the vote module
-type Signal<T> = <T as vote::Trait>::Signal;
+type GovernanceOf<T> = VoteMetadata<
+    OrgRep<<T as org::Trait>::OrgId>,
+    <T as vote::Trait>::Signal,
+    Permill,
+    <T as frame_system::Trait>::BlockNumber,
+>;
 
 pub trait Trait: frame_system::Trait + org::Trait + vote::Trait {
     /// The overarching event type
     type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 
     /// The currency type
-    /// - TODO: consider switching Reservable for Lockable?
     type Currency: Currency<Self::AccountId>
         + ReservableCurrency<Self::AccountId>;
 
@@ -135,12 +138,8 @@ decl_storage! {
                         T::AccountId,
                         BalanceOf<T>,
                         T::BlockNumber,
-                        ResolutionMetadata<
-                            OrgRep<T::OrgId>,
-                            Signal<T>,
-                            T::BlockNumber
-                        >,
-                        DisputeState<VoteId<T>>,
+                        GovernanceOf<T>,
+                        DisputeState<T::VoteId>,
                     >
                 >;
     }
@@ -156,7 +155,7 @@ decl_module! {
             origin,
             amount_to_lock: BalanceOf<T>,
             dispute_raiser: T::AccountId,
-            resolution_metadata: ResolutionMetadata<OrgRep<T::OrgId>, Signal<T>, T::BlockNumber>,
+            resolution_metadata: GovernanceOf<T>,
             expiry: Option<T::BlockNumber>,
         ) -> DispatchResult {
             let locker = ensure_signed(origin)?;
@@ -185,9 +184,11 @@ decl_module! {
             // check that it is in a valid state to trigger the dispute
             let (new_dispute, dispatched_vote_id) = match dispute.state() {
                 DisputeState::DisputeNotRaised => {
-                    let resolution_metadata = dispute.resolution_metadata();
-                    // use the resolution metadata to trigger the vote
-                    let new_vote_id = <vote::Module<T>>::open_vote(None, resolution_metadata.org(), resolution_metadata.passage_threshold(), resolution_metadata.rejection_threshold(), resolution_metadata.duration())?;
+                    // use vote metadata to dispatch vote
+                    let new_vote_id = match dispute.resolution_metadata() {
+                        VoteMetadata::Signal(v) => <vote::Module<T>>::open_vote(None, v.org, v.threshold.pass_min(), v.threshold.fail_min(), v.duration)?,
+                        VoteMetadata::Percentage(v) => <vote::Module<T>>::open_threshold_vote(None, v.org, v.threshold.pass_min(), v.threshold.fail_min(), v.duration)?,
+                    };
                     // update the state of the dispute with the new vote identifier
                     let updated_dispute = dispute.set_state(DisputeState::DisputeRaisedAndVoteDispatched(new_vote_id));
                     // return tuple
@@ -270,7 +271,7 @@ impl<T: Trait>
     RegisterDisputeType<
         T::AccountId,
         BalanceOf<T>,
-        ResolutionMetadata<OrgRep<T::OrgId>, Signal<T>, T::BlockNumber>,
+        GovernanceOf<T>,
         T::BlockNumber,
     > for Module<T>
 {
@@ -279,11 +280,7 @@ impl<T: Trait>
         locker: T::AccountId,
         amount_to_lock: BalanceOf<T>,
         dispute_raiser: T::AccountId,
-        resolution_path: ResolutionMetadata<
-            OrgRep<T::OrgId>,
-            Signal<T>,
-            T::BlockNumber,
-        >,
+        resolution_path: GovernanceOf<T>,
         expiry: Option<T::BlockNumber>,
     ) -> Result<Self::DisputeIdentifier, DispatchError> {
         ensure!(

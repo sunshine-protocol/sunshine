@@ -44,37 +44,11 @@ impl<
     pub fn expiry(&self) -> Option<BlockNumber> {
         self.expiry
     }
-    // TODO: change this to trait impl for state transitions so we don't match in the runtime on the state to enforce valid transitions and instead depend on calls to the logic here
     pub fn set_state(&self, state: State) -> Self {
         Self {
             state,
             ..self.clone()
         }
-    }
-}
-
-#[derive(new, PartialEq, Eq, Default, Clone, Encode, Decode, RuntimeDebug)]
-pub struct ResolutionMetadata<OrgId, Threshold, BlockNumber> {
-    org: OrgId,
-    passage_threshold: Threshold,
-    rejection_threshold: Option<Threshold>,
-    duration: Option<BlockNumber>,
-}
-
-impl<OrgId: Copy, Threshold: Clone, BlockNumber: Copy>
-    ResolutionMetadata<OrgId, Threshold, BlockNumber>
-{
-    pub fn org(&self) -> OrgId {
-        self.org
-    }
-    pub fn passage_threshold(&self) -> Threshold {
-        self.passage_threshold.clone()
-    }
-    pub fn rejection_threshold(&self) -> Option<Threshold> {
-        self.rejection_threshold.clone()
-    }
-    pub fn duration(&self) -> Option<BlockNumber> {
-        self.duration
     }
 }
 

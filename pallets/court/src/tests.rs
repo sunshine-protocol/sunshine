@@ -15,6 +15,10 @@ use sp_runtime::{
     Perbill,
 };
 use util::{
+    meta::{
+        Threshold,
+        VoteCall,
+    },
     organization::Organization,
     traits::GroupMembership,
     vote::VoterView,
@@ -170,8 +174,12 @@ fn genesis_config_works() {
 fn dispute_registration_works() {
     new_test_ext().execute_with(|| {
         let one = Origin::signed(1);
-        let new_resolution_metadata =
-            ResolutionMetadata::new(OrgRep::Equal(1), 1, None, None);
+        let signal_threshold = Threshold::new(1, None);
+        let new_resolution_metadata = VoteMetadata::Signal(VoteCall::new(
+            OrgRep::Equal(1),
+            signal_threshold,
+            None,
+        ));
         assert_noop!(
             Court::register_dispute_type_with_resolution_path(
                 one.clone(),
@@ -221,8 +229,12 @@ fn dispute_raised_works() {
     new_test_ext().execute_with(|| {
         let one = Origin::signed(1);
         let two = Origin::signed(2);
-        let new_resolution_metadata =
-            ResolutionMetadata::new(OrgRep::Equal(1), 1, None, None);
+        let signal_threshold = Threshold::new(1, None);
+        let new_resolution_metadata = VoteMetadata::Signal(VoteCall::new(
+            OrgRep::Equal(1),
+            signal_threshold,
+            None,
+        ));
         assert_noop!(
             Court::raise_dispute_to_trigger_vote(two.clone(), 1),
             Error::<Test>::CannotRaiseDisputeIfDisputeStateDNE
@@ -258,8 +270,12 @@ fn poll_dispute_to_execute_outcome_works() {
     new_test_ext().execute_with(|| {
         let one = Origin::signed(1);
         let two = Origin::signed(2);
-        let new_resolution_metadata =
-            ResolutionMetadata::new(OrgRep::Equal(1), 1, None, None);
+        let signal_threshold = Threshold::new(1, None);
+        let new_resolution_metadata = VoteMetadata::Signal(VoteCall::new(
+            OrgRep::Equal(1),
+            signal_threshold,
+            None,
+        ));
         assert_ok!(Court::register_dispute_type_with_resolution_path(
             one.clone(),
             10,

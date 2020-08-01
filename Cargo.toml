@@ -16,6 +16,8 @@ members = [
     "pallets/court",
     "pallets/donate",
     "pallets/drip",
+    "pallets/grant",
+    "pallets/meta",
     "pallets/org",
     "pallets/treasury",
     "pallets/vote",
