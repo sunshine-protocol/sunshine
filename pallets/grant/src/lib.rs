@@ -2,10 +2,10 @@
 #![allow(clippy::redundant_closure_call)]
 #![allow(clippy::type_complexity)]
 #![cfg_attr(not(feature = "std"), no_std)]
-//! Grants module
+//! Grants module for short to long-term developer contracts
 
-// #[cfg(test)]
-// mod tests;
+#[cfg(test)]
+mod tests;
 
 use codec::Codec;
 use frame_support::{
@@ -261,6 +261,7 @@ decl_module! {
                 WithdrawReasons::from(WithdrawReason::Transfer),
                 ExistenceRequirement::AllowDeath,
             )?;
+            // TODO: screen validity of `governance` input in context of registered orgs
             let foundation = FoundationOf::<T>::new(info.clone(), amount, governance);
             let id = Self::foundation_generate_uid();
             <T as donate::Trait>::Currency::resolve_creating(&Self::foundation_account_id(id), imb);
