@@ -7241,7 +7241,6 @@ dependencies = [
  "sp-std",
  "sunshine-bounty-utils",
  "sunshine-donate",
- "sunshine-drip",
  "sunshine-org",
  "sunshine-vote",
 ]
@@ -7303,24 +7302,6 @@ dependencies = [
  "libipld",
  "parity-scale-codec",
  "serde",
-]
-
-[[package]]
-name = "sunshine-meta"
-version = "0.0.1"
-dependencies = [
- "clear_on_drop",
- "frame-support",
- "frame-system",
- "pallet-balances",
- "parity-scale-codec",
- "serde",
- "sp-core",
- "sp-io",
- "sp-runtime",
- "sp-std",
- "sunshine-bounty-utils",
- "sunshine-org",
 ]
 
 [[package]]

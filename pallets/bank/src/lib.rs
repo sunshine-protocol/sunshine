@@ -282,17 +282,11 @@ decl_module! {
             let bank_account_id = Self::bank_account_id(bank_id);
             let remaining_funds = <T as donate::Trait>::Currency::total_balance(&bank_account_id);
             // distributes remaining funds equally among members in proportion to ownership (PropDonation)
-            let remainder = <donate::Module<T>>::donate(
+            let _ = <donate::Module<T>>::donate(
                 &bank_account_id,
                 OrgRep::Weighted(bank.org()),
-                remaining_funds,
-            )?;
-            // transfer the remainder to the closer (who is the organization supervisor)
-            <T as donate::Trait>::Currency::transfer(
-                &bank_account_id,
                 &closer,
-                remainder,
-                ExistenceRequirement::AllowDeath
+                remaining_funds,
             )?;
             <BankStores<T>>::remove(bank_id);
             <OrgTreasuryCount<T>>::mutate(bank.org(), |count| *count -= 1);

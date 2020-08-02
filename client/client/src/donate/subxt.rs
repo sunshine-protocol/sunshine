@@ -57,6 +57,7 @@ pub struct TransactionFee<T: Donate> {
 #[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
 pub struct MakePropDonationCall<T: Donate> {
     pub org: <T as Org>::OrgId,
+    pub rem_recipient: <T as System>::AccountId,
     pub amt: DonateBalanceOf<T>,
 }
 
@@ -64,12 +65,15 @@ pub struct MakePropDonationCall<T: Donate> {
 pub struct PropDonationExecutedEvent<T: Donate> {
     pub sender: <T as System>::AccountId,
     pub org: <T as Org>::OrgId,
-    pub amt: DonateBalanceOf<T>,
+    pub amt_to_org: DonateBalanceOf<T>,
+    pub rem_recipient: <T as System>::AccountId,
+    pub amt_to_recipient: DonateBalanceOf<T>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
 pub struct MakeEqualDonationCall<T: Donate> {
     pub org: <T as Org>::OrgId,
+    pub rem_recipient: <T as System>::AccountId,
     pub amt: DonateBalanceOf<T>,
 }
 
@@ -77,5 +81,7 @@ pub struct MakeEqualDonationCall<T: Donate> {
 pub struct EqualDonationExecutedEvent<T: Donate> {
     pub sender: <T as System>::AccountId,
     pub org: <T as Org>::OrgId,
-    pub amt: DonateBalanceOf<T>,
+    pub amt_to_org: DonateBalanceOf<T>,
+    pub rem_recipient: <T as System>::AccountId,
+    pub amt_to_recipient: DonateBalanceOf<T>,
 }
