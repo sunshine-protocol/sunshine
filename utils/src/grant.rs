@@ -163,6 +163,9 @@ impl<
     pub fn payment(&self) -> Payment {
         self.payment.clone()
     }
+    pub fn awaiting_review(&self) -> bool {
+        self.state.awaiting_review()
+    }
     pub fn approved_and_live(&self) -> bool {
         self.state.approved_and_live()
     }
@@ -267,7 +270,7 @@ impl<
     pub fn state(&self) -> MilestoneStatus<VoteId> {
         self.state
     }
-    pub fn ready_for_review(&self) -> bool {
+    pub fn awaiting_review(&self) -> bool {
         matches!(self.state, MilestoneStatus::SubmittedAwaitingResponse)
     }
     pub fn under_review(&self) -> Option<VoteId> {

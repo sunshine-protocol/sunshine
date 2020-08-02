@@ -56,6 +56,11 @@ use util::{
         VoteMetadata,
     },
     organization::OrgRep,
+    traits::{
+        GroupMembership,
+        OpenThresholdVote,
+        OpenVote,
+    },
 };
 
 // type aliases
@@ -153,6 +158,7 @@ decl_event!(
     where
         <T as frame_system::Trait>::AccountId,
         <T as org::Trait>::IpfsReference,
+        <T as vote::Trait>::VoteId,
         <T as Trait>::FoundationId,
         <T as Trait>::ApplicationId,
         <T as Trait>::MilestoneId,
@@ -162,7 +168,11 @@ decl_event!(
         FoundationCreated(FoundationId, Balance, IpfsReference),
         FoundationDonation(AccountId, Balance, FoundationId, Balance),
         ApplicationSubmitted(FoundationId, ApplicationId, Recipient, Balance, IpfsReference),
+        ApplicationReviewTriggered(FoundationId, ApplicationId, VoteId),
+        ApplicationApproved(FoundationId, ApplicationId, IpfsReference),
         MilestoneSubmitted(FoundationId, ApplicationId, MilestoneId, Recipient, Balance, IpfsReference),
+        MilestoneReviewTriggered(FoundationId, ApplicationId, MilestoneId, VoteId),
+        MilestoneApproved(FoundationId, ApplicationId, MilestoneId, IpfsReference),
     }
 );
 
@@ -171,8 +181,18 @@ decl_error! {
         // Foundation Does Not Exist
         FoundationDNE,
         ApplicationDNE,
+        MilestoneDNE,
         DepositBelowMinDeposit,
         ContributionBelowMinContribution,
+        ApplicationMustBeApprovedToSubmitMilestone,
+        ApplicationNotInValidStateToTriggerReview,
+        NotAuthorizedToTriggerApplicationReview,
+        ApplicationNotInValidStateToApprove,
+        NotAuthorizedToApproveApplication,
+        NotAuthorizedToTriggerMilestoneReview,
+        MilestoneNotInValidStateToTriggerReview,
+        MilestoneNotInValidStateToApprove,
+        NotAuthorizedToApproveMilestone,
     }
 }
 
@@ -276,6 +296,43 @@ decl_module! {
             Ok(())
         }
         #[weight = 0]
+        fn trigger_application_review(
+            origin,
+            application_id: T::ApplicationId,
+        ) -> DispatchResult {
+            let trigger_er = ensure_signed(origin)?;
+            let app = <Applications<T>>::get(application_id).ok_or(Error::<T>::ApplicationDNE)?;
+            ensure!(app.awaiting_review(), Error::<T>::ApplicationNotInValidStateToTriggerReview);
+            let foundation = <Foundations<T>>::get(app.foundation_id()).ok_or(Error::<T>::FoundationDNE)?;
+            let auth = if let Some(gov) = foundation.gov().vote() {
+                <org::Module<T>>::is_member_of_group(gov.org().org(), &trigger_er) || foundation.gov().is_sudo(&trigger_er)
+            } else { false };
+            ensure!(auth, Error::<T>::NotAuthorizedToTriggerApplicationReview);
+            let new_vote_id = match foundation.gov().vote().ok_or(Error::<T>::NotAuthorizedToTriggerApplicationReview)? {
+                VoteMetadata::Signal(v) => <vote::Module<T>>::open_vote(Some(app.submission_ref()), v.org, v.threshold.pass_min(), v.threshold.fail_min(), v.duration)?,
+                VoteMetadata::Percentage(v) => <vote::Module<T>>::open_threshold_vote(Some(app.submission_ref()), v.org, v.threshold.pass_min(), v.threshold.fail_min(), v.duration)?,
+            };
+            let new_app = app.set_state(ApplicationState::UnderReviewByAcceptanceCommittee(new_vote_id));
+            <Applications<T>>::insert(application_id, new_app);
+            Self::deposit_event(RawEvent::ApplicationReviewTriggered(app.foundation_id(), application_id, new_vote_id));
+            Ok(())
+        }
+        #[weight = 0]
+        fn approve_application(
+            origin,
+            application_id: T::ApplicationId,
+        ) -> DispatchResult {
+            let purported_sudo = ensure_signed(origin)?;
+            let app = <Applications<T>>::get(application_id).ok_or(Error::<T>::ApplicationDNE)?;
+            ensure!(app.awaiting_review(), Error::<T>::ApplicationNotInValidStateToApprove);
+            let foundation = <Foundations<T>>::get(app.foundation_id()).ok_or(Error::<T>::FoundationDNE)?;
+            ensure!(foundation.gov().is_sudo(&purported_sudo), Error::<T>::NotAuthorizedToApproveApplication);
+            let new_app = app.set_state(ApplicationState::ApprovedAndLive);
+            <Applications<T>>::insert(application_id, new_app);
+            Self::deposit_event(RawEvent::ApplicationApproved(app.foundation_id(), application_id, app.submission_ref()));
+            Ok(())
+        }
+        #[weight = 0]
         fn submit_milestone(
             origin,
             foundation_id: T::FoundationId,
@@ -286,12 +343,58 @@ decl_module! {
         ) -> DispatchResult {
             let _ = ensure_signed(origin)?;
             ensure!(!Self::foundation_id_is_available(foundation_id), Error::<T>::FoundationDNE);
-            ensure!(!Self::application_id_is_available(application_id), Error::<T>::ApplicationDNE);
+            let application = <Applications<T>>::get(application_id).ok_or(Error::<T>::ApplicationDNE)?;
+            ensure!(application.approved_and_live(), Error::<T>::ApplicationMustBeApprovedToSubmitMilestone);
             let milestone = Milestone::<T>::new((foundation_id, application_id), submission_ref.clone(), recipient.clone(), amount_requested);
             let id = Self::milestone_generate_uid(application_id);
             <Milestones<T>>::insert(application_id, id, milestone);
             Self::deposit_event(RawEvent::MilestoneSubmitted(foundation_id, application_id, id, recipient, amount_requested, submission_ref));
             Ok(())
+        }
+        #[weight = 0]
+        fn trigger_milestone_review(
+            origin,
+            application_id: T::ApplicationId,
+            milestone_id: T::MilestoneId,
+        ) -> DispatchResult {
+            let trigger_er = ensure_signed(origin)?;
+            let mile = <Milestones<T>>::get(application_id, milestone_id).ok_or(Error::<T>::MilestoneDNE)?;
+            ensure!(mile.awaiting_review(), Error::<T>::MilestoneNotInValidStateToTriggerReview);
+            let foundation = <Foundations<T>>::get(mile.base_foundation()).ok_or(Error::<T>::FoundationDNE)?;
+            let auth = if let Some(gov) = foundation.gov().vote() {
+                <org::Module<T>>::is_member_of_group(gov.org().org(), &trigger_er) || foundation.gov().is_sudo(&trigger_er)
+            } else { false };
+            ensure!(auth, Error::<T>::NotAuthorizedToTriggerMilestoneReview);
+            let new_vote_id = match foundation.gov().vote().ok_or(Error::<T>::NotAuthorizedToTriggerMilestoneReview)? {
+                VoteMetadata::Signal(v) => <vote::Module<T>>::open_vote(Some(mile.submission()), v.org, v.threshold.pass_min(), v.threshold.fail_min(), v.duration)?,
+                VoteMetadata::Percentage(v) => <vote::Module<T>>::open_threshold_vote(Some(mile.submission()), v.org, v.threshold.pass_min(), v.threshold.fail_min(), v.duration)?,
+            };
+            let new_mile = mile.set_state(MilestoneStatus::SubmittedReviewStarted(new_vote_id));
+            <Milestones<T>>::insert(application_id, milestone_id, new_mile);
+            Self::deposit_event(RawEvent::MilestoneReviewTriggered(mile.base_foundation(), application_id, milestone_id, new_vote_id));
+            Ok(())
+        }
+        #[weight = 0]
+        fn approve_milestone(
+            origin,
+            application_id: T::ApplicationId,
+            milestone_id: T::MilestoneId,
+        ) -> DispatchResult {
+            let purported_sudo = ensure_signed(origin)?;
+            let mile = <Milestones<T>>::get(application_id, milestone_id).ok_or(Error::<T>::MilestoneDNE)?;
+            ensure!(mile.awaiting_review(), Error::<T>::MilestoneNotInValidStateToApprove);
+            let foundation = <Foundations<T>>::get(mile.base_foundation()).ok_or(Error::<T>::FoundationDNE)?;
+            ensure!(foundation.gov().is_sudo(&purported_sudo), Error::<T>::NotAuthorizedToApproveMilestone);
+            // TODO: try transfer and if fails, set ApprovedButNotTransferred
+            let new_mile = mile.set_state(MilestoneStatus::ApprovedButNotTransferred);
+            <Milestones<T>>::insert(application_id, milestone_id, new_mile);
+            Self::deposit_event(RawEvent::MilestoneApproved(mile.base_foundation(), application_id, milestone_id, mile.submission()));
+            Ok(())
+        }
+        fn on_finalize(_n: T::BlockNumber) {
+            // poll applications under review and approve passed applications
+            todo!()
+            // poll milestones under review and approve passed milestones
         }
     }
 }
