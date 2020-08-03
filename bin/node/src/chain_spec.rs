@@ -156,7 +156,6 @@ pub fn testnet_genesis(
     first_org_value_constitution: CidBytes,
     first_org_flat_membership: Vec<AccountId>,
     treasury_mint_rate: (BlockNumber, Balance),
-
     _enable_println: bool,
 ) -> GenesisConfig {
     GenesisConfig {

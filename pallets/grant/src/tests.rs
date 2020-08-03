@@ -116,8 +116,8 @@ impl donate::Trait for Test {
 }
 parameter_types! {
     pub const BigFoundation: ModuleId = ModuleId(*b"big/fund");
-    pub const MinDeposit: u128 = 20;
-    pub const MinContribution: u128 = 10;
+    pub const MinDeposit: u64 = 20;
+    pub const MinContribution: u64 = 10;
 }
 impl Trait for Test {
     type Event = TestEvent;
