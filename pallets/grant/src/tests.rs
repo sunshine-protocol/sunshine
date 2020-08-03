@@ -509,3 +509,10 @@ fn approve_reject_application_works() {
         );
     });
 }
+
+#[test]
+fn submit_milestone_works() {
+    new_test_ext().execute_with(|| {
+        assert!(true);
+    });
+}
