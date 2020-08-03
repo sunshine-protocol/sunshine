@@ -7226,6 +7226,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "sunshine-grant"
+version = "0.0.1"
+dependencies = [
+ "clear_on_drop",
+ "frame-support",
+ "frame-system",
+ "pallet-balances",
+ "parity-scale-codec",
+ "serde",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+ "sunshine-bounty-utils",
+ "sunshine-donate",
+ "sunshine-org",
+ "sunshine-vote",
+]
+
+[[package]]
 name = "sunshine-identity-cli"
 version = "0.2.3"
 source = "git+https://github.com/sunshine-protocol/sunshine-identity#63b8559a2298e8298b7167367c8e3cbd9ad9fe27"

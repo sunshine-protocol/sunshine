@@ -25,7 +25,6 @@ use substrate_subxt::{
     Call,
     Event,
 };
-use sunshine_bounty_utils::bank::OnChainTreasuryID;
 
 /// The donation balance type
 pub type DonateBalanceOf<T> = <T as Donate>::DCurrency; // as Currency<<T as System>::AccountId>>::Balance;
@@ -53,17 +52,12 @@ pub struct TransactionFee<T: Donate> {
     pub amount: DonateBalanceOf<T>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Encode)]
-pub struct TreasuryAddress {
-    // ModuleId type which implements Debug
-    pub module_id: OnChainTreasuryID,
-}
-
 // ~~ Calls and Events ~~
 
 #[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
 pub struct MakePropDonationCall<T: Donate> {
     pub org: <T as Org>::OrgId,
+    pub rem_recipient: <T as System>::AccountId,
     pub amt: DonateBalanceOf<T>,
 }
 
@@ -71,12 +65,15 @@ pub struct MakePropDonationCall<T: Donate> {
 pub struct PropDonationExecutedEvent<T: Donate> {
     pub sender: <T as System>::AccountId,
     pub org: <T as Org>::OrgId,
-    pub amt: DonateBalanceOf<T>,
+    pub amt_to_org: DonateBalanceOf<T>,
+    pub rem_recipient: <T as System>::AccountId,
+    pub amt_to_recipient: DonateBalanceOf<T>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
 pub struct MakeEqualDonationCall<T: Donate> {
     pub org: <T as Org>::OrgId,
+    pub rem_recipient: <T as System>::AccountId,
     pub amt: DonateBalanceOf<T>,
 }
 
@@ -84,5 +81,7 @@ pub struct MakeEqualDonationCall<T: Donate> {
 pub struct EqualDonationExecutedEvent<T: Donate> {
     pub sender: <T as System>::AccountId,
     pub org: <T as Org>::OrgId,
-    pub amt: DonateBalanceOf<T>,
+    pub amt_to_org: DonateBalanceOf<T>,
+    pub rem_recipient: <T as System>::AccountId,
+    pub amt_to_recipient: DonateBalanceOf<T>,
 }

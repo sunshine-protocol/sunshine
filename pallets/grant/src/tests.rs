@@ -1,0 +1,511 @@
+use super::*;
+use frame_support::{
+    assert_noop,
+    assert_ok,
+    impl_outer_event,
+    impl_outer_origin,
+    parameter_types,
+    weights::Weight,
+};
+use frame_system::{self as system,};
+use sp_core::H256;
+use sp_runtime::{
+    testing::Header,
+    traits::IdentityLookup,
+    Perbill,
+};
+use util::{
+    grant::Recipient,
+    meta::{
+        ResolutionMetadata,
+        Threshold,
+        VoteCall,
+        VoteMetadata,
+    },
+    organization::{
+        OrgRep,
+        Organization,
+    },
+    traits::GroupMembership,
+    vote::VoterView,
+};
+
+// type aliases
+pub type AccountId = u64;
+pub type BlockNumber = u64;
+
+impl_outer_origin! {
+    pub enum Origin for Test where system = frame_system {}
+}
+
+mod grant {
+    pub use super::super::*;
+}
+
+impl_outer_event! {
+    pub enum TestEvent for Test {
+        system<T>,
+        pallet_balances<T>,
+        org<T>,
+        vote<T>,
+        donate<T>,
+        grant<T>,
+    }
+}
+
+#[derive(Clone, Eq, PartialEq)]
+pub struct Test;
+parameter_types! {
+    pub const BlockHashCount: u64 = 250;
+    pub const MaximumBlockWeight: Weight = 1024;
+    pub const MaximumBlockLength: u32 = 2 * 1024;
+    pub const AvailableBlockRatio: Perbill = Perbill::one();
+}
+impl frame_system::Trait for Test {
+    type Origin = Origin;
+    type Index = u64;
+    type BlockNumber = BlockNumber;
+    type Call = ();
+    type Hash = H256;
+    type Hashing = ::sp_runtime::traits::BlakeTwo256;
+    type AccountId = AccountId;
+    type Lookup = IdentityLookup<Self::AccountId>;
+    type Header = Header;
+    type Event = TestEvent;
+    type BlockHashCount = BlockHashCount;
+    type MaximumBlockWeight = MaximumBlockWeight;
+    type MaximumExtrinsicWeight = MaximumBlockWeight;
+    type DbWeight = ();
+    type BlockExecutionWeight = ();
+    type ExtrinsicBaseWeight = ();
+    type AvailableBlockRatio = AvailableBlockRatio;
+    type MaximumBlockLength = MaximumBlockLength;
+    type Version = ();
+    type ModuleToIndex = ();
+    type AccountData = pallet_balances::AccountData<u64>;
+    type OnNewAccount = ();
+    type OnKilledAccount = ();
+    type BaseCallFilter = ();
+    type SystemWeightInfo = ();
+}
+parameter_types! {
+    pub const ExistentialDeposit: u64 = 1;
+}
+impl pallet_balances::Trait for Test {
+    type Balance = u64;
+    type Event = TestEvent;
+    type DustRemoval = ();
+    type ExistentialDeposit = ExistentialDeposit;
+    type AccountStore = System;
+    type WeightInfo = ();
+}
+impl org::Trait for Test {
+    type Event = TestEvent;
+    type IpfsReference = u32;
+    type OrgId = u64;
+    type Shares = u64;
+}
+impl vote::Trait for Test {
+    type Event = TestEvent;
+    type VoteId = u64;
+    type Signal = u64;
+}
+impl donate::Trait for Test {
+    type Event = TestEvent;
+    type Currency = Balances;
+}
+parameter_types! {
+    pub const BigFoundation: ModuleId = ModuleId(*b"big/fund");
+    pub const MinDeposit: u32 = 20;
+    pub const MinContribution: u64 = 10;
+}
+impl Trait for Test {
+    type Event = TestEvent;
+    type FoundationId = u64;
+    type ApplicationId = u64;
+    type MilestoneId = u64;
+    type BigFoundation = BigFoundation;
+    type MinDeposit = MinDeposit;
+    type MinContribution = MinContribution;
+}
+pub type System = system::Module<Test>;
+pub type Balances = pallet_balances::Module<Test>;
+pub type Org = org::Module<Test>;
+pub type Vote = vote::Module<Test>;
+pub type Grant = Module<Test>;
+
+fn get_last_event(
+) -> RawEvent<u64, u32, u64, u64, u64, u64, u64, Recipient<u64, OrgRep<u64>>> {
+    System::events()
+        .into_iter()
+        .map(|r| r.event)
+        .filter_map(|e| {
+            if let TestEvent::grant(inner) = e {
+                Some(inner)
+            } else {
+                None
+            }
+        })
+        .last()
+        .unwrap()
+}
+
+fn new_test_ext() -> sp_io::TestExternalities {
+    let mut t = frame_system::GenesisConfig::default()
+        .build_storage::<Test>()
+        .unwrap();
+    pallet_balances::GenesisConfig::<Test> {
+        balances: vec![(1, 100), (2, 98), (3, 200), (4, 75), (5, 10), (6, 69)],
+    }
+    .assimilate_storage(&mut t)
+    .unwrap();
+    org::GenesisConfig::<Test> {
+        first_organization_supervisor: 1,
+        first_organization_value_constitution: 1738,
+        first_organization_flat_membership: vec![1, 2, 3, 4, 5, 6],
+    }
+    .assimilate_storage(&mut t)
+    .unwrap();
+    let mut ext: sp_io::TestExternalities = t.into();
+    ext.execute_with(|| System::set_block_number(1));
+    ext
+}
+
+#[test]
+fn genesis_config_works() {
+    new_test_ext().execute_with(|| {
+        assert_eq!(Org::organization_counter(), 1);
+        let constitution = 1738;
+        let expected_organization =
+            Organization::new(Some(1), None, constitution);
+        let org_in_storage = Org::organization_states(1u64).unwrap();
+        assert_eq!(expected_organization, org_in_storage);
+        for i in 1u64..7u64 {
+            assert!(Org::is_member_of_group(1u64, &i));
+        }
+        assert!(System::events().is_empty());
+    });
+}
+
+fn sudo_threshold_no_vote() -> GovernanceOf<Test> {
+    ResolutionMetadata::new(Some(1u64), None).unwrap()
+}
+
+fn new_min_threshold_and_sudo() -> GovernanceOf<Test> {
+    ResolutionMetadata::new(
+        Some(1u64),
+        Some(VoteMetadata::Signal(VoteCall::new(
+            OrgRep::Equal(1u64),
+            Threshold::new(1u64, None),
+            None,
+        ))),
+    )
+    .unwrap()
+}
+
+fn new_min_threshold_no_sudo() -> GovernanceOf<Test> {
+    ResolutionMetadata::new(
+        None,
+        Some(VoteMetadata::Signal(VoteCall::new(
+            OrgRep::Equal(1u64),
+            Threshold::new(1u64, None),
+            None,
+        ))),
+    )
+    .unwrap()
+}
+
+#[test]
+fn create_foundation_test() {
+    new_test_ext().execute_with(|| {
+        assert_noop!(
+            Grant::create_foundation(
+                Origin::signed(1),
+                10u32,
+                101u64,
+                sudo_threshold_no_vote()
+            ),
+            sp_runtime::DispatchError::Module {
+                index: 0,
+                error: 3,
+                message: Some("InsufficientBalance")
+            }
+        );
+        assert_noop!(
+            Grant::create_foundation(
+                Origin::signed(1),
+                10u32,
+                19u64,
+                sudo_threshold_no_vote()
+            ),
+            Error::<Test>::DepositBelowMinDeposit
+        );
+        assert!(System::events().is_empty());
+        assert_ok!(Grant::create_foundation(
+            Origin::signed(1),
+            10u32,
+            20u64,
+            sudo_threshold_no_vote()
+        ));
+        assert_eq!(
+            get_last_event(),
+            RawEvent::FoundationCreated(1u64, 20u64, 10u32)
+        );
+        assert_ok!(Grant::create_foundation(
+            Origin::signed(1),
+            10u32,
+            20u64,
+            new_min_threshold_and_sudo()
+        ));
+        assert_eq!(
+            get_last_event(),
+            RawEvent::FoundationCreated(2u64, 20u64, 10u32)
+        );
+        assert_ok!(Grant::create_foundation(
+            Origin::signed(1),
+            10u32,
+            20u64,
+            new_min_threshold_no_sudo()
+        ));
+        assert_eq!(
+            get_last_event(),
+            RawEvent::FoundationCreated(3u64, 20u64, 10u32)
+        );
+    });
+}
+
+#[test]
+fn donate_2_foundation_works() {
+    new_test_ext().execute_with(|| {
+        assert_noop!(
+            Grant::donate_to_foundation(Origin::signed(2), 1, 10,),
+            Error::<Test>::FoundationDNE
+        );
+        assert_ok!(Grant::create_foundation(
+            Origin::signed(1),
+            10u32,
+            20u64,
+            sudo_threshold_no_vote()
+        ));
+        assert_noop!(
+            Grant::donate_to_foundation(Origin::signed(2), 1, 99,),
+            sp_runtime::DispatchError::Module {
+                index: 0,
+                error: 3,
+                message: Some("InsufficientBalance")
+            }
+        );
+        assert_noop!(
+            Grant::donate_to_foundation(Origin::signed(2), 1, 9,),
+            Error::<Test>::ContributionBelowMinContribution
+        );
+        assert_eq!(
+            get_last_event(),
+            RawEvent::FoundationCreated(1u64, 20u64, 10u32)
+        );
+        assert_ok!(Grant::donate_to_foundation(Origin::signed(2), 1, 10,));
+        assert_eq!(
+            get_last_event(),
+            RawEvent::FoundationDonation(2, 10, 1, 30)
+        );
+    });
+}
+
+#[test]
+fn submit_application_works() {
+    new_test_ext().execute_with(|| {
+        let one_recipient = Recipient::new(1, None);
+        assert_noop!(
+            Grant::submit_application(
+                Origin::signed(1),
+                1u64,
+                11u32,
+                one_recipient.clone(),
+                2u64,
+            ),
+            Error::<Test>::FoundationDNE
+        );
+        assert!(System::events().is_empty());
+        assert_ok!(Grant::create_foundation(
+            Origin::signed(1),
+            10u32,
+            20u64,
+            sudo_threshold_no_vote()
+        ));
+        assert_ok!(Grant::submit_application(
+            Origin::signed(1),
+            1u64,
+            11u32,
+            one_recipient.clone(),
+            2u64,
+        ));
+        assert_eq!(
+            get_last_event(),
+            RawEvent::ApplicationSubmitted(1, 1, one_recipient, 2u64, 11u32)
+        );
+    });
+}
+
+#[test]
+fn trigger_app_review_works() {
+    new_test_ext().execute_with(|| {
+        let one_recipient = Recipient::new(1, None);
+        let two_recipient = Recipient::new(2, None);
+        assert_noop!(
+            Grant::trigger_application_review(Origin::signed(1), 1,),
+            Error::<Test>::ApplicationDNE
+        );
+        assert!(System::events().is_empty());
+        assert_ok!(Grant::create_foundation(
+            Origin::signed(1),
+            10u32,
+            20u64,
+            sudo_threshold_no_vote()
+        ));
+        assert_ok!(Grant::submit_application(
+            Origin::signed(1),
+            1u64,
+            11u32,
+            one_recipient.clone(),
+            2u64,
+        ));
+        assert_noop!(
+            Grant::trigger_application_review(Origin::signed(2), 1,),
+            Error::<Test>::NotAuthorizedToTriggerApplicationReview
+        );
+        // even the sudo cannot trigger review for this type of application
+        assert_noop!(
+            Grant::trigger_application_review(Origin::signed(1), 1,),
+            Error::<Test>::NotAuthorizedToTriggerApplicationReview
+        );
+        assert_ok!(Grant::create_foundation(
+            Origin::signed(1),
+            10u32,
+            20u64,
+            new_min_threshold_and_sudo()
+        ));
+        assert_ok!(Grant::submit_application(
+            Origin::signed(2),
+            2u64,
+            11u32,
+            two_recipient.clone(),
+            5u64,
+        ));
+        assert_noop!(
+            Grant::trigger_application_review(Origin::signed(77), 2,),
+            Error::<Test>::NotAuthorizedToTriggerApplicationReview
+        );
+        assert_ok!(Grant::trigger_application_review(Origin::signed(1), 2,));
+        assert_eq!(
+            get_last_event(),
+            RawEvent::ApplicationReviewTriggered(2, 2, 1)
+        );
+        assert_ok!(Grant::submit_application(
+            Origin::signed(1),
+            2u64,
+            12u32,
+            one_recipient.clone(),
+            7u64,
+        ));
+        assert_ok!(Grant::trigger_application_review(Origin::signed(2), 3,));
+        assert_eq!(
+            get_last_event(),
+            RawEvent::ApplicationReviewTriggered(2, 3, 2)
+        );
+    });
+}
+
+#[test]
+fn approve_reject_application_works() {
+    let one_recipient = Recipient::new(1, None);
+    let two_recipient = Recipient::new(2, None);
+    new_test_ext().execute_with(|| {
+        assert_noop!(
+            Grant::approve_application(Origin::signed(1), 1,),
+            Error::<Test>::ApplicationDNE
+        );
+        assert_noop!(
+            Grant::reject_application(Origin::signed(1), 1,),
+            Error::<Test>::ApplicationDNE
+        );
+        assert_ok!(Grant::create_foundation(
+            Origin::signed(1),
+            10u32,
+            20u64,
+            sudo_threshold_no_vote()
+        ));
+        assert_ok!(Grant::submit_application(
+            Origin::signed(1),
+            1u64,
+            11u32,
+            one_recipient.clone(),
+            2u64,
+        ));
+        assert_noop!(
+            Grant::reject_application(Origin::signed(2), 1,),
+            Error::<Test>::NotAuthorizedToRejectApplication
+        );
+        assert_noop!(
+            Grant::approve_application(Origin::signed(77), 1,),
+            Error::<Test>::NotAuthorizedToApproveApplication
+        );
+        assert_ok!(Grant::reject_application(Origin::signed(1), 1,));
+        assert_eq!(get_last_event(), RawEvent::ApplicationRejected(1, 1));
+        assert_noop!(
+            Grant::approve_application(Origin::signed(1), 1,),
+            Error::<Test>::ApplicationDNE
+        );
+        assert_ok!(Grant::submit_application(
+            Origin::signed(2),
+            1u64,
+            12u32,
+            two_recipient.clone(),
+            9u64,
+        ));
+        assert_ok!(Grant::approve_application(Origin::signed(1), 2,));
+        assert_eq!(
+            get_last_event(),
+            RawEvent::ApplicationApproved(1, 2, 12u32)
+        );
+        assert_noop!(
+            Grant::reject_application(Origin::signed(1), 2,),
+            Error::<Test>::ApplicationNotInValidStateToReject
+        );
+        assert_noop!(
+            Grant::approve_application(Origin::signed(1), 2,),
+            Error::<Test>::ApplicationNotInValidStateToApprove
+        );
+        assert_ok!(Grant::create_foundation(
+            Origin::signed(1),
+            10u32,
+            20u64,
+            new_min_threshold_and_sudo(),
+        ));
+        assert_ok!(Grant::submit_application(
+            Origin::signed(2),
+            2u64,
+            13u32,
+            two_recipient.clone(),
+            4u64,
+        ));
+        assert_ok!(Grant::reject_application(Origin::signed(1), 3,));
+        assert_ok!(Grant::create_foundation(
+            Origin::signed(1),
+            10u32,
+            20u64,
+            new_min_threshold_no_sudo(),
+        ));
+        assert_ok!(Grant::submit_application(
+            Origin::signed(2),
+            3u64,
+            14u32,
+            two_recipient.clone(),
+            6u64,
+        ));
+        // bc governance does not have sudo
+        assert_noop!(
+            Grant::reject_application(Origin::signed(1), 4,),
+            Error::<Test>::NotAuthorizedToRejectApplication
+        );
+    });
+}

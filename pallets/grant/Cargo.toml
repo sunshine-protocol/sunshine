@@ -1,0 +1,41 @@
+[package]
+name = "sunshine-grant"
+version = "0.0.1"
+authors = ["Amar Singh <asinghchrony@protonmail.com>"]
+edition = "2018"
+
+license = "GPL-3.0"
+repository = "https://github.com/sunshine-protocol/sunshine-bounty"
+description = "governance module for on-chain grant programs, ongoing developer contracts"
+keywords = ["sunshine", "substrate"]
+
+[dependencies]
+serde = { version = "1.0.114", optional = true}
+codec = { package = "parity-scale-codec", version = "1.3.0", default-features = false, features = ["derive"] }
+sp-std = { version = "2.0.0-rc5", default-features = false }
+sp-runtime = { version = "2.0.0-rc5", default-features = false }
+frame-support = { version = "2.0.0-rc5", default-features = false }
+frame-system = { version = "2.0.0-rc5", default-features = false }
+util = { package = "sunshine-bounty-utils", path = "../../utils", default-features=false}
+org = { package = "sunshine-org", path = "../org", default-features=false}
+vote = { package = "sunshine-vote", path = "../vote", default-features=false}
+donate = { package = "sunshine-donate", path = "../donate", default-features=false}
+clear_on_drop = { version = "0.2.4", features = ["no_cc"] }	# https://github.com/paritytech/substrate/issues/4179
+
+[dev-dependencies]
+sp-io = { version = "2.0.0-rc5", default-features = false }
+sp-core = { version = "2.0.0-rc5", default-features = false }
+pallet-balances = { version = "2.0.0-rc5", default-features = false }
+
+[features]
+default = ["std"]
+std = [
+	"serde",
+	"codec/std",
+	"sp-std/std",
+	"sp-runtime/std",
+	"frame-support/std",
+	"frame-system/std",
+	"org/std",
+	"pallet-balances/std",
+]

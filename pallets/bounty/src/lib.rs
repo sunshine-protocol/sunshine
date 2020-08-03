@@ -269,6 +269,7 @@ decl_module! {
     }
 }
 
+// ID helpers
 impl<T: Trait> Module<T> {
     pub fn bounty_account_id(index: T::BountyId) -> T::AccountId {
         T::Foundation::get().into_sub_account(index)
@@ -300,5 +301,35 @@ impl<T: Trait> Module<T> {
         <Submissions<T>>::iter()
             .filter(|(_, app)| app.bounty_id() == id)
             .for_each(|(app_id, _)| <Submissions<T>>::remove(app_id));
+    }
+}
+
+// Storage helpers
+impl<T: Trait> Module<T> {
+    pub fn open_bounties(
+        min: BalanceOf<T>,
+    ) -> Option<Vec<(T::BountyId, Bounty<T>)>> {
+        let ret = <Bounties<T>>::iter()
+            .filter(|(_, b)| b.total() >= min)
+            .map(|(id, bounty)| (id, bounty))
+            .collect::<Vec<(T::BountyId, Bounty<T>)>>();
+        if ret.is_empty() {
+            None
+        } else {
+            Some(ret)
+        }
+    }
+    pub fn open_submissions(
+        bounty_id: T::BountyId,
+    ) -> Option<Vec<(T::SubmissionId, BountySub<T>)>> {
+        let ret = <Submissions<T>>::iter()
+            .filter(|(_, s)| s.bounty_id() == bounty_id)
+            .map(|(id, sub)| (id, sub))
+            .collect::<Vec<(T::SubmissionId, BountySub<T>)>>();
+        if ret.is_empty() {
+            None
+        } else {
+            Some(ret)
+        }
     }
 }

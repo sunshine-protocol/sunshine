@@ -27,6 +27,12 @@ use substrate_subxt::{
     },
     Call,
     Event,
+    Store,
+};
+use sunshine_bounty_utils::bounty::{
+    BountyInformation,
+    BountySubmission,
+    SubmissionState,
 };
 
 pub type BalanceOf<T> = <T as Bounty>::Currency;
@@ -91,6 +97,45 @@ pub trait Bounty: System {
         + DagDecode<DagCborCodec>
         + Send
         + Sync;
+}
+
+// ~~ Storage ~~
+
+pub type BountyState<T> = BountyInformation<
+    <T as Bounty>::IpfsReference,
+    <T as System>::AccountId,
+    BalanceOf<T>,
+>;
+pub type SubState<T> = BountySubmission<
+    <T as Bounty>::BountyId,
+    <T as Bounty>::IpfsReference,
+    <T as System>::AccountId,
+    BalanceOf<T>,
+    SubmissionState,
+>;
+
+#[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
+pub struct BountiesStore<T: Bounty> {
+    #[store(returns = BountyState<T>)]
+    pub id: T::BountyId,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
+pub struct SubmissionsStore<T: Bounty> {
+    #[store(returns = SubState<T>)]
+    pub id: T::SubmissionId,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
+pub struct OpenBountiesStore<T: Bounty> {
+    #[store(returns = Option<Vec<(T::BountyId, BountyState<T>)>>)]
+    min: BalanceOf<T>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
+pub struct OpenSubmissionsStore<T: Bounty> {
+    #[store(returns = Option<Vec<(T::SubmissionId, SubState<T>)>>)]
+    bounty_id: T::BountyId,
 }
 
 // ~~ (Calls, Events) ~~

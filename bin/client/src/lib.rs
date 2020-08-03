@@ -87,6 +87,7 @@ impl Donate for Runtime {
 }
 
 impl Bank for Runtime {
+    type BankId = u64;
     type SpendId = u64;
     type Currency = u128;
 }

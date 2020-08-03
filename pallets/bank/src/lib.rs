@@ -34,6 +34,7 @@ use sp_runtime::{
     },
     DispatchError,
     DispatchResult,
+    ModuleId,
 };
 use sp_std::{
     fmt::Debug,
@@ -43,22 +44,17 @@ use util::{
     bank::{
         BankSpend,
         BankState,
-        OnChainTreasuryID,
         SpendProposal,
         SpendState,
     },
     organization::OrgRep,
     traits::{
         BankPermissions,
-        GenerateUniqueID,
         GetVoteOutcome,
         GroupMembership,
-        IDIsAvailable,
-        Increment,
         OpenBankAccount,
         OpenVote,
         OrganizationSupervisorPermissions,
-        SeededGenerateUniqueID,
         SpendGovernance,
     },
     vote::VoteOutcome,
@@ -75,7 +71,27 @@ pub trait Trait:
     /// The overarching event types
     type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 
-    /// Identifier for spends, only has meaning in the context of a bank account (OnChainTreasuryID)
+    /// The currency type for on-chain transactions
+    type Currency: Currency<Self::AccountId>
+        + ReservableCurrency<Self::AccountId>;
+
+    /// The base bank account for this module
+    type BigBank: Get<ModuleId>;
+
+    /// Identifier for banks
+    type BankId: Parameter
+        + Member
+        + AtLeast32Bit
+        + Codec
+        + Default
+        + Copy
+        + MaybeSerializeDeserialize
+        + Debug
+        + PartialOrd
+        + PartialEq
+        + Zero;
+
+    /// Identifier for spends
     type SpendId: Parameter
         + Member
         + AtLeast32Bit
@@ -88,15 +104,10 @@ pub trait Trait:
         + PartialEq
         + Zero;
 
-    /// The currency type for on-chain transactions
-    type Currency: Currency<Self::AccountId>
-        + ReservableCurrency<Self::AccountId>;
-
-    /// The limit on how many bank accounts an org can have
     type MaxTreasuryPerOrg: Get<u32>;
 
-    /// The minimum amount necessary to open an organizational bank account
-    type MinimumInitialDeposit: Get<BalanceOf<Self>>;
+    /// The minimum amount to open an organizational bank account and keep it open
+    type MinDeposit: Get<BalanceOf<Self>>;
 }
 
 decl_event!(
@@ -105,15 +116,16 @@ decl_event!(
         <T as frame_system::Trait>::AccountId,
         <T as org::Trait>::OrgId,
         <T as vote::Trait>::VoteId,
+        <T as Trait>::BankId,
         <T as Trait>::SpendId,
         Balance = BalanceOf<T>,
     {
-        BankAccountOpened(AccountId, OnChainTreasuryID, Balance, OrgId, Option<AccountId>),
-        SpendProposedByMember(AccountId, OnChainTreasuryID, SpendId, Balance, AccountId),
-        VoteTriggeredOnSpendProposal(AccountId, OnChainTreasuryID, SpendId, VoteId),
-        SudoApprovedSpendProposal(AccountId, OnChainTreasuryID, SpendId),
-        SpendProposalPolled(AccountId, OnChainTreasuryID, SpendId, SpendState<VoteId>),
-        BankAccountClosed(AccountId, OnChainTreasuryID, OrgId),
+        BankAccountOpened(AccountId, BankId, Balance, OrgId, Option<AccountId>),
+        SpendProposedByMember(AccountId, BankId, SpendId, Balance, AccountId),
+        VoteTriggeredOnSpendProposal(AccountId, BankId, SpendId, VoteId),
+        SudoApprovedSpendProposal(AccountId, BankId, SpendId),
+        SpendProposalPolled(AccountId, BankId, SpendId, SpendState<VoteId>),
+        BankAccountClosed(AccountId, BankId, OrgId),
     }
 );
 
@@ -147,12 +159,12 @@ decl_error! {
 
 decl_storage! {
     trait Store for Module<T: Trait> as Bank {
-        /// Counter for generating unique treasury identifiers
-        TreasuryIDNonce get(fn treasury_id_nonce): OnChainTreasuryID;
+        /// Counter for generating unique bank identifiers
+        BankIdNonce get(fn bank_id_nonce): T::BankId;
 
         /// Counter for generating unique spend proposal identifiers
         SpendNonceMap get(fn spend_nonce_map): map
-            hasher(blake2_128_concat) OnChainTreasuryID => T::SpendId;
+            hasher(blake2_128_concat) T::BankId => T::SpendId;
 
         /// Total number of banks registered in this module
         pub TotalBankCount get(fn total_bank_count): u32;
@@ -162,15 +174,14 @@ decl_storage! {
             hasher(blake2_128_concat) T::OrgId => u32;
 
         /// The store for organizational bank accounts
-        /// -> keyset acts as canonical set for unique `OnChainTreasuryID`s
+        /// -> keyset acts as canonical set for unique BankIds
         pub BankStores get(fn bank_stores): map
-            hasher(blake2_128_concat) OnChainTreasuryID =>
+            hasher(blake2_128_concat) T::BankId =>
             Option<BankState<T::AccountId, T::OrgId>>;
 
         /// Proposals to make spends from the bank account
-        /// TODO: gc strategy in `on_finalize`
         pub SpendProposals get(fn spend_proposals): double_map
-            hasher(blake2_128_concat) OnChainTreasuryID,
+            hasher(blake2_128_concat) T::BankId,
             hasher(blake2_128_concat) T::SpendId => Option<
                 SpendProposal<
                     BalanceOf<T>,
@@ -203,7 +214,7 @@ decl_module! {
         #[weight = 0]
         fn member_proposes_spend(
             origin,
-            bank_id: OnChainTreasuryID,
+            bank_id: T::BankId,
             amount: BalanceOf<T>,
             dest: T::AccountId,
         ) -> DispatchResult {
@@ -217,7 +228,7 @@ decl_module! {
         #[weight = 0]
         fn member_triggers_vote_on_spend_proposal(
             origin,
-            bank_id: OnChainTreasuryID,
+            bank_id: T::BankId,
             spend_id: T::SpendId,
         ) -> DispatchResult {
             let caller = ensure_signed(origin)?;
@@ -231,7 +242,7 @@ decl_module! {
         #[weight = 0]
         fn member_sudo_approves_spend_proposal(
             origin,
-            bank_id: OnChainTreasuryID,
+            bank_id: T::BankId,
             spend_id: T::SpendId,
         ) -> DispatchResult {
             let caller = ensure_signed(origin)?;
@@ -245,7 +256,7 @@ decl_module! {
         #[weight = 0]
         fn member_polls_spend_proposal(
             origin,
-            bank_id: OnChainTreasuryID,
+            bank_id: T::BankId,
             spend_id: T::SpendId,
         ) -> DispatchResult {
             let caller = ensure_signed(origin)?;
@@ -259,7 +270,7 @@ decl_module! {
         #[weight = 0]
         fn close_org_bank_account(
             origin,
-            bank_id: OnChainTreasuryID,
+            bank_id: T::BankId,
         ) -> DispatchResult {
             let closer = ensure_signed(origin)?;
             let bank = <BankStores<T>>::get(bank_id).ok_or(Error::<T>::CannotCloseBankThatDNE)?;
@@ -268,20 +279,14 @@ decl_module! {
                 <org::Module<T>>::is_organization_supervisor(bank.org(), &closer),
                 Error::<T>::MustBeOrgSupervisorToCloseBankAccount
             );
-            let bank_account_id = Self::account_id(bank_id);
+            let bank_account_id = Self::bank_account_id(bank_id);
             let remaining_funds = <T as donate::Trait>::Currency::total_balance(&bank_account_id);
             // distributes remaining funds equally among members in proportion to ownership (PropDonation)
-            let remainder = <donate::Module<T>>::donate(
+            let _ = <donate::Module<T>>::donate(
                 &bank_account_id,
                 OrgRep::Weighted(bank.org()),
-                remaining_funds,
-            )?;
-            // transfer the remainder to the closer (who is the organization supervisor)
-            <T as donate::Trait>::Currency::transfer(
-                &bank_account_id,
                 &closer,
-                remainder,
-                ExistenceRequirement::AllowDeath
+                remaining_funds,
             )?;
             <BankStores<T>>::remove(bank_id);
             <OrgTreasuryCount<T>>::mutate(bank.org(), |count| *count -= 1);
@@ -293,22 +298,42 @@ decl_module! {
 }
 
 impl<T: Trait> Module<T> {
-    pub fn is_bank(id: OnChainTreasuryID) -> bool {
-        !Self::id_is_available(id)
+    /// Performs computation so don't call unnecessarily
+    pub fn bank_account_id(id: T::BankId) -> T::AccountId {
+        T::BigBank::get().into_sub_account(id)
     }
-    pub fn account_id(id: OnChainTreasuryID) -> T::AccountId {
-        id.into_account()
+    pub fn bank_balance(bank: T::BankId) -> BalanceOf<T> {
+        <T as Trait>::Currency::total_balance(&Self::bank_account_id(bank))
     }
-    pub fn bank_balance(bank: OnChainTreasuryID) -> BalanceOf<T> {
-        <T as Trait>::Currency::total_balance(&Self::account_id(bank))
+    pub fn is_bank(id: T::BankId) -> bool {
+        <BankStores<T>>::get(id).is_some()
+    }
+    pub fn is_spend(bank: T::BankId, spend: T::SpendId) -> bool {
+        <SpendProposals<T>>::get(bank, spend).is_some()
+    }
+    fn generate_bank_uid() -> T::BankId {
+        let mut bank_nonce_id = <BankIdNonce<T>>::get() + 1u32.into();
+        while Self::is_bank(bank_nonce_id) {
+            bank_nonce_id += 1u32.into();
+        }
+        <BankIdNonce<T>>::put(bank_nonce_id);
+        bank_nonce_id
+    }
+    fn generate_spend_uid(seed: T::BankId) -> T::SpendId {
+        let mut id_nonce = <SpendNonceMap<T>>::get(seed) + 1u32.into();
+        while Self::is_spend(seed, id_nonce) {
+            id_nonce += 1u32.into();
+        }
+        <SpendNonceMap<T>>::insert(seed, id_nonce);
+        id_nonce
     }
     pub fn get_banks_for_org(
         org: T::OrgId,
-    ) -> Result<Vec<OnChainTreasuryID>, DispatchError> {
+    ) -> Result<Vec<T::BankId>, DispatchError> {
         let ret_vec = <BankStores<T>>::iter()
             .filter(|(_, bank_state)| bank_state.org() == org)
             .map(|(bank_id, _)| bank_id)
-            .collect::<Vec<OnChainTreasuryID>>();
+            .collect::<Vec<T::BankId>>();
         if !ret_vec.is_empty() {
             Ok(ret_vec)
         } else {
@@ -317,44 +342,8 @@ impl<T: Trait> Module<T> {
     }
 }
 
-impl<T: Trait> IDIsAvailable<OnChainTreasuryID> for Module<T> {
-    fn id_is_available(id: OnChainTreasuryID) -> bool {
-        <BankStores<T>>::get(id).is_none()
-    }
-}
-
-impl<T: Trait> IDIsAvailable<(OnChainTreasuryID, T::SpendId)> for Module<T> {
-    fn id_is_available(id: (OnChainTreasuryID, T::SpendId)) -> bool {
-        <SpendProposals<T>>::get(id.0, id.1).is_none()
-    }
-}
-
-impl<T: Trait> GenerateUniqueID<OnChainTreasuryID> for Module<T> {
-    fn generate_unique_id() -> OnChainTreasuryID {
-        let mut treasury_nonce_id = TreasuryIDNonce::get().increment();
-        while !Self::id_is_available(treasury_nonce_id) {
-            treasury_nonce_id = treasury_nonce_id.increment();
-        }
-        TreasuryIDNonce::put(treasury_nonce_id);
-        treasury_nonce_id
-    }
-}
-
-impl<T: Trait> SeededGenerateUniqueID<T::SpendId, OnChainTreasuryID>
-    for Module<T>
-{
-    fn seeded_generate_unique_id(seed: OnChainTreasuryID) -> T::SpendId {
-        let mut id_nonce = <SpendNonceMap<T>>::get(seed) + 1u32.into();
-        while !Self::id_is_available((seed, id_nonce)) {
-            id_nonce += 1u32.into();
-        }
-        <SpendNonceMap<T>>::insert(seed, id_nonce);
-        id_nonce
-    }
-}
-
 // adds a storage lookup /forall methods but this is just for local permissions anyway
-impl<T: Trait> BankPermissions<OnChainTreasuryID, T::OrgId, T::AccountId>
+impl<T: Trait> BankPermissions<T::BankId, T::OrgId, T::AccountId>
     for Module<T>
 {
     fn can_open_bank_account_for_org(
@@ -364,7 +353,7 @@ impl<T: Trait> BankPermissions<OnChainTreasuryID, T::OrgId, T::AccountId>
         <org::Module<T>>::is_member_of_group(org, who)
     }
     fn can_propose_spend(
-        bank: OnChainTreasuryID,
+        bank: T::BankId,
         who: &T::AccountId,
     ) -> Result<bool, DispatchError> {
         let bank = <BankStores<T>>::get(bank)
@@ -372,7 +361,7 @@ impl<T: Trait> BankPermissions<OnChainTreasuryID, T::OrgId, T::AccountId>
         Ok(<org::Module<T>>::is_member_of_group(bank.org(), who))
     }
     fn can_trigger_vote_on_spend_proposal(
-        bank: OnChainTreasuryID,
+        bank: T::BankId,
         who: &T::AccountId,
     ) -> Result<bool, DispatchError> {
         let bank = <BankStores<T>>::get(bank)
@@ -380,7 +369,7 @@ impl<T: Trait> BankPermissions<OnChainTreasuryID, T::OrgId, T::AccountId>
         Ok(<org::Module<T>>::is_member_of_group(bank.org(), who))
     }
     fn can_sudo_approve_spend_proposal(
-        bank: OnChainTreasuryID,
+        bank: T::BankId,
         who: &T::AccountId,
     ) -> Result<bool, DispatchError> {
         let bank = <BankStores<T>>::get(bank)
@@ -388,7 +377,7 @@ impl<T: Trait> BankPermissions<OnChainTreasuryID, T::OrgId, T::AccountId>
         Ok(bank.is_controller(who))
     }
     fn can_poll_spend_proposal(
-        bank: OnChainTreasuryID,
+        bank: T::BankId,
         who: &T::AccountId,
     ) -> Result<bool, DispatchError> {
         let bank = <BankStores<T>>::get(bank)
@@ -396,7 +385,7 @@ impl<T: Trait> BankPermissions<OnChainTreasuryID, T::OrgId, T::AccountId>
         Ok(<org::Module<T>>::is_member_of_group(bank.org(), who))
     }
     fn can_spend(
-        bank: OnChainTreasuryID,
+        bank: T::BankId,
         who: &T::AccountId,
     ) -> Result<bool, DispatchError> {
         let bank = <BankStores<T>>::get(bank)
@@ -408,7 +397,7 @@ impl<T: Trait> BankPermissions<OnChainTreasuryID, T::OrgId, T::AccountId>
 impl<T: Trait> OpenBankAccount<T::OrgId, BalanceOf<T>, T::AccountId>
     for Module<T>
 {
-    type BankId = OnChainTreasuryID;
+    type BankId = T::BankId;
     fn open_bank_account(
         opener: T::AccountId,
         org: T::OrgId,
@@ -416,7 +405,7 @@ impl<T: Trait> OpenBankAccount<T::OrgId, BalanceOf<T>, T::AccountId>
         controller: Option<T::AccountId>,
     ) -> Result<Self::BankId, DispatchError> {
         ensure!(
-            deposit >= T::MinimumInitialDeposit::get(),
+            deposit >= T::MinDeposit::get(),
             Error::<T>::CannotOpenBankAccountIfDepositIsBelowModuleMinimum
         );
         let new_org_bank_count = <OrgTreasuryCount<T>>::get(org) + 1;
@@ -425,13 +414,13 @@ impl<T: Trait> OpenBankAccount<T::OrgId, BalanceOf<T>, T::AccountId>
             Error::<T>::CannotOpenBankAccountForOrgIfBankCountExceedsLimitPerOrg
         );
         // generate new treasury identifier
-        let new_treasury_id = Self::generate_unique_id();
+        let new_treasury_id = Self::generate_bank_uid();
         // create new bank object
         let new_bank = BankState::new(org, controller);
         // perform fallible transfer
         <T as Trait>::Currency::transfer(
             &opener,
-            &Self::account_id(new_treasury_id),
+            &Self::bank_account_id(new_treasury_id),
             deposit,
             ExistenceRequirement::KeepAlive,
         )?;
@@ -446,14 +435,14 @@ impl<T: Trait> OpenBankAccount<T::OrgId, BalanceOf<T>, T::AccountId>
     }
 }
 
-impl<T: Trait> SpendGovernance<OnChainTreasuryID, BalanceOf<T>, T::AccountId>
+impl<T: Trait> SpendGovernance<T::BankId, BalanceOf<T>, T::AccountId>
     for Module<T>
 {
-    type SpendId = BankSpend<OnChainTreasuryID, T::SpendId>;
+    type SpendId = BankSpend<T::BankId, T::SpendId>;
     type VoteId = T::VoteId;
     type SpendState = SpendState<T::VoteId>;
     fn propose_spend(
-        bank_id: OnChainTreasuryID,
+        bank_id: T::BankId,
         amount: BalanceOf<T>,
         dest: T::AccountId,
     ) -> Result<Self::SpendId, DispatchError> {
@@ -462,7 +451,7 @@ impl<T: Trait> SpendGovernance<OnChainTreasuryID, BalanceOf<T>, T::AccountId>
             Error::<T>::BankMustExistToProposeSpendFrom
         );
         let spend_proposal = SpendProposal::new(amount, dest);
-        let new_spend_id = Self::seeded_generate_unique_id(bank_id);
+        let new_spend_id = Self::generate_spend_uid(bank_id);
         <SpendProposals<T>>::insert(bank_id, new_spend_id, spend_proposal);
         Ok(BankSpend::new(bank_id, new_spend_id))
     }
@@ -512,7 +501,7 @@ impl<T: Trait> SpendGovernance<OnChainTreasuryID, BalanceOf<T>, T::AccountId>
                 // TODO: if Voting, remove the current live vote
                 let new_spend_proposal = if let Ok(()) =
                     <T as Trait>::Currency::transfer(
-                        &Self::account_id(spend_id.bank),
+                        &Self::bank_account_id(spend_id.bank),
                         &spend_proposal.dest(),
                         spend_proposal.amount(),
                         ExistenceRequirement::KeepAlive,
@@ -552,7 +541,7 @@ impl<T: Trait> SpendGovernance<OnChainTreasuryID, BalanceOf<T>, T::AccountId>
                     // approved so try to execute and if not, still approve
                     let new_spend_proposal = if let Ok(()) =
                         <T as Trait>::Currency::transfer(
-                            &Self::account_id(spend_id.bank),
+                            &Self::bank_account_id(spend_id.bank),
                             &spend_proposal.dest(),
                             spend_proposal.amount(),
                             ExistenceRequirement::KeepAlive,

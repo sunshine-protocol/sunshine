@@ -49,8 +49,8 @@ decl_event!(
         <T as org::Trait>::OrgId,
         Balance = BalanceOf<T>,
     {
-        PropDonationExecuted(AccountId, OrgId, Balance),
-        EqualDonationExecuted(AccountId, OrgId, Balance),
+        PropDonationExecuted(AccountId, Balance, OrgId, Balance, AccountId),
+        EqualDonationExecuted(AccountId, Balance, OrgId, Balance, AccountId),
     }
 );
 
@@ -70,24 +70,46 @@ decl_module! {
         fn make_prop_donation(
             origin,
             org: T::OrgId,
+            remainder_recipient: T::AccountId,
             amt: BalanceOf<T>
         ) -> DispatchResult {
             let sender = ensure_signed(origin)?;
-            let remainder = Self::donate(&sender, OrgRep::Weighted(org), amt)?;
-            let transferred_amt = amt - remainder;
-            Self::deposit_event(RawEvent::PropDonationExecuted(sender, org, transferred_amt));
+            let (
+                amt_transferred_to_org,
+                remainder_transferred_to_acc
+            ) = Self::donate(&sender, OrgRep::Weighted(org), &remainder_recipient, amt)?;
+            Self::deposit_event(
+                RawEvent::PropDonationExecuted(
+                    sender,
+                    amt_transferred_to_org,
+                    org,
+                    remainder_transferred_to_acc,
+                    remainder_recipient,
+                )
+            );
             Ok(())
         }
         #[weight = 0]
         fn make_equal_donation(
             origin,
             org: T::OrgId,
+            remainder_recipient: T::AccountId,
             amt: BalanceOf<T>,
         ) -> DispatchResult {
             let sender = ensure_signed(origin)?;
-            let remainder = Self::donate(&sender, OrgRep::Equal(org), amt)?;
-            let transferred_amt = amt - remainder;
-            Self::deposit_event(RawEvent::EqualDonationExecuted(sender, org, transferred_amt));
+            let (
+                amt_transferred_to_org,
+                remainder_transferred_to_acc
+            ) = Self::donate(&sender, OrgRep::Equal(org), &remainder_recipient, amt)?;
+            Self::deposit_event(
+                RawEvent::EqualDonationExecuted(
+                    sender,
+                    amt_transferred_to_org,
+                    org,
+                    remainder_transferred_to_acc,
+                    remainder_recipient,
+                )
+            );
             Ok(())
         }
     }
@@ -98,8 +120,9 @@ impl<T: Trait> Module<T> {
     pub fn donate(
         sender: &T::AccountId,
         recipient: OrgRep<T::OrgId>,
+        remainder_recipient: &T::AccountId,
         amt: BalanceOf<T>,
-    ) -> Result<BalanceOf<T>, DispatchError> {
+    ) -> Result<(BalanceOf<T>, BalanceOf<T>), DispatchError> {
         let free = T::Currency::free_balance(sender);
         let _ = free
             .checked_sub(&amt)
@@ -160,7 +183,15 @@ impl<T: Trait> Module<T> {
                 amt - transferred_amt
             }
         };
-        Ok(remainder)
+        // transfer remainder to remainder recipient
+        T::Currency::transfer(
+            sender,
+            remainder_recipient,
+            remainder,
+            ExistenceRequirement::KeepAlive,
+        )?;
+        let amt_transferred_to_org = amt - remainder;
+        Ok((amt_transferred_to_org, remainder))
     }
     fn calculate_proportional_amount(
         amount: BalanceOf<T>,

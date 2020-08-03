@@ -91,7 +91,7 @@ impl pallet_balances::Trait for Test {
 }
 impl org::Trait for Test {
     type Event = TestEvent;
-    type IpfsReference = u32; // TODO: replace with utils_identity::Cid
+    type IpfsReference = u32;
     type OrgId = u64;
     type Shares = u64;
 }
@@ -105,15 +105,18 @@ impl donate::Trait for Test {
     type Currency = Balances;
 }
 parameter_types! {
+    pub const BigBank: ModuleId = ModuleId(*b"big/bank");
     pub const MaxTreasuryPerOrg: u32 = 50;
-    pub const MinimumInitialDeposit: u64 = 20;
+    pub const MinDeposit: u64 = 20;
 }
 impl Trait for Test {
     type Event = TestEvent;
-    type SpendId = u64;
     type Currency = Balances;
+    type BigBank = BigBank;
+    type BankId = u64;
+    type SpendId = u64;
     type MaxTreasuryPerOrg = MaxTreasuryPerOrg;
-    type MinimumInitialDeposit = MinimumInitialDeposit;
+    type MinDeposit = MinDeposit;
 }
 pub type System = system::Module<Test>;
 pub type Balances = pallet_balances::Module<Test>;
@@ -121,7 +124,7 @@ pub type Org = org::Module<Test>;
 pub type Vote = vote::Module<Test>;
 pub type Bank = Module<Test>;
 
-fn get_last_event() -> RawEvent<u64, u64, u64, u64, u64> {
+fn get_last_event() -> RawEvent<u64, u64, u64, u64, u64, u64> {
     System::events()
         .into_iter()
         .map(|r| r.event)
@@ -191,13 +194,7 @@ fn opening_bank_account_works() {
         assert_ok!(Bank::open_org_bank_account(one.clone(), 1, 20, None));
         assert_eq!(
             get_last_event(),
-            RawEvent::BankAccountOpened(
-                1,
-                OnChainTreasuryID([0, 0, 0, 0, 0, 0, 0, 1]),
-                20,
-                1,
-                None
-            ),
+            RawEvent::BankAccountOpened(1, 1, 20, 1, None),
         );
         let total_bank_count = Bank::total_bank_count();
         assert_eq!(total_bank_count, 1u32);
@@ -210,20 +207,11 @@ fn spend_governance_works() {
         let one = Origin::signed(1);
         assert_ok!(Bank::open_org_bank_account(one.clone(), 1, 20, None));
         assert_noop!(
-            Bank::propose_spend(
-                OnChainTreasuryID([0, 0, 0, 0, 0, 0, 0, 2]),
-                10,
-                3,
-            ),
+            Bank::propose_spend(2, 10, 3,),
             Error::<Test>::BankMustExistToProposeSpendFrom
         );
-        assert_ok!(Bank::propose_spend(
-            OnChainTreasuryID([0, 0, 0, 0, 0, 0, 0, 1]),
-            10,
-            3,
-        ));
-        let first_spend_proposal =
-            BankSpend::new(OnChainTreasuryID([0, 0, 0, 0, 0, 0, 0, 1]), 1);
+        assert_ok!(Bank::propose_spend(1, 10, 3,));
+        let first_spend_proposal = BankSpend::new(1, 1);
         assert_ok!(Bank::trigger_vote_on_spend_proposal(
             first_spend_proposal.clone()
         ));
@@ -240,13 +228,8 @@ fn spend_governance_works() {
         assert_ok!(Bank::poll_spend_proposal(first_spend_proposal.clone()));
         // spend executed
         assert_eq!(Balances::total_balance(&3), 210);
-        assert_ok!(Bank::propose_spend(
-            OnChainTreasuryID([0, 0, 0, 0, 0, 0, 0, 1]),
-            5,
-            4,
-        ));
-        let second_spend_proposal =
-            BankSpend::new(OnChainTreasuryID([0, 0, 0, 0, 0, 0, 0, 1]), 2);
+        assert_ok!(Bank::propose_spend(1, 5, 4,));
+        let second_spend_proposal = BankSpend::new(1, 2);
         assert_eq!(Balances::total_balance(&4), 75);
         assert_ok!(Bank::sudo_approve_spend_proposal(second_spend_proposal));
         assert_eq!(Balances::total_balance(&4), 80);
