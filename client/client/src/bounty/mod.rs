@@ -34,13 +34,22 @@ pub trait BountyClient<T: Runtime + Bounty>: ChainClient<T> {
         &self,
         submission_id: T::SubmissionId,
     ) -> Result<BountyPaymentExecutedEvent<T>, Self::Error>;
-    async fn get_bounty(
+    async fn bounty(
         &self,
         bounty_id: T::BountyId,
     ) -> Result<BountyState<T>, Self::Error>;
-    async fn list_open_bounties(
+    async fn submission(
         &self,
-    ) -> Result<Option<Vec<T::BountyId>>, Self::Error>;
+        submission_id: T::SubmissionId,
+    ) -> Result<SubState<T>, Self::Error>;
+    async fn open_bounties(
+        &self,
+        min: BalanceOf<T>,
+    ) -> Result<Option<Vec<(T::BountyId, BountyState<T>)>>, Self::Error>;
+    async fn open_submissions(
+        &self,
+        bounty_id: T::BountyId,
+    ) -> Result<Option<Vec<(T::SubmissionId, SubState<T>)>>, Self::Error>;
 }
 
 #[async_trait]
@@ -115,7 +124,7 @@ where
             .bounty_payment_executed()?
             .ok_or_else(|| Error::EventNotFound.into())
     }
-    async fn get_bounty(
+    async fn bounty(
         &self,
         bounty_id: T::BountyId,
     ) -> Result<BountyState<T>, C::Error> {
@@ -125,12 +134,33 @@ where
             .await
             .map_err(Error::Subxt)?)
     }
-    async fn list_open_bounties(
+    async fn submission(
         &self,
-    ) -> Result<Option<Vec<T::BountyId>>, C::Error> {
+        submission_id: T::SubmissionId,
+    ) -> Result<SubState<T>, C::Error> {
         Ok(self
             .chain_client()
-            .open_bounties(core::marker::PhantomData, None)
+            .submissions(submission_id, None)
+            .await
+            .map_err(Error::Subxt)?)
+    }
+    async fn open_bounties(
+        &self,
+        min: BalanceOf<T>,
+    ) -> Result<Option<Vec<(T::BountyId, BountyState<T>)>>, C::Error> {
+        Ok(self
+            .chain_client()
+            .open_bounties(min, None)
+            .await
+            .map_err(Error::Subxt)?)
+    }
+    async fn open_submissions(
+        &self,
+        bounty_id: T::BountyId,
+    ) -> Result<Option<Vec<(T::SubmissionId, SubState<T>)>>, C::Error> {
+        Ok(self
+            .chain_client()
+            .open_submissions(bounty_id, None)
             .await
             .map_err(Error::Subxt)?)
     }

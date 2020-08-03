@@ -129,4 +129,9 @@ pub enum BountySubCommand {
     ContributeToBounty(bounty::BountyContributeCommand),
     SubmitForBounty(bounty::BountySubmitCommand),
     ApproveApplication(bounty::BountyApproveCommand),
+    // storage helpers
+    GetBounty(bounty::GetBountyCommand),
+    GetSubmission(bounty::GetSubmissionCommand),
+    GetOpenBounties(bounty::GetOpenBountiesCommand),
+    GetOpenSubmissions(bounty::GetOpenSubmissionsCommand),
 }

@@ -181,6 +181,16 @@ async fn run() -> Result<(), Error> {
                 BountySubCommand::ApproveApplication(cmd) => {
                     cmd.exec(&client).await?
                 }
+                BountySubCommand::GetBounty(cmd) => cmd.exec(&client).await?,
+                BountySubCommand::GetSubmission(cmd) => {
+                    cmd.exec(&client).await?
+                }
+                BountySubCommand::GetOpenBounties(cmd) => {
+                    cmd.exec(&client).await?
+                }
+                BountySubCommand::GetOpenSubmissions(cmd) => {
+                    cmd.exec(&client).await?
+                }
             }
         }
     }

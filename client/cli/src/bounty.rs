@@ -155,3 +155,128 @@ impl BountyApproveCommand {
         Ok(())
     }
 }
+
+#[derive(Clone, Debug, Clap)]
+pub struct GetBountyCommand {
+    pub bounty_id: u64,
+}
+
+impl GetBountyCommand {
+    pub async fn exec<R: Runtime + Bounty, C: BountyClient<R>>(
+        &self,
+        client: &C,
+    ) -> Result<(), C::Error>
+    where
+        <R as System>::AccountId: Ss58Codec,
+        <R as Bounty>::Currency: Display,
+        <R as Bounty>::BountyId: Display + From<u64>,
+        <R as Bounty>::IpfsReference: Debug,
+    {
+        let bounty_state = client
+            .bounty(self.bounty_id.into())
+            .await
+            .map_err(Error::Client)?;
+        println!(
+            "BOUNTY {} INFORMATION: CID: {:?} | Depositor: {} | Total Balance: {} ",
+            self.bounty_id, bounty_state.info(), bounty_state.depositer(), bounty_state.total(),
+        );
+        Ok(())
+    }
+}
+
+#[derive(Clone, Debug, Clap)]
+pub struct GetSubmissionCommand {
+    pub submission_id: u64,
+}
+
+impl GetSubmissionCommand {
+    pub async fn exec<R: Runtime + Bounty, C: BountyClient<R>>(
+        &self,
+        client: &C,
+    ) -> Result<(), C::Error>
+    where
+        <R as System>::AccountId: Ss58Codec,
+        <R as Bounty>::Currency: Display,
+        <R as Bounty>::BountyId: Display,
+        <R as Bounty>::SubmissionId: Display + From<u64>,
+        <R as Bounty>::IpfsReference: Debug,
+    {
+        let submission_state = client
+            .submission(self.submission_id.into())
+            .await
+            .map_err(Error::Client)?;
+        println!(
+            "SUBMISSION {} INFORMATION: Bounty ID: {} | CID : {:?} | Submitter: {} | Total Balance: {} ",
+            self.submission_id, submission_state.bounty_id(), submission_state.submission(), submission_state.submitter(), submission_state.amount(),
+        );
+        Ok(())
+    }
+}
+
+#[derive(Clone, Debug, Clap)]
+pub struct GetOpenBountiesCommand {
+    pub min: u128,
+}
+
+impl GetOpenBountiesCommand {
+    pub async fn exec<R: Runtime + Bounty, C: BountyClient<R>>(
+        &self,
+        client: &C,
+    ) -> Result<(), C::Error>
+    where
+        <R as Bounty>::Currency: From<u128> + Display,
+        <R as Bounty>::BountyId: Display,
+        <R as Bounty>::SubmissionId: Display + From<u64>,
+    {
+        let open_bounties = client
+            .open_bounties(self.min.into())
+            .await
+            .map_err(Error::Client)?;
+        if let Some(b) = open_bounties {
+            b.into_iter().for_each(|(id, bounty)| {
+                println!(
+                    "Live BountyID {} has total available balance {}",
+                    id,
+                    bounty.total()
+                );
+            });
+        } else {
+            println!("No open bounties above the passed input minimum balance");
+        }
+        Ok(())
+    }
+}
+
+#[derive(Clone, Debug, Clap)]
+pub struct GetOpenSubmissionsCommand {
+    pub bounty_id: u64,
+}
+
+impl GetOpenSubmissionsCommand {
+    pub async fn exec<R: Runtime + Bounty, C: BountyClient<R>>(
+        &self,
+        client: &C,
+    ) -> Result<(), C::Error>
+    where
+        <R as Bounty>::Currency: Display,
+        <R as Bounty>::BountyId: From<u64> + Display,
+        <R as Bounty>::SubmissionId: Display,
+    {
+        let open_submissions = client
+            .open_submissions(self.bounty_id.into())
+            .await
+            .map_err(Error::Client)?;
+        if let Some(s) = open_submissions {
+            s.into_iter().for_each(|(id, sub)| {
+                println!(
+                    "Live SubmissionID {} requests total balance {}",
+                    id,
+                    sub.amount()
+                );
+            });
+        } else {
+            println!("No open submissions for the passed in BountyID");
+        }
+        Ok(())
+    }
+}
