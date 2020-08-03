@@ -155,6 +155,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "allo-isolate"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f75caca5bd0e6176a1fdf24799ab19dc50af1fd067192807d9ebb3eaea12ca3f"
+
+[[package]]
 name = "ansi_term"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7135,6 +7141,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "sunshine-bounty-ffi"
+version = "0.1.0"
+dependencies = [
+ "substrate-subxt",
+ "sunshine-bounty-client",
+ "sunshine-core",
+ "sunshine-ffi-utils",
+ "test-client",
+ "thiserror",
+]
+
+[[package]]
 name = "sunshine-bounty-gbot"
 version = "0.0.1"
 dependencies = [
@@ -7223,6 +7241,17 @@ dependencies = [
  "sp-runtime",
  "sp-std",
  "sunshine-bounty-utils",
+]
+
+[[package]]
+name = "sunshine-ffi-utils"
+version = "0.1.0"
+source = "git+https://github.com/sunshine-protocol/sunshine-identity?rev=9003376#90033765901df6c5c6595945efc5062a81097616"
+dependencies = [
+ "allo-isolate",
+ "async-std",
+ "log",
+ "once_cell",
 ]
 
 [[package]]

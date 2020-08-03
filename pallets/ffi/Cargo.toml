@@ -1,0 +1,19 @@
+[package]
+name = "sunshine-bounty-ffi"
+version = "0.1.0"
+authors = ["Shady Khalifa <shekohex@gmail.com>"]
+edition = "2018"
+description = "FFI for the sunshine bounty module."
+license = "ISC"
+documentation = "https://docs.rs/sunshine-bounty-ffi"
+repository = "https://github.com/sunshine-protocol/sunshine-bounty"
+
+[dependencies]
+ffi-utils = { git = "https://github.com/sunshine-protocol/sunshine-identity", rev = "9003376", package = "sunshine-ffi-utils" }
+thiserror = "^1"
+sunshine-core = "0.2.0"
+sunshine-bounty-client = { path = "../../client/client" }
+substrate-subxt = "0.10.1"
+
+[dev-dependencies]
+test-client = { path = "../../bin/client" }
