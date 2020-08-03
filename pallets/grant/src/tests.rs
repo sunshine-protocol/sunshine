@@ -116,8 +116,8 @@ impl donate::Trait for Test {
 }
 parameter_types! {
     pub const BigFoundation: ModuleId = ModuleId(*b"big/fund");
-    pub const MinDeposit: u32 = 20;
-    pub const MinContribution: u64 = 10;
+    pub const MinDeposit: u128 = 20;
+    pub const MinContribution: u128 = 10;
 }
 impl Trait for Test {
     type Event = TestEvent;
@@ -163,6 +163,12 @@ fn new_test_ext() -> sp_io::TestExternalities {
         first_organization_supervisor: 1,
         first_organization_value_constitution: 1738,
         first_organization_flat_membership: vec![1, 2, 3, 4, 5, 6],
+    }
+    .assimilate_storage(&mut t)
+    .unwrap();
+    GenesisConfig::<Test> {
+        application_poll_frequency: 10,
+        milestone_poll_frequency: 10,
     }
     .assimilate_storage(&mut t)
     .unwrap();
@@ -314,13 +320,12 @@ fn donate_2_foundation_works() {
 #[test]
 fn submit_application_works() {
     new_test_ext().execute_with(|| {
-        let one_recipient = Recipient::new(1, None);
         assert_noop!(
             Grant::submit_application(
                 Origin::signed(1),
                 1u64,
                 11u32,
-                one_recipient.clone(),
+                Recipient::new(1, None),
                 2u64,
             ),
             Error::<Test>::FoundationDNE
@@ -336,12 +341,18 @@ fn submit_application_works() {
             Origin::signed(1),
             1u64,
             11u32,
-            one_recipient.clone(),
+            Recipient::new(1, None),
             2u64,
         ));
         assert_eq!(
             get_last_event(),
-            RawEvent::ApplicationSubmitted(1, 1, one_recipient, 2u64, 11u32)
+            RawEvent::ApplicationSubmitted(
+                1,
+                1,
+                Recipient::new(1, None),
+                2u64,
+                11u32
+            )
         );
     });
 }
@@ -349,8 +360,6 @@ fn submit_application_works() {
 #[test]
 fn trigger_app_review_works() {
     new_test_ext().execute_with(|| {
-        let one_recipient = Recipient::new(1, None);
-        let two_recipient = Recipient::new(2, None);
         assert_noop!(
             Grant::trigger_application_review(Origin::signed(1), 1,),
             Error::<Test>::ApplicationDNE
@@ -366,7 +375,7 @@ fn trigger_app_review_works() {
             Origin::signed(1),
             1u64,
             11u32,
-            one_recipient.clone(),
+            Recipient::new(1, None),
             2u64,
         ));
         assert_noop!(
@@ -388,7 +397,7 @@ fn trigger_app_review_works() {
             Origin::signed(2),
             2u64,
             11u32,
-            two_recipient.clone(),
+            Recipient::new(2, None),
             5u64,
         ));
         assert_noop!(
@@ -404,7 +413,7 @@ fn trigger_app_review_works() {
             Origin::signed(1),
             2u64,
             12u32,
-            one_recipient.clone(),
+            Recipient::new(1, None),
             7u64,
         ));
         assert_ok!(Grant::trigger_application_review(Origin::signed(2), 3,));
@@ -417,8 +426,6 @@ fn trigger_app_review_works() {
 
 #[test]
 fn approve_reject_application_works() {
-    let one_recipient = Recipient::new(1, None);
-    let two_recipient = Recipient::new(2, None);
     new_test_ext().execute_with(|| {
         assert_noop!(
             Grant::approve_application(Origin::signed(1), 1,),
@@ -438,7 +445,7 @@ fn approve_reject_application_works() {
             Origin::signed(1),
             1u64,
             11u32,
-            one_recipient.clone(),
+            Recipient::new(1, None),
             2u64,
         ));
         assert_noop!(
@@ -459,7 +466,7 @@ fn approve_reject_application_works() {
             Origin::signed(2),
             1u64,
             12u32,
-            two_recipient.clone(),
+            Recipient::new(2, None),
             9u64,
         ));
         assert_ok!(Grant::approve_application(Origin::signed(1), 2,));
@@ -485,7 +492,7 @@ fn approve_reject_application_works() {
             Origin::signed(2),
             2u64,
             13u32,
-            two_recipient.clone(),
+            Recipient::new(2, None),
             4u64,
         ));
         assert_ok!(Grant::reject_application(Origin::signed(1), 3,));
@@ -499,7 +506,7 @@ fn approve_reject_application_works() {
             Origin::signed(2),
             3u64,
             14u32,
-            two_recipient.clone(),
+            Recipient::new(2, None),
             6u64,
         ));
         // bc governance does not have sudo
@@ -513,6 +520,205 @@ fn approve_reject_application_works() {
 #[test]
 fn submit_milestone_works() {
     new_test_ext().execute_with(|| {
-        assert!(true);
+        assert_ok!(Grant::create_foundation(
+            Origin::signed(1),
+            10u32,
+            20u64,
+            sudo_threshold_no_vote()
+        ));
+        assert_ok!(Grant::submit_application(
+            Origin::signed(2),
+            1u64,
+            11u32,
+            Recipient::new(2, None),
+            5u64,
+        ));
+        assert_noop!(
+            Grant::submit_milestone(
+                Origin::signed(2),
+                1,
+                1,
+                12u32,
+                Recipient::new(2, None),
+                5u64,
+            ),
+            Error::<Test>::ApplicationMustBeApprovedToSubmitMilestone
+        );
+        assert_ok!(Grant::approve_application(Origin::signed(1), 1,));
+        assert_noop!(
+            Grant::submit_milestone(
+                Origin::signed(2),
+                66u64,
+                1,
+                12u32,
+                Recipient::new(2, None),
+                5u64,
+            ),
+            Error::<Test>::FoundationDNE
+        );
+        assert_noop!(
+            Grant::submit_milestone(
+                Origin::signed(2),
+                1,
+                2,
+                12u32,
+                Recipient::new(2, None),
+                5u64,
+            ),
+            Error::<Test>::ApplicationDNE
+        );
+        assert_ok!(Grant::submit_milestone(
+            Origin::signed(2),
+            1,
+            1,
+            12u32,
+            Recipient::new(2, None),
+            5u64,
+        ));
+        assert_eq!(
+            get_last_event(),
+            RawEvent::MilestoneSubmitted(
+                1,
+                1,
+                1,
+                Recipient::new(2, None),
+                5u64,
+                12u32
+            )
+        );
+    });
+}
+
+#[test]
+fn trigger_milestone_review_works() {
+    new_test_ext().execute_with(|| {
+        assert_noop!(
+            Grant::trigger_milestone_review(Origin::signed(1), 1, 1,),
+            Error::<Test>::MilestoneDNE
+        );
+        assert_ok!(Grant::create_foundation(
+            Origin::signed(1),
+            10u32,
+            20u64,
+            sudo_threshold_no_vote()
+        ));
+        assert_ok!(Grant::submit_application(
+            Origin::signed(2),
+            1u64,
+            11u32,
+            Recipient::new(2, None),
+            5u64,
+        ));
+        assert_ok!(Grant::approve_application(Origin::signed(1), 1,));
+        assert_ok!(Grant::submit_milestone(
+            Origin::signed(2),
+            1,
+            1,
+            12u32,
+            Recipient::new(2, None),
+            5u64,
+        ));
+        assert_noop!(
+            Grant::trigger_milestone_review(Origin::signed(1), 1, 1,),
+            Error::<Test>::NotAuthorizedToTriggerMilestoneReview
+        );
+        assert_ok!(Grant::create_foundation(
+            Origin::signed(1),
+            10u32,
+            20u64,
+            new_min_threshold_and_sudo()
+        ));
+        assert_ok!(Grant::submit_application(
+            Origin::signed(2),
+            2u64,
+            17u32,
+            Recipient::new(2, None),
+            5u64,
+        ));
+        assert_ok!(Grant::approve_application(Origin::signed(1), 2,));
+        assert_ok!(Grant::submit_milestone(
+            Origin::signed(2),
+            2,
+            2,
+            19u32,
+            Recipient::new(2, None),
+            5u64,
+        ));
+        assert_ok!(Grant::trigger_milestone_review(Origin::signed(1), 2, 1,));
+        assert_noop!(
+            Grant::trigger_milestone_review(Origin::signed(1), 2, 1,),
+            Error::<Test>::MilestoneNotInValidStateToTriggerReview
+        );
+        assert_eq!(
+            get_last_event(),
+            RawEvent::MilestoneReviewTriggered(2, 2, 1, 1,)
+        );
+    });
+}
+
+#[test]
+fn approve_reject_milestone_works() {
+    new_test_ext().execute_with(|| {
+        assert_noop!(
+            Grant::approve_milestone(Origin::signed(1), 1, 1,),
+            Error::<Test>::MilestoneDNE
+        );
+        assert_noop!(
+            Grant::reject_milestone(Origin::signed(1), 1, 1,),
+            Error::<Test>::MilestoneDNE
+        );
+        assert_ok!(Grant::create_foundation(
+            Origin::signed(1),
+            10u32,
+            20u64,
+            sudo_threshold_no_vote()
+        ));
+        assert_ok!(Grant::submit_application(
+            Origin::signed(2),
+            1u64,
+            11u32,
+            Recipient::new(2, None),
+            5u64,
+        ));
+        assert_ok!(Grant::approve_application(Origin::signed(1), 1,));
+        assert_ok!(Grant::submit_milestone(
+            Origin::signed(2),
+            1,
+            1,
+            12u32,
+            Recipient::new(2, None),
+            5u64,
+        ));
+        assert_noop!(
+            Grant::approve_milestone(Origin::signed(66), 1, 1,),
+            Error::<Test>::NotAuthorizedToApproveMilestone
+        );
+        assert_noop!(
+            Grant::reject_milestone(Origin::signed(66), 1, 1,),
+            Error::<Test>::NotAuthorizedToRejectMilestone
+        );
+        assert_ok!(Grant::approve_milestone(Origin::signed(1), 1, 1,));
+        assert_noop!(
+            Grant::approve_milestone(Origin::signed(1), 1, 1,),
+            Error::<Test>::MilestoneNotInValidStateToApprove
+        );
+        assert_noop!(
+            Grant::reject_milestone(Origin::signed(1), 1, 1,),
+            Error::<Test>::MilestoneNotInValidStateToReject
+        );
+        assert_eq!(
+            get_last_event(),
+            RawEvent::MilestoneApproved(1, 1, 1, 12u32)
+        );
+        assert_ok!(Grant::submit_milestone(
+            Origin::signed(2),
+            1,
+            1,
+            12u32,
+            Recipient::new(2, None),
+            5u64,
+        ));
+        assert_ok!(Grant::reject_milestone(Origin::signed(1), 1, 2,));
+        assert_eq!(get_last_event(), RawEvent::MilestoneRejected(1, 1, 2));
     });
 }
