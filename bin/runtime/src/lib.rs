@@ -171,9 +171,8 @@ where
             .ok()?;
         let signature =
             raw_payload.using_encoded(|payload| C::sign(payload, public))?;
-        let address = Indices::unlookup(account);
         let (call, extra, _) = raw_payload.deconstruct();
-        Some((call, (address, signature, extra)))
+        Some((call, (account, signature, extra)))
     }
 }
 
@@ -241,7 +240,7 @@ impl frame_system::Trait for Runtime {
     /// The aggregated dispatch type that is available for extrinsics.
     type Call = Call;
     /// The lookup mechanism to get account ID from whatever is passed in dispatchers.
-    type Lookup = Indices;
+    type Lookup = traits::IdentityLookup<AccountId>;
     /// The index type for storing how many extrinsics an account has signed.
     type Index = Index;
     /// The index type for blocks.
@@ -317,13 +316,13 @@ parameter_types! {
     pub const IndexDeposit: Balance = 1u128;
 }
 
-impl pallet_indices::Trait for Runtime {
-    type AccountIndex = AccountIndex;
-    type Event = Event;
-    type Currency = Balances;
-    type Deposit = IndexDeposit;
-    type WeightInfo = ();
-}
+// impl pallet_indices::Trait for Runtime {
+// type AccountIndex = AccountIndex;
+// type Event = Event;
+// type Currency = Balances;
+// type Deposit = IndexDeposit;
+// type WeightInfo = ();
+// }
 
 parameter_types! {
     pub const MinimumPeriod: u64 = SLOT_DURATION / 2;
@@ -448,7 +447,7 @@ construct_runtime!(
         Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
         TransactionPayment: pallet_transaction_payment::{Module, Storage},
         Sudo: pallet_sudo::{Module, Call, Config<T>, Storage, Event<T>},
-        Indices: pallet_indices::{Module, Call, Storage, Config<T>, Event<T>},
+        //Indices: pallet_indices::{Module, Call, Storage, Config<T>, Event<T>},
         // sunshine-bounty modules
         Org: org::{Module, Call, Config<T>, Storage, Event<T>},
         Vote: vote::{Module, Call, Storage, Event<T>},
@@ -462,7 +461,7 @@ construct_runtime!(
 );
 
 /// The address format for describing accounts.
-pub type Address = <Indices as StaticLookup>::Source;
+pub type Address = AccountId;
 /// Block header type as expected by this runtime.
 pub type Header = generic::Header<BlockNumber, BlakeTwo256>;
 /// Block type as expected by this runtime.

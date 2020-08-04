@@ -18,7 +18,6 @@ use test_runtime::{
     BlockNumber,
     GenesisConfig,
     GrandpaConfig,
-    IndicesConfig,
     OrgConfig,
     Signature,
     SudoConfig,
@@ -174,7 +173,7 @@ pub fn testnet_genesis(
                 .map(|k| (k, 1 << 60))
                 .collect(),
         }),
-        pallet_indices: Some(IndicesConfig { indices: vec![] }),
+        // pallet_indices: Some(IndicesConfig { indices: vec![] }),
         pallet_aura: Some(AuraConfig {
             authorities: initial_authorities
                 .iter()
