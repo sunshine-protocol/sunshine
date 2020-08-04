@@ -122,7 +122,7 @@ decl_event!(
     {
         /// Poster, Initial Amount, Identifier, Bounty Metadata (i.e. github issue reference)
         BountyPosted(AccountId, Balance, BountyId, IpfsReference),
-        /// Contributor, Total Contribution Amount, Identifier, Full Amount After Contribution, Bounty Metadata
+        /// Contributor, This Contribution Amount, Identifier, Full Amount After Contribution, Bounty Metadata
         BountyRaiseContribution(AccountId, Balance, BountyId, Balance, IpfsReference),
         /// Submitter, Bounty Identifier, Amount Requested, Submission Identifier, Bounty Metadata, Submission Metadata
         BountySubmissionPosted(AccountId, BountyId, Balance, SubmissionId, IpfsReference, IpfsReference),
@@ -219,7 +219,7 @@ decl_module! {
             let total = new_bounty.total();
             <BountyTips<T>>::insert(bounty_id, &contributor, new_amount);
             <Bounties<T>>::insert(bounty_id, new_bounty);
-            Self::deposit_event(RawEvent::BountyRaiseContribution(contributor, new_amount, bounty_id, total, bounty.info()));
+            Self::deposit_event(RawEvent::BountyRaiseContribution(contributor, amount, bounty_id, total, bounty.info()));
             Ok(())
         }
         #[weight = 0]

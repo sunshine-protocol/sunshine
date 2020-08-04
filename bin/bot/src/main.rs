@@ -116,8 +116,9 @@ async fn run_github_bot(mut bot: Bot, github: GBot) -> Result<Bot> {
         // issue comment
         github
             .issue_comment_bounty_contribute(
-                event.bounty_id,
+                event.amount,
                 event.total,
+                event.bounty_id,
                 bounty_body.repo_owner,
                 bounty_body.repo_name,
                 bounty_body.issue_number,
@@ -129,11 +130,20 @@ async fn run_github_bot(mut bot: Bot, github: GBot) -> Result<Bot> {
             BountySubmissionPostedEvent::<Runtime>::decode(&mut &raw.data[..])
                 .map_err(Error::SubxtCodec)?;
         // fetch structured data from client
-        let event_cid = event.bounty_ref.to_cid().map_err(Error::CiDecode)?;
+        let bounty_event_cid =
+            event.bounty_ref.to_cid().map_err(Error::CiDecode)?;
+        let submission_event_cid =
+            event.submission_ref.to_cid().map_err(Error::CiDecode)?;
         let bounty_body: BountyBody = bot
             .client
             .offchain_client()
-            .get(&event_cid)
+            .get(&bounty_event_cid)
+            .await
+            .map_err(Error::Libipld)?;
+        let submission_body: BountyBody = bot
+            .client
+            .offchain_client()
+            .get(&submission_event_cid)
             .await
             .map_err(Error::Libipld)?;
         // issue comment
@@ -142,6 +152,9 @@ async fn run_github_bot(mut bot: Bot, github: GBot) -> Result<Bot> {
                 event.amount,
                 event.bounty_id,
                 event.id,
+                submission_body.repo_owner,
+                submission_body.repo_name,
+                submission_body.issue_number,
                 bounty_body.repo_owner,
                 bounty_body.repo_name,
                 bounty_body.issue_number,
@@ -153,20 +166,32 @@ async fn run_github_bot(mut bot: Bot, github: GBot) -> Result<Bot> {
             BountyPaymentExecutedEvent::<Runtime>::decode(&mut &raw.data[..])
                 .map_err(Error::SubxtCodec)?;
         // fetch structured data from client
-        let event_cid = event.bounty_ref.to_cid().map_err(Error::CiDecode)?;
+        let bounty_event_cid =
+            event.bounty_ref.to_cid().map_err(Error::CiDecode)?;
+        let submission_event_cid =
+            event.submission_ref.to_cid().map_err(Error::CiDecode)?;
         let bounty_body: BountyBody = bot
             .client
             .offchain_client()
-            .get(&event_cid)
+            .get(&bounty_event_cid)
+            .await
+            .map_err(Error::Libipld)?;
+        let submission_body: BountyBody = bot
+            .client
+            .offchain_client()
+            .get(&submission_event_cid)
             .await
             .map_err(Error::Libipld)?;
         // issue comment
         github
             .issue_comment_submission_approval(
-                event.bounty_id,
-                event.submission_id,
                 event.amount,
                 event.new_total,
+                event.submission_id,
+                event.bounty_id,
+                submission_body.repo_owner,
+                submission_body.repo_name,
+                submission_body.issue_number,
                 bounty_body.repo_owner,
                 bounty_body.repo_name,
                 bounty_body.issue_number,

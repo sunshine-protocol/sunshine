@@ -163,7 +163,7 @@ pub struct ContributeToBountyCall<T: Bounty> {
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
 pub struct BountyRaiseContributionEvent<T: Bounty> {
     pub contributor: <T as System>::AccountId,
-    pub new_amount: BalanceOf<T>,
+    pub amount: BalanceOf<T>,
     pub bounty_id: T::BountyId,
     pub total: BalanceOf<T>,
     pub bounty_ref: T::IpfsReference,
