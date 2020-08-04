@@ -29,7 +29,6 @@ use sp_runtime::{
         IdentifyAccount,
         NumberFor,
         Saturating,
-        StaticLookup,
         Verify,
     },
     transaction_validity::TransactionValidity,
