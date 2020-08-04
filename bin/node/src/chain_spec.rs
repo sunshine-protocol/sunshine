@@ -10,7 +10,7 @@ use sp_runtime::traits::{
     IdentifyAccount,
     Verify,
 };
-use suntime::{
+use test_runtime::{
     AccountId,
     AuraConfig,
     Balance,
@@ -19,7 +19,6 @@ use suntime::{
     GenesisConfig,
     GrandpaConfig,
     GrantConfig,
-    IndicesConfig,
     OrgConfig,
     Signature,
     SudoConfig,
@@ -179,7 +178,6 @@ pub fn testnet_genesis(
                 .map(|k| (k, 1 << 60))
                 .collect(),
         }),
-        pallet_indices: Some(IndicesConfig { indices: vec![] }),
         pallet_aura: Some(AuraConfig {
             authorities: initial_authorities
                 .iter()

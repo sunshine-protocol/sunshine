@@ -263,6 +263,20 @@ mod tests {
     }
 
     #[async_std::test]
+    async fn simple_test() {
+        use substrate_subxt::balances::TransferCallExt;
+        let (node, _node_tmp) = test_node();
+        let (client, _client_tmp) =
+            Client::mock(&node, AccountKeyring::Alice).await;
+        let alice_account_id = AccountKeyring::Alice.to_account_id();
+        client
+            .chain_client()
+            .transfer(client.chain_signer().unwrap(), &alice_account_id, 10_000)
+            .await
+            .unwrap();
+    }
+
+    #[async_std::test]
     async fn register_flat_org() {
         let (node, _node_tmp) = test_node();
         let (client, _client_tmp) =

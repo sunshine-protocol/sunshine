@@ -24,7 +24,7 @@ use std::{
     sync::Arc,
     time::Duration,
 };
-use suntime::{
+use test_runtime::{
     self,
     opaque::Block,
     RuntimeApi,
@@ -33,8 +33,8 @@ use suntime::{
 // Our native executor instance.
 native_executor_instance!(
     pub Executor,
-    suntime::api::dispatch,
-    suntime::native_version,
+    test_runtime::api::dispatch,
+    test_runtime::native_version,
 );
 
 type FullClient = sc_service::TFullClient<Block, RuntimeApi, Executor>;
