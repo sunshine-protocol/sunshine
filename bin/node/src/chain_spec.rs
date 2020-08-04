@@ -10,7 +10,7 @@ use sp_runtime::traits::{
     IdentifyAccount,
     Verify,
 };
-use suntime::{
+use test_runtime::{
     AccountId,
     AuraConfig,
     Balance,

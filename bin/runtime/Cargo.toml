@@ -3,7 +3,7 @@ authors = ['4meta5']
 edition = '2018'
 homepage = 'https://sunshine.foundation'
 license = 'GPL-3.0'
-name = 'suntime'
+name = 'test-runtime'
 repository = 'https://github.com/sunshine-protocol/sunshine-bounty/'
 version = '0.0.1'
 

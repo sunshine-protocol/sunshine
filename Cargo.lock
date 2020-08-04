@@ -7357,48 +7357,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "suntime"
-version = "0.0.1"
-dependencies = [
- "frame-executive",
- "frame-support",
- "frame-system",
- "pallet-aura",
- "pallet-balances",
- "pallet-grandpa",
- "pallet-indices",
- "pallet-randomness-collective-flip",
- "pallet-sudo",
- "pallet-timestamp",
- "pallet-transaction-payment",
- "parity-scale-codec",
- "serde",
- "sp-api",
- "sp-block-builder",
- "sp-consensus-aura",
- "sp-core",
- "sp-inherents",
- "sp-io",
- "sp-offchain",
- "sp-runtime",
- "sp-session",
- "sp-std",
- "sp-transaction-pool",
- "sp-version",
- "substrate-wasm-builder-runner",
- "sunshine-bank",
- "sunshine-bounty",
- "sunshine-bounty-utils",
- "sunshine-court",
- "sunshine-donate",
- "sunshine-drip",
- "sunshine-identity-utils 0.2.0 (git+https://github.com/sunshine-protocol/sunshine-identity)",
- "sunshine-org",
- "sunshine-treasury",
- "sunshine-vote",
-]
-
-[[package]]
 name = "syn"
 version = "0.11.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7542,7 +7500,7 @@ dependencies = [
 
 [[package]]
 name = "test-node"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "futures 0.3.5",
  "log",
@@ -7566,7 +7524,49 @@ dependencies = [
  "structopt",
  "substrate-build-script-utils",
  "sunshine-identity-utils 0.2.0 (git+https://github.com/sunshine-protocol/sunshine-identity)",
- "suntime",
+ "test-runtime",
+]
+
+[[package]]
+name = "test-runtime"
+version = "0.0.1"
+dependencies = [
+ "frame-executive",
+ "frame-support",
+ "frame-system",
+ "pallet-aura",
+ "pallet-balances",
+ "pallet-grandpa",
+ "pallet-indices",
+ "pallet-randomness-collective-flip",
+ "pallet-sudo",
+ "pallet-timestamp",
+ "pallet-transaction-payment",
+ "parity-scale-codec",
+ "serde",
+ "sp-api",
+ "sp-block-builder",
+ "sp-consensus-aura",
+ "sp-core",
+ "sp-inherents",
+ "sp-io",
+ "sp-offchain",
+ "sp-runtime",
+ "sp-session",
+ "sp-std",
+ "sp-transaction-pool",
+ "sp-version",
+ "substrate-wasm-builder-runner",
+ "sunshine-bank",
+ "sunshine-bounty",
+ "sunshine-bounty-utils",
+ "sunshine-court",
+ "sunshine-donate",
+ "sunshine-drip",
+ "sunshine-identity-utils 0.2.0 (git+https://github.com/sunshine-protocol/sunshine-identity)",
+ "sunshine-org",
+ "sunshine-treasury",
+ "sunshine-vote",
 ]
 
 [[package]]

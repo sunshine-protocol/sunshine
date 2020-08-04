@@ -1,45 +1,34 @@
 [package]
-name = 'test-node'
-version = '0.0.1'
-authors = ['4meta5']
-edition = '2018'
-
-license = 'GPL-3.0'
-description = 'sunshine bounty node'
-homepage = 'https://sunshine.foundation'
-repository = 'https://github.com/sunshine-protocol/sunshine-bounty'
-
-[build-dependencies]
-substrate-build-script-utils = "2.0.0-rc5"
+name = "test-node"
+version = "0.1.0"
+authors = ["4meta5"]
+edition = "2018"
+publish = false
 
 [dependencies]
 futures = "0.3.5"
 log = "0.4.11"
-sc-basic-authorship = { version = "0.8.0-rc5", default-features = false }
-sc-cli = { version = "0.8.0-rc5", optional = true, default-features = false }
-sc-consensus = { version = "0.8.0-rc5", default-features = false }
-sc-client-api = { version = "2.0.0-rc5", default-features = false }
-sc-consensus-aura = { version = "0.8.0-rc5", default-features = false }
-sc-executor = { version = "0.8.0-rc5", default-features = false }
-sc-finality-grandpa = { version = "0.8.0-rc5", default-features = false }
-sc-network = { version = "0.8.0-rc5", default-features = false }
-sc-service = { version = "0.8.0-rc5", default-features = false }
-sc-transaction-pool = { version = "2.0.0-rc5", default-features = false }
-sp-consensus = { version = "0.8.0-rc5", default-features = false }
-sp-consensus-aura = { version = "0.8.0-rc5", default-features = false }
-sp-core = { version = "2.0.0-rc5", default-features = false }
-sp-finality-grandpa = { version = "2.0.0-rc5", default-features = false }
-sp-inherents = { version = "2.0.0-rc5", default-features = false }
-sp-runtime = { version = "2.0.0-rc5", default-features = false }
-sp-transaction-pool = { version = "2.0.0-rc5", default-features = false }
-suntime = { path = "../runtime" }
-utils-identity = { package = "sunshine-identity-utils", git = "https://github.com/sunshine-protocol/sunshine-identity/", default-features=false }
-structopt = { version = "0.3.15", optional = true }
+structopt = "0.3.15"
+test-runtime = { path = "../runtime" }
+utils-identity = { package = "sunshine-identity-utils", git = "https://github.com/sunshine-protocol/sunshine-identity" }
 
-[features]
-default = ["cli"]
-cli = ["sc-cli", "sc-service/db", "structopt"]
+sc-basic-authorship = "0.8.0-rc5"
+sc-cli = "0.8.0-rc5"
+sc-client-api = "2.0.0-rc5"
+sc-consensus = "0.8.0-rc5"
+sc-consensus-aura = "0.8.0-rc5"
+sc-executor = "0.8.0-rc5"
+sc-finality-grandpa = "0.8.0-rc5"
+sc-network = "0.8.0-rc5"
+sc-service = "0.8.0-rc5"
+sc-transaction-pool = "2.0.0-rc5"
+sp-consensus = "0.8.0-rc5"
+sp-consensus-aura = "0.8.0-rc5"
+sp-core = "2.0.0-rc5"
+sp-finality-grandpa = "2.0.0-rc5"
+sp-inherents = "2.0.0-rc5"
+sp-runtime = "2.0.0-rc5"
+sp-transaction-pool = "2.0.0-rc5"
 
-[[bin]]
-name = 'test-node'
-required-features = ["cli"]
+[build-dependencies]
+substrate-build-script-utils = "2.0.0-rc5"
