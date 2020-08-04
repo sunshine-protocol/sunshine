@@ -7,12 +7,16 @@ pub enum Error<E: std::error::Error + std::fmt::Debug + 'static> {
     Client(E),
     #[error(transparent)]
     Io(#[from] async_std::io::Error),
-    #[error("Failed to find config dir. Use `--path` to supply a suitable directory.")]
-    ConfigDirNotFound,
     #[error(transparent)]
     InvalidSuri(#[from] sunshine_core::InvalidSuri),
     #[error(transparent)]
     InvalidSs58(#[from] sunshine_core::InvalidSs58),
+    #[error(transparent)]
+    CiDecode(#[from] libipld::cid::Error),
+    #[error(transparent)]
+    Libipld(#[from] libipld::error::Error),
+    #[error(transparent)]
+    Cbor(#[from] serde_cbor::Error),
 }
 
 pub type Result<T, E> = core::result::Result<T, Error<E>>;

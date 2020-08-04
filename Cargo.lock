@@ -1896,6 +1896,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "half"
+version = "1.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d36fab90f82edc3c747f9d438e06cf0a491055896f2a279638bb5beed6c40177"
+
+[[package]]
 name = "hash-db"
 version = "0.15.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5905,6 +5911,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde_cbor"
+version = "0.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1e18acfa2f90e8b735b2836ab8d538de304cbb6729a7360729ea5a895d15a622"
+dependencies = [
+ "half",
+ "serde",
+]
+
+[[package]]
 name = "serde_derive"
 version = "1.0.114"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7144,10 +7160,16 @@ dependencies = [
 name = "sunshine-bounty-ffi"
 version = "0.1.0"
 dependencies = [
+ "ipfs-embed",
+ "ipld-block-builder",
+ "libipld",
+ "serde",
+ "serde_cbor",
  "substrate-subxt",
  "sunshine-bounty-client",
  "sunshine-core",
  "sunshine-ffi-utils",
+ "sunshine-identity-utils 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "test-client",
  "thiserror",
 ]

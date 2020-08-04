@@ -1,4 +1,5 @@
 pub use ffi_utils;
+pub mod dto;
 pub mod error;
 pub mod ffi;
 /// Generate the FFI for the provided runtime
@@ -21,11 +22,11 @@ macro_rules! impl_ffi {
 
         gen_ffi! {
             /// Get a bounty Information by using bounty Id
-            /// Returns [TODO]
-            Bounty::get => fn client_bounty_get(bounty_id: u64 = bounty_id) -> Vec<String>;
+            /// Returns Cbor encoded `BountyInformation` as bytes
+            Bounty::get => fn client_bounty_get(bounty_id: u64 = bounty_id) -> Cbor<BountyInformation>;
             /// Get a submission Information by using submission Id
-            /// Returns [TODO]
-            Bounty::get_submission => fn client_bounty_get_submission(submission_id: u64 = submission_id) -> Vec<String>;
+            /// Returns Cbor encoded `BountySubmissionInformation` as bytes
+            Bounty::get_submission => fn client_bounty_get_submission(submission_id: u64 = submission_id) -> Cbor<BountySubmissionInformation>;
             /// Create a new Bounty
             /// Returns the `BountyId` as `u64`
             Bounty::post => fn client_bounty_post(

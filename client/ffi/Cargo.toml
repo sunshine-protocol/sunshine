@@ -14,6 +14,11 @@ thiserror = "^1"
 sunshine-core = "0.2.0"
 sunshine-bounty-client = { path = "../../client/client" }
 substrate-subxt = "0.10.1"
-
+ipfs-embed = "0.3.0"
+ipld-block-builder = "0.4.1"
+libipld = "0.3.0"
+identity-utils = { package = "sunshine-identity-utils", version = "0.2.0" }
+serde = { version = "^1", features = ["derive"] }
+serde_cbor = "^0.11"
 [dev-dependencies]
 test-client = { path = "../../bin/client" }
