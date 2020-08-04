@@ -10,6 +10,7 @@ members = [
     "bin/node",
     "client/cli",
     "client/client",
+    "client/ffi",
     "client/gbot",
     "pallets/bank",
     "pallets/bounty",

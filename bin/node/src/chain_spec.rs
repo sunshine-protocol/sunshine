@@ -18,6 +18,7 @@ use test_runtime::{
     BlockNumber,
     GenesisConfig,
     GrandpaConfig,
+    GrantConfig,
     OrgConfig,
     Signature,
     SudoConfig,
@@ -161,6 +162,10 @@ pub fn testnet_genesis(
             code: WASM_BINARY.to_vec(),
             changes_trie_config: Default::default(),
         }),
+        grant: Some(GrantConfig {
+            application_poll_frequency: 10,
+            milestone_poll_frequency: 10,
+        }),
         org: Some(OrgConfig {
             first_organization_supervisor: root_key.clone(),
             first_organization_value_constitution: first_org_value_constitution,
@@ -173,7 +178,6 @@ pub fn testnet_genesis(
                 .map(|k| (k, 1 << 60))
                 .collect(),
         }),
-        // pallet_indices: Some(IndicesConfig { indices: vec![] }),
         pallet_aura: Some(AuraConfig {
             authorities: initial_authorities
                 .iter()
