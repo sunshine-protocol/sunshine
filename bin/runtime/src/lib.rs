@@ -153,15 +153,16 @@ where
             // so the actual block number is `n`.
             .saturating_sub(1);
         let extra: SignedExtra = (
-            frame_system::CheckSpecVersion::<Runtime>::new(),
-            frame_system::CheckTxVersion::<Runtime>::new(),
-            frame_system::CheckGenesis::<Runtime>::new(),
-            frame_system::CheckEra::<Runtime>::from(generic::Era::mortal(
+            frame_system::CheckSpecVersion::new(),
+            frame_system::CheckTxVersion::new(),
+            frame_system::CheckGenesis::new(),
+            frame_system::CheckEra::from(generic::Era::mortal(
                 period,
                 current_block,
             )),
-            frame_system::CheckNonce::<Runtime>::from(nonce),
-            frame_system::CheckWeight::<Runtime>::new(),
+            frame_system::CheckNonce::from(nonce),
+            frame_system::CheckWeight::new(),
+            pallet_transaction_payment::ChargeTransactionPayment::from(0),
         );
         let raw_payload = SignedPayload::new(call, extra)
             .map_err(|e| {
@@ -478,6 +479,7 @@ pub type SignedExtra = (
     frame_system::CheckEra<Runtime>,
     frame_system::CheckNonce<Runtime>,
     frame_system::CheckWeight<Runtime>,
+    pallet_transaction_payment::ChargeTransactionPayment<Runtime>,
 );
 /// Unchecked extrinsic type as expected by this runtime.
 pub type UncheckedExtrinsic =
