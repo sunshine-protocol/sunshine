@@ -18,6 +18,7 @@ use suntime::{
     BlockNumber,
     GenesisConfig,
     GrandpaConfig,
+    GrantConfig,
     IndicesConfig,
     OrgConfig,
     Signature,
@@ -161,6 +162,10 @@ pub fn testnet_genesis(
         frame_system: Some(SystemConfig {
             code: WASM_BINARY.to_vec(),
             changes_trie_config: Default::default(),
+        }),
+        grant: Some(GrantConfig {
+            application_poll_frequency: 10,
+            milestone_poll_frequency: 10,
         }),
         org: Some(OrgConfig {
             first_organization_supervisor: root_key.clone(),

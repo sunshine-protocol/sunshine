@@ -7420,6 +7420,7 @@ dependencies = [
  "sunshine-court",
  "sunshine-donate",
  "sunshine-drip",
+ "sunshine-grant",
  "sunshine-identity-utils 0.2.0 (git+https://github.com/sunshine-protocol/sunshine-identity)",
  "sunshine-org",
  "sunshine-treasury",

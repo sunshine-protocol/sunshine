@@ -432,6 +432,20 @@ impl bounty::Trait for Runtime {
     type MinDeposit = MinDeposit;
     type MinContribution = MinContribution;
 }
+parameter_types! {
+    pub const BigFoundation: ModuleId = ModuleId(*b"big/fund");
+    pub const MinGrantDeposit: u128 = 20;
+    pub const MinGrantContribution: u128 = 10;
+}
+impl grant::Trait for Runtime {
+    type Event = Event;
+    type FoundationId = u64;
+    type ApplicationId = u64;
+    type MilestoneId = u64;
+    type BigFoundation = BigFoundation;
+    type MinDeposit = MinGrantDeposit;
+    type MinContribution = MinGrantContribution;
+}
 
 construct_runtime!(
     pub enum Runtime where
@@ -457,6 +471,7 @@ construct_runtime!(
         Donate: donate::{Module, Call, Event<T>},
         Bank: bank::{Module, Call, Storage, Event<T>},
         Bounty: bounty::{Module, Call, Storage, Event<T>},
+        Grant: grant::{Module, Call, Config<T>, Storage, Event<T>},
     }
 );
 
