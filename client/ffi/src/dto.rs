@@ -2,6 +2,7 @@ use serde::Serialize;
 
 #[derive(Debug, Serialize)]
 pub struct BountyInformation {
+    pub id: u64,
     pub repo_owner: String,
     pub repo_name: String,
     pub issue_number: u64,
@@ -11,6 +12,7 @@ pub struct BountyInformation {
 
 #[derive(Debug, Serialize)]
 pub struct BountySubmissionInformation {
+    pub id: u64,
     pub repo_owner: String,
     pub repo_name: String,
     pub issue_number: u64,

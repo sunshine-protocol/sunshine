@@ -50,6 +50,12 @@ macro_rules! impl_ffi {
             /// Approve a Submission using `SubmissionId`
             /// Returns the new total amount on that bounty after this operation
             Bounty::approve => fn client_bounty_approve(submission_id: u64 = submission_id) -> u128;
+            /// Get a list of open bounties.
+            /// Returns a Cbor encoded list of `BountyInformation` as bytes.
+            Bounty::open_bounties => fn client_bounty_open_bounties(min: u64 = min) -> Cbor<Vec<BountyInformation>>;
+            /// Get a list of open submissions on a bounty.
+            /// Returns a Cbor encoded list of `BountySubmissionInformation` as bytes.
+            Bounty::open_bounty_submissions => fn client_bounty_open_bounty_submissions(bounty_id: u64 = bounty_id) -> Cbor<Vec<BountySubmissionInformation>>;
         }
     };
     (client: $client: ty) => {
