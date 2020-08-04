@@ -6,6 +6,8 @@ use error::Result;
 
 use octocrab::Octocrab;
 
+const GITHUB_BASE_URL: &str = "https://github.com";
+
 #[derive(Debug, Clone)]
 pub struct GBot {
     crab: Octocrab,
@@ -42,8 +44,9 @@ impl GBot {
     }
     pub async fn issue_comment_bounty_contribute(
         &self,
-        bounty_id: u64,
+        last_contribution: u128,
         total_balance: u128,
+        bounty_id: u64,
         repo_owner: String,
         repo_name: String,
         issue_number: u64,
@@ -53,30 +56,60 @@ impl GBot {
             .create_comment(
                 issue_number,
                 format!(
-                    "Contribution to Bounty {} increases Total Balance to ${}",
-                    bounty_id, total_balance
+                    "Contribution to Bounty {} of Balance ${} increases Total Bounty Balance to ${}",
+                    bounty_id, last_contribution, total_balance
                 ),
             )
             .await?;
         Ok(())
     }
-    // TODO: handle when submission and post issues are separate (using referencing)
     pub async fn issue_comment_bounty_submission(
         &self,
         amount_requested: u128,
         bounty_id: u64,
         submission_id: u64,
-        repo_owner: String,
-        repo_name: String,
-        issue_number: u64,
+        submission_repo_owner: String,
+        submission_repo_name: String,
+        submission_issue_number: u64,
+        bounty_repo_owner: String,
+        bounty_repo_name: String,
+        bounty_issue_number: u64,
     ) -> Result<()> {
-        let new_issues_handler = self.crab.issues(repo_owner, repo_name);
-        let _ = new_issues_handler
+        let submission_issues_handler = self.crab.issues(
+            submission_repo_owner.clone(),
+            submission_repo_name.clone(),
+        );
+        let bounty_issue_ref = format!(
+            "{}/{}/{}/issues/{}",
+            GITHUB_BASE_URL,
+            bounty_repo_owner,
+            bounty_repo_name,
+            bounty_issue_number
+        );
+        let _ = submission_issues_handler
             .create_comment(
-                issue_number,
+                submission_issue_number,
                 format!(
-                    "${} Submission for BountyId {} with SubmissionId {}",
-                    amount_requested, bounty_id, submission_id,
+                    "${} Submission for BountyId {} with SubmissionId {} | [Bounty Reference]({})",
+                    amount_requested, bounty_id, submission_id, bounty_issue_ref
+                ),
+            )
+            .await?;
+        let bounty_issues_handler =
+            self.crab.issues(bounty_repo_owner, bounty_repo_name);
+        let submission_issue_ref = format!(
+            "{}/{}/{}/issues/{}",
+            GITHUB_BASE_URL,
+            submission_repo_owner,
+            submission_repo_name,
+            submission_issue_number
+        );
+        let _ = bounty_issues_handler
+            .create_comment(
+                bounty_issue_number,
+                format!(
+                    "${} Submission for Bounty with SubmissionId {} | [Submission Reference]({})",
+                    amount_requested, submission_id, submission_issue_ref,
                 ),
             )
             .await?;
@@ -84,21 +117,52 @@ impl GBot {
     }
     pub async fn issue_comment_submission_approval(
         &self,
-        submission_id: u64,
-        bounty_id: u64,
         transfer_amt: u128,
         remaining_balance: u128,
-        repo_owner: String,
-        repo_name: String,
-        issue_number: u64,
+        submission_id: u64,
+        bounty_id: u64,
+        submission_repo_owner: String,
+        submission_repo_name: String,
+        submission_issue_number: u64,
+        bounty_repo_owner: String,
+        bounty_repo_name: String,
+        bounty_issue_number: u64,
     ) -> Result<()> {
-        let new_issues_handler = self.crab.issues(repo_owner, repo_name);
-        let _ = new_issues_handler
+        let submission_issues_handler = self.crab.issues(
+            submission_repo_owner.clone(),
+            submission_repo_name.clone(),
+        );
+        let bounty_issue_ref = format!(
+            "{}/{}/{}/issues/{}",
+            GITHUB_BASE_URL,
+            bounty_repo_owner,
+            bounty_repo_name,
+            bounty_issue_number
+        );
+        let _ = submission_issues_handler
             .create_comment(
-                issue_number,
+                submission_issue_number,
                 format!(
-                    "SubmissionId {} approved for BountyId {}, Transferring Balance ${} to the Submitter s.t. ${} Remaining Balance for the Bounty",
-                    submission_id, bounty_id, transfer_amt, remaining_balance
+                    "SubmissionId {} approved for BountyId {} and Transferred Balance ${} to the Submitter | [Bounty Reference]({})",
+                    submission_id, bounty_id, transfer_amt, bounty_issue_ref,
+                ),
+            )
+            .await?;
+        let bounty_issues_handler =
+            self.crab.issues(bounty_repo_owner, bounty_repo_name);
+        let submission_issue_ref = format!(
+            "{}/{}/{}/issues/{}",
+            GITHUB_BASE_URL,
+            submission_repo_owner,
+            submission_repo_name,
+            submission_issue_number
+        );
+        let _ = bounty_issues_handler
+            .create_comment(
+                bounty_issue_number,
+                format!(
+                    "${} Remaining Balance for the Bounty after SubmissionId {} approved for BountyId {}. Transferred Balance ${} to the Submitter | [Submission Reference]({})",
+                    remaining_balance, submission_id, bounty_id, transfer_amt, submission_issue_ref,
                 ),
             )
             .await?;

@@ -155,6 +155,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "allo-isolate"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f75caca5bd0e6176a1fdf24799ab19dc50af1fd067192807d9ebb3eaea12ca3f"
+
+[[package]]
 name = "ansi_term"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1888,6 +1894,12 @@ dependencies = [
  "tokio-util",
  "tracing",
 ]
+
+[[package]]
+name = "half"
+version = "1.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d36fab90f82edc3c747f9d438e06cf0a491055896f2a279638bb5beed6c40177"
 
 [[package]]
 name = "hash-db"
@@ -5897,6 +5909,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde_cbor"
+version = "0.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1e18acfa2f90e8b735b2836ab8d538de304cbb6729a7360729ea5a895d15a622"
+dependencies = [
+ "half",
+ "serde",
+]
+
+[[package]]
 name = "serde_derive"
 version = "1.0.114"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7136,6 +7158,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "sunshine-bounty-ffi"
+version = "0.1.0"
+dependencies = [
+ "ipfs-embed",
+ "ipld-block-builder",
+ "libipld",
+ "serde",
+ "serde_cbor",
+ "substrate-subxt",
+ "sunshine-bounty-client",
+ "sunshine-core",
+ "sunshine-ffi-utils",
+ "sunshine-identity-utils 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "test-client",
+ "thiserror",
+]
+
+[[package]]
 name = "sunshine-bounty-gbot"
 version = "0.0.1"
 dependencies = [
@@ -7224,6 +7264,17 @@ dependencies = [
  "sp-runtime",
  "sp-std",
  "sunshine-bounty-utils",
+]
+
+[[package]]
+name = "sunshine-ffi-utils"
+version = "0.1.0"
+source = "git+https://github.com/sunshine-protocol/sunshine-identity?branch=master#1f2e926ee3fe1872395a64dfdb3a811653ee93b2"
+dependencies = [
+ "allo-isolate",
+ "async-std",
+ "log",
+ "once_cell",
 ]
 
 [[package]]
@@ -7354,6 +7405,49 @@ dependencies = [
  "sp-std",
  "sunshine-bounty-utils",
  "sunshine-org",
+]
+
+[[package]]
+name = "suntime"
+version = "0.0.1"
+dependencies = [
+ "frame-executive",
+ "frame-support",
+ "frame-system",
+ "pallet-aura",
+ "pallet-balances",
+ "pallet-grandpa",
+ "pallet-indices",
+ "pallet-randomness-collective-flip",
+ "pallet-sudo",
+ "pallet-timestamp",
+ "pallet-transaction-payment",
+ "parity-scale-codec",
+ "serde",
+ "sp-api",
+ "sp-block-builder",
+ "sp-consensus-aura",
+ "sp-core",
+ "sp-inherents",
+ "sp-io",
+ "sp-offchain",
+ "sp-runtime",
+ "sp-session",
+ "sp-std",
+ "sp-transaction-pool",
+ "sp-version",
+ "substrate-wasm-builder-runner",
+ "sunshine-bank",
+ "sunshine-bounty",
+ "sunshine-bounty-utils",
+ "sunshine-court",
+ "sunshine-donate",
+ "sunshine-drip",
+ "sunshine-grant",
+ "sunshine-identity-utils 0.2.0 (git+https://github.com/sunshine-protocol/sunshine-identity)",
+ "sunshine-org",
+ "sunshine-treasury",
+ "sunshine-vote",
 ]
 
 [[package]]

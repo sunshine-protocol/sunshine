@@ -78,8 +78,8 @@ impl BountyContributeCommand {
             .await
             .map_err(Error::Client)?;
         println!(
-            "Contributor with AccountId {} contributed to BountyId {} s.t. their total contribution is {} and the Total Balance for the Bounty is now {}",
-            event.contributor, event.bounty_id, event.new_amount, event.total
+            "AccountId {} contributed ${} to BountyId {} and the Total Balance for the Bounty is now {}",
+            event.contributor, event.amount, event.bounty_id, event.total
         );
         Ok(())
     }

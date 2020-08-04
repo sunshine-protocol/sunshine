@@ -38,6 +38,7 @@ std = [
     'util/std',
     'org/std',
     'treasury/std',
+    'grant/std',
     'utils-identity/std',
 ]
 
@@ -79,4 +80,5 @@ treasury = { package = "sunshine-treasury", path = "../../pallets/treasury", def
 donate = { package = "sunshine-donate", path = "../../pallets/donate", default-features=false}
 bank = { package = "sunshine-bank", path = "../../pallets/bank", default-features=false}
 bounty = { package = "sunshine-bounty", path = "../../pallets/bounty", default-features=false}
+grant = { package = "sunshine-grant", path = "../../pallets/grant", default-features=false}
 serde = { version = "1.0.114", features = ["derive"], optional = true }

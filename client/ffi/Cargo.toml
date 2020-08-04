@@ -1,0 +1,25 @@
+[package]
+name = "sunshine-bounty-ffi"
+version = "0.1.0"
+authors = ["Shady Khalifa <shekohex@gmail.com>"]
+edition = "2018"
+description = "FFI for the sunshine bounty module."
+license = "ISC"
+documentation = "https://docs.rs/sunshine-bounty-ffi"
+repository = "https://github.com/sunshine-protocol/sunshine-bounty"
+
+[dependencies]
+ffi-utils = { git = "https://github.com/sunshine-protocol/sunshine-identity", branch = "master", package = "sunshine-ffi-utils" }
+thiserror = "^1"
+sunshine-core = "0.2.0"
+sunshine-bounty-client = { path = "../../client/client" }
+substrate-subxt = "0.10.1"
+ipfs-embed = "0.3.0"
+ipld-block-builder = "0.4.1"
+libipld = "0.3.0"
+identity-utils = { package = "sunshine-identity-utils", version = "0.2.0" }
+serde = { version = "^1", features = ["derive"] }
+serde_cbor = "^0.11"
+
+[dev-dependencies]
+test-client = { path = "../../bin/client" }
