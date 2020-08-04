@@ -7268,7 +7268,7 @@ dependencies = [
 [[package]]
 name = "sunshine-ffi-utils"
 version = "0.1.0"
-source = "git+https://github.com/sunshine-protocol/sunshine-identity?rev=9003376#90033765901df6c5c6595945efc5062a81097616"
+source = "git+https://github.com/sunshine-protocol/sunshine-identity?branch=master#1f2e926ee3fe1872395a64dfdb3a811653ee93b2"
 dependencies = [
  "allo-isolate",
  "async-std",

@@ -9,7 +9,7 @@ documentation = "https://docs.rs/sunshine-bounty-ffi"
 repository = "https://github.com/sunshine-protocol/sunshine-bounty"
 
 [dependencies]
-ffi-utils = { git = "https://github.com/sunshine-protocol/sunshine-identity", rev = "9003376", package = "sunshine-ffi-utils" }
+ffi-utils = { git = "https://github.com/sunshine-protocol/sunshine-identity", branch = "master", package = "sunshine-ffi-utils" }
 thiserror = "^1"
 sunshine-core = "0.2.0"
 sunshine-bounty-client = { path = "../../client/client" }
@@ -20,5 +20,6 @@ libipld = "0.3.0"
 identity-utils = { package = "sunshine-identity-utils", version = "0.2.0" }
 serde = { version = "^1", features = ["derive"] }
 serde_cbor = "^0.11"
+
 [dev-dependencies]
 test-client = { path = "../../bin/client" }
