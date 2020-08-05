@@ -7,7 +7,6 @@
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
-use codec::Encode;
 use pallet_grandpa::{
     fg_primitives,
     AuthorityId,
@@ -35,7 +34,6 @@ use sp_runtime::{
     ApplyExtrinsicResult,
     ModuleId,
     MultiSignature,
-    SaturatedConversion,
 };
 use sp_std::prelude::*;
 #[cfg(feature = "std")]
@@ -122,56 +120,6 @@ pub mod opaque {
             pub aura: Aura,
             pub grandpa: Grandpa,
         }
-    }
-}
-
-impl<LocalCall> frame_system::offchain::CreateSignedTransaction<LocalCall>
-    for Runtime
-where
-    Call: From<LocalCall>,
-{
-    fn create_transaction<
-        C: frame_system::offchain::AppCrypto<Self::Public, Self::Signature>,
-    >(
-        call: Call,
-        public: <Signature as traits::Verify>::Signer,
-        account: AccountId,
-        nonce: Index,
-    ) -> Option<(
-        Call,
-        <UncheckedExtrinsic as traits::Extrinsic>::SignaturePayload,
-    )> {
-        // take the biggest period possible.
-        let period = BlockHashCount::get()
-            .checked_next_power_of_two()
-            .map(|c| c / 2)
-            .unwrap_or(2) as u64;
-        let current_block = System::block_number()
-            .saturated_into::<u64>()
-            // The `System::block_number` is initialized with `n+1`,
-            // so the actual block number is `n`.
-            .saturating_sub(1);
-        let extra: SignedExtra = (
-            frame_system::CheckSpecVersion::new(),
-            frame_system::CheckTxVersion::new(),
-            frame_system::CheckGenesis::new(),
-            frame_system::CheckEra::from(generic::Era::mortal(
-                period,
-                current_block,
-            )),
-            frame_system::CheckNonce::from(nonce),
-            frame_system::CheckWeight::new(),
-            pallet_transaction_payment::ChargeTransactionPayment::from(0),
-        );
-        let raw_payload = SignedPayload::new(call, extra)
-            .map_err(|e| {
-                debug::warn!("Unable to create signed payload: {:?}", e);
-            })
-            .ok()?;
-        let signature =
-            raw_payload.using_encoded(|payload| C::sign(payload, public))?;
-        let (call, extra, _) = raw_payload.deconstruct();
-        Some((call, (account, signature, extra)))
     }
 }
 
@@ -315,14 +263,6 @@ parameter_types! {
     pub const IndexDeposit: Balance = 1u128;
 }
 
-// impl pallet_indices::Trait for Runtime {
-// type AccountIndex = AccountIndex;
-// type Event = Event;
-// type Currency = Balances;
-// type Deposit = IndexDeposit;
-// type WeightInfo = ();
-// }
-
 parameter_types! {
     pub const MinimumPeriod: u64 = SLOT_DURATION / 2;
 }
@@ -460,7 +400,6 @@ construct_runtime!(
         Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
         TransactionPayment: pallet_transaction_payment::{Module, Storage},
         Sudo: pallet_sudo::{Module, Call, Config<T>, Storage, Event<T>},
-        //Indices: pallet_indices::{Module, Call, Storage, Config<T>, Event<T>},
         // sunshine-bounty modules
         Org: org::{Module, Call, Config<T>, Storage, Event<T>},
         Vote: vote::{Module, Call, Storage, Event<T>},
