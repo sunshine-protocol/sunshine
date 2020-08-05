@@ -17,6 +17,7 @@ use ipld_block_builder::{
 };
 use std::marker::PhantomData;
 use substrate_subxt::{
+    balances::Balances,
     system::System,
     Runtime,
 };
@@ -62,7 +63,7 @@ where
     <R as System>::AccountId: ToString,
     <R as BountyTrait>::BountyId: From<u64> + Into<u64>,
     <R as BountyTrait>::SubmissionId: From<u64> + Into<u64>,
-    <R as BountyTrait>::Currency: Into<u128> + From<u64>,
+    <R as Balances>::Balance: Into<u128> + From<u64>,
 {
     pub async fn get(&self, bounty_id: u64) -> Result<Vec<u8>, C::Error> {
         let bounty_state = self
