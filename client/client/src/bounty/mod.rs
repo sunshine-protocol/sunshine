@@ -165,3 +165,66 @@ where
             .map_err(Error::Subxt)?)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use rand::{
+        rngs::OsRng,
+        RngCore,
+    };
+    use sunshine_core::ChainClient;
+    use test_client::{
+        bounty::{
+            BountyClient,
+            BountyPostedEvent,
+        },
+        bounty_client::BountyBody,
+        mock::{
+            test_node,
+            AccountKeyring,
+        },
+        Client,
+    };
+
+    // For testing purposes only, NEVER use this to generate AccountIds in practice because it's random
+    pub fn _random_account_id() -> substrate_subxt::sp_runtime::AccountId32 {
+        let mut buf = [0u8; 32];
+        OsRng.fill_bytes(&mut buf);
+        buf.into()
+    }
+
+    #[async_std::test]
+    async fn simple_test() {
+        use substrate_subxt::balances::TransferCallExt;
+        let (node, _node_tmp) = test_node();
+        let (client, _client_tmp) =
+            Client::mock(&node, AccountKeyring::Alice).await;
+        let alice_account_id = AccountKeyring::Alice.to_account_id();
+        client
+            .chain_client()
+            .transfer(client.chain_signer().unwrap(), &alice_account_id, 10_000)
+            .await
+            .unwrap();
+    }
+
+    #[async_std::test]
+    async fn post_bounty_test() {
+        let (node, _node_tmp) = test_node();
+        let (client, _client_tmp) =
+            Client::mock(&node, AccountKeyring::Alice).await;
+        let alice_account_id = AccountKeyring::Alice.to_account_id();
+        let bounty = BountyBody {
+            repo_owner: "sunshine-protocol".to_string(),
+            repo_name: "sunshine-bounty".to_string(),
+            issue_number: 124,
+        };
+        let event = client.post_bounty(bounty, 40u128).await.unwrap();
+        let expected_event = BountyPostedEvent {
+            depositer: alice_account_id,
+            amount: 10,
+            id: 1,
+            description: event.description.clone(),
+        };
+        assert_eq!(event, expected_event);
+    }
+}

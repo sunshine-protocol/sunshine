@@ -42,8 +42,11 @@ use sunshine_core::{
 };
 use thiserror::Error;
 
-pub use bounty_client as bounty;
-pub use bounty_client::org;
+pub use bounty_client::{
+    self,
+    bounty,
+    org,
+};
 
 type AccountId = <<sp_runtime::MultiSignature as Verify>::Signer as IdentifyAccount>::AccountId;
 

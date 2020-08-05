@@ -238,21 +238,16 @@ mod tests {
     };
     use sunshine_core::ChainClient;
     use test_client::{
-        bounty::{
-            self,
-            TextBlock,
-        },
+        bounty_client::TextBlock,
         mock::{
             test_node,
             AccountKeyring,
         },
         org::{
             NewFlatOrganizationRegisteredEvent,
-            Org,
             OrgClient,
         },
         Client,
-        OffchainClient,
     };
 
     // For testing purposes only, NEVER use this to generate AccountIds in practice because it's random
@@ -277,7 +272,7 @@ mod tests {
     }
 
     #[async_std::test]
-    async fn register_flat_org() {
+    async fn register_flat_org_test() {
         let (node, _node_tmp) = test_node();
         let (client, _client_tmp) =
             Client::mock(&node, AccountKeyring::Alice).await;
