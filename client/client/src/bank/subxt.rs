@@ -26,6 +26,10 @@ use sp_runtime::traits::{
 };
 use std::fmt::Debug;
 use substrate_subxt::{
+    balances::{
+        Balances,
+        BalancesEventsDecoder,
+    },
     module,
     sp_runtime,
     system::{
@@ -41,11 +45,11 @@ use sunshine_bounty_utils::bank::{
     SpendState,
 };
 
-pub type BalanceOf<T> = <T as Bank>::Currency; // as Currency<<T as System>::AccountId>>::Balance;
+pub type BalanceOf<T> = <T as Balances>::Balance;
 
 /// The subset of the bank trait and its inherited traits that the client must inherit
 #[module]
-pub trait Bank: System + Org + Vote + Donate {
+pub trait Bank: System + Balances + Org + Vote + Donate {
     type BankId: Parameter
         + Member
         + AtLeast32Bit
@@ -68,18 +72,6 @@ pub trait Bank: System + Org + Vote + Donate {
         + PartialOrd
         + PartialEq
         + Zero;
-    /// The currency type for on-chain transactions
-    type Currency: Parameter
-        + Member
-        + AtLeast32Bit
-        + Codec
-        + Default
-        + Copy
-        + MaybeSerializeDeserialize
-        + Debug
-        + PartialOrd
-        + PartialEq
-        + Zero; // + Currency<<Self as System>::AccountId> // commented out until #93 is resolved
 }
 
 // ~~ Values (Constants) ~~
@@ -120,8 +112,6 @@ pub struct OrgBankAccountOpenedEvent<T: Bank> {
     pub hosting_org: <T as Org>::OrgId,
     pub bank_operator: Option<<T as System>::AccountId>,
 }
-
-// -- unimplemented in client (TODO) --
 
 #[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
 pub struct MemberProposesSpendCall<T: Bank> {

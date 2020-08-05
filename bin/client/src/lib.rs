@@ -85,19 +85,15 @@ impl Vote for Runtime {
     type VoteJustification = TextBlock;
 }
 
-impl Donate for Runtime {
-    type DCurrency = u128;
-}
+impl Donate for Runtime {}
 
 impl Bank for Runtime {
     type BankId = u64;
     type SpendId = u64;
-    type Currency = u128;
 }
 
 impl Bounty for Runtime {
     type IpfsReference = CidBytes;
-    type Currency = u128;
     type BountyId = u64;
     type BountyPost = BountyBody;
     type SubmissionId = u64;

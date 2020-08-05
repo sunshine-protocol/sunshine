@@ -39,24 +39,12 @@ use sunshine_bounty_utils::bounty::{
     SubmissionState,
 };
 
-pub type BalanceOf<T> = <T as Bounty>::Currency;
+pub type BalanceOf<T> = <T as Balances>::Balance;
 
 #[module]
 pub trait Bounty: System + Balances {
     /// Cid type
     type IpfsReference: Parameter + Member + Default;
-    /// Currency type
-    type Currency: Parameter
-        + Member
-        + AtLeast32Bit
-        + Codec
-        + Default
-        + Copy
-        + MaybeSerializeDeserialize
-        + Debug
-        + PartialOrd
-        + PartialEq
-        + Zero;
 
     type BountyId: Parameter
         + Member

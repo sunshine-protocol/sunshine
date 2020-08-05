@@ -21,13 +21,13 @@ pub trait DonateClient<T: Runtime + Donate>: ChainClient<T> {
         &self,
         org: <T as Org>::OrgId,
         rem_recipient: <T as System>::AccountId,
-        amt: DonateBalanceOf<T>,
+        amt: BalanceOf<T>,
     ) -> Result<PropDonationExecutedEvent<T>, Self::Error>;
     async fn make_equal_donation(
         &self,
         org: <T as Org>::OrgId,
         rem_recipient: <T as System>::AccountId,
-        amt: DonateBalanceOf<T>,
+        amt: BalanceOf<T>,
     ) -> Result<EqualDonationExecutedEvent<T>, Self::Error>;
 }
 
@@ -44,7 +44,7 @@ where
         &self,
         org: <T as Org>::OrgId,
         rem_recipient: <T as System>::AccountId,
-        amt: DonateBalanceOf<T>,
+        amt: BalanceOf<T>,
     ) -> Result<PropDonationExecutedEvent<T>, C::Error> {
         let signer = self.chain_signer()?;
         self.chain_client()
@@ -57,7 +57,7 @@ where
         &self,
         org: <T as Org>::OrgId,
         rem_recipient: <T as System>::AccountId,
-        amt: DonateBalanceOf<T>,
+        amt: BalanceOf<T>,
     ) -> Result<EqualDonationExecutedEvent<T>, C::Error> {
         let signer = self.chain_signer()?;
         self.chain_client()
