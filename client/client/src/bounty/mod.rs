@@ -177,6 +177,7 @@ mod tests {
         bounty::{
             BountyClient,
             BountyPostedEvent,
+            BountyRaiseContributionEvent,
         },
         bounty_client::BountyBody,
         mock::{
@@ -218,12 +219,35 @@ mod tests {
             repo_name: "sunshine-bounty".to_string(),
             issue_number: 124,
         };
-        let event = client.post_bounty(bounty, 40u128).await.unwrap();
+        let event = client.post_bounty(bounty, 10u128).await.unwrap();
         let expected_event = BountyPostedEvent {
             depositer: alice_account_id,
             amount: 10,
             id: 1,
             description: event.description.clone(),
+        };
+        assert_eq!(event, expected_event);
+    }
+
+    #[async_std::test]
+    async fn contribute_to_bounty_test() {
+        let (node, _node_tmp) = test_node();
+        let (client, _client_tmp) =
+            Client::mock(&node, AccountKeyring::Alice).await;
+        let alice_account_id = AccountKeyring::Alice.to_account_id();
+        let bounty = BountyBody {
+            repo_owner: "sunshine-protocol".to_string(),
+            repo_name: "sunshine-bounty".to_string(),
+            issue_number: 124,
+        };
+        let _ = client.post_bounty(bounty, 10u128).await.unwrap();
+        let event = client.contribute_to_bounty(1, 5u128).await.unwrap();
+        let expected_event = BountyRaiseContributionEvent {
+            contributor: alice_account_id,
+            amount: 5,
+            bounty_id: 1,
+            total: 15,
+            bounty_ref: event.bounty_ref.clone(),
         };
         assert_eq!(event, expected_event);
     }

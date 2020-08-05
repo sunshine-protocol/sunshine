@@ -19,6 +19,10 @@ use sp_runtime::traits::{
 };
 use std::fmt::Debug;
 use substrate_subxt::{
+    balances::{
+        Balances,
+        BalancesEventsDecoder,
+    },
     module,
     sp_runtime,
     system::{
@@ -38,7 +42,7 @@ use sunshine_bounty_utils::bounty::{
 pub type BalanceOf<T> = <T as Bounty>::Currency;
 
 #[module]
-pub trait Bounty: System {
+pub trait Bounty: System + Balances {
     /// Cid type
     type IpfsReference: Parameter + Member + Default;
     /// Currency type
