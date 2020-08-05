@@ -9,4 +9,4 @@ cd ../../
 # 2. set the keystore password
 ./target/release/bounty-cli key set
 # > requires user input here
-# 3. 
+# 3. post bounty

@@ -301,10 +301,6 @@ impl pallet_transaction_payment::Trait for Runtime {
     type WeightToFee = IdentityFee<Balance>;
     type FeeMultiplierUpdate = ();
 }
-impl pallet_sudo::Trait for Runtime {
-    type Event = Event;
-    type Call = Call;
-}
 impl org::Trait for Runtime {
     type Event = Event;
     type IpfsReference = CidBytes;
@@ -399,7 +395,6 @@ construct_runtime!(
         Grandpa: pallet_grandpa::{Module, Call, Storage, Config, Event},
         Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
         TransactionPayment: pallet_transaction_payment::{Module, Storage},
-        Sudo: pallet_sudo::{Module, Call, Config<T>, Storage, Event<T>},
         // sunshine-bounty modules
         Org: org::{Module, Call, Config<T>, Storage, Event<T>},
         Vote: vote::{Module, Call, Storage, Event<T>},

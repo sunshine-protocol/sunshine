@@ -21,7 +21,6 @@ use test_runtime::{
     GrantConfig,
     OrgConfig,
     Signature,
-    SudoConfig,
     SystemConfig,
     TreasuryConfig,
     WASM_BINARY,
@@ -167,7 +166,7 @@ pub fn testnet_genesis(
             milestone_poll_frequency: 10,
         }),
         org: Some(OrgConfig {
-            first_organization_supervisor: root_key.clone(),
+            first_organization_supervisor: root_key,
             first_organization_value_constitution: first_org_value_constitution,
             first_organization_flat_membership: first_org_flat_membership,
         }),
@@ -190,7 +189,6 @@ pub fn testnet_genesis(
                 .map(|x| (x.1.clone(), 1))
                 .collect(),
         }),
-        pallet_sudo: Some(SudoConfig { key: root_key }),
         treasury: Some(TreasuryConfig {
             minting_interval: treasury_mint_rate.0,
             mint_amount: treasury_mint_rate.1,
