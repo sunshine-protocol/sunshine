@@ -8,6 +8,7 @@ use core::fmt::{
     Display,
 };
 use substrate_subxt::{
+    balances::Balances,
     sp_core::crypto::Ss58Codec,
     system::System,
     Runtime,
@@ -36,7 +37,7 @@ impl PropDonateCommand {
     where
         <R as System>::AccountId: Ss58Codec,
         <R as Org>::OrgId: From<u64> + Display,
-        <R as Donate>::DCurrency: From<u128> + Display,
+        <R as Balances>::Balance: From<u128> + Display,
     {
         let remainder_recipient: Ss58<R> = self.rem_recipient.parse()?;
         let event = client
@@ -70,7 +71,7 @@ impl EqualDonateCommand {
     where
         <R as System>::AccountId: Ss58Codec,
         <R as Org>::OrgId: From<u64> + Display,
-        <R as Donate>::DCurrency: From<u128> + Display,
+        <R as Balances>::Balance: From<u128> + Display,
     {
         let remainder_recipient: Ss58<R> = self.rem_recipient.parse()?;
         let event = client
