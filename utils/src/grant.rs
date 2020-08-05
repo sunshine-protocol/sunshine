@@ -11,6 +11,31 @@ use sp_runtime::{
 use sp_std::prelude::*;
 
 #[derive(new, PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+/// An example governance other than ResolutionMetadata, used in bounty2
+pub struct ChallengeNorms<AccountId, FineArithmetic> {
+    /// The depositer by default in bounty2
+    leader: AccountId,
+    /// If vote exceeds threshold, the given spend decision is vetoed
+    veto_threshold: FineArithmetic,
+    /// If vote exceeds threshold, remaining balance is returned in proportion to contributions
+    refund_threshold: FineArithmetic,
+}
+
+impl<AccountId: Clone, FineArithmetic: Copy>
+    ChallengeNorms<AccountId, FineArithmetic>
+{
+    pub fn leader(&self) -> AccountId {
+        self.leader.clone()
+    }
+    pub fn veto_threshold(&self) -> FineArithmetic {
+        self.veto_threshold
+    }
+    pub fn refund_threshold(&self) -> FineArithmetic {
+        self.refund_threshold
+    }
+}
+
+#[derive(new, PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub struct Foundation<IpfsReference, Currency, Governance> {
     // Storage cid
     info: IpfsReference,
