@@ -28,6 +28,7 @@ use sp_runtime::{
         Member,
         Zero,
     },
+    DispatchError,
     DispatchResult,
     ModuleId,
     Permill,
@@ -93,8 +94,8 @@ decl_event!(
         EventPosted(AccountId, Balance, KickbackEventId, IpfsReference),
         /// Event, Reserver
         EventSeatReserved(KickbackEventId, AccountId),
-        /// Event closed and redistributed funds to participants
-        EventClosed(KickbackEventId),
+        /// Event ID Closed, Reservation Requirement, Amt Returned Per Present, Remainder Sent to Publisher
+        EventClosed(KickbackEventId, Balance, Balance, Balance),
     }
 );
 
@@ -173,7 +174,7 @@ decl_module! {
             present: Vec<T::AccountId>,
         ) -> DispatchResult {
             let publisher = ensure_signed(origin)?;
-            let _ = <KickbackEvents<T>>::get(id).ok_or(Error::<T>::KickbackEventDNE)?;
+            let k = <KickbackEvents<T>>::get(id).ok_or(Error::<T>::KickbackEventDNE)?;
             let mut present = present;
             present.sort();
             present.dedup();
@@ -183,12 +184,24 @@ decl_module! {
                 .collect::<Vec<T::AccountId>>();
             ensure!(!present_members.is_empty(), Error::<T>::AttendanceMustBeGreaterThanZero);
             // drain to present members
-            Self::drain_into_accounts(&Self::event_account_id(id), present_members, &publisher)?;
+            let (amt_per_present, remainder_for_publisher) =
+                Self::drain_into_accounts(
+                    &Self::event_account_id(id),
+                    present_members,
+                    &publisher
+                )?;
             // remove event
             <KickbackEvents<T>>::remove(id);
             <KickbackReservations<T>>::remove_prefix(id);
             // emit event
-            Self::deposit_event(RawEvent::EventClosed(id));
+            Self::deposit_event(
+                RawEvent::EventClosed(
+                    id,
+                    k.reservation_req(),
+                    amt_per_present,
+                    remainder_for_publisher
+                )
+            );
             Ok(())
         }
     }
@@ -218,7 +231,7 @@ impl<T: Trait> Module<T> {
         from: &T::AccountId,
         accounts: Vec<T::AccountId>,
         remainder_recipient: &T::AccountId,
-    ) -> DispatchResult {
+    ) -> Result<(BalanceOf<T>, BalanceOf<T>), DispatchError> {
         let mut total = T::Currency::total_balance(from);
         let num_of_accounts: u32 = accounts.len() as u32;
         let equal_amt =
@@ -240,6 +253,6 @@ impl<T: Trait> Module<T> {
             total,
             ExistenceRequirement::AllowDeath,
         )?;
-        Ok(())
+        Ok((equal_amt, total))
     }
 }
