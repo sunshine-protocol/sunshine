@@ -118,18 +118,6 @@ pub struct SubmissionsStore<T: Bounty> {
     pub id: T::SubmissionId,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
-pub struct OpenBountiesStore<T: Bounty> {
-    #[store(returns = Option<Vec<(T::BountyId, BountyState<T>)>>)]
-    min: BalanceOf<T>,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
-pub struct OpenSubmissionsStore<T: Bounty> {
-    #[store(returns = Option<Vec<(T::SubmissionId, SubState<T>)>>)]
-    bounty_id: T::BountyId,
-}
-
 // ~~ (Calls, Events) ~~
 
 #[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]

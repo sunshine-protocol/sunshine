@@ -5,6 +5,7 @@ pub use sunshine_bounty_utils::bounty::*;
 
 use crate::error::Error;
 use async_trait::async_trait;
+use codec::Decode;
 use substrate_subxt::{
     Runtime,
     SignedExtension,
@@ -148,21 +149,47 @@ where
         &self,
         min: BalanceOf<T>,
     ) -> Result<Option<Vec<(T::BountyId, BountyState<T>)>>, C::Error> {
-        Ok(self
+        let mut bounties = self
             .chain_client()
-            .open_bounties(min, None)
+            .bounties_iter(None)
             .await
-            .map_err(Error::Subxt)?)
+            .map_err(Error::Subxt)?;
+        let mut bounties_above_min =
+            Vec::<(T::BountyId, BountyState<T>)>::new();
+        while let Some((id, bounty)) = bounties.next().await? {
+            if bounty.total() >= min {
+                let decoded_key = Decode::decode(&mut &id.0[..])?;
+                bounties_above_min.push((decoded_key, bounty));
+            }
+        }
+        if bounties_above_min.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(bounties_above_min))
+        }
     }
     async fn open_submissions(
         &self,
         bounty_id: T::BountyId,
     ) -> Result<Option<Vec<(T::SubmissionId, SubState<T>)>>, C::Error> {
-        Ok(self
+        let mut submissions = self
             .chain_client()
-            .open_submissions(bounty_id, None)
+            .submissions_iter(None)
             .await
-            .map_err(Error::Subxt)?)
+            .map_err(Error::Subxt)?;
+        let mut submissions_for_bounty =
+            Vec::<(T::SubmissionId, SubState<T>)>::new();
+        while let Some((id, submission)) = submissions.next().await? {
+            if submission.bounty_id() == bounty_id {
+                let decoded_key = Decode::decode(&mut &id.0[..])?;
+                submissions_for_bounty.push((decoded_key, submission));
+            }
+        }
+        if submissions_for_bounty.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(submissions_for_bounty))
+        }
     }
 }
 
