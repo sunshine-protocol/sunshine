@@ -224,7 +224,7 @@ impl<T: Trait> Module<T> {
         let equal_amt =
             Permill::from_rational_approximation(1u32, num_of_accounts)
                 .mul_floor(total);
-        for acc in accounts.clone().iter() {
+        for acc in accounts.iter() {
             T::Currency::transfer(
                 from,
                 &acc,
