@@ -211,9 +211,9 @@ impl<T: Trait> Module<T> {
         amount: BalanceOf<T>,
         group_count: usize,
     ) -> Result<BalanceOf<T>, DispatchError> {
-        let group_size: BalanceOf<T> = (group_count as u32).into();
+        let group_size: u32 = group_count as u32;
         let equal_ownership =
-            Permill::from_rational_approximation(group_size, amount);
+            Permill::from_rational_approximation(1u32, group_size);
         Ok(equal_ownership.mul_floor(amount))
     }
 }

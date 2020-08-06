@@ -19,6 +19,7 @@ members = [
     "pallets/donate",
     "pallets/drip",
     "pallets/grant",
+    "pallets/kickback",
     "pallets/org",
     "pallets/treasury",
     "pallets/vote",

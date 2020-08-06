@@ -7356,6 +7356,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "sunshine-kickback"
+version = "0.0.1"
+dependencies = [
+ "clear_on_drop",
+ "frame-support",
+ "frame-system",
+ "pallet-balances",
+ "parity-scale-codec",
+ "serde",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+ "sunshine-bounty-utils",
+]
+
+[[package]]
 name = "sunshine-org"
 version = "0.2.0"
 dependencies = [
