@@ -199,6 +199,7 @@ mod tests {
         rngs::OsRng,
         RngCore,
     };
+    use sunshine_bounty_utils::bounty::BountyInformation;
     use sunshine_core::ChainClient;
     use test_client::{
         bounty::{
@@ -257,25 +258,64 @@ mod tests {
     }
 
     #[async_std::test]
-    async fn contribute_to_bounty_test() {
+    async fn get_bounties_test() {
         let (node, _node_tmp) = test_node();
         let (client, _client_tmp) =
             Client::mock(&node, AccountKeyring::Alice).await;
         let alice_account_id = AccountKeyring::Alice.to_account_id();
-        let bounty = BountyBody {
+        let bounty1 = BountyBody {
             repo_owner: "sunshine-protocol".to_string(),
             repo_name: "sunshine-bounty".to_string(),
             issue_number: 124,
         };
-        let _ = client.post_bounty(bounty, 10u128).await.unwrap();
-        let event = client.contribute_to_bounty(1, 5u128).await.unwrap();
-        let expected_event = BountyRaiseContributionEvent {
-            contributor: alice_account_id,
-            amount: 5,
-            bounty_id: 1,
-            total: 15,
-            bounty_ref: event.bounty_ref.clone(),
+        let event1 = client.post_bounty(bounty1, 10u128).await.unwrap();
+        let bounty2 = BountyBody {
+            repo_owner: "sunshine-protocol".to_string(),
+            repo_name: "sunshine-bounty".to_string(),
+            issue_number: 124,
         };
-        assert_eq!(event, expected_event);
+        let event2 = client.post_bounty(bounty2, 10u128).await.unwrap();
+        let bounties = client.open_bounties(9u128).await.unwrap().unwrap();
+        assert_eq!(bounties.len(), 2);
+        let expected_bounty1 = BountyInformation::new(
+            event1.description,
+            alice_account_id.clone(),
+            10,
+        );
+        let expected_bounty2 =
+            BountyInformation::new(event2.description, alice_account_id, 10);
+        assert_eq!(bounties.get(0).unwrap().1, expected_bounty1);
+        assert_eq!(bounties.get(1).unwrap().1, expected_bounty2);
     }
+
+    // #[async_std::test]
+    // async fn get_submissions_test() {
+    //     let (node, _node_tmp) = test_node();
+    //     let (client, _client_tmp) =
+    //         Client::mock(&node, AccountKeyring::Alice).await;
+    //     let alice_account_id = AccountKeyring::Alice.to_account_id();
+    // }
+
+    // #[async_std::test]
+    // async fn contribute_to_bounty_test() {
+    //     let (node, _node_tmp) = test_node();
+    //     let (client, _client_tmp) =
+    //         Client::mock(&node, AccountKeyring::Alice).await;
+    //     let alice_account_id = AccountKeyring::Alice.to_account_id();
+    //     let bounty = BountyBody {
+    //         repo_owner: "sunshine-protocol".to_string(),
+    //         repo_name: "sunshine-bounty".to_string(),
+    //         issue_number: 124,
+    //     };
+    //     let _ = client.post_bounty(bounty, 10u128).await.unwrap();
+    //     let event = client.contribute_to_bounty(1, 5u128).await.unwrap();
+    //     let expected_event = BountyRaiseContributionEvent {
+    //         contributor: alice_account_id,
+    //         amount: 5,
+    //         bounty_id: 1,
+    //         total: 15,
+    //         bounty_ref: event.bounty_ref.clone(),
+    //     };
+    //     assert_eq!(event, expected_event);
+    // }
 }

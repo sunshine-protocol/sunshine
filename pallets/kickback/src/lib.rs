@@ -4,6 +4,9 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 //! Kickback pallet for event management with incentives
 
+#[cfg(test)]
+mod tests;
+
 use codec::Codec;
 use frame_support::{
     decl_error,
@@ -108,6 +111,7 @@ decl_error! {
         AlreadyMadeReservation,
         AttendanceLimitReached,
         AttendanceMustBeGreaterThanZero,
+        NotAuthorizedToPublishAttendance,
     }
 }
 
@@ -173,11 +177,10 @@ decl_module! {
             id: T::KickbackEventId,
             present: Vec<T::AccountId>,
         ) -> DispatchResult {
+            ensure!(!present.is_empty(), Error::<T>::AttendanceMustBeGreaterThanZero);
             let publisher = ensure_signed(origin)?;
             let k = <KickbackEvents<T>>::get(id).ok_or(Error::<T>::KickbackEventDNE)?;
-            let mut present = present;
-            present.sort();
-            present.dedup();
+            ensure!(k.supervisor() == publisher, Error::<T>::NotAuthorizedToPublishAttendance);
             let present_members = <KickbackReservations<T>>::iter()
                 .filter(|(i, ac, _)| i == &id && present.binary_search(&ac).is_ok())
                 .map(|(_, a, _)| a)
@@ -234,25 +237,35 @@ impl<T: Trait> Module<T> {
     ) -> Result<(BalanceOf<T>, BalanceOf<T>), DispatchError> {
         let mut total = T::Currency::total_balance(from);
         let num_of_accounts: u32 = accounts.len() as u32;
-        let equal_amt =
-            Permill::from_rational_approximation(1u32, num_of_accounts)
-                .mul_floor(total);
-        for acc in accounts.iter() {
+        if num_of_accounts == 1 {
             T::Currency::transfer(
                 from,
-                &acc,
-                equal_amt,
-                ExistenceRequirement::KeepAlive,
+                &accounts[0],
+                total,
+                ExistenceRequirement::AllowDeath,
             )?;
-            total -= equal_amt;
+            Ok((total, BalanceOf::<T>::zero()))
+        } else {
+            let equal_amt =
+                Permill::from_rational_approximation(1u32, num_of_accounts)
+                    .mul_floor(total);
+            for acc in accounts.iter() {
+                T::Currency::transfer(
+                    from,
+                    &acc,
+                    equal_amt,
+                    ExistenceRequirement::AllowDeath,
+                )?;
+                total -= equal_amt;
+            }
+            // send remainder
+            T::Currency::transfer(
+                from,
+                remainder_recipient,
+                total,
+                ExistenceRequirement::AllowDeath,
+            )?;
+            Ok((equal_amt, total))
         }
-        // send remainder
-        T::Currency::transfer(
-            from,
-            remainder_recipient,
-            total,
-            ExistenceRequirement::AllowDeath,
-        )?;
-        Ok((equal_amt, total))
     }
 }
