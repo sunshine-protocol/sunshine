@@ -120,20 +120,26 @@ fn vote_creation_works() {
         let one = Origin::signed(1);
         let twentytwo = Origin::signed(22);
         assert_noop!(
-            VoteThreshold::create_signal_threshold_vote_flat(
-                twentytwo, None, 1, 4, None, None
+            VoteThreshold::create_signal_vote(
+                twentytwo,
+                None,
+                OrgRep::Equal(1),
+                Threshold::new(4, None),
+                None
             ),
             Error::<Test>::NotAuthorizedToCreateVoteForOrganization
         );
-        assert_ok!(VoteThreshold::create_signal_threshold_vote_flat(
+        assert_ok!(VoteThreshold::create_signal_vote(
             one.clone(),
             None,
-            1,
-            4,
-            Some(5),
+            OrgRep::Equal(1),
+            Threshold::new(4, None),
             None
         ));
-        assert_eq!(get_last_event(), RawEvent::NewVoteStarted(1, 1, 1));
+        assert_eq!(
+            get_last_event(),
+            RawEvent::NewVoteStarted(1, OrgRep::Equal(1), 1)
+        );
     });
 }
 
@@ -142,11 +148,12 @@ fn vote_signal_threshold_works() {
     new_test_ext().execute_with(|| {
         let one = Origin::signed(1);
         // unanimous consent
-        assert_ok!(VoteThreshold::create_unanimous_consent_vote(
+        assert_ok!(VoteThreshold::create_signal_vote(
             one.clone(),
             None,
-            1,
-            None,
+            OrgRep::Equal(1),
+            Threshold::new(6, None),
+            None
         ));
         for i in 1u64..6u64 {
             let i_origin = Origin::signed(i);
@@ -177,14 +184,13 @@ fn vote_signal_threshold_works() {
 fn vote_pct_threshold_works() {
     new_test_ext().execute_with(|| {
         let one = Origin::signed(1);
-        // 34% passage requirement => 3 people at least
-        assert_ok!(VoteThreshold::create_percent_threshold_vote_flat(
+        // 50% passage requirement => 3 people at least
+        assert_ok!(VoteThreshold::create_percent_vote(
             one.clone(),
             None,
-            1,
-            Permill::from_percent(34),
-            None,
-            None,
+            OrgRep::Equal(1),
+            Threshold::new(Permill::from_percent(50), None),
+            None
         ));
         // check that the vote has not passed
         let outcome_almost_passed = VoteThreshold::get_vote_outcome(1).unwrap();
@@ -233,11 +239,12 @@ fn changing_votes_upholds_invariants() {
             Error::<Test>::NoVoteStateForVoteRequest
         );
         // unanimous consent
-        assert_ok!(VoteThreshold::create_unanimous_consent_vote(
+        assert_ok!(VoteThreshold::create_signal_vote(
             one.clone(),
             None,
-            1,
-            None,
+            OrgRep::Equal(1),
+            Threshold::new(6, None),
+            None
         ));
         for i in 1u64..6u64 {
             let i_origin = Origin::signed(i);

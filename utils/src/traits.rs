@@ -153,60 +153,18 @@ pub trait GetVoteOutcome<VoteId> {
 }
 
 /// Open a new vote for the organization, share_id and a custom threshold requirement
-pub trait OpenVote<OrgId, Threshold, BlockNumber, Hash> {
+pub trait OpenVote<OrgId, Signal, Percent, BlockNumber, Hash> {
     type VoteIdentifier;
     fn open_vote(
         topic: Option<Hash>,
         organization: OrgId,
-        passage_threshold: Threshold,
-        rejection_threshold: Option<Threshold>,
+        threshold: Signal,
         duration: Option<BlockNumber>,
     ) -> Result<Self::VoteIdentifier>;
-    fn open_unanimous_consent(
+    fn open_percent_vote(
         topic: Option<Hash>,
         organization: OrgId,
-        duration: Option<BlockNumber>,
-    ) -> Result<Self::VoteIdentifier>;
-}
-
-pub trait OpenThresholdVote<OrgId, Threshold, BlockNumber, Hash, FineArithmetic>:
-    OpenVote<OrgId, Threshold, BlockNumber, Hash>
-{
-    const THIRTY_FOUR_PERCENT: FineArithmetic;
-    const FIFTY_ONE_PERCENT: FineArithmetic;
-    const SIXTY_SEVEN_PERCENT: FineArithmetic;
-    const SEVENTY_SIX_PERCENT: FineArithmetic;
-    const NINETY_ONE_PERCENT: FineArithmetic;
-    fn open_threshold_vote(
-        topic: Option<Hash>,
-        organization: OrgId,
-        passage_threshold_pct: FineArithmetic,
-        rejection_threshold_pct: Option<FineArithmetic>,
-        duration: Option<BlockNumber>,
-    ) -> Result<Self::VoteIdentifier>;
-    fn open_34_pct_passage_threshold_vote(
-        topic: Option<Hash>,
-        organization: OrgId,
-        duration: Option<BlockNumber>,
-    ) -> Result<Self::VoteIdentifier>;
-    fn open_51_pct_passage_threshold_vote(
-        topic: Option<Hash>,
-        organization: OrgId,
-        duration: Option<BlockNumber>,
-    ) -> Result<Self::VoteIdentifier>;
-    fn open_67_pct_passage_threshold_vote(
-        topic: Option<Hash>,
-        organization: OrgId,
-        duration: Option<BlockNumber>,
-    ) -> Result<Self::VoteIdentifier>;
-    fn open_76_pct_passage_threshold_vote(
-        topic: Option<Hash>,
-        organization: OrgId,
-        duration: Option<BlockNumber>,
-    ) -> Result<Self::VoteIdentifier>;
-    fn open_91_pct_passage_threshold_vote(
-        topic: Option<Hash>,
-        organization: OrgId,
+        threshold: Percent,
         duration: Option<BlockNumber>,
     ) -> Result<Self::VoteIdentifier>;
 }
@@ -273,15 +231,6 @@ pub trait MintableSignal<AccountId, OrgId, VoteId, Signal> {
         vote_id: VoteId,
         organization: OrgId,
     ) -> Result<Signal>;
-}
-
-/// Define the rate at which signal is burned to unreserve shares in an organization
-pub trait BurnableSignal<VoteId, AccountId, Signal> {
-    fn burn_signal(
-        vote_id: VoteId,
-        who: &AccountId,
-        amount: Option<Signal>, // if None, then all
-    ) -> DispatchResult;
 }
 
 pub trait VoteOnProposal<AccountId, VoteId, Hash>:

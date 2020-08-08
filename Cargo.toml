@@ -23,6 +23,7 @@ members = [
     "pallets/org",
     "pallets/treasury",
     "pallets/vote",
+    "pallets/vote-direct",
     "utils",
 ]
 

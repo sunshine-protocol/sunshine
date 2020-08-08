@@ -7424,6 +7424,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "sunshine-vote-direct"
+version = "0.0.1"
+dependencies = [
+ "clear_on_drop",
+ "frame-support",
+ "frame-system",
+ "pallet-balances",
+ "parity-scale-codec",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+ "sunshine-bounty-utils",
+]
+
+[[package]]
 name = "syn"
 version = "0.11.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
