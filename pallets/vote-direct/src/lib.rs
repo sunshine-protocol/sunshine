@@ -125,7 +125,6 @@ decl_error! {
         CannotUpdateVoteTopicIfVoteStateDNE,
         // i.e. changing from any non-NoVote view to NoVote (some vote changes aren't allowed to simplify assumptions)
         VoteChangeNotSupported,
-        InvalidVoteGenesisInput,
         InputThresholdExceedsBounds,
     }
 }
@@ -141,6 +140,10 @@ decl_storage! {
         /// The state of a vote
         pub VoteStates get(fn vote_states): map
             hasher(opaque_blake2_256) T::VoteId => Option<VoteSt<T>>;
+
+        /// Total signal minted for the vote; sum of all participant signal for the vote
+        pub TotalSignalIssuance get(fn total_signal_issuance): map
+            hasher(opaque_blake2_256) T::VoteId => Option<T::Signal>;
 
         /// Tracks all votes and signal for each participating account
         pub VoteLogger get(fn vote_logger): double_map
@@ -225,10 +228,11 @@ impl<T: Trait> Module<T> {
         threshold: &Threshold<Permill>,
         all_possible_turnout: T::Signal,
     ) -> Threshold<T::Signal> {
-        let in_favor_t: T::Signal = threshold.in_favor() * all_possible_turnout;
+        let in_favor_t: T::Signal =
+            threshold.in_favor().mul_ceil(all_possible_turnout);
         let against_t: Option<T::Signal> = if let Some(t) = threshold.against()
         {
-            Some(t * all_possible_turnout)
+            Some(t.mul_ceil(all_possible_turnout))
         } else {
             None
         };
@@ -280,26 +284,20 @@ impl<T: Trait>
         threshold: Threshold<T::Signal>,
         duration: Option<T::BlockNumber>,
     ) -> Result<Self::VoteIdentifier, DispatchError> {
+        ensure!(
+            Self::valid_signal_threshold(&threshold, src.total()),
+            Error::<T>::InputThresholdExceedsBounds
+        );
         let vote_id = Self::generate_unique_id();
         // iterate through src and mint the signal
-        let mut expected_total: T::Signal = 0u32.into();
         src.account_ownership()
             .iter()
             .for_each(|(who, vote_power)| {
                 let new_vote =
-                    Vote::new(vote_power.clone(), VoterView::NoVote, None);
+                    Vote::new(*vote_power, VoterView::Uninitialized, None);
                 <VoteLogger<T>>::insert(vote_id, who, new_vote);
-                expected_total += *vote_power
             });
-        // validate that the total is actually the total and throw error if not
-        ensure!(
-            expected_total == src.total(),
-            Error::<T>::InvalidVoteGenesisInput
-        );
-        ensure!(
-            Self::valid_signal_threshold(&threshold, expected_total),
-            Error::<T>::InputThresholdExceedsBounds
-        );
+        <TotalSignalIssuance<T>>::insert(vote_id, src.total());
         let now = system::Module::<T>::block_number();
         let ends: Option<T::BlockNumber> = if let Some(time_to_add) = duration {
             Some(now + time_to_add)
@@ -323,26 +321,20 @@ impl<T: Trait>
     ) -> Result<Self::VoteIdentifier, DispatchError> {
         let signal_threshold =
             Self::from_permill_to_signal(&threshold, src.total());
+        ensure!(
+            Self::valid_signal_threshold(&signal_threshold, src.total()),
+            Error::<T>::InputThresholdExceedsBounds
+        );
         let vote_id = Self::generate_unique_id();
         // iterate through src and mint the signal
-        let mut expected_total: T::Signal = 0u32.into();
         src.account_ownership()
             .iter()
             .for_each(|(who, vote_power)| {
                 let new_vote =
-                    Vote::new(vote_power.clone(), VoterView::NoVote, None);
+                    Vote::new(*vote_power, VoterView::Uninitialized, None);
                 <VoteLogger<T>>::insert(vote_id, who, new_vote);
-                expected_total += *vote_power
             });
-        // validate that the total is actually the total and throw error if not
-        ensure!(
-            expected_total == src.total(),
-            Error::<T>::InvalidVoteGenesisInput
-        );
-        ensure!(
-            Self::valid_signal_threshold(&signal_threshold, expected_total),
-            Error::<T>::InputThresholdExceedsBounds
-        );
+        <TotalSignalIssuance<T>>::insert(vote_id, src.total());
         let now = system::Module::<T>::block_number();
         let ends: Option<T::BlockNumber> = if let Some(time_to_add) = duration {
             Some(now + time_to_add)

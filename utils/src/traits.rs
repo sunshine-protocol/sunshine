@@ -218,11 +218,6 @@ pub trait CheckVoteStatus<Hash, VoteId>:
 }
 
 pub trait MintableSignal<AccountId, OrgId, VoteId, Signal> {
-    fn mint_custom_signal_for_account(
-        vote_id: VoteId,
-        who: &AccountId,
-        signal: Signal,
-    );
     fn batch_mint_equal_signal(
         vote_id: VoteId,
         organization: OrgId,

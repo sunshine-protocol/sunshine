@@ -50,7 +50,6 @@ use util::{
         GenerateUniqueID,
         GetVoteOutcome,
         IDIsAvailable,
-        OpenThresholdVote,
         OpenVote,
         RegisterDisputeType,
     },
@@ -186,8 +185,8 @@ decl_module! {
                 DisputeState::DisputeNotRaised => {
                     // use vote metadata to dispatch vote
                     let new_vote_id = match dispute.resolution_metadata() {
-                        VoteMetadata::Signal(v) => <vote::Module<T>>::open_vote(None, v.org, v.threshold.pass_min(), v.threshold.fail_min(), v.duration)?,
-                        VoteMetadata::Percentage(v) => <vote::Module<T>>::open_threshold_vote(None, v.org, v.threshold.pass_min(), v.threshold.fail_min(), v.duration)?,
+                        VoteMetadata::Signal(v) => <vote::Module<T>>::open_vote(None, v.org, v.threshold, v.duration)?,
+                        VoteMetadata::Percentage(v) => <vote::Module<T>>::open_percent_vote(None, v.org, v.threshold, v.duration)?,
                     };
                     // update the state of the dispute with the new vote identifier
                     let updated_dispute = dispute.set_state(DisputeState::DisputeRaisedAndVoteDispatched(new_vote_id));

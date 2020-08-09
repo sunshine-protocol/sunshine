@@ -75,7 +75,7 @@ impl_outer_event! {
 }
 pub type System = system::Module<Test>;
 // pub type Organization = org::Module<Test>;
-pub type VoteThreshold = Module<Test>;
+pub type Vote = Module<Test>;
 
 fn get_last_event() -> RawEvent<u64, u64> {
     System::events()
@@ -93,7 +93,7 @@ fn get_last_event() -> RawEvent<u64, u64> {
 }
 
 fn new_test_ext() -> sp_io::TestExternalities {
-    let mut t = frame_system::GenesisConfig::default()
+    let t = frame_system::GenesisConfig::default()
         .build_storage::<Test>()
         .unwrap();
     let mut ext: sp_io::TestExternalities = t.into();
@@ -104,20 +104,22 @@ fn new_test_ext() -> sp_io::TestExternalities {
 #[test]
 fn vote_creation_works() {
     new_test_ext().execute_with(|| {
+        let vote_set: SimpleShareGenesis<u64, u64> =
+            vec![(1, 10), (2, 20)].into();
         assert_noop!(
-            VoteThreshold::create_signal_vote(
+            Vote::create_signal_vote(
                 Origin::signed(22),
                 None,
-                vec![(1, 10), (2, 20)].into(),
+                vote_set.clone(),
                 Threshold::new(31, None),
                 None
             ),
             Error::<Test>::InputThresholdExceedsBounds
         );
-        assert_ok!(VoteThreshold::create_signal_vote(
+        assert_ok!(Vote::create_signal_vote(
             Origin::signed(1),
             None,
-            vec![(1, 10), (2, 20)].into(),
+            vote_set,
             Threshold::new(10, None),
             None
         ));
@@ -125,151 +127,150 @@ fn vote_creation_works() {
     });
 }
 
-// #[test]
-// fn vote_signal_threshold_works() {
-//     new_test_ext().execute_with(|| {
-//         // unanimous consent
-//         assert_ok!(VoteThreshold::create_signal_vote(
-//             Origin::signed(1),
-//             None,
-//             1,
-//             None,
-//         ));
-//         for i in 1u64..6u64 {
-//             let i_origin = Origin::signed(i);
-//             assert_ok!(VoteThreshold::submit_vote(
-//                 i_origin,
-//                 1,
-//                 VoterView::InFavor,
-//                 None
-//             ));
-//         }
-//         // check that the vote has not passed
-//         let outcome_almost_passed = VoteThreshold::get_vote_outcome(1).unwrap();
-//         assert_eq!(outcome_almost_passed, VoteOutcome::Voting);
-//         let six = Origin::signed(6);
-//         assert_ok!(VoteThreshold::submit_vote(
-//             six,
-//             1,
-//             VoterView::InFavor,
-//             None
-//         ));
-//         // check that the vote has passed
-//         let outcome_has_passed = VoteThreshold::get_vote_outcome(1).unwrap();
-//         assert_eq!(outcome_has_passed, VoteOutcome::Approved);
-//     });
-// }
+#[test]
+fn vote_signal_threshold_works() {
+    new_test_ext().execute_with(|| {
+        let vote_set: SimpleShareGenesis<u64, u64> =
+            vec![(1, 1), (2, 1), (3, 1), (4, 1), (5, 1), (6, 1)].into();
+        // unanimous consent
+        assert_ok!(Vote::create_signal_vote(
+            Origin::signed(1),
+            None,
+            vote_set,
+            Threshold::new(6, None),
+            None
+        ));
+        for i in 1u64..6u64 {
+            let i_origin = Origin::signed(i);
+            assert_ok!(Vote::submit_vote(
+                i_origin,
+                1,
+                VoterView::InFavor,
+                None
+            ));
+        }
+        // check that the vote has not passed
+        let outcome_almost_passed = Vote::get_vote_outcome(1).unwrap();
+        assert_eq!(outcome_almost_passed, VoteOutcome::Voting);
+        let six = Origin::signed(6);
+        assert_ok!(Vote::submit_vote(six, 1, VoterView::InFavor, None));
+        // check that the vote has passed
+        let outcome_has_passed = Vote::get_vote_outcome(1).unwrap();
+        assert_eq!(outcome_has_passed, VoteOutcome::Approved);
+        assert_eq!(get_last_event(), RawEvent::Voted(1, 6, VoterView::InFavor));
+    });
+}
 
-// #[test]
-// fn vote_pct_threshold_works() {
-//     new_test_ext().execute_with(|| {
-//         let one = Origin::signed(1);
-//         // 34% passage requirement => 3 people at least
-//         assert_ok!(VoteThreshold::create_percent_threshold_vote_flat(
-//             one.clone(),
-//             None,
-//             1,
-//             Permill::from_percent(34),
-//             None,
-//             None,
-//         ));
-//         // check that the vote has not passed
-//         let outcome_almost_passed = VoteThreshold::get_vote_outcome(1).unwrap();
-//         assert_eq!(outcome_almost_passed, VoteOutcome::Voting);
-//         assert_ok!(VoteThreshold::submit_vote(
-//             one.clone(),
-//             1,
-//             VoterView::InFavor,
-//             None
-//         ));
-//         let outcome_almost_passed = VoteThreshold::get_vote_outcome(1).unwrap();
-//         assert_eq!(outcome_almost_passed, VoteOutcome::Voting);
-//         let two = Origin::signed(2);
-//         assert_ok!(VoteThreshold::submit_vote(
-//             two.clone(),
-//             1,
-//             VoterView::InFavor,
-//             None
-//         ));
-//         let outcome_almost_passed = VoteThreshold::get_vote_outcome(1).unwrap();
-//         assert_eq!(outcome_almost_passed, VoteOutcome::Voting);
-//         let three = Origin::signed(3);
-//         assert_ok!(VoteThreshold::submit_vote(
-//             three.clone(),
-//             1,
-//             VoterView::InFavor,
-//             None
-//         ));
-//         // check that the vote has passed
-//         let outcome_has_passed = VoteThreshold::get_vote_outcome(1).unwrap();
-//         assert_eq!(outcome_has_passed, VoteOutcome::Approved);
-//     });
-// }
+#[test]
+fn vote_pct_threshold_works() {
+    new_test_ext().execute_with(|| {
+        let vote_set: SimpleShareGenesis<u64, u64> =
+            vec![(1, 1), (2, 1), (3, 1), (4, 1), (5, 1), (6, 1)].into();
+        // 34% passage requirement => 3 people at least
+        assert_ok!(Vote::create_percent_vote(
+            Origin::signed(1),
+            None,
+            vote_set,
+            Threshold::new(Permill::from_percent(34), None),
+            None,
+        ));
+        // check that the vote has not passed
+        let outcome_almost_passed = Vote::get_vote_outcome(1).unwrap();
+        assert_eq!(outcome_almost_passed, VoteOutcome::Voting);
+        assert_ok!(Vote::submit_vote(
+            Origin::signed(1),
+            1,
+            VoterView::InFavor,
+            None
+        ));
+        let outcome_almost_passed = Vote::get_vote_outcome(1).unwrap();
+        assert_eq!(outcome_almost_passed, VoteOutcome::Voting);
+        assert_ok!(Vote::submit_vote(
+            Origin::signed(2),
+            1,
+            VoterView::InFavor,
+            None
+        ));
+        let outcome_almost_passed = Vote::get_vote_outcome(1).unwrap();
+        assert_eq!(outcome_almost_passed, VoteOutcome::Voting);
+        assert_ok!(Vote::submit_vote(
+            Origin::signed(3),
+            1,
+            VoterView::InFavor,
+            None
+        ));
+        // check that the vote has passed
+        let outcome_has_passed = Vote::get_vote_outcome(1).unwrap();
+        assert_eq!(outcome_has_passed, VoteOutcome::Approved);
+        assert_eq!(get_last_event(), RawEvent::Voted(1, 3, VoterView::InFavor));
+    });
+}
 
-// #[test]
-// fn changing_votes_upholds_invariants() {
-//     new_test_ext().execute_with(|| {
-//         let one = Origin::signed(1);
-//         assert_noop!(
-//             VoteThreshold::submit_vote(
-//                 one.clone(),
-//                 1,
-//                 VoterView::Against,
-//                 None
-//             ),
-//             Error::<Test>::NoVoteStateForVoteRequest
-//         );
-//         // unanimous consent
-//         assert_ok!(VoteThreshold::create_unanimous_consent_vote(
-//             one.clone(),
-//             None,
-//             1,
-//             None,
-//         ));
-//         for i in 1u64..6u64 {
-//             let i_origin = Origin::signed(i);
-//             assert_ok!(VoteThreshold::submit_vote(
-//                 i_origin,
-//                 1,
-//                 VoterView::InFavor,
-//                 None
-//             ));
-//         }
-//         // change the vote of voter 5
-//         let five = Origin::signed(5u64);
-//         assert_ok!(VoteThreshold::submit_vote(
-//             five.clone(),
-//             1,
-//             VoterView::Against,
-//             None
-//         ));
-//         // check that the vote has not passed
-//         let outcome_almost_passed = VoteThreshold::get_vote_outcome(1).unwrap();
-//         assert_eq!(outcome_almost_passed, VoteOutcome::Voting);
-//         let six = Origin::signed(6);
-//         assert_ok!(VoteThreshold::submit_vote(
-//             six.clone(),
-//             1,
-//             VoterView::InFavor,
-//             None
-//         ));
-//         // cannot change vote to NoVote from an existing vote
-//         assert_noop!(
-//             VoteThreshold::submit_vote(six, 1, VoterView::NoVote, None),
-//             Error::<Test>::VoteChangeNotSupported
-//         );
-//         // check that the vote has still not passed
-//         let outcome_has_passed = VoteThreshold::get_vote_outcome(1).unwrap();
-//         assert_eq!(outcome_has_passed, VoteOutcome::Voting);
-//         // change the vote of voter 5
-//         assert_ok!(VoteThreshold::submit_vote(
-//             five,
-//             1,
-//             VoterView::InFavor,
-//             None
-//         ));
-//         // check that the vote has not passed
-//         let outcome_almost_passed = VoteThreshold::get_vote_outcome(1).unwrap();
-//         assert_eq!(outcome_almost_passed, VoteOutcome::Approved);
-//     });
-// }
+#[test]
+fn changing_votes_upholds_invariants() {
+    new_test_ext().execute_with(|| {
+        assert_noop!(
+            Vote::submit_vote(Origin::signed(1), 1, VoterView::Against, None),
+            Error::<Test>::NoVoteStateForVoteRequest
+        );
+        let vote_set: SimpleShareGenesis<u64, u64> =
+            vec![(1, 1), (2, 1), (3, 1), (4, 1), (5, 1), (6, 1)].into();
+        // unanimous consent threshold
+        assert_ok!(Vote::create_signal_vote(
+            Origin::signed(1),
+            None,
+            vote_set,
+            Threshold::new(6, None),
+            None,
+        ));
+        for i in 1u64..6u64 {
+            let i_origin = Origin::signed(i);
+            assert_ok!(Vote::submit_vote(
+                i_origin,
+                1,
+                VoterView::InFavor,
+                None
+            ));
+        }
+        // change the vote of voter 5
+        assert_ok!(Vote::submit_vote(
+            Origin::signed(5u64),
+            1,
+            VoterView::Against,
+            None
+        ));
+        // check that the vote has not passed
+        let outcome_almost_passed = Vote::get_vote_outcome(1).unwrap();
+        assert_eq!(outcome_almost_passed, VoteOutcome::Voting);
+        // vote in favor for 6
+        assert_ok!(Vote::submit_vote(
+            Origin::signed(6),
+            1,
+            VoterView::InFavor,
+            None
+        ));
+        // cannot change vote to NoVote from an existing vote
+        assert_noop!(
+            Vote::submit_vote(
+                Origin::signed(6),
+                1,
+                VoterView::Uninitialized,
+                None
+            ),
+            Error::<Test>::VoteChangeNotSupported
+        );
+        // check that the vote has still not passed (even after 6 had voted in favor because 5 had changed their vote)
+        let outcome_has_passed = Vote::get_vote_outcome(1).unwrap();
+        assert_eq!(outcome_has_passed, VoteOutcome::Voting);
+        // change the vote of voter 5 back
+        assert_ok!(Vote::submit_vote(
+            Origin::signed(5u64),
+            1,
+            VoterView::InFavor,
+            None
+        ));
+        // check that the vote has now passed
+        let outcome_almost_passed = Vote::get_vote_outcome(1).unwrap();
+        assert_eq!(outcome_almost_passed, VoteOutcome::Approved);
+    });
+}

@@ -83,7 +83,7 @@ pub type System = system::Module<Test>;
 // pub type Organization = org::Module<Test>;
 pub type VoteThreshold = Module<Test>;
 
-fn get_last_event() -> RawEvent<u64, u64, u64> {
+fn get_last_event() -> RawEvent<u64, u64> {
     System::events()
         .into_iter()
         .map(|r| r.event)
@@ -136,10 +136,7 @@ fn vote_creation_works() {
             Threshold::new(4, None),
             None
         ));
-        assert_eq!(
-            get_last_event(),
-            RawEvent::NewVoteStarted(1, OrgRep::Equal(1), 1)
-        );
+        assert_eq!(get_last_event(), RawEvent::NewVoteStarted(1, 1));
     });
 }
 
@@ -184,7 +181,7 @@ fn vote_signal_threshold_works() {
 fn vote_pct_threshold_works() {
     new_test_ext().execute_with(|| {
         let one = Origin::signed(1);
-        // 50% passage requirement => 3 people at least
+        // 34% passage requirement => 3 people at least
         assert_ok!(VoteThreshold::create_percent_vote(
             one.clone(),
             None,
@@ -275,7 +272,7 @@ fn changing_votes_upholds_invariants() {
         ));
         // cannot change vote to NoVote from an existing vote
         assert_noop!(
-            VoteThreshold::submit_vote(six, 1, VoterView::NoVote, None),
+            VoteThreshold::submit_vote(six, 1, VoterView::Uninitialized, None),
             Error::<Test>::VoteChangeNotSupported
         );
         // check that the vote has still not passed

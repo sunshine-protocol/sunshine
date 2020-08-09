@@ -61,7 +61,6 @@ use util::{
     traits::{
         GetVoteOutcome,
         GroupMembership,
-        OpenThresholdVote,
         OpenVote,
     },
     vote::VoteOutcome,
@@ -325,8 +324,8 @@ decl_module! {
             } else { false };
             ensure!(auth, Error::<T>::NotAuthorizedToTriggerApplicationReview);
             let new_vote_id = match foundation.gov().vote().ok_or(Error::<T>::NotAuthorizedToTriggerApplicationReview)? {
-                VoteMetadata::Signal(v) => <vote::Module<T>>::open_vote(Some(app.submission_ref()), v.org, v.threshold.pass_min(), v.threshold.fail_min(), v.duration)?,
-                VoteMetadata::Percentage(v) => <vote::Module<T>>::open_threshold_vote(Some(app.submission_ref()), v.org, v.threshold.pass_min(), v.threshold.fail_min(), v.duration)?,
+                VoteMetadata::Signal(v) => <vote::Module<T>>::open_vote(Some(app.submission_ref()), v.org, v.threshold, v.duration)?,
+                VoteMetadata::Percentage(v) => <vote::Module<T>>::open_percent_vote(Some(app.submission_ref()), v.org, v.threshold, v.duration)?,
             };
             let new_app = app.set_state(ApplicationState::UnderReviewByAcceptanceCommittee(new_vote_id));
             <Applications<T>>::insert(application_id, new_app);
@@ -396,8 +395,8 @@ decl_module! {
             } else { false };
             ensure!(auth, Error::<T>::NotAuthorizedToTriggerMilestoneReview);
             let new_vote_id = match foundation.gov().vote().ok_or(Error::<T>::NotAuthorizedToTriggerMilestoneReview)? {
-                VoteMetadata::Signal(v) => <vote::Module<T>>::open_vote(Some(mile.submission()), v.org, v.threshold.pass_min(), v.threshold.fail_min(), v.duration)?,
-                VoteMetadata::Percentage(v) => <vote::Module<T>>::open_threshold_vote(Some(mile.submission()), v.org, v.threshold.pass_min(), v.threshold.fail_min(), v.duration)?,
+                VoteMetadata::Signal(v) => <vote::Module<T>>::open_vote(Some(mile.submission()), v.org, v.threshold, v.duration)?,
+                VoteMetadata::Percentage(v) => <vote::Module<T>>::open_percent_vote(Some(mile.submission()), v.org, v.threshold, v.duration)?,
             };
             let new_mile = mile.set_state(MilestoneStatus::SubmittedReviewStarted(new_vote_id));
             <Milestones<T>>::insert(application_id, milestone_id, new_mile);

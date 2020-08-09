@@ -103,10 +103,9 @@ decl_event!(
     pub enum Event<T>
     where
         <T as frame_system::Trait>::AccountId,
-        <T as org::Trait>::OrgId,
         <T as Trait>::VoteId,
     {
-        NewVoteStarted(AccountId, OrgRep<OrgId>, VoteId),
+        NewVoteStarted(AccountId, VoteId),
         Voted(VoteId, AccountId, VoterView),
     }
 );
@@ -176,7 +175,7 @@ decl_module! {
                 duration,
             )?;
             // emit event
-            Self::deposit_event(RawEvent::NewVoteStarted(vote_creator, organization, new_vote_id));
+            Self::deposit_event(RawEvent::NewVoteStarted(vote_creator, new_vote_id));
             Ok(())
         }
         #[weight = 0]
@@ -199,7 +198,7 @@ decl_module! {
                 duration
             )?;
             // emit event
-            Self::deposit_event(RawEvent::NewVoteStarted(vote_creator, organization, new_vote_id));
+            Self::deposit_event(RawEvent::NewVoteStarted(vote_creator, new_vote_id));
             Ok(())
         }
         #[weight = 0]
@@ -233,10 +232,11 @@ impl<T: Trait> Module<T> {
         threshold: &Threshold<Permill>,
         all_possible_turnout: T::Signal,
     ) -> Threshold<T::Signal> {
-        let in_favor_t: T::Signal = threshold.in_favor() * all_possible_turnout;
+        let in_favor_t: T::Signal =
+            threshold.in_favor().mul_ceil(all_possible_turnout);
         let against_t: Option<T::Signal> = if let Some(t) = threshold.against()
         {
-            Some(t * all_possible_turnout)
+            Some(t.mul_ceil(all_possible_turnout))
         } else {
             None
         };
@@ -391,18 +391,6 @@ impl<T: Trait> UpdateVoteTopic<T::VoteId, T::IpfsReference> for Module<T> {
 impl<T: Trait> MintableSignal<T::AccountId, T::OrgId, T::VoteId, T::Signal>
     for Module<T>
 {
-    /// Mints a custom amount of signal
-    /// - may be useful for resetting voting rights
-    /// - should be heavily guarded and not public facing
-    fn mint_custom_signal_for_account(
-        vote_id: T::VoteId,
-        who: &T::AccountId,
-        signal: T::Signal,
-    ) {
-        let new_vote = Vote::new(signal, VoterView::NoVote, None);
-        <VoteLogger<T>>::insert(vote_id, who, new_vote);
-    }
-
     /// Mints equal signal for all members of the group (1u32.into())
     /// -> used most often for the unanimous consent vote path
     fn batch_mint_equal_signal(
@@ -415,7 +403,8 @@ impl<T: Trait> MintableSignal<T::AccountId, T::OrgId, T::VoteId, T::Signal>
         let total_minted: T::Signal = (new_vote_group.0.len() as u32).into();
         new_vote_group.0.into_iter().for_each(|who| {
             let minted_signal: T::Signal = 1u32.into();
-            let new_vote = Vote::new(minted_signal, VoterView::NoVote, None);
+            let new_vote =
+                Vote::new(minted_signal, VoterView::Uninitialized, None);
             <VoteLogger<T>>::insert(vote_id, who, new_vote);
         });
         <TotalSignalIssuance<T>>::insert(vote_id, total_minted);
@@ -435,7 +424,7 @@ impl<T: Trait> MintableSignal<T::AccountId, T::OrgId, T::VoteId, T::Signal>
             |(who, shares)| {
                 let minted_signal: T::Signal = shares.into();
                 let new_vote =
-                    Vote::new(minted_signal, VoterView::NoVote, None);
+                    Vote::new(minted_signal, VoterView::Uninitialized, None);
                 <VoteLogger<T>>::insert(vote_id, who, new_vote);
             },
         );

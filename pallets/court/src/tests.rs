@@ -15,13 +15,13 @@ use sp_runtime::{
     Perbill,
 };
 use util::{
-    meta::{
-        Threshold,
-        VoteCall,
-    },
+    meta::VoteCall,
     organization::Organization,
     traits::GroupMembership,
-    vote::VoterView,
+    vote::{
+        Threshold,
+        VoterView,
+    },
 };
 
 // type aliases

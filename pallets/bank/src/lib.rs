@@ -35,6 +35,7 @@ use sp_runtime::{
     DispatchError,
     DispatchResult,
     ModuleId,
+    Permill,
 };
 use sp_std::{
     fmt::Debug,
@@ -57,7 +58,10 @@ use util::{
         OrganizationSupervisorPermissions,
         SpendGovernance,
     },
-    vote::VoteOutcome,
+    vote::{
+        Threshold,
+        VoteOutcome,
+    },
 };
 
 /// The balances type for this module
@@ -466,10 +470,12 @@ impl<T: Trait> SpendGovernance<T::BankId, BalanceOf<T>, T::AccountId>
             )?;
         match spend_proposal.state() {
             SpendState::WaitingForApproval => {
-                // default unanimous passage \forall spend proposals; TODO: add more default thresholds after more user research and consider adding local storage item for the threshold
-                let new_vote_id = <vote::Module<T>>::open_unanimous_consent(
+                // default unanimous passage \forall spend proposals
+                // TODO: add more nuanced defaults
+                let new_vote_id = <vote::Module<T>>::open_percent_vote(
                     None,
                     OrgRep::Equal(bank.org()),
+                    Threshold::new(Permill::one(), None),
                     None,
                 )?;
                 let new_spend_proposal =

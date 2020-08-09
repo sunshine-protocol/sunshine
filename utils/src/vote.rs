@@ -17,7 +17,7 @@ use sp_std::prelude::*;
 /// The voter options (direction)
 pub enum VoterView {
     /// Not yet voted
-    NoVote,
+    Uninitialized,
     /// Voted in favor
     InFavor,
     /// Voted against
@@ -28,7 +28,7 @@ pub enum VoterView {
 
 impl Default for VoterView {
     fn default() -> VoterView {
-        VoterView::NoVote
+        VoterView::Uninitialized
     }
 }
 
@@ -287,7 +287,7 @@ impl<
         new_direction: VoterView,
     ) -> Option<VoteState<Signal, BlockNumber, Hash>> {
         match (old_direction, new_direction) {
-            (VoterView::NoVote, VoterView::InFavor) => {
+            (VoterView::Uninitialized, VoterView::InFavor) => {
                 let new_turnout = self.turnout() + magnitude;
                 let new_in_favor = self.in_favor() + magnitude;
                 let new_vote_state = VoteState {
@@ -297,7 +297,7 @@ impl<
                 };
                 Some(new_vote_state.set_outcome())
             }
-            (VoterView::NoVote, VoterView::Against) => {
+            (VoterView::Uninitialized, VoterView::Against) => {
                 let new_turnout = self.turnout() + magnitude;
                 let new_against = self.against() + magnitude;
                 let new_vote_state = VoteState {
@@ -307,7 +307,7 @@ impl<
                 };
                 Some(new_vote_state.set_outcome())
             }
-            (VoterView::NoVote, VoterView::Abstain) => {
+            (VoterView::Uninitialized, VoterView::Abstain) => {
                 let new_turnout = self.turnout() + magnitude;
                 let new_vote_state = VoteState {
                     turnout: new_turnout,
