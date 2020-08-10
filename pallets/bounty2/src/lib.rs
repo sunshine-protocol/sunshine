@@ -226,7 +226,7 @@ decl_module! {
                 WithdrawReasons::from(WithdrawReason::Transfer),
                 ExistenceRequirement::AllowDeath,
             )?;
-            let bounty = Bounty::<T>::new(info.clone(), ChallengeNorms::new(depositer.clone(), veto_threshold, refund_threshold), amount);
+            let bounty = Bounty::<T>::new(info, ChallengeNorms::new(depositer.clone(), veto_threshold, refund_threshold), amount);
             let id = Self::bounty_generate_uid();
             T::Currency::resolve_creating(&Self::bounty_account_id(id), imb);
             <Bounties<T>>::insert(id, bounty);
@@ -272,7 +272,7 @@ decl_module! {
             let bounty = <Bounties<T>>::get(bounty_id).ok_or(Error::<T>::BountyDNE)?;
             ensure!(submitter != bounty.gov().leader(), Error::<T>::DepositerCannotSubmitForBounty);
             ensure!(amount <= bounty.total(), Error::<T>::BountySubmissionExceedsTotalAvailableFunding);
-            let submission = BountySub::<T>::new(bounty_id, submission_ref.clone(), submitter.clone(), amount);
+            let submission = BountySub::<T>::new(bounty_id, submission_ref, submitter.clone(), amount);
             let id = Self::submission_generate_uid();
             <Submissions<T>>::insert(id, submission);
             Self::deposit_event(RawEvent::BountySubmissionPosted(submitter, bounty_id, amount, id, bounty.info(), submission_ref));
@@ -342,27 +342,24 @@ decl_module! {
             // poll bounties and execute refunds for bounties under contributor vote to refund
             if now % Self::bounty_poll_frequency() == Zero::zero() {
                 for (bid, bty) in <Bounties<T>>::iter() {
-                    match bty.state() {
-                        BountyState::ChallengedToClose(v) => {
-                            let status = <vote::Module<T>>::get_vote_outcome(v).expect("dispatched votes are never cleared by default, qed");
-                            match status {
-                                VoteOutcome::Approved => {
-                                    // => the refund is executed
-                                    if let Ok((amt_to_contributors, amt_to_depositer)) = Self::execute_refund(bid, &bty.gov().leader()) {
-                                        Self::deposit_event(RawEvent::BountyRefunded(bid, amt_to_contributors, amt_to_depositer));
-                                    }
-                                },
-                                VoteOutcome::Rejected => {
-                                    // => the refund is not executed and the bty state is reset to NoPendingChallenges until next challenge
-                                    let new_bty = bty.set_state(BountyState::NoPendingChallenges);
-                                    let total = new_bty.total();
-                                    <Bounties<T>>::insert(bid, new_bty);
-                                    Self::deposit_event(RawEvent::BountyRefundChallengeRejected(v, bid, total));
-                                },
-                                _ => (),
-                            }
-                        },
-                        _ => (),
+                    if let BountyState::ChallengedToClose(v) = bty.state() {
+                        let status = <vote::Module<T>>::get_vote_outcome(v).expect("dispatched votes are never cleared by default, qed");
+                        match status {
+                            VoteOutcome::Approved => {
+                                // => the refund is executed
+                                if let Ok((amt_to_contributors, amt_to_depositer)) = Self::execute_refund(bid, &bty.gov().leader()) {
+                                    Self::deposit_event(RawEvent::BountyRefunded(bid, amt_to_contributors, amt_to_depositer));
+                                }
+                            },
+                            VoteOutcome::Rejected => {
+                                // => the refund is not executed and the bty state is reset to NoPendingChallenges until next challenge
+                                let new_bty = bty.set_state(BountyState::NoPendingChallenges);
+                                let total = new_bty.total();
+                                <Bounties<T>>::insert(bid, new_bty);
+                                Self::deposit_event(RawEvent::BountyRefundChallengeRejected(v, bid, total));
+                            },
+                            _ => (),
+                        }
                     }
                 }
             }
@@ -441,13 +438,13 @@ impl<T: Trait> Module<T> {
     // remainder recipient should be the depositer, aka bounty.gov().leader()
     fn execute_refund(
         id: T::BountyId,
-        remainder_recipient: &T::AccountId,
+        _remainder_recipient: &T::AccountId,
     ) -> Result<(BalanceOf<T>, BalanceOf<T>), DispatchError> {
         let from = Self::bounty_account_id(id);
-        let mut total = T::Currency::total_balance(&from);
+        let total = T::Currency::total_balance(&from);
         let contributors: SimpleShareGenesis<T::AccountId, BalanceOf<T>> =
             <BountyTips<T>>::iter()
-                .filter(|(i, acc, amt)| i == &id)
+                .filter(|(i, _, _)| i == &id)
                 .map(|(_, ac, amt)| (ac, amt))
                 .collect::<Vec<(T::AccountId, BalanceOf<T>)>>()
                 .into();
@@ -490,7 +487,7 @@ impl<T: Trait> Module<T> {
             // Ok((total_to_contributors, total))
         }
     }
-    fn recursive_remove_bounty(id: T::BountyId) {
+    fn _recursive_remove_bounty(id: T::BountyId) {
         <Bounties<T>>::remove(id);
         <Submissions<T>>::iter()
             .filter(|(_, app)| app.bounty_id() == id)

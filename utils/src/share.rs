@@ -177,7 +177,7 @@ impl<
     fn verify_shape(&self) -> bool {
         let mut sum: Shares = Shares::zero();
         for ac in self.account_ownership.iter() {
-            sum = sum + ac.1
+            sum += ac.1
         }
         sum == self.total
     }

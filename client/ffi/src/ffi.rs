@@ -265,7 +265,7 @@ where
             .await
             .map_err(Error::Libipld)?;
 
-        let awaiting_review = state.awaiting_review();
+        let awaiting_review = state.state().awaiting_review();
         let info = BountySubmissionInformation {
             id: id.into(),
             repo_owner: submission_body.repo_owner,

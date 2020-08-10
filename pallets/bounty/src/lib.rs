@@ -246,7 +246,7 @@ decl_module! {
         ) -> DispatchResult {
             let approver = ensure_signed(origin)?;
             let submission = <Submissions<T>>::get(submission_id).ok_or(Error::<T>::SubmissionDNE)?;
-            ensure!(submission.awaiting_review(), Error::<T>::SubmissionNotInValidStateToApprove);
+            ensure!(submission.state().awaiting_review(), Error::<T>::SubmissionNotInValidStateToApprove);
             let bounty_id = submission.bounty_id();
             let bounty = <Bounties<T>>::get(bounty_id).ok_or(Error::<T>::BountyDNE)?;
             ensure!(bounty.total() >= submission.amount(), Error::<T>::CannotApproveSubmissionIfAmountExceedsTotalAvailable);

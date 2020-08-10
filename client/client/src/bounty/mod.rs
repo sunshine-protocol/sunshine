@@ -1,7 +1,6 @@
 mod subxt;
 
 pub use subxt::*;
-pub use sunshine_bounty_utils::bounty::*;
 
 use crate::error::Error;
 use async_trait::async_trait;
