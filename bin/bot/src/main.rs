@@ -60,20 +60,8 @@ async fn main() -> std::result::Result<(), Error> {
         bounty_submit_sub,
         bounty_approval_sub,
     };
-    // TODO: how can I read input so that the user doesn't have to press enter
-    println!("Press `q` then `Enter` to quit the bounty bot");
-    while keep_running_bot() {
+    loop {
         bot = run_github_bot(bot, github_bot.clone()).await?;
-    }
-    Ok(())
-}
-
-fn keep_running_bot() -> bool {
-    let mut input = String::new();
-    if std::io::stdin().read_line(&mut input).is_ok() {
-        input.find('q').is_none()
-    } else {
-        true
     }
 }
 
