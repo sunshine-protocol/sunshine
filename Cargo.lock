@@ -7197,6 +7197,7 @@ dependencies = [
  "sp-runtime",
  "sp-std",
  "sunshine-bounty-utils",
+ "sunshine-vote-direct",
 ]
 
 [[package]]
