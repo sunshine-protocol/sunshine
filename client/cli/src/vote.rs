@@ -22,7 +22,13 @@ use sunshine_bounty_client::{
     Error as E,
     TextBlock,
 };
-use sunshine_bounty_utils::vote::VoterView;
+use sunshine_bounty_utils::{
+    organization::OrgRep,
+    vote::{
+        Threshold,
+        VoterView,
+    },
+};
 
 #[derive(Clone, Debug, Clap)]
 pub struct VoteCreateSignalThresholdCommand {
@@ -30,7 +36,7 @@ pub struct VoteCreateSignalThresholdCommand {
     pub weighted: u8,
     pub organization: u64,
     pub support_requirement: u64,
-    pub turnout_requirement: Option<u64>,
+    pub rejection_requirement: Option<u64>,
     pub duration: Option<u32>,
 }
 
@@ -58,12 +64,14 @@ impl VoteCreateSignalThresholdCommand {
         } else {
             None
         };
-        let turnout_requirement: Option<R::Signal> =
-            if let Some(req) = self.turnout_requirement {
-                Some(req.into())
-            } else {
-                None
-            };
+        let rt: Option<R::Signal> = if let Some(r) = self.rejection_requirement
+        {
+            Some(r.into())
+        } else {
+            None
+        };
+        let threshold: Threshold<R::Signal> =
+            Threshold::new(self.support_requirement.into(), rt);
         let duration: Option<<R as System>::BlockNumber> =
             if let Some(req) = self.duration {
                 Some(req.into())
@@ -71,37 +79,31 @@ impl VoteCreateSignalThresholdCommand {
                 None
             };
         // 0 is false, every other integer is true
-        if self.weighted != 0 {
-            let event = client
-                .create_signal_threshold_vote_weighted(
+        let event = if self.weighted != 0 {
+            client
+                .create_signal_vote(
                     topic,
-                    self.organization.into(),
-                    self.support_requirement.into(),
-                    turnout_requirement,
+                    OrgRep::Weighted(self.organization.into()),
+                    threshold,
                     duration,
                 )
                 .await
-                .map_err(Error::Client)?;
-            println!(
-                "Account {} created a signal threshold vote for weighted OrgId {} with VoteId {}",
-                event.caller, event.org, event.new_vote_id
-            );
+                .map_err(Error::Client)?
         } else {
-            let event = client
-                .create_signal_threshold_vote_flat(
+            client
+                .create_signal_vote(
                     topic,
-                    self.organization.into(),
-                    self.support_requirement.into(),
-                    turnout_requirement,
+                    OrgRep::Equal(self.organization.into()),
+                    threshold,
                     duration,
                 )
                 .await
-                .map_err(Error::Client)?;
-            println!(
-                "Account {} created a signal threshold vote for flat OrgId {} with VoteId {}",
-                event.caller, event.org, event.new_vote_id
-            );
-        }
+                .map_err(Error::Client)?
+        };
+        println!(
+            "Account {} created a signal threshold vote with VoteId {}",
+            event.caller, event.new_vote_id
+        );
         Ok(())
     }
 }
@@ -112,7 +114,7 @@ pub struct VoteCreatePercentThresholdCommand {
     pub weighted: u8,
     pub organization: u64,
     pub support_threshold: u8,
-    pub turnout_threshold: Option<u8>,
+    pub rejection_threshold: Option<u8>,
     pub duration: Option<u32>,
 }
 
@@ -154,100 +156,45 @@ impl VoteCreatePercentThresholdCommand {
             } else {
                 None
             };
-        let support_threshold: <R as Vote>::Percent =
-            u8_to_permill(self.support_threshold)
-                .map_err(|_| Error::VotePercentThresholdInputBoundError)?
-                .into();
-        let turnout_threshold: Option<<R as Vote>::Percent> =
-            if let Some(req) = self.turnout_threshold {
-                let ret = u8_to_permill(req)
+        let rt: Option<<R as Vote>::Percent> =
+            if let Some(r) = self.rejection_threshold {
+                let ret = u8_to_permill(r)
                     .map_err(|_| Error::VotePercentThresholdInputBoundError)?;
                 Some(ret.into())
             } else {
                 None
             };
+        let support_t: <R as Vote>::Percent =
+            u8_to_permill(self.support_threshold)
+                .map_err(|_| Error::VotePercentThresholdInputBoundError)?
+                .into();
+        let threshold: Threshold<<R as Vote>::Percent> =
+            Threshold::new(support_t, rt);
         // 0 is false and everything else is true
-        if self.weighted != 0 {
-            let event = client
-                .create_percent_threshold_vote_weighted(
+        let event = if self.weighted != 0 {
+            client
+                .create_percent_vote(
                     topic,
-                    self.organization.into(),
-                    support_threshold,
-                    turnout_threshold,
+                    OrgRep::Weighted(self.organization.into()),
+                    threshold,
                     duration,
                 )
                 .await
-                .map_err(Error::Client)?;
-            println!(
-                "Account {} created a percent threshold vote for flat OrgId {} with VoteId {}",
-                event.caller, event.org, event.new_vote_id
-            );
+                .map_err(Error::Client)?
         } else {
-            let event = client
-                .create_percent_threshold_vote_flat(
+            client
+                .create_percent_vote(
                     topic,
-                    self.organization.into(),
-                    support_threshold,
-                    turnout_threshold,
+                    OrgRep::Equal(self.organization.into()),
+                    threshold,
                     duration,
                 )
                 .await
-                .map_err(Error::Client)?;
-            println!(
-                "Account {} created a percent threshold vote for flat OrgId {} with VoteId {}",
-                event.caller, event.org, event.new_vote_id
-            );
-        }
-        Ok(())
-    }
-}
-
-#[derive(Clone, Debug, Clap)]
-pub struct VoteCreateUnanimousConsentCommand {
-    pub topic: Option<String>,
-    pub organization: u64,
-    pub duration: Option<u32>,
-}
-
-impl VoteCreateUnanimousConsentCommand {
-    pub async fn exec<R: Runtime + Vote, C: VoteClient<R>>(
-        &self,
-        client: &C,
-    ) -> Result<(), C::Error>
-    where
-        <R as System>::AccountId: Ss58Codec,
-        <R as Org>::OrgId: From<u64> + Display,
-        <R as Vote>::VoteId: Display,
-        <R as Vote>::VoteTopic: From<TextBlock>,
-    {
-        let topic: Option<<R as Vote>::VoteTopic> = if let Some(t) = &self.topic
-        {
-            Some(
-                TextBlock {
-                    text: (*t).to_string(),
-                }
-                .into(),
-            )
-        } else {
-            None
+                .map_err(Error::Client)?
         };
-        let duration: Option<<R as System>::BlockNumber> =
-            if let Some(req) = self.duration {
-                Some(req.into())
-            } else {
-                None
-            };
-        let event = client
-            .create_unanimous_consent_vote(
-                topic,
-                self.organization.into(),
-                duration,
-            )
-            .await
-            .map_err(Error::Client)?;
         println!(
-            "Account {} created a unanimous consent vote for OrgId {} with VoteId {}",
-            event.caller, event.org, event.new_vote_id
+            "Account {} created a percent threshold vote with VoteId {}",
+            event.caller, event.new_vote_id
         );
         Ok(())
     }

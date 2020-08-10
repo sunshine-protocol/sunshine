@@ -36,9 +36,13 @@ use substrate_subxt::{
     Event,
     Store,
 };
-use sunshine_bounty_utils::vote::{
-    Vote as VoteVector,
-    VoteState,
+use sunshine_bounty_utils::{
+    organization::OrgRep,
+    vote::{
+        Threshold,
+        Vote as VoteVector,
+        VoteState,
+    },
 };
 
 /// The subset of the `vote::Trait` that a client must implement.
@@ -121,12 +125,6 @@ pub struct VoteStateStore<T: Vote> {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
-pub struct TotalSignalIssuanceStore<T: Vote> {
-    #[store(returns = T::Signal)]
-    pub vote: T::VoteId,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
 pub struct VoteLoggerStore<T: Vote> {
     #[store(returns = VoteVector<T::Signal, <T as Org>::IpfsReference>)]
     pub vote: T::VoteId,
@@ -136,45 +134,18 @@ pub struct VoteLoggerStore<T: Vote> {
 // ~~ Calls ~~
 
 #[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
-pub struct CreateSignalThresholdVoteWeightedCall<T: Vote> {
+pub struct CreateSignalVoteCall<T: Vote> {
     pub topic: Option<<T as Org>::IpfsReference>,
-    pub organization: T::OrgId,
-    pub support_requirement: T::Signal,
-    pub turnout_requirement: Option<T::Signal>,
+    pub organization: OrgRep<T::OrgId>,
+    pub threshold: Threshold<T::Signal>,
     pub duration: Option<<T as System>::BlockNumber>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
-pub struct CreateSignalThresholdVoteFlatCall<T: Vote> {
+pub struct CreatePercentVoteCall<T: Vote> {
     pub topic: Option<<T as Org>::IpfsReference>,
-    pub organization: T::OrgId,
-    pub support_requirement: T::Signal,
-    pub turnout_requirement: Option<T::Signal>,
-    pub duration: Option<<T as System>::BlockNumber>,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
-pub struct CreatePercentThresholdVoteWeightedCall<T: Vote> {
-    pub topic: Option<<T as Org>::IpfsReference>,
-    pub organization: T::OrgId,
-    pub support_requirement: <T as Vote>::Percent,
-    pub turnout_requirement: Option<<T as Vote>::Percent>,
-    pub duration: Option<<T as System>::BlockNumber>,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
-pub struct CreatePercentThresholdVoteFlatCall<T: Vote> {
-    pub topic: Option<<T as Org>::IpfsReference>,
-    pub organization: T::OrgId,
-    pub support_requirement: <T as Vote>::Percent,
-    pub turnout_requirement: Option<<T as Vote>::Percent>,
-    pub duration: Option<<T as System>::BlockNumber>,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
-pub struct CreateUnanimousConsentVoteCall<T: Vote> {
-    pub topic: Option<<T as Org>::IpfsReference>,
-    pub organization: T::OrgId,
+    pub organization: OrgRep<T::OrgId>,
+    pub threshold: Threshold<T::Percent>,
     pub duration: Option<<T as System>::BlockNumber>,
 }
 

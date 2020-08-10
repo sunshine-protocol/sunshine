@@ -3,7 +3,7 @@
 #![allow(clippy::redundant_closure_call)]
 #![allow(clippy::type_complexity)]
 #![cfg_attr(not(feature = "std"), no_std)]
-//! Drip cash flow
+//! Drip fund stream
 
 #[cfg(test)]
 mod tests;

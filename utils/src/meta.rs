@@ -1,4 +1,5 @@
 //! Structured call data for `vote`
+use crate::vote::Threshold;
 use codec::{
     Decode,
     Encode,
@@ -8,34 +9,19 @@ use sp_runtime::RuntimeDebug;
 use sp_std::prelude::*;
 
 #[derive(new, PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug)]
-pub struct Threshold<Signal> {
-    pass_min: Signal,
-    fail_min: Option<Signal>,
-}
-
-impl<Signal: Copy> Threshold<Signal> {
-    pub fn pass_min(&self) -> Signal {
-        self.pass_min
-    }
-    pub fn fail_min(&self) -> Option<Signal> {
-        self.fail_min
-    }
-}
-
-#[derive(new, PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug)]
 pub struct VoteCall<Org, VoteThreshold, BlockNumber> {
     pub org: Org,
     pub threshold: VoteThreshold,
     pub duration: Option<BlockNumber>,
 }
 
-#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub enum VoteMetadata<Org, Signal, Permill, BlockNumber> {
     Signal(VoteCall<Org, Threshold<Signal>, BlockNumber>),
     Percentage(VoteCall<Org, Threshold<Permill>, BlockNumber>),
 }
 
-impl<Org: Copy, Signal, Permill, BlockNumber: Copy>
+impl<Org: Copy, Signal: Copy, Permill: Copy, BlockNumber: Copy>
     VoteMetadata<Org, Signal, Permill, BlockNumber>
 {
     pub fn org(&self) -> Org {
@@ -58,7 +44,7 @@ pub struct ResolutionMetadata<AccountId, VoteMetadata> {
     vote: Option<VoteMetadata>,
 }
 
-impl<AccountId: Clone + PartialEq, VoteMetadata: Copy>
+impl<AccountId: Clone + PartialEq, VoteMetadata: Clone>
     ResolutionMetadata<AccountId, VoteMetadata>
 {
     pub fn new(
@@ -83,6 +69,6 @@ impl<AccountId: Clone + PartialEq, VoteMetadata: Copy>
         }
     }
     pub fn vote(&self) -> Option<VoteMetadata> {
-        self.vote
+        self.vote.clone()
     }
 }

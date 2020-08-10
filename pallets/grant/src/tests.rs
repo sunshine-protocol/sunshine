@@ -18,7 +18,6 @@ use util::{
     grant::Recipient,
     meta::{
         ResolutionMetadata,
-        Threshold,
         VoteCall,
         VoteMetadata,
     },
@@ -27,7 +26,10 @@ use util::{
         Organization,
     },
     traits::GroupMembership,
-    vote::VoterView,
+    vote::{
+        Threshold,
+        VoterView,
+    },
 };
 
 // type aliases

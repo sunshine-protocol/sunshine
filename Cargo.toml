@@ -14,17 +14,21 @@ members = [
     "client/gbot",
     "pallets/bank",
     "pallets/bounty",
+    "pallets/bounty2",
     "pallets/court",
     "pallets/donate",
     "pallets/drip",
     "pallets/grant",
+    "pallets/kickback",
     "pallets/org",
     "pallets/treasury",
     "pallets/vote",
+    "pallets/vote-direct",
     "utils",
 ]
 
 [patch.crates-io]
+substrate-subxt = { git = "https://github.com/paritytech/substrate-subxt" }
 sunshine-identity-cli = { git = "https://github.com/sunshine-protocol/sunshine-identity" }
 substrate-keybase-keystore = { git = "https://github.com/sunshine-protocol/sunshine-identity" }
 sunshine-core = { git = "https://github.com/sunshine-protocol/sunshine-identity" }

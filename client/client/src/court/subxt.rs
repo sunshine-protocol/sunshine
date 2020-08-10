@@ -21,6 +21,10 @@ use sp_runtime::traits::{
 };
 use std::fmt::Debug;
 use substrate_subxt::{
+    balances::{
+        Balances,
+        BalancesEventsDecoder,
+    },
     module,
     sp_runtime,
     system::{
@@ -29,11 +33,11 @@ use substrate_subxt::{
     },
 };
 
-pub type BalanceOf<T> = <T as Court>::Currency; // as Currency<<T as System>::AccountId>>::Balance;
+pub type BalanceOf<T> = <T as Balances>::Balance;
 
 /// The subset of the org trait and its inherited traits that the client must inherit
 #[module]
-pub trait Court: System + Org + Vote {
+pub trait Court: System + Balances + Org + Vote {
     /// Dispute Type Identifier
     type DisputeId: Parameter
         + Member
@@ -44,19 +48,6 @@ pub trait Court: System + Org + Vote {
         + MaybeSerializeDeserialize
         + Debug
         + Zero;
-
-    /// The currency type for on-chain transactions
-    type Currency: Parameter
-        + Member
-        + AtLeast32Bit
-        + Codec
-        + Default
-        + Copy
-        + MaybeSerializeDeserialize
-        + Debug
-        + PartialOrd
-        + PartialEq
-        + Zero; // + Currency<<Self as System>::AccountId> // commented out until #93 is resolved
 }
 
 // ~~ Values (Constants) ~~

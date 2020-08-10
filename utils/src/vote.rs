@@ -17,7 +17,7 @@ use sp_std::prelude::*;
 /// The voter options (direction)
 pub enum VoterView {
     /// Not yet voted
-    NoVote,
+    Uninitialized,
     /// Voted in favor
     InFavor,
     /// Voted against
@@ -28,7 +28,7 @@ pub enum VoterView {
 
 impl Default for VoterView {
     fn default() -> VoterView {
-        VoterView::NoVote
+        VoterView::Uninitialized
     }
 }
 
@@ -76,6 +76,26 @@ impl<Signal: Copy, Hash: Clone> VoteVector<Signal, VoterView, Hash>
     }
 }
 
+#[derive(
+    new, PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug,
+)]
+pub struct Threshold<T> {
+    in_favor: T,
+    against: Option<T>,
+}
+
+impl<T: Copy + PartialOrd> Threshold<T> {
+    pub fn in_favor(&self) -> T {
+        self.in_favor
+    }
+    pub fn geq_in_favor(&self, t: T) -> bool {
+        t >= self.in_favor
+    }
+    pub fn against(&self) -> Option<T> {
+        self.against
+    }
+}
+
 #[derive(PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
 /// The state of an ongoing vote
 pub struct VoteState<Signal, BlockNumber, Hash> {
@@ -90,9 +110,7 @@ pub struct VoteState<Signal, BlockNumber, Hash> {
     /// All signal that can vote
     all_possible_turnout: Signal,
     /// The threshold requirement for passage
-    passage_threshold: Signal,
-    /// The threshold requirement for rejection
-    rejection_threshold: Option<Signal>,
+    threshold: Threshold<Signal>,
     /// The time at which this vote state is initialized
     initialized: BlockNumber,
     /// The time at which this vote state expires
@@ -103,35 +121,8 @@ pub struct VoteState<Signal, BlockNumber, Hash> {
 
 impl<
         Signal: Parameter
-            + Copy
             + From<u32>
-            + Default
-            + sp_std::ops::Add<Output = Signal>
-            + sp_std::ops::Sub<Output = Signal>,
-        BlockNumber: Parameter + Copy + Default,
-        Hash: Clone,
-    > Default for VoteState<Signal, BlockNumber, Hash>
-{
-    fn default() -> VoteState<Signal, BlockNumber, Hash> {
-        VoteState {
-            topic: None,
-            in_favor: 0u32.into(),
-            against: 0u32.into(),
-            turnout: 0u32.into(),
-            all_possible_turnout: 0u32.into(),
-            passage_threshold: 0u32.into(),
-            rejection_threshold: None,
-            initialized: BlockNumber::default(),
-            expires: None,
-            outcome: VoteOutcome::default(),
-        }
-    }
-}
-
-impl<
-        Signal: Parameter
             + Copy
-            + From<u32>
             + Default
             + sp_std::ops::Add<Output = Signal>
             + sp_std::ops::Sub<Output = Signal>
@@ -143,20 +134,20 @@ impl<
     pub fn new(
         topic: Option<Hash>,
         all_possible_turnout: Signal,
-        passage_threshold: Signal,
-        rejection_threshold: Option<Signal>,
+        threshold: Threshold<Signal>,
         initialized: BlockNumber,
         expires: Option<BlockNumber>,
     ) -> VoteState<Signal, BlockNumber, Hash> {
         VoteState {
             topic,
+            in_favor: 0u32.into(),
+            against: 0u32.into(),
+            turnout: 0u32.into(),
             all_possible_turnout,
-            passage_threshold,
-            rejection_threshold,
+            threshold,
             initialized,
             expires,
             outcome: VoteOutcome::Voting,
-            ..Default::default()
         }
     }
     pub fn new_unanimous_consent(
@@ -167,12 +158,14 @@ impl<
     ) -> VoteState<Signal, BlockNumber, Hash> {
         VoteState {
             topic,
+            in_favor: 0u32.into(),
+            against: 0u32.into(),
+            turnout: 0u32.into(),
             all_possible_turnout,
-            passage_threshold: all_possible_turnout,
+            threshold: Threshold::new(all_possible_turnout, None),
             initialized,
             expires,
             outcome: VoteOutcome::Voting,
-            ..Default::default()
         }
     }
     pub fn topic(&self) -> Option<Hash> {
@@ -193,11 +186,8 @@ impl<
     pub fn expires(&self) -> Option<BlockNumber> {
         self.expires
     }
-    pub fn passage_threshold(&self) -> Signal {
-        self.passage_threshold
-    }
-    pub fn rejection_threshold(&self) -> Option<Signal> {
-        self.rejection_threshold
+    pub fn threshold(&self) -> Threshold<Signal> {
+        self.threshold.clone()
     }
     pub fn outcome(&self) -> VoteOutcome {
         self.outcome
@@ -252,7 +242,7 @@ impl<
     > Approved for VoteState<Signal, BlockNumber, Hash>
 {
     fn approved(&self) -> bool {
-        self.in_favor() >= self.passage_threshold()
+        self.in_favor() >= self.threshold().in_favor()
     }
 }
 
@@ -269,7 +259,7 @@ impl<
     > Rejected for VoteState<Signal, BlockNumber, Hash>
 {
     fn rejected(&self) -> Option<bool> {
-        if let Some(rejection_threshold_set) = self.rejection_threshold() {
+        if let Some(rejection_threshold_set) = self.threshold().against() {
             Some(self.against() >= rejection_threshold_set)
         } else {
             // rejection threshold not set!
@@ -297,7 +287,7 @@ impl<
         new_direction: VoterView,
     ) -> Option<VoteState<Signal, BlockNumber, Hash>> {
         match (old_direction, new_direction) {
-            (VoterView::NoVote, VoterView::InFavor) => {
+            (VoterView::Uninitialized, VoterView::InFavor) => {
                 let new_turnout = self.turnout() + magnitude;
                 let new_in_favor = self.in_favor() + magnitude;
                 let new_vote_state = VoteState {
@@ -307,7 +297,7 @@ impl<
                 };
                 Some(new_vote_state.set_outcome())
             }
-            (VoterView::NoVote, VoterView::Against) => {
+            (VoterView::Uninitialized, VoterView::Against) => {
                 let new_turnout = self.turnout() + magnitude;
                 let new_against = self.against() + magnitude;
                 let new_vote_state = VoteState {
@@ -317,7 +307,7 @@ impl<
                 };
                 Some(new_vote_state.set_outcome())
             }
-            (VoterView::NoVote, VoterView::Abstain) => {
+            (VoterView::Uninitialized, VoterView::Abstain) => {
                 let new_turnout = self.turnout() + magnitude;
                 let new_vote_state = VoteState {
                     turnout: new_turnout,

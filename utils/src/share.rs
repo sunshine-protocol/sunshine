@@ -119,7 +119,9 @@ impl<
     }
 }
 
-impl<Shares: Copy + Parameter> AccessProfile<Shares> for ShareProfile<Shares> {
+impl<Shares: Copy + sp_std::ops::AddAssign + Zero> AccessProfile<Shares>
+    for ShareProfile<Shares>
+{
     fn total(&self) -> Shares {
         self.total
     }
@@ -132,11 +134,14 @@ pub struct SimpleShareGenesis<AccountId, Shares> {
     account_ownership: Vec<(AccountId, Shares)>,
 }
 
-impl<AccountId: Clone, Shares: Parameter + From<u32>>
-    AccessGenesis<AccountId, Shares> for SimpleShareGenesis<AccountId, Shares>
+impl<
+        AccountId: Clone,
+        Shares: Copy + sp_std::ops::AddAssign + Zero + PartialEq,
+    > AccessGenesis<AccountId, Shares>
+    for SimpleShareGenesis<AccountId, Shares>
 {
     fn total(&self) -> Shares {
-        self.total.clone()
+        self.total
     }
     fn account_ownership(&self) -> Vec<(AccountId, Shares)> {
         self.account_ownership.clone()
@@ -145,13 +150,13 @@ impl<AccountId: Clone, Shares: Parameter + From<u32>>
 
 impl<
         AccountId: Parameter,
-        Shares: Parameter + From<u32> + sp_std::ops::AddAssign,
+        Shares: Copy + sp_std::ops::AddAssign + Zero + PartialEq,
     > From<Vec<(AccountId, Shares)>> for SimpleShareGenesis<AccountId, Shares>
 {
     fn from(
         genesis: Vec<(AccountId, Shares)>,
     ) -> SimpleShareGenesis<AccountId, Shares> {
-        let mut total: Shares = 0u32.into();
+        let mut total: Shares = Shares::zero();
         let mut dedup_genesis = genesis;
         dedup_genesis.dedup(); // deduplicated
         for account_shares in dedup_genesis.clone() {
@@ -166,14 +171,13 @@ impl<
 
 impl<
         AccountId: Parameter,
-        Shares: Copy + Parameter + From<u32> + sp_std::ops::Add<Output = Shares>,
+        Shares: Copy + sp_std::ops::AddAssign + Zero + PartialEq,
     > VerifyShape for SimpleShareGenesis<AccountId, Shares>
 {
     fn verify_shape(&self) -> bool {
-        // TODO: clean up and optimize
-        let mut sum: Shares = 0u32.into();
+        let mut sum: Shares = Shares::zero();
         for ac in self.account_ownership.iter() {
-            sum = sum + ac.1
+            sum += ac.1
         }
         sum == self.total
     }

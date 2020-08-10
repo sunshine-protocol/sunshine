@@ -8,6 +8,7 @@ use core::fmt::{
     Display,
 };
 use substrate_subxt::{
+    balances::Balances,
     sp_core::crypto::Ss58Codec,
     system::System,
     Runtime,
@@ -35,7 +36,7 @@ impl BountyPostCommand {
     ) -> Result<(), C::Error>
     where
         <R as System>::AccountId: Ss58Codec,
-        <R as Bounty>::Currency: From<u128> + Display,
+        <R as Balances>::Balance: From<u128> + Display,
         <R as Bounty>::BountyId: Display,
         <R as Bounty>::BountyPost: From<BountyBody>,
     {
@@ -70,7 +71,7 @@ impl BountyContributeCommand {
     ) -> Result<(), C::Error>
     where
         <R as System>::AccountId: Ss58Codec,
-        <R as Bounty>::Currency: From<u128> + Display,
+        <R as Balances>::Balance: From<u128> + Display,
         <R as Bounty>::BountyId: From<u64> + Display,
     {
         let event = client
@@ -101,7 +102,7 @@ impl BountySubmitCommand {
     ) -> Result<(), C::Error>
     where
         <R as System>::AccountId: Ss58Codec,
-        <R as Bounty>::Currency: From<u128> + Display,
+        <R as Balances>::Balance: From<u128> + Display,
         <R as Bounty>::BountyId: From<u64> + Display,
         <R as Bounty>::SubmissionId: Display,
         <R as Bounty>::BountySubmission: From<BountyBody>,
@@ -140,7 +141,7 @@ impl BountyApproveCommand {
     ) -> Result<(), C::Error>
     where
         <R as System>::AccountId: Ss58Codec,
-        <R as Bounty>::Currency: From<u128> + Display,
+        <R as Balances>::Balance: From<u128> + Display,
         <R as Bounty>::SubmissionId: From<u64> + Display,
         <R as Bounty>::BountyId: Display,
     {
@@ -168,7 +169,7 @@ impl GetBountyCommand {
     ) -> Result<(), C::Error>
     where
         <R as System>::AccountId: Ss58Codec,
-        <R as Bounty>::Currency: Display,
+        <R as Balances>::Balance: Display,
         <R as Bounty>::BountyId: Display + From<u64>,
         <R as Bounty>::IpfsReference: Debug,
     {
@@ -196,7 +197,7 @@ impl GetSubmissionCommand {
     ) -> Result<(), C::Error>
     where
         <R as System>::AccountId: Ss58Codec,
-        <R as Bounty>::Currency: Display,
+        <R as Balances>::Balance: Display,
         <R as Bounty>::BountyId: Display,
         <R as Bounty>::SubmissionId: Display + From<u64>,
         <R as Bounty>::IpfsReference: Debug,
@@ -224,7 +225,7 @@ impl GetOpenBountiesCommand {
         client: &C,
     ) -> Result<(), C::Error>
     where
-        <R as Bounty>::Currency: From<u128> + Display,
+        <R as Balances>::Balance: From<u128> + Display,
         <R as Bounty>::BountyId: Display,
         <R as Bounty>::SubmissionId: Display + From<u64>,
     {
@@ -258,7 +259,7 @@ impl GetOpenSubmissionsCommand {
         client: &C,
     ) -> Result<(), C::Error>
     where
-        <R as Bounty>::Currency: Display,
+        <R as Balances>::Balance: Display,
         <R as Bounty>::BountyId: From<u64> + Display,
         <R as Bounty>::SubmissionId: Display,
     {

@@ -19,6 +19,10 @@ use sp_runtime::traits::{
 };
 use std::fmt::Debug;
 use substrate_subxt::{
+    balances::{
+        Balances,
+        BalancesEventsDecoder,
+    },
     module,
     sp_runtime,
     system::{
@@ -35,24 +39,12 @@ use sunshine_bounty_utils::bounty::{
     SubmissionState,
 };
 
-pub type BalanceOf<T> = <T as Bounty>::Currency;
+pub type BalanceOf<T> = <T as Balances>::Balance;
 
 #[module]
-pub trait Bounty: System {
+pub trait Bounty: System + Balances {
     /// Cid type
     type IpfsReference: Parameter + Member + Default;
-    /// Currency type
-    type Currency: Parameter
-        + Member
-        + AtLeast32Bit
-        + Codec
-        + Default
-        + Copy
-        + MaybeSerializeDeserialize
-        + Debug
-        + PartialOrd
-        + PartialEq
-        + Zero;
 
     type BountyId: Parameter
         + Member
@@ -124,18 +116,6 @@ pub struct BountiesStore<T: Bounty> {
 pub struct SubmissionsStore<T: Bounty> {
     #[store(returns = SubState<T>)]
     pub id: T::SubmissionId,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
-pub struct OpenBountiesStore<T: Bounty> {
-    #[store(returns = Option<Vec<(T::BountyId, BountyState<T>)>>)]
-    min: BalanceOf<T>,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
-pub struct OpenSubmissionsStore<T: Bounty> {
-    #[store(returns = Option<Vec<(T::SubmissionId, SubState<T>)>>)]
-    bounty_id: T::BountyId,
 }
 
 // ~~ (Calls, Events) ~~

@@ -151,9 +151,6 @@ async fn run() -> Result<(), Error> {
                 VoteSubCommand::CreatePercentThresholdVote(cmd) => {
                     cmd.exec(&client).await?
                 }
-                VoteSubCommand::CreateUnanimousConsentVote(cmd) => {
-                    cmd.exec(&client).await?
-                }
                 VoteSubCommand::SubmitVote(cmd) => cmd.exec(&client).await?,
             }
         }

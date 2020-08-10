@@ -5,6 +5,80 @@ use codec::{
 use sp_runtime::RuntimeDebug;
 use sp_std::prelude::*;
 
+#[derive(new, PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug)]
+pub enum BountyState<VoteId> {
+    NoPendingChallenges,
+    ChallengedToClose(VoteId),
+}
+
+impl<VoteId> Default for BountyState<VoteId> {
+    fn default() -> BountyState<VoteId> {
+        BountyState::NoPendingChallenges
+    }
+}
+
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+pub struct BountyInfo2<IpfsReference, Governance, Currency, State> {
+    // Storage cid
+    info: IpfsReference,
+    // Whoever posts the bounty
+    gov: Governance,
+    // Total amount
+    total: Currency,
+    // State
+    state: State,
+}
+
+impl<
+        IpfsReference: Clone,
+        Governance: Clone,
+        Currency: Copy
+            + PartialOrd
+            + sp_std::ops::Sub<Output = Currency>
+            + sp_std::ops::Add<Output = Currency>,
+        VoteId: Copy,
+    > BountyInfo2<IpfsReference, Governance, Currency, BountyState<VoteId>>
+{
+    pub fn new(info: IpfsReference, gov: Governance, total: Currency) -> Self {
+        Self {
+            info,
+            gov,
+            total,
+            state: BountyState::default(),
+        }
+    }
+    pub fn info(&self) -> IpfsReference {
+        self.info.clone()
+    }
+    pub fn gov(&self) -> Governance {
+        self.gov.clone()
+    }
+    pub fn total(&self) -> Currency {
+        self.total
+    }
+    pub fn state(&self) -> BountyState<VoteId> {
+        self.state
+    }
+    pub fn set_state(&self, b: BountyState<VoteId>) -> Self {
+        Self {
+            state: b,
+            ..self.clone()
+        }
+    }
+    pub fn add_funds(&self, c: Currency) -> Self {
+        Self {
+            total: self.total + c,
+            ..self.clone()
+        }
+    }
+    pub fn subtract_funds(&self, c: Currency) -> Self {
+        Self {
+            total: self.total - c,
+            ..self.clone()
+        }
+    }
+}
+
 #[derive(new, PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub struct BountyInformation<IpfsReference, AccountId, Currency> {
     // Storage cid
@@ -54,12 +128,52 @@ pub enum SubmissionState {
     ApprovedAndExecuted,
 }
 
+impl Default for SubmissionState {
+    fn default() -> SubmissionState {
+        SubmissionState::SubmittedAwaitingResponse
+    }
+}
+
 impl SubmissionState {
     pub fn awaiting_review(&self) -> bool {
         matches!(self, SubmissionState::SubmittedAwaitingResponse)
     }
     pub fn approved(&self) -> bool {
         matches!(self, SubmissionState::ApprovedAndExecuted)
+    }
+}
+
+#[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug)]
+/// Submission state for Bounty2
+pub enum SubmissionState2<BlockNumber, VoteId> {
+    SubmittedAwaitingResponse,
+    ApprovedAndScheduled(BlockNumber),
+    ChallengedAndUnderReview(VoteId),
+}
+
+impl<BlockNumber: Copy, VoteId: Copy> Default
+    for SubmissionState2<BlockNumber, VoteId>
+{
+    fn default() -> SubmissionState2<BlockNumber, VoteId> {
+        SubmissionState2::SubmittedAwaitingResponse
+    }
+}
+
+impl<BlockNumber: Copy, VoteId: Copy> SubmissionState2<BlockNumber, VoteId> {
+    pub fn awaiting_review(&self) -> bool {
+        matches!(self, SubmissionState2::SubmittedAwaitingResponse)
+    }
+    pub fn approved_and_scheduled(&self) -> Option<BlockNumber> {
+        match self {
+            SubmissionState2::ApprovedAndScheduled(n) => Some(*n),
+            _ => None,
+        }
+    }
+    pub fn under_review(&self) -> Option<VoteId> {
+        match self {
+            SubmissionState2::ChallengedAndUnderReview(n) => Some(*n),
+            _ => None,
+        }
     }
 }
 
@@ -83,33 +197,22 @@ impl<
         IpfsReference: Clone,
         AccountId: Clone + PartialEq,
         Currency: Copy + PartialOrd + sp_std::ops::Sub<Output = Currency>,
-    >
-    BountySubmission<
-        BountyId,
-        IpfsReference,
-        AccountId,
-        Currency,
-        SubmissionState,
-    >
+        State: Copy + Default,
+    > BountySubmission<BountyId, IpfsReference, AccountId, Currency, State>
 {
     pub fn new(
         bounty: BountyId,
         submission_ref: IpfsReference,
         submitter: AccountId,
         amount: Currency,
-    ) -> BountySubmission<
-        BountyId,
-        IpfsReference,
-        AccountId,
-        Currency,
-        SubmissionState,
-    > {
+    ) -> BountySubmission<BountyId, IpfsReference, AccountId, Currency, State>
+    {
         BountySubmission {
             bounty,
             submission_ref,
             submitter,
             amount,
-            state: SubmissionState::SubmittedAwaitingResponse,
+            state: State::default(),
         }
     }
     pub fn bounty_id(&self) -> BountyId {
@@ -134,7 +237,7 @@ impl<
             ..self.clone()
         }
     }
-    pub fn awaiting_review(&self) -> bool {
-        self.state.awaiting_review()
+    pub fn state(&self) -> State {
+        self.state
     }
 }

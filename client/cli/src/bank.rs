@@ -8,6 +8,7 @@ use core::fmt::{
     Display,
 };
 use substrate_subxt::{
+    balances::Balances,
     sp_core::crypto::Ss58Codec,
     system::System,
     Runtime,
@@ -36,7 +37,7 @@ impl BankOpenOrgAccountCommand {
     where
         <R as System>::AccountId: Ss58Codec,
         <R as Org>::OrgId: From<u64> + Display,
-        <R as Bank>::Currency: From<u128> + Display,
+        <R as Balances>::Balance: From<u128> + Display,
     {
         let bank_operator = if let Some(acc) = &self.bank_operator {
             let new_acc: Ss58<R> = acc.parse()?;

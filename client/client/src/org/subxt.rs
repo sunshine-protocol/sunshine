@@ -76,11 +76,6 @@ pub trait Org: System {
 // ~~ Values ~~
 
 #[derive(Clone, Debug, Eq, PartialEq, Encode)]
-pub struct SudoKeyStore<T: Org> {
-    pub sudo_key: Option<<T as System>::AccountId>,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Encode)]
 pub struct OrganizationIdNonceStore<T: Org> {
     pub org_id_nonce: T::OrgId,
 }

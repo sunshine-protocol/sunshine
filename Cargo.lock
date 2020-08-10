@@ -3841,21 +3841,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pallet-sudo"
-version = "2.0.0-rc5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "76ae534ae474aa72f63a0816e105479cf2ef1bfec8a9200051f56c7d369ba82d"
-dependencies = [
- "frame-support",
- "frame-system",
- "parity-scale-codec",
- "serde",
- "sp-io",
- "sp-runtime",
- "sp-std",
-]
-
-[[package]]
 name = "pallet-timestamp"
 version = "2.0.0-rc5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6991,8 +6976,7 @@ dependencies = [
 [[package]]
 name = "substrate-subxt"
 version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "94cc064acf915e8411b74261e6cd6d28b56709a5bbbb7f5fdf5dd55c650210d1"
+source = "git+https://github.com/paritytech/substrate-subxt#271775bf99092bb890fe8c15eabc87f5b8d3966f"
 dependencies = [
  "frame-metadata",
  "frame-support",
@@ -7020,8 +7004,7 @@ dependencies = [
 [[package]]
 name = "substrate-subxt-client"
 version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4d205ba200ff1b62e1c9d94a47f71f737947e682d5c0f5a085f6ae6dc016fb5c"
+source = "git+https://github.com/paritytech/substrate-subxt#271775bf99092bb890fe8c15eabc87f5b8d3966f"
 dependencies = [
  "async-std",
  "futures 0.1.29",
@@ -7038,8 +7021,7 @@ dependencies = [
 [[package]]
 name = "substrate-subxt-proc-macro"
 version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fd823af41d4d29069613987caf17c52610e505058788fa1c434821528c191db8"
+source = "git+https://github.com/paritytech/substrate-subxt#271775bf99092bb890fe8c15eabc87f5b8d3966f"
 dependencies = [
  "heck",
  "proc-macro-crate",
@@ -7201,6 +7183,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "sunshine-bounty2"
+version = "0.0.1"
+dependencies = [
+ "clear_on_drop",
+ "frame-support",
+ "frame-system",
+ "pallet-balances",
+ "parity-scale-codec",
+ "serde",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+ "sunshine-bounty-utils",
+ "sunshine-vote-direct",
+]
+
+[[package]]
 name = "sunshine-core"
 version = "0.2.0"
 source = "git+https://github.com/sunshine-protocol/sunshine-identity#1f2e926ee3fe1872395a64dfdb3a811653ee93b2"
@@ -7357,6 +7357,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "sunshine-kickback"
+version = "0.0.1"
+dependencies = [
+ "clear_on_drop",
+ "frame-support",
+ "frame-system",
+ "pallet-balances",
+ "parity-scale-codec",
+ "serde",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+ "sunshine-bounty-utils",
+]
+
+[[package]]
 name = "sunshine-org"
 version = "0.2.0"
 dependencies = [
@@ -7405,6 +7422,22 @@ dependencies = [
  "sp-std",
  "sunshine-bounty-utils",
  "sunshine-org",
+]
+
+[[package]]
+name = "sunshine-vote-direct"
+version = "0.0.1"
+dependencies = [
+ "clear_on_drop",
+ "frame-support",
+ "frame-system",
+ "pallet-balances",
+ "parity-scale-codec",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+ "sunshine-bounty-utils",
 ]
 
 [[package]]
@@ -7588,9 +7621,7 @@ dependencies = [
  "pallet-aura",
  "pallet-balances",
  "pallet-grandpa",
- "pallet-indices",
  "pallet-randomness-collective-flip",
- "pallet-sudo",
  "pallet-timestamp",
  "pallet-transaction-payment",
  "parity-scale-codec",
