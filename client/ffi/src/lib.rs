@@ -41,6 +41,9 @@ macro_rules! impl_ffi {
             /// Unlock your account using the password
             /// return `true` when the account get unlocked, otherwise an error message returned
             Key::unlock => fn client_key_unlock(password: *const raw::c_char = cstr!(password)) -> bool;
+            /// Get current UID as string (if any)
+            /// otherwise null returned
+            Key::uid => fn client_key_uid() -> Option<String>;
 
             /// Get a bounty Information by using bounty Id
             /// Returns Cbor encoded `BountyInformation` as bytes
@@ -77,6 +80,16 @@ macro_rules! impl_ffi {
             /// Get a list of open submissions on a bounty.
             /// Returns a Cbor encoded list of `BountySubmissionInformation` as bytes.
             Bounty::open_bounty_submissions => fn client_bounty_open_bounty_submissions(bounty_id: u64 = bounty_id) -> Cbor<Vec<BountySubmissionInformation>>;
+
+            /// Get the balance of an identifier.
+            /// returns and string but normally it's a `u128` encoded as string.
+            Wallet::balance => fn client_wallet_balance(identifier: *const raw::c_char = cstr!(identifier, allow_null)) -> String;
+            /// Transfer tokens to another account using there `identifier`
+            /// returns current account balance after the transaction.
+            Wallet::transfer => fn client_wallet_transfer(
+                to: *const raw::c_char = cstr!(to),
+                amount: u64 = amount
+            ) -> String;
         }
     };
     (client: $client: ty) => {

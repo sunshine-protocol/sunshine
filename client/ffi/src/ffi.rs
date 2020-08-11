@@ -2,7 +2,10 @@ use crate::dto::{
     BountyInformation,
     BountySubmissionInformation,
 };
-use anyhow::bail;
+use anyhow::{
+    anyhow,
+    bail,
+};
 use ipld_block_builder::{
     Cache,
     Codec,
@@ -10,9 +13,20 @@ use ipld_block_builder::{
 };
 use std::marker::PhantomData;
 use substrate_subxt::{
-    balances::Balances,
-    system::System,
+    balances::{
+        AccountData,
+        Balances,
+        TransferCallExt,
+        TransferEventExt,
+    },
+    sp_core::crypto::Ss58Codec,
+    system::{
+        AccountStoreExt,
+        System,
+    },
     Runtime,
+    SignedExtension,
+    SignedExtra,
 };
 use sunshine_bounty_client::{
     bounty::{
@@ -32,6 +46,7 @@ use sunshine_client_utils::{
             ExposeSecret,
             SecretString,
         },
+        ss58::Ss58,
     },
     Keystore,
     Result,
@@ -84,6 +99,29 @@ where
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct Wallet<'a, C, R>
+where
+    C: BountyClient<R> + Send + Sync,
+    R: Runtime + BountyTrait,
+{
+    client: &'a RwLock<C>,
+    _runtime: PhantomData<R>,
+}
+
+impl<'a, C, R> Wallet<'a, C, R>
+where
+    C: BountyClient<R> + Send + Sync,
+    R: Runtime + BountyTrait,
+{
+    pub fn new(client: &'a RwLock<C>) -> Self {
+        Self {
+            client,
+            _runtime: PhantomData,
+        }
+    }
+}
+
 impl<'a, C, R> Key<'a, C, R>
 where
     C: BountyClient<R> + Send + Sync,
@@ -91,6 +129,12 @@ where
 {
     pub async fn exists(&self) -> Result<bool> {
         self.client.read().await.keystore().is_initialized().await
+    }
+
+    pub async fn uid(&self) -> Result<String> {
+        let client = self.client.read().await;
+        let signer = client.signer()?;
+        Ok(signer.account_id().to_string())
     }
 
     pub async fn set(
@@ -337,5 +381,47 @@ where
             approved: !awaiting_review,
         };
         Ok(info)
+    }
+}
+
+impl<'a, C, R> Wallet<'a, C, R>
+where
+    C: BountyClient<R> + Send + Sync,
+    R: Runtime + Balances + BountyTrait,
+    <R as Balances>::Balance: Into<u128> + From<u64>,
+    <R as System>::AccountId: Ss58Codec + Into<<R as System>::Address>,
+        <<<R as Runtime>::Extra as SignedExtra<R>>::Extra as SignedExtension>::AdditionalSigned:
+            Send + Sync,
+        R: System<AccountData = AccountData<<R as Balances>::Balance>>,
+
+
+{
+    pub async fn balance(&self, identifier: Option<&str>) -> Result<R::Balance> {
+        let client = self.client.read().await;
+        let account_id: Ss58<R> = if let Some(identifier) = identifier {
+            identifier.parse()?
+        } else {
+            Ss58(client.signer()?.account_id().clone())
+        };
+        let account = client.chain_client().account(&account_id.0, None).await?;
+        Ok(account.data.free)
+    }
+
+    pub async fn transfer(
+        &self,
+        to: &str,
+        amount: u64,
+    ) -> Result<R::Balance> {
+        let client = self.client.read().await;
+        let account_id: Ss58<R> = to.parse()?;
+        let signer = client.chain_signer()?;
+        client
+            .chain_client()
+            .transfer_and_watch(&signer, &account_id.0.into(), amount.into())
+            .await?
+            .transfer()
+            .map_err(|_| anyhow!("Failed to decode transfer event"))?
+            .ok_or_else(|| anyhow!("Failed to find transfer event"))?;
+        self.balance(None).await
     }
 }
