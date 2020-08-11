@@ -388,11 +388,10 @@ impl<'a, C, R> Wallet<'a, C, R>
 where
     C: BountyClient<R> + Send + Sync,
     R: Runtime + Balances + BountyTrait,
+    R: System<AccountData = AccountData<<R as Balances>::Balance>>,
     <R as Balances>::Balance: Into<u128> + From<u64>,
     <R as System>::AccountId: Ss58Codec + Into<<R as System>::Address>,
-        <<<R as Runtime>::Extra as SignedExtra<R>>::Extra as SignedExtension>::AdditionalSigned:
-            Send + Sync,
-        R: System<AccountData = AccountData<<R as Balances>::Balance>>,
+    <<<R as Runtime>::Extra as SignedExtra<R>>::Extra as SignedExtension>::AdditionalSigned: Send + Sync,
 
 
 {
