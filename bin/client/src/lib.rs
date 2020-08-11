@@ -6,7 +6,10 @@ use ipld_block_builder::{
 use libipld::store::Store;
 use std::sync::Arc;
 use substrate_subxt::{
-    balances::Balances,
+    balances::{
+        AccountData,
+        Balances,
+    },
     extrinsic,
     sp_core,
     sp_runtime,
@@ -22,8 +25,6 @@ use sunshine_bounty_client::{
     donate::Donate,
     org::Org,
     vote::Vote,
-    BountyBody,
-    TextBlock,
 };
 use sunshine_client_utils::{
     cid::CidBytes,
@@ -46,7 +47,7 @@ use sunshine_client_utils::{
     },
 };
 
-pub use sunshine_bounty_client as bounty;
+pub use sunshine_bounty_client::*;
 pub use sunshine_bounty_utils as utils;
 pub use sunshine_client_utils as client;
 
@@ -65,7 +66,7 @@ impl System for Runtime {
     type Address = AccountId;
     type Header = sp_runtime::generic::Header<Self::BlockNumber, Self::Hashing>;
     type Extrinsic = sp_runtime::OpaqueExtrinsic;
-    type AccountData = ();
+    type AccountData = AccountData<u128>;
 }
 
 impl Balances for Runtime {

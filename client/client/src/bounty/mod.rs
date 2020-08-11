@@ -179,20 +179,19 @@ mod tests {
         rngs::OsRng,
         RngCore,
     };
-    use sunshine_bounty_utils::bounty::BountyInformation;
-    use sunshine_core::ChainClient;
     use test_client::{
         bounty::{
             BountyClient,
             BountyPostedEvent,
-            BountyRaiseContributionEvent,
         },
-        bounty_client::BountyBody,
+        client::Client as _,
         mock::{
             test_node,
             AccountKeyring,
+            Client,
         },
-        Client,
+        utils::bounty::BountyInformation,
+        BountyBody,
     };
 
     // For testing purposes only, NEVER use this to generate AccountIds in practice because it's random
@@ -206,12 +205,15 @@ mod tests {
     async fn simple_test() {
         use substrate_subxt::balances::TransferCallExt;
         let (node, _node_tmp) = test_node();
-        let (client, _client_tmp) =
-            Client::mock(&node, AccountKeyring::Alice).await;
+        let client = Client::mock(&node, AccountKeyring::Alice).await;
         let alice_account_id = AccountKeyring::Alice.to_account_id();
         client
             .chain_client()
-            .transfer(client.chain_signer().unwrap(), &alice_account_id, 10_000)
+            .transfer(
+                &client.chain_signer().unwrap(),
+                &alice_account_id,
+                10_000,
+            )
             .await
             .unwrap();
     }
@@ -219,8 +221,7 @@ mod tests {
     #[async_std::test]
     async fn post_bounty_test() {
         let (node, _node_tmp) = test_node();
-        let (client, _client_tmp) =
-            Client::mock(&node, AccountKeyring::Alice).await;
+        let client = Client::mock(&node, AccountKeyring::Alice).await;
         let alice_account_id = AccountKeyring::Alice.to_account_id();
         let bounty = BountyBody {
             repo_owner: "sunshine-protocol".to_string(),
@@ -240,8 +241,7 @@ mod tests {
     #[async_std::test]
     async fn get_bounties_test() {
         let (node, _node_tmp) = test_node();
-        let (client, _client_tmp) =
-            Client::mock(&node, AccountKeyring::Alice).await;
+        let client = Client::mock(&node, AccountKeyring::Alice).await;
         let alice_account_id = AccountKeyring::Alice.to_account_id();
         let bounty1 = BountyBody {
             repo_owner: "sunshine-protocol".to_string(),
