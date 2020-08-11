@@ -7,6 +7,7 @@ pub mod court;
 pub mod donate;
 pub mod org;
 pub mod vote;
+pub use sunshine_bounty_utils as utils;
 
 use codec::{
     Decode,
