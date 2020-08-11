@@ -6,7 +6,6 @@ use crate::{
     error::Error,
     org::Org,
 };
-use async_trait::async_trait;
 use substrate_subxt::{
     system::System,
     Runtime,
@@ -17,30 +16,34 @@ use sunshine_bounty_utils::{
     organization::OrgRep,
     vote::Threshold,
 };
-use sunshine_core::ChainClient;
+use sunshine_client_utils::{
+    async_trait,
+    Client,
+    Result,
+};
 
 #[async_trait]
-pub trait VoteClient<T: Runtime + Vote>: ChainClient<T> {
+pub trait VoteClient<T: Runtime + Vote>: Client<T> {
     async fn create_signal_vote(
         &self,
         topic: Option<<T as Vote>::VoteTopic>,
         organization: OrgRep<T::OrgId>,
         threshold: Threshold<T::Signal>,
         duration: Option<<T as System>::BlockNumber>,
-    ) -> Result<NewVoteStartedEvent<T>, Self::Error>;
+    ) -> Result<NewVoteStartedEvent<T>>;
     async fn create_percent_vote(
         &self,
         topic: Option<<T as Vote>::VoteTopic>,
         organization: OrgRep<T::OrgId>,
         threshold: Threshold<<T as Vote>::Percent>,
         duration: Option<<T as System>::BlockNumber>,
-    ) -> Result<NewVoteStartedEvent<T>, Self::Error>;
+    ) -> Result<NewVoteStartedEvent<T>>;
     async fn submit_vote(
         &self,
         vote_id: <T as Vote>::VoteId,
         direction: <T as Vote>::VoterView,
         justification: Option<<T as Vote>::VoteJustification>,
-    ) -> Result<VotedEvent<T>, Self::Error>;
+    ) -> Result<VotedEvent<T>>;
 }
 
 #[async_trait]
@@ -50,8 +53,7 @@ where
     <<T::Extra as SignedExtra<T>>::Extra as SignedExtension>::AdditionalSigned:
         Send + Sync,
     <T as Org>::IpfsReference: From<libipld::cid::Cid>,
-    C: ChainClient<T>,
-    C::Error: From<Error>,
+    C: Client<T>,
     C::OffchainClient: ipld_block_builder::Cache<
             ipld_block_builder::Codec,
             <T as Vote>::VoteTopic,
@@ -66,7 +68,7 @@ where
         organization: OrgRep<T::OrgId>,
         threshold: Threshold<T::Signal>,
         duration: Option<<T as System>::BlockNumber>,
-    ) -> Result<NewVoteStartedEvent<T>, C::Error> {
+    ) -> Result<NewVoteStartedEvent<T>> {
         let signer = self.chain_signer()?;
         let topic = if let Some(t) = topic {
             let iref: <T as Org>::IpfsReference =
@@ -77,7 +79,7 @@ where
         };
         self.chain_client()
             .create_signal_vote_and_watch(
-                signer,
+                &signer,
                 topic,
                 organization,
                 threshold,
@@ -93,7 +95,7 @@ where
         organization: OrgRep<T::OrgId>,
         threshold: Threshold<<T as Vote>::Percent>,
         duration: Option<<T as System>::BlockNumber>,
-    ) -> Result<NewVoteStartedEvent<T>, C::Error> {
+    ) -> Result<NewVoteStartedEvent<T>> {
         let signer = self.chain_signer()?;
         let topic = if let Some(t) = topic {
             let iref: <T as Org>::IpfsReference =
@@ -104,7 +106,7 @@ where
         };
         self.chain_client()
             .create_percent_vote_and_watch(
-                signer,
+                &signer,
                 topic,
                 organization,
                 threshold,
@@ -119,7 +121,7 @@ where
         vote_id: <T as Vote>::VoteId,
         direction: <T as Vote>::VoterView,
         justification: Option<<T as Vote>::VoteJustification>,
-    ) -> Result<VotedEvent<T>, C::Error> {
+    ) -> Result<VotedEvent<T>> {
         let signer = self.chain_signer()?;
         let justification = if let Some(j) = justification {
             let iref: <T as Org>::IpfsReference =
@@ -129,7 +131,7 @@ where
             None
         };
         self.chain_client()
-            .submit_vote_and_watch(signer, vote_id, direction, justification)
+            .submit_vote_and_watch(&signer, vote_id, direction, justification)
             .await?
             .voted()?
             .ok_or_else(|| Error::EventNotFound.into())

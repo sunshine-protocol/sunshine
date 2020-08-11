@@ -6,13 +6,9 @@ edition = "2018"
 
 [dependencies]
 async-std = { version = "1.6.2", features = ["attributes"] }
-exitfailure = "0.5.1"
 clap = "3.0.0-beta.1"
 dirs = "3.0.1"
 env_logger = "0.7.1"
-substrate-subxt = "0.11.0"
 sunshine-bounty-cli = { path = "../../client/cli" }
-sunshine-core = "0.2.0"
-sunshine-identity-cli = "0.2.2"
+sunshine-cli-utils = { git = "https://github.com/sunshine-protocol/sunshine-core" }
 test-client = { path = "../client" }
-thiserror = "1.0.20"

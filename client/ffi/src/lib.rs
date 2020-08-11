@@ -1,6 +1,5 @@
-pub use ffi_utils;
+pub use sunshine_ffi_utils as ffi_utils;
 pub mod dto;
-pub mod error;
 pub mod ffi;
 /// Generate the FFI for the provided runtime
 ///

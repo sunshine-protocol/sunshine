@@ -1,14 +1,6 @@
-mod error;
 mod subxt;
-use crate::{
-    error::{
-        Error,
-        Result,
-    },
-    subxt::*,
-};
+use crate::subxt::*;
 use gbot::GBot;
-use ipfs_embed::Store;
 use ipld_block_builder::ReadonlyCache;
 use substrate_subxt::{
     sp_core::Decode,
@@ -23,7 +15,10 @@ use sunshine_bounty_client::{
     },
     BountyBody,
 };
-use sunshine_core::ChainClient;
+use sunshine_client_utils::{
+    Client as _,
+    Result,
+};
 use test_client::{
     Client,
     Runtime,
@@ -31,7 +26,7 @@ use test_client::{
 use tokio::time;
 
 pub struct Bot {
-    pub client: Client<Store>,
+    pub client: Client,
     pub bounty_post_sub: EventSubscription<Runtime>,
     pub bounty_contrib_sub: EventSubscription<Runtime>,
     pub bounty_submit_sub: EventSubscription<Runtime>,
@@ -39,11 +34,11 @@ pub struct Bot {
 }
 
 #[tokio::main]
-async fn main() -> std::result::Result<(), Error> {
+async fn main() -> Result<()> {
     env_logger::init();
-    let github_bot = GBot::new().map_err(Error::GithuBot)?;
+    let github_bot = GBot::new()?;
     let root = dirs::config_dir().unwrap().join("sunshine-bounty-bot");
-    let client = Client::new(&root, None).await.map_err(Error::Client)?;
+    let client = Client::new(&root, None).await?;
     // subscribe to bounty posts
     let bounty_post_sub = bounty_post_subscriber(&client).await?;
     // subscribe to bounty contributions
@@ -68,16 +63,11 @@ async fn main() -> std::result::Result<(), Error> {
 async fn run_github_bot(mut bot: Bot, github: GBot) -> Result<Bot> {
     if let Some(Ok(raw)) = bot.bounty_post_sub.next().await {
         // get event data
-        let event = BountyPostedEvent::<Runtime>::decode(&mut &raw.data[..])
-            .map_err(Error::SubxtCodec)?;
+        let event = BountyPostedEvent::<Runtime>::decode(&mut &raw.data[..])?;
         // fetch structured data from client
-        let event_cid = event.description.to_cid().map_err(Error::CiDecode)?;
-        let bounty_body: BountyBody = bot
-            .client
-            .offchain_client()
-            .get(&event_cid)
-            .await
-            .map_err(Error::Libipld)?;
+        let event_cid = event.description.to_cid()?;
+        let bounty_body: BountyBody =
+            bot.client.offchain_client().get(&event_cid).await?;
         // issue comment
         github
             .issue_comment_bounty_post(
@@ -90,17 +80,13 @@ async fn run_github_bot(mut bot: Bot, github: GBot) -> Result<Bot> {
             .await?;
     } else if let Some(Ok(raw)) = bot.bounty_contrib_sub.next().await {
         // get event data
-        let event =
-            BountyRaiseContributionEvent::<Runtime>::decode(&mut &raw.data[..])
-                .map_err(Error::SubxtCodec)?;
+        let event = BountyRaiseContributionEvent::<Runtime>::decode(
+            &mut &raw.data[..],
+        )?;
         // fetch structured data from client
-        let event_cid = event.bounty_ref.to_cid().map_err(Error::CiDecode)?;
-        let bounty_body: BountyBody = bot
-            .client
-            .offchain_client()
-            .get(&event_cid)
-            .await
-            .map_err(Error::Libipld)?;
+        let event_cid = event.bounty_ref.to_cid()?;
+        let bounty_body: BountyBody =
+            bot.client.offchain_client().get(&event_cid).await?;
         // issue comment
         github
             .issue_comment_bounty_contribute(
@@ -115,25 +101,17 @@ async fn run_github_bot(mut bot: Bot, github: GBot) -> Result<Bot> {
     } else if let Some(Ok(raw)) = bot.bounty_submit_sub.next().await {
         // get event data
         let event =
-            BountySubmissionPostedEvent::<Runtime>::decode(&mut &raw.data[..])
-                .map_err(Error::SubxtCodec)?;
+            BountySubmissionPostedEvent::<Runtime>::decode(&mut &raw.data[..])?;
         // fetch structured data from client
-        let bounty_event_cid =
-            event.bounty_ref.to_cid().map_err(Error::CiDecode)?;
-        let submission_event_cid =
-            event.submission_ref.to_cid().map_err(Error::CiDecode)?;
-        let bounty_body: BountyBody = bot
-            .client
-            .offchain_client()
-            .get(&bounty_event_cid)
-            .await
-            .map_err(Error::Libipld)?;
+        let bounty_event_cid = event.bounty_ref.to_cid()?;
+        let submission_event_cid = event.submission_ref.to_cid()?;
+        let bounty_body: BountyBody =
+            bot.client.offchain_client().get(&bounty_event_cid).await?;
         let submission_body: BountyBody = bot
             .client
             .offchain_client()
             .get(&submission_event_cid)
-            .await
-            .map_err(Error::Libipld)?;
+            .await?;
         // issue comment
         github
             .issue_comment_bounty_submission(
@@ -151,25 +129,17 @@ async fn run_github_bot(mut bot: Bot, github: GBot) -> Result<Bot> {
     } else if let Some(Ok(raw)) = bot.bounty_approval_sub.next().await {
         // get event data
         let event =
-            BountyPaymentExecutedEvent::<Runtime>::decode(&mut &raw.data[..])
-                .map_err(Error::SubxtCodec)?;
+            BountyPaymentExecutedEvent::<Runtime>::decode(&mut &raw.data[..])?;
         // fetch structured data from client
-        let bounty_event_cid =
-            event.bounty_ref.to_cid().map_err(Error::CiDecode)?;
-        let submission_event_cid =
-            event.submission_ref.to_cid().map_err(Error::CiDecode)?;
-        let bounty_body: BountyBody = bot
-            .client
-            .offchain_client()
-            .get(&bounty_event_cid)
-            .await
-            .map_err(Error::Libipld)?;
+        let bounty_event_cid = event.bounty_ref.to_cid()?;
+        let submission_event_cid = event.submission_ref.to_cid()?;
+        let bounty_body: BountyBody =
+            bot.client.offchain_client().get(&bounty_event_cid).await?;
         let submission_body: BountyBody = bot
             .client
             .offchain_client()
             .get(&submission_event_cid)
-            .await
-            .map_err(Error::Libipld)?;
+            .await?;
         // issue comment
         github
             .issue_comment_submission_approval(

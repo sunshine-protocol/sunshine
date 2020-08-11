@@ -5,73 +5,76 @@ pub use subxt::*;
 pub use utils::AccountShare;
 
 use crate::error::Error;
-use async_trait::async_trait;
 use substrate_subxt::{
     system::System,
     Runtime,
     SignedExtension,
     SignedExtra,
 };
-use sunshine_core::ChainClient;
+use sunshine_client_utils::{
+    async_trait,
+    Client,
+    Result,
+};
 
 #[async_trait]
-pub trait OrgClient<T: Runtime + Org>: ChainClient<T> {
+pub trait OrgClient<T: Runtime + Org>: Client<T> {
     async fn register_flat_org(
         &self,
         sudo: Option<<T as System>::AccountId>,
         parent_org: Option<<T as Org>::OrgId>,
         constitution: <T as Org>::Constitution,
         members: &[<T as System>::AccountId],
-    ) -> Result<NewFlatOrganizationRegisteredEvent<T>, Self::Error>;
+    ) -> Result<NewFlatOrganizationRegisteredEvent<T>>;
     async fn register_weighted_org(
         &self,
         sudo: Option<<T as System>::AccountId>,
         parent_org: Option<<T as Org>::OrgId>,
         constitution: <T as Org>::Constitution,
         weighted_members: &[(<T as System>::AccountId, <T as Org>::Shares)],
-    ) -> Result<NewWeightedOrganizationRegisteredEvent<T>, Self::Error>;
+    ) -> Result<NewWeightedOrganizationRegisteredEvent<T>>;
     async fn issue_shares(
         &self,
         organization: <T as Org>::OrgId,
         who: <T as System>::AccountId,
         shares: <T as Org>::Shares,
-    ) -> Result<SharesIssuedEvent<T>, Self::Error>;
+    ) -> Result<SharesIssuedEvent<T>>;
     async fn burn_shares(
         &self,
         organization: <T as Org>::OrgId,
         who: <T as System>::AccountId,
         shares: <T as Org>::Shares,
-    ) -> Result<SharesBurnedEvent<T>, Self::Error>;
+    ) -> Result<SharesBurnedEvent<T>>;
     async fn batch_issue_shares(
         &self,
         organization: <T as Org>::OrgId,
         new_accounts: &[(<T as System>::AccountId, <T as Org>::Shares)],
-    ) -> Result<SharesBatchIssuedEvent<T>, Self::Error>;
+    ) -> Result<SharesBatchIssuedEvent<T>>;
     async fn batch_burn_shares(
         &self,
         organization: <T as Org>::OrgId,
         old_accounts: &[(<T as System>::AccountId, <T as Org>::Shares)],
-    ) -> Result<SharesBatchBurnedEvent<T>, Self::Error>;
+    ) -> Result<SharesBatchBurnedEvent<T>>;
     async fn reserve_shares(
         &self,
         org: <T as Org>::OrgId,
         who: &<T as System>::AccountId,
-    ) -> Result<SharesReservedEvent<T>, Self::Error>;
+    ) -> Result<SharesReservedEvent<T>>;
     async fn unreserve_shares(
         &self,
         org: <T as Org>::OrgId,
         who: &<T as System>::AccountId,
-    ) -> Result<SharesUnReservedEvent<T>, Self::Error>;
+    ) -> Result<SharesUnReservedEvent<T>>;
     async fn lock_shares(
         &self,
         org: <T as Org>::OrgId,
         who: &<T as System>::AccountId,
-    ) -> Result<SharesLockedEvent<T>, Self::Error>;
+    ) -> Result<SharesLockedEvent<T>>;
     async fn unlock_shares(
         &self,
         org: <T as Org>::OrgId,
         who: &<T as System>::AccountId,
-    ) -> Result<SharesUnlockedEvent<T>, Self::Error>;
+    ) -> Result<SharesUnlockedEvent<T>>;
 }
 
 #[async_trait]
@@ -81,8 +84,7 @@ where
     <<T::Extra as SignedExtra<T>>::Extra as SignedExtension>::AdditionalSigned:
         Send + Sync,
     <T as Org>::IpfsReference: From<libipld::cid::Cid>,
-    C: ChainClient<T>,
-    C::Error: From<Error>,
+    C: Client<T>,
     C::OffchainClient: ipld_block_builder::Cache<
         ipld_block_builder::Codec,
         <T as Org>::Constitution,
@@ -94,12 +96,12 @@ where
         parent_org: Option<<T as Org>::OrgId>,
         constitution: <T as Org>::Constitution,
         members: &[<T as System>::AccountId],
-    ) -> Result<NewFlatOrganizationRegisteredEvent<T>, C::Error> {
+    ) -> Result<NewFlatOrganizationRegisteredEvent<T>> {
         let signer = self.chain_signer()?;
         let constitution = crate::post(self, constitution).await?;
         self.chain_client()
             .register_flat_org_and_watch(
-                signer,
+                &signer,
                 sudo,
                 parent_org,
                 constitution.into(),
@@ -115,12 +117,12 @@ where
         parent_org: Option<<T as Org>::OrgId>,
         constitution: <T as Org>::Constitution,
         weighted_members: &[(<T as System>::AccountId, <T as Org>::Shares)],
-    ) -> Result<NewWeightedOrganizationRegisteredEvent<T>, C::Error> {
+    ) -> Result<NewWeightedOrganizationRegisteredEvent<T>> {
         let signer = self.chain_signer()?;
         let constitution = crate::post(self, constitution).await?;
         self.chain_client()
             .register_weighted_org_and_watch(
-                signer,
+                &signer,
                 sudo,
                 parent_org,
                 constitution.into(),
@@ -135,10 +137,10 @@ where
         organization: <T as Org>::OrgId,
         who: <T as System>::AccountId,
         shares: <T as Org>::Shares,
-    ) -> Result<SharesIssuedEvent<T>, C::Error> {
+    ) -> Result<SharesIssuedEvent<T>> {
         let signer = self.chain_signer()?;
         self.chain_client()
-            .issue_shares_and_watch(signer, organization, &who, shares)
+            .issue_shares_and_watch(&signer, organization, &who, shares)
             .await?
             .shares_issued()?
             .ok_or_else(|| Error::EventNotFound.into())
@@ -148,10 +150,10 @@ where
         organization: <T as Org>::OrgId,
         who: <T as System>::AccountId,
         shares: <T as Org>::Shares,
-    ) -> Result<SharesBurnedEvent<T>, C::Error> {
+    ) -> Result<SharesBurnedEvent<T>> {
         let signer = self.chain_signer()?;
         self.chain_client()
-            .burn_shares_and_watch(signer, organization, &who, shares)
+            .burn_shares_and_watch(&signer, organization, &who, shares)
             .await?
             .shares_burned()?
             .ok_or_else(|| Error::EventNotFound.into())
@@ -160,10 +162,10 @@ where
         &self,
         organization: <T as Org>::OrgId,
         new_accounts: &[(<T as System>::AccountId, <T as Org>::Shares)],
-    ) -> Result<SharesBatchIssuedEvent<T>, C::Error> {
+    ) -> Result<SharesBatchIssuedEvent<T>> {
         let signer = self.chain_signer()?;
         self.chain_client()
-            .batch_issue_shares_and_watch(signer, organization, new_accounts)
+            .batch_issue_shares_and_watch(&signer, organization, new_accounts)
             .await?
             .shares_batch_issued()?
             .ok_or_else(|| Error::EventNotFound.into())
@@ -172,10 +174,10 @@ where
         &self,
         organization: <T as Org>::OrgId,
         old_accounts: &[(<T as System>::AccountId, <T as Org>::Shares)],
-    ) -> Result<SharesBatchBurnedEvent<T>, C::Error> {
+    ) -> Result<SharesBatchBurnedEvent<T>> {
         let signer = self.chain_signer()?;
         self.chain_client()
-            .batch_burn_shares_and_watch(signer, organization, old_accounts)
+            .batch_burn_shares_and_watch(&signer, organization, old_accounts)
             .await?
             .shares_batch_burned()?
             .ok_or_else(|| Error::EventNotFound.into())
@@ -184,10 +186,10 @@ where
         &self,
         org: <T as Org>::OrgId,
         who: &<T as System>::AccountId,
-    ) -> Result<SharesReservedEvent<T>, C::Error> {
+    ) -> Result<SharesReservedEvent<T>> {
         let signer = self.chain_signer()?;
         self.chain_client()
-            .reserve_shares_and_watch(signer, org, who)
+            .reserve_shares_and_watch(&signer, org, who)
             .await?
             .shares_reserved()?
             .ok_or_else(|| Error::EventNotFound.into())
@@ -196,10 +198,10 @@ where
         &self,
         org: <T as Org>::OrgId,
         who: &<T as System>::AccountId,
-    ) -> Result<SharesUnReservedEvent<T>, C::Error> {
+    ) -> Result<SharesUnReservedEvent<T>> {
         let signer = self.chain_signer()?;
         self.chain_client()
-            .unreserve_shares_and_watch(signer, org, who)
+            .unreserve_shares_and_watch(&signer, org, who)
             .await?
             .shares_un_reserved()?
             .ok_or_else(|| Error::EventNotFound.into())
@@ -208,10 +210,10 @@ where
         &self,
         org: <T as Org>::OrgId,
         who: &<T as System>::AccountId,
-    ) -> Result<SharesLockedEvent<T>, C::Error> {
+    ) -> Result<SharesLockedEvent<T>> {
         let signer = self.chain_signer()?;
         self.chain_client()
-            .lock_shares_and_watch(signer, org, who)
+            .lock_shares_and_watch(&signer, org, who)
             .await?
             .shares_locked()?
             .ok_or_else(|| Error::EventNotFound.into())
@@ -220,10 +222,10 @@ where
         &self,
         org: <T as Org>::OrgId,
         who: &<T as System>::AccountId,
-    ) -> Result<SharesUnlockedEvent<T>, C::Error> {
+    ) -> Result<SharesUnlockedEvent<T>> {
         let signer = self.chain_signer()?;
         self.chain_client()
-            .unlock_shares_and_watch(signer, org, who)
+            .unlock_shares_and_watch(&signer, org, who)
             .await?
             .shares_unlocked()?
             .ok_or_else(|| Error::EventNotFound.into())

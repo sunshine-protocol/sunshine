@@ -10,6 +10,7 @@ use sp_runtime::traits::{
     IdentifyAccount,
     Verify,
 };
+use sunshine_client_utils::cid::CidBytes;
 use test_runtime::{
     AccountId,
     AuraConfig,
@@ -25,7 +26,6 @@ use test_runtime::{
     TreasuryConfig,
     WASM_BINARY,
 };
-use utils_identity::cid::CidBytes;
 
 /// Specialized `ChainSpec`.
 pub type ChainSpec = sc_service::GenericChainSpec<GenesisConfig>;

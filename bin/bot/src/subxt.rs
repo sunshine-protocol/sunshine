@@ -1,5 +1,3 @@
-use crate::error::Error;
-use ipfs_embed::Store;
 use substrate_subxt::{
     EventSubscription,
     EventsDecoder,
@@ -11,15 +9,18 @@ use sunshine_bounty_client::bounty::{
     BountyRaiseContributionEvent,
     BountySubmissionPostedEvent,
 };
-use sunshine_core::ChainClient;
+use sunshine_client_utils::{
+    Client as _,
+    Result,
+};
 use test_client::{
     Client,
     Runtime,
 };
 
 pub async fn bounty_post_subscriber(
-    client: &Client<Store>,
-) -> Result<EventSubscription<Runtime>, Error> {
+    client: &Client,
+) -> Result<EventSubscription<Runtime>> {
     let sub = client.chain_client().subscribe_events().await?;
     let mut decoder =
         EventsDecoder::<Runtime>::new(client.chain_client().metadata().clone());
@@ -30,8 +31,8 @@ pub async fn bounty_post_subscriber(
 }
 
 pub async fn bounty_contribution_subscriber(
-    client: &Client<Store>,
-) -> Result<EventSubscription<Runtime>, Error> {
+    client: &Client,
+) -> Result<EventSubscription<Runtime>> {
     let sub = client.chain_client().subscribe_events().await?;
     let mut decoder =
         EventsDecoder::<Runtime>::new(client.chain_client().metadata().clone());
@@ -42,8 +43,8 @@ pub async fn bounty_contribution_subscriber(
 }
 
 pub async fn bounty_submission_subscriber(
-    client: &Client<Store>,
-) -> Result<EventSubscription<Runtime>, Error> {
+    client: &Client,
+) -> Result<EventSubscription<Runtime>> {
     let sub = client.chain_client().subscribe_events().await?;
     let mut decoder =
         EventsDecoder::<Runtime>::new(client.chain_client().metadata().clone());
@@ -54,8 +55,8 @@ pub async fn bounty_submission_subscriber(
 }
 
 pub async fn bounty_approval_subscriber(
-    client: &Client<Store>,
-) -> Result<EventSubscription<Runtime>, Error> {
+    client: &Client,
+) -> Result<EventSubscription<Runtime>> {
     let sub = client.chain_client().subscribe_events().await?;
     let mut decoder =
         EventsDecoder::<Runtime>::new(client.chain_client().metadata().clone());
