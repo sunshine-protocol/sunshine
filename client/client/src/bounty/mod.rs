@@ -3,53 +3,53 @@ mod subxt;
 pub use subxt::*;
 
 use crate::error::Error;
-use async_trait::async_trait;
 use codec::Decode;
 use substrate_subxt::{
     Runtime,
     SignedExtension,
     SignedExtra,
 };
-use sunshine_core::ChainClient;
+use sunshine_client_utils::{
+    async_trait,
+    Client,
+    Result,
+};
 
 #[async_trait]
-pub trait BountyClient<T: Runtime + Bounty>: ChainClient<T> {
+pub trait BountyClient<T: Runtime + Bounty>: Client<T> {
     async fn post_bounty(
         &self,
         bounty: T::BountyPost,
         amount: BalanceOf<T>,
-    ) -> Result<BountyPostedEvent<T>, Self::Error>;
+    ) -> Result<BountyPostedEvent<T>>;
     async fn contribute_to_bounty(
         &self,
         bounty_id: T::BountyId,
         amount: BalanceOf<T>,
-    ) -> Result<BountyRaiseContributionEvent<T>, Self::Error>;
+    ) -> Result<BountyRaiseContributionEvent<T>>;
     async fn submit_for_bounty(
         &self,
         bounty_id: T::BountyId,
         submission: T::BountySubmission,
         amount: BalanceOf<T>,
-    ) -> Result<BountySubmissionPostedEvent<T>, Self::Error>;
+    ) -> Result<BountySubmissionPostedEvent<T>>;
     async fn approve_bounty_submission(
         &self,
         submission_id: T::SubmissionId,
-    ) -> Result<BountyPaymentExecutedEvent<T>, Self::Error>;
-    async fn bounty(
-        &self,
-        bounty_id: T::BountyId,
-    ) -> Result<BountyState<T>, Self::Error>;
+    ) -> Result<BountyPaymentExecutedEvent<T>>;
+    async fn bounty(&self, bounty_id: T::BountyId) -> Result<BountyState<T>>;
     async fn submission(
         &self,
         submission_id: T::SubmissionId,
-    ) -> Result<SubState<T>, Self::Error>;
+    ) -> Result<SubState<T>>;
     async fn open_bounties(
         &self,
         min: BalanceOf<T>,
-    ) -> Result<Option<Vec<(T::BountyId, BountyState<T>)>>, Self::Error>;
+    ) -> Result<Option<Vec<(T::BountyId, BountyState<T>)>>>;
     async fn open_submissions(
         &self,
         bounty_id: T::BountyId,
-    ) -> Result<Option<Vec<(T::SubmissionId, SubState<T>)>>, Self::Error>;
+    ) -> Result<Option<Vec<(T::SubmissionId, SubState<T>)>>>;
 }
 
 #[async_trait]
@@ -59,8 +59,7 @@ where
     <<T::Extra as SignedExtra<T>>::Extra as SignedExtension>::AdditionalSigned:
         Send + Sync,
     <T as Bounty>::IpfsReference: From<libipld::cid::Cid>,
-    C: ChainClient<T>,
-    C::Error: From<Error>,
+    C: Client<T>,
     C::OffchainClient: ipld_block_builder::Cache<
             ipld_block_builder::Codec,
             <T as Bounty>::BountyPost,
@@ -73,11 +72,11 @@ where
         &self,
         bounty: T::BountyPost,
         amount: BalanceOf<T>,
-    ) -> Result<BountyPostedEvent<T>, C::Error> {
+    ) -> Result<BountyPostedEvent<T>> {
         let signer = self.chain_signer()?;
         let info = crate::post(self, bounty).await?;
         self.chain_client()
-            .post_bounty_and_watch(signer, info.into(), amount)
+            .post_bounty_and_watch(&signer, info.into(), amount)
             .await?
             .bounty_posted()?
             .ok_or_else(|| Error::EventNotFound.into())
@@ -86,10 +85,10 @@ where
         &self,
         bounty_id: T::BountyId,
         amount: BalanceOf<T>,
-    ) -> Result<BountyRaiseContributionEvent<T>, C::Error> {
+    ) -> Result<BountyRaiseContributionEvent<T>> {
         let signer = self.chain_signer()?;
         self.chain_client()
-            .contribute_to_bounty_and_watch(signer, bounty_id, amount)
+            .contribute_to_bounty_and_watch(&signer, bounty_id, amount)
             .await?
             .bounty_raise_contribution()?
             .ok_or_else(|| Error::EventNotFound.into())
@@ -99,12 +98,12 @@ where
         bounty_id: T::BountyId,
         submission: T::BountySubmission,
         amount: BalanceOf<T>,
-    ) -> Result<BountySubmissionPostedEvent<T>, C::Error> {
+    ) -> Result<BountySubmissionPostedEvent<T>> {
         let signer = self.chain_signer()?;
         let submission_ref = crate::post(self, submission).await?;
         self.chain_client()
             .submit_for_bounty_and_watch(
-                signer,
+                &signer,
                 bounty_id,
                 submission_ref.into(),
                 amount,
@@ -116,43 +115,28 @@ where
     async fn approve_bounty_submission(
         &self,
         submission_id: T::SubmissionId,
-    ) -> Result<BountyPaymentExecutedEvent<T>, C::Error> {
+    ) -> Result<BountyPaymentExecutedEvent<T>> {
         let signer = self.chain_signer()?;
         self.chain_client()
-            .approve_bounty_submission_and_watch(signer, submission_id)
+            .approve_bounty_submission_and_watch(&signer, submission_id)
             .await?
             .bounty_payment_executed()?
             .ok_or_else(|| Error::EventNotFound.into())
     }
-    async fn bounty(
-        &self,
-        bounty_id: T::BountyId,
-    ) -> Result<BountyState<T>, C::Error> {
-        Ok(self
-            .chain_client()
-            .bounties(bounty_id, None)
-            .await
-            .map_err(Error::Subxt)?)
+    async fn bounty(&self, bounty_id: T::BountyId) -> Result<BountyState<T>> {
+        Ok(self.chain_client().bounties(bounty_id, None).await?)
     }
     async fn submission(
         &self,
         submission_id: T::SubmissionId,
-    ) -> Result<SubState<T>, C::Error> {
-        Ok(self
-            .chain_client()
-            .submissions(submission_id, None)
-            .await
-            .map_err(Error::Subxt)?)
+    ) -> Result<SubState<T>> {
+        Ok(self.chain_client().submissions(submission_id, None).await?)
     }
     async fn open_bounties(
         &self,
         min: BalanceOf<T>,
-    ) -> Result<Option<Vec<(T::BountyId, BountyState<T>)>>, C::Error> {
-        let mut bounties = self
-            .chain_client()
-            .bounties_iter(None)
-            .await
-            .map_err(Error::Subxt)?;
+    ) -> Result<Option<Vec<(T::BountyId, BountyState<T>)>>> {
+        let mut bounties = self.chain_client().bounties_iter(None).await?;
         let mut bounties_above_min =
             Vec::<(T::BountyId, BountyState<T>)>::new();
         while let Some((id, bounty)) = bounties.next().await? {
@@ -170,12 +154,9 @@ where
     async fn open_submissions(
         &self,
         bounty_id: T::BountyId,
-    ) -> Result<Option<Vec<(T::SubmissionId, SubState<T>)>>, C::Error> {
-        let mut submissions = self
-            .chain_client()
-            .submissions_iter(None)
-            .await
-            .map_err(Error::Subxt)?;
+    ) -> Result<Option<Vec<(T::SubmissionId, SubState<T>)>>> {
+        let mut submissions =
+            self.chain_client().submissions_iter(None).await?;
         let mut submissions_for_bounty =
             Vec::<(T::SubmissionId, SubState<T>)>::new();
         while let Some((id, submission)) = submissions.next().await? {

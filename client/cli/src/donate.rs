@@ -1,7 +1,3 @@
-use crate::error::{
-    Error,
-    Result,
-};
 use clap::Clap;
 use core::fmt::{
     Debug,
@@ -20,7 +16,10 @@ use sunshine_bounty_client::{
     },
     org::Org,
 };
-use sunshine_core::Ss58;
+use sunshine_client_utils::{
+    crypto::ss58::Ss58,
+    Result,
+};
 
 #[derive(Clone, Debug, Clap)]
 pub struct PropDonateCommand {
@@ -33,7 +32,7 @@ impl PropDonateCommand {
     pub async fn exec<R: Runtime + Donate, C: DonateClient<R>>(
         &self,
         client: &C,
-    ) -> Result<(), C::Error>
+    ) -> Result<()>
     where
         <R as System>::AccountId: Ss58Codec,
         <R as Org>::OrgId: From<u64> + Display,
@@ -46,8 +45,7 @@ impl PropDonateCommand {
                 remainder_recipient.0,
                 self.amt.into(),
             )
-            .await
-            .map_err(Error::Client)?;
+            .await?;
         println!(
             "AccountId {:?} donated {} to weighted OrgId {} and {} to the Remainder Recipient {}",
             event.sender, event.amt_to_org, event.org, event.amt_to_recipient, event.rem_recipient,
@@ -67,7 +65,7 @@ impl EqualDonateCommand {
     pub async fn exec<R: Runtime + Donate, C: DonateClient<R>>(
         &self,
         client: &C,
-    ) -> Result<(), C::Error>
+    ) -> Result<()>
     where
         <R as System>::AccountId: Ss58Codec,
         <R as Org>::OrgId: From<u64> + Display,
@@ -80,8 +78,7 @@ impl EqualDonateCommand {
                 remainder_recipient.0,
                 self.amt.into(),
             )
-            .await
-            .map_err(Error::Client)?;
+            .await?;
         println!(
             "AccountId {:?} donated {} to flat OrgId {} and {} to the Remainder Recipient {}",
             event.sender, event.amt_to_org, event.org, event.amt_to_recipient, event.rem_recipient,

@@ -1,7 +1,3 @@
-use crate::error::{
-    Error,
-    Result,
-};
 use clap::Clap;
 use core::fmt::{
     Debug,
@@ -20,6 +16,7 @@ use sunshine_bounty_client::{
     },
     BountyBody,
 };
+use sunshine_client_utils::Result;
 
 #[derive(Clone, Debug, Clap)]
 pub struct BountyPostCommand {
@@ -33,7 +30,7 @@ impl BountyPostCommand {
     pub async fn exec<R: Runtime + Bounty, C: BountyClient<R>>(
         &self,
         client: &C,
-    ) -> Result<(), C::Error>
+    ) -> Result<()>
     where
         <R as System>::AccountId: Ss58Codec,
         <R as Balances>::Balance: From<u128> + Display,
@@ -46,10 +43,7 @@ impl BountyPostCommand {
             issue_number: self.issue_number,
         }
         .into();
-        let event = client
-            .post_bounty(bounty, self.amount.into())
-            .await
-            .map_err(Error::Client)?;
+        let event = client.post_bounty(bounty, self.amount.into()).await?;
         println!(
             "Depositer with AccountId {} posted new BountyId {}, Balance {}",
             event.depositer, event.id, event.amount,
@@ -68,7 +62,7 @@ impl BountyContributeCommand {
     pub async fn exec<R: Runtime + Bounty, C: BountyClient<R>>(
         &self,
         client: &C,
-    ) -> Result<(), C::Error>
+    ) -> Result<()>
     where
         <R as System>::AccountId: Ss58Codec,
         <R as Balances>::Balance: From<u128> + Display,
@@ -76,8 +70,7 @@ impl BountyContributeCommand {
     {
         let event = client
             .contribute_to_bounty(self.bounty_id.into(), self.amount.into())
-            .await
-            .map_err(Error::Client)?;
+            .await?;
         println!(
             "AccountId {} contributed ${} to BountyId {} and the Total Balance for the Bounty is now {}",
             event.contributor, event.amount, event.bounty_id, event.total
@@ -99,7 +92,7 @@ impl BountySubmitCommand {
     pub async fn exec<R: Runtime + Bounty, C: BountyClient<R>>(
         &self,
         client: &C,
-    ) -> Result<(), C::Error>
+    ) -> Result<()>
     where
         <R as System>::AccountId: Ss58Codec,
         <R as Balances>::Balance: From<u128> + Display,
@@ -119,8 +112,7 @@ impl BountySubmitCommand {
                 bounty,
                 self.amount.into(),
             )
-            .await
-            .map_err(Error::Client)?;
+            .await?;
         println!(
             "Submitter with AccountId {} submitted for BountyId {}, requesting Balance {} with SubmissionId {:?}",
             event.submitter, event.bounty_id, event.amount, event.id,
@@ -138,7 +130,7 @@ impl BountyApproveCommand {
     pub async fn exec<R: Runtime + Bounty, C: BountyClient<R>>(
         &self,
         client: &C,
-    ) -> Result<(), C::Error>
+    ) -> Result<()>
     where
         <R as System>::AccountId: Ss58Codec,
         <R as Balances>::Balance: From<u128> + Display,
@@ -147,8 +139,7 @@ impl BountyApproveCommand {
     {
         let event = client
             .approve_bounty_submission(self.submission_id.into())
-            .await
-            .map_err(Error::Client)?;
+            .await?;
         println!(
             "Approved SubmissionId {} to transfer Balance {} to AccountId {}. Remaining Balance {} for BountyId {} ",
             event.submission_id, event.amount, event.submitter, event.new_total, event.bounty_id
@@ -166,17 +157,14 @@ impl GetBountyCommand {
     pub async fn exec<R: Runtime + Bounty, C: BountyClient<R>>(
         &self,
         client: &C,
-    ) -> Result<(), C::Error>
+    ) -> Result<()>
     where
         <R as System>::AccountId: Ss58Codec,
         <R as Balances>::Balance: Display,
         <R as Bounty>::BountyId: Display + From<u64>,
         <R as Bounty>::IpfsReference: Debug,
     {
-        let bounty_state = client
-            .bounty(self.bounty_id.into())
-            .await
-            .map_err(Error::Client)?;
+        let bounty_state = client.bounty(self.bounty_id.into()).await?;
         println!(
             "BOUNTY {} INFORMATION: CID: {:?} | Depositor: {} | Total Balance: {} ",
             self.bounty_id, bounty_state.info(), bounty_state.depositer(), bounty_state.total(),
@@ -194,7 +182,7 @@ impl GetSubmissionCommand {
     pub async fn exec<R: Runtime + Bounty, C: BountyClient<R>>(
         &self,
         client: &C,
-    ) -> Result<(), C::Error>
+    ) -> Result<()>
     where
         <R as System>::AccountId: Ss58Codec,
         <R as Balances>::Balance: Display,
@@ -202,10 +190,8 @@ impl GetSubmissionCommand {
         <R as Bounty>::SubmissionId: Display + From<u64>,
         <R as Bounty>::IpfsReference: Debug,
     {
-        let submission_state = client
-            .submission(self.submission_id.into())
-            .await
-            .map_err(Error::Client)?;
+        let submission_state =
+            client.submission(self.submission_id.into()).await?;
         println!(
             "SUBMISSION {} INFORMATION: Bounty ID: {} | CID : {:?} | Submitter: {} | Total Balance: {} ",
             self.submission_id, submission_state.bounty_id(), submission_state.submission(), submission_state.submitter(), submission_state.amount(),
@@ -223,16 +209,13 @@ impl GetOpenBountiesCommand {
     pub async fn exec<R: Runtime + Bounty, C: BountyClient<R>>(
         &self,
         client: &C,
-    ) -> Result<(), C::Error>
+    ) -> Result<()>
     where
         <R as Balances>::Balance: From<u128> + Display,
         <R as Bounty>::BountyId: Display,
         <R as Bounty>::SubmissionId: Display + From<u64>,
     {
-        let open_bounties = client
-            .open_bounties(self.min.into())
-            .await
-            .map_err(Error::Client)?;
+        let open_bounties = client.open_bounties(self.min.into()).await?;
         if let Some(b) = open_bounties {
             b.into_iter().for_each(|(id, bounty)| {
                 println!(
@@ -257,16 +240,14 @@ impl GetOpenSubmissionsCommand {
     pub async fn exec<R: Runtime + Bounty, C: BountyClient<R>>(
         &self,
         client: &C,
-    ) -> Result<(), C::Error>
+    ) -> Result<()>
     where
         <R as Balances>::Balance: Display,
         <R as Bounty>::BountyId: From<u64> + Display,
         <R as Bounty>::SubmissionId: Display,
     {
-        let open_submissions = client
-            .open_submissions(self.bounty_id.into())
-            .await
-            .map_err(Error::Client)?;
+        let open_submissions =
+            client.open_submissions(self.bounty_id.into()).await?;
         if let Some(s) = open_submissions {
             s.into_iter().for_each(|(id, sub)| {
                 println!(

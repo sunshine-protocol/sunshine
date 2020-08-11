@@ -1,47 +1,12 @@
 use crate::command::*;
 use clap::Clap;
-use exitfailure::ExitDisplay;
-use substrate_subxt::{
-    balances::*,
-    system::*,
-};
-use sunshine_core::{
-    ChainClient,
-    Ss58,
-};
-use sunshine_identity_cli::{
-    key::KeySetCommand,
-    wallet::{
-        WalletBalanceCommand,
-        WalletTransferCommand,
-    },
-};
-use test_client::{
-    Client,
-    Runtime,
-};
-use thiserror::Error;
+use sunshine_cli_utils::Result;
+use test_client::Client;
 
 mod command;
 
 #[async_std::main]
-async fn main() -> Result<(), ExitDisplay<Error>> {
-    Ok(run().await?)
-}
-
-#[derive(Debug, Error)]
-enum Error {
-    #[error(transparent)]
-    Bounty(#[from] sunshine_bounty_cli::Error<test_client::Error>),
-    #[error(transparent)]
-    Identity(#[from] sunshine_identity_cli::Error<test_client::Error>),
-    #[error(transparent)]
-    Client(#[from] test_client::Error),
-    #[error(transparent)]
-    Ss58(#[from] sunshine_core::InvalidSs58),
-}
-
-async fn run() -> Result<(), Error> {
+async fn main() -> Result<()> {
     env_logger::init();
     let opts: Opts = Opts::parse();
     let root = if let Some(root) = opts.path {
@@ -54,68 +19,18 @@ async fn run() -> Result<(), Error> {
     match opts.cmd {
         SubCommand::Key(KeyCommand { cmd }) => {
             match cmd {
-                KeySubCommand::Set(KeySetCommand {
-                    force,
-                    suri,
-                    paperkey,
-                }) => {
-                    let account_id = sunshine_identity_cli::set_device_key(
-                        &mut client,
-                        paperkey,
-                        suri.as_deref(),
-                        force,
-                    )
-                    .await?;
-                    println!("your device key is {}", account_id.to_string());
-                }
+                KeySubCommand::Set(cmd) => cmd.exec(&mut client).await?,
                 KeySubCommand::Unlock(cmd) => cmd.exec(&mut client).await?,
                 KeySubCommand::Lock(cmd) => cmd.exec(&mut client).await?,
             }
         }
         SubCommand::Wallet(WalletCommand { cmd }) => {
             match cmd {
-                WalletSubCommand::GetAccountBalance(WalletBalanceCommand {
-                    identifier,
-                }) => {
-                    let account_id: Ss58<Runtime> =
-                        if let Some(identifier) = identifier {
-                            identifier.parse()?
-                        } else {
-                            Ss58(
-                                client
-                                    .chain_signer()
-                                    .map_err(Error::Client)?
-                                    .account_id()
-                                    .clone(),
-                            )
-                        };
-                    let account = client
-                        .chain_client()
-                        .account(&account_id.0, None)
-                        .await
-                        .map_err(|e| Error::Client(e.into()))?;
-                    println!("{}", account.data.free);
+                WalletSubCommand::GetAccountBalance(cmd) => {
+                    cmd.exec(&client).await?
                 }
-                WalletSubCommand::TransferBalance(WalletTransferCommand {
-                    identifier,
-                    amount,
-                }) => {
-                    let account_id: Ss58<Runtime> = identifier.parse()?;
-                    let signer =
-                        client.chain_signer().map_err(Error::Client)?;
-                    let event = client
-                        .chain_client()
-                        .transfer_and_watch(signer, &account_id.0, amount)
-                        .await
-                        .map_err(|e| Error::Client(e.into()))?
-                        .transfer()
-                        .map_err(|e| Error::Client(e.into()))?
-                        .unwrap();
-                    println!(
-                        "transfered {} to {}",
-                        event.amount,
-                        event.to.to_string()
-                    );
+                WalletSubCommand::TransferBalance(cmd) => {
+                    cmd.exec(&client).await?
                 }
             }
         }

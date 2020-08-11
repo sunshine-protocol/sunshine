@@ -29,7 +29,10 @@ use substrate_subxt::{
     Runtime,
     SignedExtra,
 };
-use sunshine_core::ChainClient;
+use sunshine_client_utils::{
+    Client,
+    Result,
+};
 
 #[derive(Default, Clone, DagCbor, Encode, Decode)]
 pub struct TextBlock {
@@ -46,14 +49,13 @@ pub struct BountyBody {
 pub(crate) async fn post<R, C, V>(
     client: &C,
     value: V,
-) -> Result<libipld::cid::Cid, C::Error>
+) -> Result<libipld::cid::Cid>
 where
     R: Runtime,
     <<R::Extra as SignedExtra<R>>::Extra as SignedExtension>::AdditionalSigned:
         Send + Sync,
-    C: ChainClient<R>,
+    C: Client<R>,
     C::OffchainClient: Cache<Codec, V>,
-    C::Error: From<Error>,
     V: Clone + DagEncode<DagCborCodec> + DagDecode<DagCborCodec> + Send + Sync,
 {
     let cid = client.offchain_client().insert(value).await?;

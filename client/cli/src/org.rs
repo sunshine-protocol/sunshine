@@ -1,7 +1,3 @@
-use crate::error::{
-    Error,
-    Result,
-};
 use clap::Clap;
 use core::fmt::{
     Debug,
@@ -20,7 +16,10 @@ use sunshine_bounty_client::{
     },
     TextBlock,
 };
-use sunshine_core::Ss58;
+use sunshine_client_utils::{
+    crypto::ss58::Ss58,
+    Result,
+};
 
 #[derive(Clone, Debug, Clap)]
 pub struct OrgRegisterFlatCommand {
@@ -34,7 +33,7 @@ impl OrgRegisterFlatCommand {
     pub async fn exec<R: Runtime + Org, C: OrgClient<R>>(
         &self,
         client: &C,
-    ) -> Result<(), C::Error>
+    ) -> Result<()>
     where
         <R as System>::AccountId: Ss58Codec,
         <R as Org>::OrgId: From<u64> + Display,
@@ -57,15 +56,14 @@ impl OrgRegisterFlatCommand {
         let members = self
             .members
             .iter()
-            .map(|acc| -> Result<R::AccountId, C::Error> {
+            .map(|acc| -> Result<R::AccountId> {
                 let mem: Ss58<R> = acc.parse::<Ss58<R>>()?;
                 Ok(mem.0)
             })
-            .collect::<Result<Vec<R::AccountId>, C::Error>>()?;
+            .collect::<Result<Vec<R::AccountId>>>()?;
         let event = client
             .register_flat_org(sudo, parent_org, constitution.into(), &members)
-            .await
-            .map_err(Error::Client)?;
+            .await?;
         println!(
             "Account {} created a flat organization with OrgId: {}, constitution: {:?} and {} members of equal ownership weight",
             event.caller, event.new_id, event.constitution, event.total
@@ -86,7 +84,7 @@ impl OrgRegisterWeightedCommand {
     pub async fn exec<R: Runtime + Org, C: OrgClient<R>>(
         &self,
         client: &C,
-    ) -> Result<(), C::Error>
+    ) -> Result<()>
     where
         <R as System>::AccountId: Ss58Codec,
         <R as Org>::OrgId: From<u64> + Display,
@@ -110,12 +108,12 @@ impl OrgRegisterWeightedCommand {
         let members = self
             .members
             .iter()
-            .map(|acc_share| -> Result<(R::AccountId, R::Shares), C::Error> {
+            .map(|acc_share| -> Result<(R::AccountId, R::Shares)> {
                 let mem: Ss58<R> = acc_share.0.parse()?;
                 let amt_issued: R::Shares = (acc_share.1).into();
                 Ok((mem.0, amt_issued))
             })
-            .collect::<Result<Vec<(R::AccountId, R::Shares)>, C::Error>>()?;
+            .collect::<Result<Vec<(R::AccountId, R::Shares)>>>()?;
         let event = client
             .register_weighted_org(
                 sudo,
@@ -123,8 +121,7 @@ impl OrgRegisterWeightedCommand {
                 constitution.into(),
                 &members,
             )
-            .await
-            .map_err(Error::Client)?;
+            .await?;
         println!(
             "Account {} created a weighted organization with OrgId: {}, constitution: {:?} and {} total shares minted for new members",
             event.caller, event.new_id, event.constitution, event.total

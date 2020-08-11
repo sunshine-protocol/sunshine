@@ -1,7 +1,4 @@
-use crate::error::{
-    Error,
-    Result,
-};
+use crate::error::VotePercentThresholdInputBoundError;
 use clap::Clap;
 use core::fmt::{
     Debug,
@@ -19,7 +16,6 @@ use sunshine_bounty_client::{
         Vote,
         VoteClient,
     },
-    Error as E,
     TextBlock,
 };
 use sunshine_bounty_utils::{
@@ -29,6 +25,7 @@ use sunshine_bounty_utils::{
         VoterView,
     },
 };
+use sunshine_client_utils::Result;
 
 #[derive(Clone, Debug, Clap)]
 pub struct VoteCreateSignalThresholdCommand {
@@ -44,7 +41,7 @@ impl VoteCreateSignalThresholdCommand {
     pub async fn exec<R: Runtime + Vote, C: VoteClient<R>>(
         &self,
         client: &C,
-    ) -> Result<(), C::Error>
+    ) -> Result<()>
     where
         <R as System>::AccountId: Ss58Codec,
         <R as System>::BlockNumber: From<u32>,
@@ -87,8 +84,7 @@ impl VoteCreateSignalThresholdCommand {
                     threshold,
                     duration,
                 )
-                .await
-                .map_err(Error::Client)?
+                .await?
         } else {
             client
                 .create_signal_vote(
@@ -97,8 +93,7 @@ impl VoteCreateSignalThresholdCommand {
                     threshold,
                     duration,
                 )
-                .await
-                .map_err(Error::Client)?
+                .await?
         };
         println!(
             "Account {} created a signal threshold vote with VoteId {}",
@@ -118,11 +113,11 @@ pub struct VoteCreatePercentThresholdCommand {
     pub duration: Option<u32>,
 }
 
-fn u8_to_permill(u: u8) -> Result<Permill, Error<E>> {
+fn u8_to_permill(u: u8) -> Result<Permill> {
     if u > 0u8 && u < 100u8 {
         Ok(Permill::from_percent(u.into()))
     } else {
-        Err(Error::VotePercentThresholdInputBoundError)
+        Err(VotePercentThresholdInputBoundError.into())
     }
 }
 
@@ -130,7 +125,7 @@ impl VoteCreatePercentThresholdCommand {
     pub async fn exec<R: Runtime + Vote, C: VoteClient<R>>(
         &self,
         client: &C,
-    ) -> Result<(), C::Error>
+    ) -> Result<()>
     where
         <R as System>::AccountId: Ss58Codec,
         <R as System>::BlockNumber: From<u32>,
@@ -159,14 +154,14 @@ impl VoteCreatePercentThresholdCommand {
         let rt: Option<<R as Vote>::Percent> =
             if let Some(r) = self.rejection_threshold {
                 let ret = u8_to_permill(r)
-                    .map_err(|_| Error::VotePercentThresholdInputBoundError)?;
+                    .map_err(|_| VotePercentThresholdInputBoundError)?;
                 Some(ret.into())
             } else {
                 None
             };
         let support_t: <R as Vote>::Percent =
             u8_to_permill(self.support_threshold)
-                .map_err(|_| Error::VotePercentThresholdInputBoundError)?
+                .map_err(|_| VotePercentThresholdInputBoundError)?
                 .into();
         let threshold: Threshold<<R as Vote>::Percent> =
             Threshold::new(support_t, rt);
@@ -179,8 +174,7 @@ impl VoteCreatePercentThresholdCommand {
                     threshold,
                     duration,
                 )
-                .await
-                .map_err(Error::Client)?
+                .await?
         } else {
             client
                 .create_percent_vote(
@@ -189,8 +183,7 @@ impl VoteCreatePercentThresholdCommand {
                     threshold,
                     duration,
                 )
-                .await
-                .map_err(Error::Client)?
+                .await?
         };
         println!(
             "Account {} created a percent threshold vote with VoteId {}",
@@ -211,7 +204,7 @@ impl VoteSubmitCommand {
     pub async fn exec<R: Runtime + Vote, C: VoteClient<R>>(
         &self,
         client: &C,
-    ) -> Result<(), C::Error>
+    ) -> Result<()>
     where
         <R as System>::AccountId: Ss58Codec,
         <R as Org>::OrgId: From<u64> + Display,
@@ -238,8 +231,7 @@ impl VoteSubmitCommand {
             };
         let event = client
             .submit_vote(self.vote_id.into(), voter_view, justification)
-            .await
-            .map_err(Error::Client)?;
+            .await?;
         println!(
             "Account {} voted with view {:?} in VoteId {}",
             event.voter, event.view, event.vote_id

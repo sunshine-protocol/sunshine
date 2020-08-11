@@ -8,7 +8,7 @@ use sunshine_bounty_cli::{
     shares,
     vote,
 };
-use sunshine_identity_cli::{
+use sunshine_cli_utils::{
     key,
     wallet,
 };

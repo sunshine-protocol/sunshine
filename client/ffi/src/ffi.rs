@@ -1,15 +1,7 @@
-use crate::{
-    dto::{
-        BountyInformation,
-        BountySubmissionInformation,
-    },
-    error::{
-        Error,
-        Result,
-    },
+use crate::dto::{
+    BountyInformation,
+    BountySubmissionInformation,
 };
-use ffi_utils::async_std::sync::RwLock;
-use identity_utils::cid::CidBytes;
 use ipld_block_builder::{
     Cache,
     Codec,
@@ -30,6 +22,11 @@ use sunshine_bounty_client::{
     },
     BountyBody,
 };
+use sunshine_client_utils::{
+    cid::CidBytes,
+    Result,
+};
+use sunshine_ffi_utils::async_std::sync::RwLock;
 
 #[derive(Clone, Debug)]
 pub struct Bounty<'a, C, R>
@@ -65,17 +62,12 @@ where
     <R as BountyTrait>::SubmissionId: From<u64> + Into<u64>,
     <R as Balances>::Balance: Into<u128> + From<u64>,
 {
-    pub async fn get(&self, bounty_id: u64) -> Result<Vec<u8>, C::Error> {
-        let bounty_state = self
-            .client
-            .read()
-            .await
-            .bounty(bounty_id.into())
-            .await
-            .map_err(Error::Client)?;
+    pub async fn get(&self, bounty_id: u64) -> Result<Vec<u8>> {
+        let bounty_state =
+            self.client.read().await.bounty(bounty_id.into()).await?;
 
         let info = self.get_bounty_info(bounty_id.into(), bounty_state).await?;
-        serde_cbor::to_vec(&info).map_err(Error::Cbor)
+        Ok(serde_cbor::to_vec(&info)?)
     }
 
     pub async fn post(
@@ -84,7 +76,7 @@ where
         repo_name: &str,
         issue_number: u64,
         amount: u64,
-    ) -> Result<u64, C::Error>
+    ) -> Result<u64>
     where
         <R as BountyTrait>::BountyPost: From<BountyBody>,
     {
@@ -99,8 +91,7 @@ where
             .read()
             .await
             .post_bounty(bounty, amount.into())
-            .await
-            .map_err(Error::Client)?;
+            .await?;
         Ok(event.id.into())
     }
 
@@ -108,14 +99,13 @@ where
         &self,
         bounty_id: u64,
         amount: u64,
-    ) -> Result<u128, C::Error> {
+    ) -> Result<u128> {
         let event = self
             .client
             .read()
             .await
             .contribute_to_bounty(bounty_id.into(), amount.into())
-            .await
-            .map_err(Error::Client)?;
+            .await?;
         Ok(event.total.into())
     }
 
@@ -126,7 +116,7 @@ where
         repo_name: &str,
         issue_number: u64,
         amount: u64,
-    ) -> Result<u64, C::Error>
+    ) -> Result<u64>
     where
         <R as BountyTrait>::BountySubmission: From<BountyBody>,
     {
@@ -141,47 +131,36 @@ where
             .read()
             .await
             .submit_for_bounty(bounty_id.into(), bounty, amount.into())
-            .await
-            .map_err(Error::Client)?;
+            .await?;
         Ok(event.id.into())
     }
 
-    pub async fn approve(&self, submission_id: u64) -> Result<u128, C::Error> {
+    pub async fn approve(&self, submission_id: u64) -> Result<u128> {
         let event = self
             .client
             .read()
             .await
             .approve_bounty_submission(submission_id.into())
-            .await
-            .map_err(Error::Client)?;
+            .await?;
         Ok(event.new_total.into())
     }
 
-    pub async fn get_submission(
-        &self,
-        submission_id: u64,
-    ) -> Result<Vec<u8>, C::Error> {
+    pub async fn get_submission(&self, submission_id: u64) -> Result<Vec<u8>> {
         let submission_state = self
             .client
             .read()
             .await
             .submission(submission_id.into())
-            .await
-            .map_err(Error::Client)?;
+            .await?;
         let info = self
             .get_submission_info(submission_id.into(), submission_state)
             .await?;
-        serde_cbor::to_vec(&info).map_err(Error::Cbor)
+        Ok(serde_cbor::to_vec(&info)?)
     }
 
-    pub async fn open_bounties(&self, min: u64) -> Result<Vec<u8>, C::Error> {
-        let open_bounties = self
-            .client
-            .read()
-            .await
-            .open_bounties(min.into())
-            .await
-            .map_err(Error::Client)?;
+    pub async fn open_bounties(&self, min: u64) -> Result<Vec<u8>> {
+        let open_bounties =
+            self.client.read().await.open_bounties(min.into()).await?;
         match open_bounties {
             Some(list) => {
                 let mut v = Vec::with_capacity(list.len());
@@ -190,7 +169,7 @@ where
                         v.push(info);
                     }
                 }
-                serde_cbor::to_vec(&v).map_err(Error::Cbor)
+                Ok(serde_cbor::to_vec(&v)?)
             }
             None => Ok(Vec::new()),
         }
@@ -199,14 +178,13 @@ where
     pub async fn open_bounty_submissions(
         &self,
         bounty_id: u64,
-    ) -> Result<Vec<u8>, C::Error> {
+    ) -> Result<Vec<u8>> {
         let open_submissions = self
             .client
             .read()
             .await
             .open_submissions(bounty_id.into())
-            .await
-            .map_err(Error::Client)?;
+            .await?;
         match open_submissions {
             Some(list) => {
                 let mut v = Vec::with_capacity(list.len());
@@ -216,7 +194,7 @@ where
                         v.push(info);
                     }
                 }
-                serde_cbor::to_vec(&v).map_err(Error::Cbor)
+                Ok(serde_cbor::to_vec(&v)?)
             }
             None => Ok(Vec::new()),
         }
@@ -226,8 +204,8 @@ where
         &self,
         id: <R as BountyTrait>::BountyId,
         state: BountyState<R>,
-    ) -> Result<BountyInformation, C::Error> {
-        let event_cid = state.info().to_cid().map_err(Error::CiDecode)?;
+    ) -> Result<BountyInformation> {
+        let event_cid = state.info().to_cid()?;
 
         let bounty_body: BountyBody = self
             .client
@@ -235,8 +213,7 @@ where
             .await
             .offchain_client()
             .get(&event_cid)
-            .await
-            .map_err(Error::Libipld)?;
+            .await?;
 
         let info = BountyInformation {
             id: id.into(),
@@ -253,8 +230,8 @@ where
         &self,
         id: <R as BountyTrait>::SubmissionId,
         state: SubState<R>,
-    ) -> Result<BountySubmissionInformation, C::Error> {
-        let event_cid = state.submission().to_cid().map_err(Error::CiDecode)?;
+    ) -> Result<BountySubmissionInformation> {
+        let event_cid = state.submission().to_cid()?;
 
         let submission_body: BountyBody = self
             .client
@@ -262,8 +239,7 @@ where
             .await
             .offchain_client()
             .get(&event_cid)
-            .await
-            .map_err(Error::Libipld)?;
+            .await?;
 
         let awaiting_review = state.state().awaiting_review();
         let info = BountySubmissionInformation {
