@@ -20,6 +20,28 @@ macro_rules! impl_ffi {
         use $crate::ffi::*;
 
         gen_ffi! {
+            /// Check if the Keystore is exist and initialized.
+            ///
+            /// this is useful if you want to check if there is an already created account or not.
+            Key::exists => fn client_key_exists() -> bool;
+            /// Set a new Key for this device if not already exist.
+            /// you should call `client_has_device_key` first to see if you have already a key.
+            ///
+            /// suri is used for testing only.
+            /// phrase is used to restore a backup
+            /// returns a string that is the current device id
+            Key::set => fn client_key_set(
+                password: *const raw::c_char = cstr!(password),
+                suri: *const raw::c_char = cstr!(suri, allow_null),
+                paperkey: *const raw::c_char = cstr!(paperkey, allow_null)
+            ) -> String;
+            /// Lock your account
+            /// return `true` if locked, and return an error message if something went wrong
+            Key::lock => fn client_key_lock() -> bool;
+            /// Unlock your account using the password
+            /// return `true` when the account get unlocked, otherwise an error message returned
+            Key::unlock => fn client_key_unlock(password: *const raw::c_char = cstr!(password)) -> bool;
+
             /// Get a bounty Information by using bounty Id
             /// Returns Cbor encoded `BountyInformation` as bytes
             Bounty::get => fn client_bounty_get(bounty_id: u64 = bounty_id) -> Cbor<BountyInformation>;

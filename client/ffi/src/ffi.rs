@@ -2,6 +2,7 @@ use crate::dto::{
     BountyInformation,
     BountySubmissionInformation,
 };
+use anyhow::bail;
 use ipld_block_builder::{
     Cache,
     Codec,
@@ -24,6 +25,15 @@ use sunshine_bounty_client::{
 };
 use sunshine_client_utils::{
     cid::CidBytes,
+    crypto::{
+        bip39::Mnemonic,
+        keychain::TypedPair,
+        secrecy::{
+            ExposeSecret,
+            SecretString,
+        },
+    },
+    Keystore,
     Result,
 };
 use sunshine_ffi_utils::async_std::sync::RwLock;
@@ -48,6 +58,79 @@ where
             client,
             _runtime: PhantomData,
         }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct Key<'a, C, R>
+where
+    C: BountyClient<R> + Send + Sync,
+    R: Runtime + BountyTrait,
+{
+    client: &'a RwLock<C>,
+    _runtime: PhantomData<R>,
+}
+
+impl<'a, C, R> Key<'a, C, R>
+where
+    C: BountyClient<R> + Send + Sync,
+    R: Runtime + BountyTrait,
+{
+    pub fn new(client: &'a RwLock<C>) -> Self {
+        Self {
+            client,
+            _runtime: PhantomData,
+        }
+    }
+}
+
+impl<'a, C, R> Key<'a, C, R>
+where
+    C: BountyClient<R> + Send + Sync,
+    R: Runtime + BountyTrait,
+{
+    pub async fn exists(&self) -> Result<bool> {
+        self.client.read().await.keystore().is_initialized().await
+    }
+
+    pub async fn set(
+        &self,
+        password: &str,
+        suri: Option<&str>,
+        paperkey: Option<&str>,
+    ) -> Result<String> {
+        let password = SecretString::new(password.to_string());
+        if password.expose_secret().len() < 8 {
+            bail!("Password Too Short");
+        }
+        let dk = if let Some(paperkey) = paperkey {
+            let mnemonic = Mnemonic::parse(paperkey)?;
+            TypedPair::<C::KeyType>::from_mnemonic(&mnemonic)?
+        } else if let Some(suri) = suri {
+            TypedPair::<C::KeyType>::from_suri(suri)?
+        } else {
+            TypedPair::<C::KeyType>::generate().await
+        };
+
+        self.client
+            .write()
+            .await
+            .set_key(dk, &password, false)
+            .await?;
+        let account_id =
+            self.client.read().await.signer()?.account_id().to_string();
+        Ok(account_id)
+    }
+
+    pub async fn lock(&self) -> Result<bool> {
+        self.client.write().await.lock().await?;
+        Ok(true)
+    }
+
+    pub async fn unlock(&self, password: impl Into<&str>) -> Result<bool> {
+        let password = SecretString::new(password.into().to_string());
+        self.client.write().await.unlock(&password).await?;
+        Ok(true)
     }
 }
 
