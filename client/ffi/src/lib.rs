@@ -72,6 +72,7 @@ macro_rules! impl_bounty_wallet_ffi {
 }
 
 #[doc(hidden)]
+#[cfg(feature = "bounty-module")]
 #[macro_export]
 macro_rules! impl_bounty_ffi {
     () => {
@@ -114,6 +115,13 @@ macro_rules! impl_bounty_ffi {
             Bounty::open_bounty_submissions => fn client_bounty_open_bounty_submissions(bounty_id: u64 = bounty_id) -> Cbor<Vec<BountySubmissionInformation>>;
         }
     };
+}
+
+#[doc(hidden)]
+#[cfg(not(feature = "bounty-module"))]
+#[macro_export]
+macro_rules! impl_bounty_ffi {
+    () => {};
 }
 
 /// Generate the FFI for the provided runtime
