@@ -332,9 +332,9 @@ dependencies = [
 
 [[package]]
 name = "async-trait"
-version = "0.1.36"
+version = "0.1.37"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a265e3abeffdce30b2e26b7a11b222fe37c6067404001b434101457d0385eb92"
+checksum = "caae68055714ff28740f310927e04f2eba76ff580b16fb18ed90073ee71646f7"
 dependencies = [
  "proc-macro2",
  "quote 1.0.7",
@@ -4160,9 +4160,9 @@ dependencies = [
 
 [[package]]
 name = "protobuf"
-version = "2.16.2"
+version = "2.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d883f78645c21b7281d21305181aa1f4dd9e9363e7cf2566c93121552cff003e"
+checksum = "cb14183cc7f213ee2410067e1ceeadba2a7478a59432ff0747a335202798b1e2"
 
 [[package]]
 name = "quick-error"
@@ -6900,7 +6900,7 @@ dependencies = [
 [[package]]
 name = "sunshine-cli-utils"
 version = "0.1.0"
-source = "git+https://github.com/sunshine-protocol/sunshine-core#2b92b5432a21a429c17bdafefae2c278ceeeb2de"
+source = "git+https://github.com/sunshine-protocol/sunshine-core#9dfd52e341819e04c375eaeb223ead6c4177c1bc"
 dependencies = [
  "async-std",
  "clap 3.0.0-beta.1",
@@ -6913,7 +6913,7 @@ dependencies = [
 [[package]]
 name = "sunshine-client-utils"
 version = "0.1.0"
-source = "git+https://github.com/sunshine-protocol/sunshine-core#2b92b5432a21a429c17bdafefae2c278ceeeb2de"
+source = "git+https://github.com/sunshine-protocol/sunshine-core#9dfd52e341819e04c375eaeb223ead6c4177c1bc"
 dependencies = [
  "anyhow",
  "async-std",
@@ -6938,7 +6938,7 @@ dependencies = [
 [[package]]
 name = "sunshine-codec"
 version = "0.1.0"
-source = "git+https://github.com/sunshine-protocol/sunshine-core#2b92b5432a21a429c17bdafefae2c278ceeeb2de"
+source = "git+https://github.com/sunshine-protocol/sunshine-core#9dfd52e341819e04c375eaeb223ead6c4177c1bc"
 dependencies = [
  "anyhow",
  "hash-db",
@@ -6969,7 +6969,7 @@ dependencies = [
 [[package]]
 name = "sunshine-crypto"
 version = "0.1.0"
-source = "git+https://github.com/sunshine-protocol/sunshine-core#2b92b5432a21a429c17bdafefae2c278ceeeb2de"
+source = "git+https://github.com/sunshine-protocol/sunshine-core#9dfd52e341819e04c375eaeb223ead6c4177c1bc"
 dependencies = [
  "aead 0.2.0",
  "anyhow",
@@ -7033,7 +7033,7 @@ dependencies = [
 [[package]]
 name = "sunshine-ffi-utils"
 version = "0.1.0"
-source = "git+https://github.com/sunshine-protocol/sunshine-core#2b92b5432a21a429c17bdafefae2c278ceeeb2de"
+source = "git+https://github.com/sunshine-protocol/sunshine-core#9dfd52e341819e04c375eaeb223ead6c4177c1bc"
 dependencies = [
  "allo-isolate",
  "async-std",
@@ -7064,7 +7064,7 @@ dependencies = [
 [[package]]
 name = "sunshine-keystore"
 version = "0.1.0"
-source = "git+https://github.com/sunshine-protocol/sunshine-core#2b92b5432a21a429c17bdafefae2c278ceeeb2de"
+source = "git+https://github.com/sunshine-protocol/sunshine-core#9dfd52e341819e04c375eaeb223ead6c4177c1bc"
 dependencies = [
  "anyhow",
  "async-std",
@@ -7114,7 +7114,7 @@ dependencies = [
 [[package]]
 name = "sunshine-pallet-utils"
 version = "0.1.0"
-source = "git+https://github.com/sunshine-protocol/sunshine-core#2b92b5432a21a429c17bdafefae2c278ceeeb2de"
+source = "git+https://github.com/sunshine-protocol/sunshine-core#9dfd52e341819e04c375eaeb223ead6c4177c1bc"
 dependencies = [
  "blake2-rfc",
  "hash-db",
@@ -7857,9 +7857,9 @@ checksum = "373c8a200f9e67a0c95e62a4f52fbf80c23b4381c05a17845531982fa99e6b33"
 
 [[package]]
 name = "uint"
-version = "0.8.4"
+version = "0.8.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "429ffcad8c8c15f874578c7337d156a3727eb4a1c2374c0ae937ad9a9b748c80"
+checksum = "9db035e67dfaf7edd9aebfe8676afcd63eed53c8a4044fed514c8cccf1835177"
 dependencies = [
  "byteorder",
  "crunchy",
