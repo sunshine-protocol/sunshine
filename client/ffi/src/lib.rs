@@ -136,14 +136,14 @@ macro_rules! impl_bounty_ffi {
 #[macro_export]
 macro_rules! impl_ffi {
     () => {
-        use ::std::os::raw;
-        #[allow(unused)]
-        use $crate::ffi_utils::*;
         $crate::impl_bounty_ffi!();
         $crate::impl_bounty_key_ffi!();
         $crate::impl_bounty_wallet_ffi!();
     };
     (client: $client: ty) => {
+        use ::std::os::raw;
+        #[allow(unused)]
+        use $crate::ffi_utils::*;
         gen_ffi!(client = $client);
         $crate::impl_ffi!();
     };
