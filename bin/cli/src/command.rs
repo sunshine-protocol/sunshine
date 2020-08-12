@@ -19,6 +19,8 @@ pub struct Opts {
     pub cmd: SubCommand,
     #[clap(short = "p", long = "path")]
     pub path: Option<PathBuf>,
+    #[clap(short = "c", long = "chain-spec-path")]
+    pub chain_spec_path: Option<PathBuf>,
 }
 
 #[derive(Clone, Debug, Clap)]

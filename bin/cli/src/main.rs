@@ -14,7 +14,10 @@ async fn main() -> Result<()> {
     } else {
         dirs::config_dir().unwrap().join("sunshine-bounty")
     };
-    let mut client = Client::new(&root, None).await?;
+    let mut client = match opts.chain_spec_path {
+        Some(spec) => Client::new(&root, Some(spec.as_path())).await?,
+        None => Client::new(&root, None).await?,
+    };
 
     match opts.cmd {
         SubCommand::Key(KeyCommand { cmd }) => {
