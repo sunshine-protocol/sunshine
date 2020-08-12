@@ -20,3 +20,8 @@ anyhow = "1.0.32"
 
 [dev-dependencies]
 test-client = { path = "../../bin/client" }
+
+[features]
+default = ["bounty-key", "bounty-wallet"]
+bounty-key = []
+bounty-wallet = []

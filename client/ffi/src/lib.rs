@@ -1,26 +1,15 @@
 pub use sunshine_ffi_utils as ffi_utils;
 pub mod dto;
 pub mod ffi;
-/// Generate the FFI for the provided runtime
-///
-/// ### Example
-/// ```
-/// use test_client::Client;
-/// use sunshine_bounty_ffi::impl_ffi;
-///
-/// impl_ffi!(client: Client);
-/// ```
-#[macro_export]
-macro_rules! impl_ffi {
-    () => {
-        use ::std::os::raw;
-        #[allow(unused)]
-        use $crate::ffi_utils::*;
-        #[allow(unused)]
-        use $crate::ffi::*;
 
+#[doc(hidden)]
+#[cfg(feature = "bounty-key")]
+#[macro_export]
+macro_rules! impl_bounty_key_ffi {
+    () => {
+        use $crate::ffi::Key;
         gen_ffi! {
-            /// Check if the Keystore is exist and initialized.
+             /// Check if the Keystore is exist and initialized.
             ///
             /// this is useful if you want to check if there is an already created account or not.
             Key::exists => fn client_key_exists() -> bool;
@@ -44,7 +33,50 @@ macro_rules! impl_ffi {
             /// Get current UID as string (if any)
             /// otherwise null returned
             Key::uid => fn client_key_uid() -> Option<String>;
+        }
+    }
+}
 
+#[doc(hidden)]
+#[cfg(not(feature = "bounty-key"))]
+#[macro_export]
+macro_rules! impl_bounty_key_ffi {
+    () => {};
+}
+
+#[doc(hidden)]
+#[cfg(feature = "bounty-wallet")]
+#[macro_export]
+macro_rules! impl_bounty_wallet_ffi {
+    () => {
+        use $crate::ffi::Wallet;
+        gen_ffi! {
+            /// Get the balance of an identifier.
+            /// returns and string but normally it's a `u128` encoded as string.
+            Wallet::balance => fn client_wallet_balance(identifier: *const raw::c_char = cstr!(identifier, allow_null)) -> String;
+            /// Transfer tokens to another account using there `identifier`
+            /// returns current account balance after the transaction.
+            Wallet::transfer => fn client_wallet_transfer(
+                to: *const raw::c_char = cstr!(to),
+                amount: u64 = amount
+            ) -> String;
+        }
+    };
+}
+
+#[doc(hidden)]
+#[cfg(not(feature = "bounty-wallet"))]
+#[macro_export]
+macro_rules! impl_bounty_wallet_ffi {
+    () => {};
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! impl_bounty_ffi {
+    () => {
+        use $crate::ffi::Bounty;
+        gen_ffi! {
             /// Get a bounty Information by using bounty Id
             /// Returns Cbor encoded `BountyInformation` as bytes
             Bounty::get => fn client_bounty_get(bounty_id: u64 = bounty_id) -> Cbor<BountyInformation>;
@@ -80,17 +112,28 @@ macro_rules! impl_ffi {
             /// Get a list of open submissions on a bounty.
             /// Returns a Cbor encoded list of `BountySubmissionInformation` as bytes.
             Bounty::open_bounty_submissions => fn client_bounty_open_bounty_submissions(bounty_id: u64 = bounty_id) -> Cbor<Vec<BountySubmissionInformation>>;
-
-            /// Get the balance of an identifier.
-            /// returns and string but normally it's a `u128` encoded as string.
-            Wallet::balance => fn client_wallet_balance(identifier: *const raw::c_char = cstr!(identifier, allow_null)) -> String;
-            /// Transfer tokens to another account using there `identifier`
-            /// returns current account balance after the transaction.
-            Wallet::transfer => fn client_wallet_transfer(
-                to: *const raw::c_char = cstr!(to),
-                amount: u64 = amount
-            ) -> String;
         }
+    };
+}
+
+/// Generate the FFI for the provided runtime
+///
+/// ### Example
+/// ```
+/// use test_client::Client;
+/// use sunshine_bounty_ffi::impl_ffi;
+///
+/// impl_ffi!(client: Client);
+/// ```
+#[macro_export]
+macro_rules! impl_ffi {
+    () => {
+        use ::std::os::raw;
+        #[allow(unused)]
+        use $crate::ffi_utils::*;
+        $crate::impl_bounty_ffi!();
+        $crate::impl_bounty_key_ffi!();
+        $crate::impl_bounty_wallet_ffi!();
     };
     (client: $client: ty) => {
         gen_ffi!(client = $client);
