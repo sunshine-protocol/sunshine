@@ -189,12 +189,12 @@ where
     <R as BountyTrait>::SubmissionId: From<u64> + Into<u64>,
     <R as Balances>::Balance: Into<u128> + From<u64>,
 {
-    pub async fn get(&self, bounty_id: u64) -> Result<Vec<u8>> {
+    pub async fn get(&self, bounty_id: u64) -> Result<String> {
         let bounty_state =
             self.client.read().await.bounty(bounty_id.into()).await?;
 
         let info = self.get_bounty_info(bounty_id.into(), bounty_state).await?;
-        Ok(serde_cbor::to_vec(&info)?)
+        Ok(serde_json::to_string(&info)?)
     }
 
     pub async fn post(
@@ -272,7 +272,7 @@ where
         Ok(event.new_total.into())
     }
 
-    pub async fn get_submission(&self, submission_id: u64) -> Result<Vec<u8>> {
+    pub async fn get_submission(&self, submission_id: u64) -> Result<String> {
         let submission_state = self
             .client
             .read()
@@ -282,10 +282,10 @@ where
         let info = self
             .get_submission_info(submission_id.into(), submission_state)
             .await?;
-        Ok(serde_cbor::to_vec(&info)?)
+        Ok(serde_json::to_string(&info)?)
     }
 
-    pub async fn open_bounties(&self, min: u64) -> Result<Vec<u8>> {
+    pub async fn open_bounties(&self, min: u64) -> Result<String> {
         let open_bounties =
             self.client.read().await.open_bounties(min.into()).await?;
         match open_bounties {
@@ -296,7 +296,7 @@ where
                         v.push(info);
                     }
                 }
-                Ok(serde_cbor::to_vec(&v)?)
+                Ok(serde_json::to_string(&v)?)
             }
             None => Ok(Vec::new()),
         }
@@ -305,7 +305,7 @@ where
     pub async fn open_bounty_submissions(
         &self,
         bounty_id: u64,
-    ) -> Result<Vec<u8>> {
+    ) -> Result<String> {
         let open_submissions = self
             .client
             .read()
@@ -321,7 +321,7 @@ where
                         v.push(info);
                     }
                 }
-                Ok(serde_cbor::to_vec(&v)?)
+                Ok(serde_json::to_string(&v)?)
             }
             None => Ok(Vec::new()),
         }
