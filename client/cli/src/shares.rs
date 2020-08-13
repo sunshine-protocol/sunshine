@@ -45,7 +45,7 @@ impl SharesIssueCommand {
             )
             .await?;
         println!(
-            "{} shares minted for account {:?} in the context of Org {}",
+            "{} new shares minted for account {:?} in the context of Org {}",
             event.shares, event.who, event.organization
         );
         Ok(())
@@ -114,11 +114,11 @@ impl SharesBatchBurnCommand {
             })
             .collect::<Result<Vec<_>>>()?;
         let event = client
-            .batch_issue_shares(self.organization.into(), accounts.as_slice())
+            .batch_burn_shares(self.organization.into(), accounts.as_slice())
             .await?;
         println!(
-            "{} new shares minted in the context of Org {}",
-            event.total_new_shares_minted, event.organization
+            "{} shares burned in the context of Org {}",
+            event.total_new_shares_burned, event.organization
         );
         Ok(())
     }
@@ -143,7 +143,7 @@ impl SharesBurnCommand {
     {
         let account: Ss58<R> = self.burner.parse()?;
         let event = client
-            .issue_shares(
+            .burn_shares(
                 self.organization.into(),
                 account.0,
                 self.shares.into(),
