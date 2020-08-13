@@ -189,11 +189,17 @@ where
     <R as BountyTrait>::SubmissionId: From<u64> + Into<u64> + ToString,
     <R as Balances>::Balance: Into<u128> + From<u64>,
 {
-    pub async fn get(&self, bounty_id: u64) -> Result<String> {
-        let bounty_state =
-            self.client.read().await.bounty(bounty_id.into()).await?;
+    pub async fn get(&self, bounty_id: &str) -> Result<String> {
+        let bounty_state = self
+            .client
+            .read()
+            .await
+            .bounty(bounty_id.parse::<u64>()?.into())
+            .await?;
 
-        let info = self.get_bounty_info(bounty_id.into(), bounty_state).await?;
+        let info = self
+            .get_bounty_info(bounty_id.parse::<u64>()?.into(), bounty_state)
+            .await?;
         Ok(serde_json::to_string(&info)?)
     }
 
@@ -202,7 +208,7 @@ where
         repo_owner: &str,
         repo_name: &str,
         issue_number: u64,
-        amount: u64,
+        amount: &str,
     ) -> Result<u64>
     where
         <R as BountyTrait>::BountyPost: From<BountyBody>,
@@ -217,32 +223,35 @@ where
             .client
             .read()
             .await
-            .post_bounty(bounty, amount.into())
+            .post_bounty(bounty, amount.parse::<u64>()?.into())
             .await?;
         Ok(event.id.into())
     }
 
     pub async fn contribute(
         &self,
-        bounty_id: u64,
-        amount: u64,
+        bounty_id: &str,
+        amount: &str,
     ) -> Result<u128> {
         let event = self
             .client
             .read()
             .await
-            .contribute_to_bounty(bounty_id.into(), amount.into())
+            .contribute_to_bounty(
+                bounty_id.parse::<u64>()?.into(),
+                amount.parse::<u64>()?.into(),
+            )
             .await?;
         Ok(event.total.into())
     }
 
     pub async fn submit(
         &self,
-        bounty_id: u64,
+        bounty_id: &str,
         repo_owner: &str,
         repo_name: &str,
         issue_number: u64,
-        amount: u64,
+        amount: &str,
     ) -> Result<u64>
     where
         <R as BountyTrait>::BountySubmission: From<BountyBody>,
@@ -257,37 +266,48 @@ where
             .client
             .read()
             .await
-            .submit_for_bounty(bounty_id.into(), bounty, amount.into())
+            .submit_for_bounty(
+                bounty_id.parse::<u64>()?.into(),
+                bounty,
+                amount.parse::<u64>()?.into(),
+            )
             .await?;
         Ok(event.id.into())
     }
 
-    pub async fn approve(&self, submission_id: u64) -> Result<u128> {
+    pub async fn approve(&self, submission_id: &str) -> Result<u128> {
         let event = self
             .client
             .read()
             .await
-            .approve_bounty_submission(submission_id.into())
+            .approve_bounty_submission(submission_id.parse::<u64>()?.into())
             .await?;
         Ok(event.new_total.into())
     }
 
-    pub async fn get_submission(&self, submission_id: u64) -> Result<String> {
+    pub async fn get_submission(&self, submission_id: &str) -> Result<String> {
         let submission_state = self
             .client
             .read()
             .await
-            .submission(submission_id.into())
+            .submission(submission_id.parse::<u64>()?.into())
             .await?;
         let info = self
-            .get_submission_info(submission_id.into(), submission_state)
+            .get_submission_info(
+                submission_id.parse::<u64>()?.into(),
+                submission_state,
+            )
             .await?;
         Ok(serde_json::to_string(&info)?)
     }
 
-    pub async fn open_bounties(&self, min: u64) -> Result<String> {
-        let open_bounties =
-            self.client.read().await.open_bounties(min.into()).await?;
+    pub async fn open_bounties(&self, min: &str) -> Result<String> {
+        let open_bounties = self
+            .client
+            .read()
+            .await
+            .open_bounties(min.parse::<u64>()?.into())
+            .await?;
         match open_bounties {
             Some(list) => {
                 let mut v = Vec::with_capacity(list.len());
@@ -304,13 +324,13 @@ where
 
     pub async fn open_bounty_submissions(
         &self,
-        bounty_id: u64,
+        bounty_id: &str,
     ) -> Result<String> {
         let open_submissions = self
             .client
             .read()
             .await
-            .open_submissions(bounty_id.into())
+            .open_submissions(bounty_id.parse::<u64>()?.into())
             .await?;
         match open_submissions {
             Some(list) => {

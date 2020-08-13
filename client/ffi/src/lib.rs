@@ -80,39 +80,52 @@ macro_rules! impl_bounty_ffi {
         gen_ffi! {
             /// Get a bounty Information by using bounty Id
             /// Returns JSON encoded `BountyInformation` as string
-            Bounty::get => fn client_bounty_get(bounty_id: u64 = bounty_id) -> JSON<BountyInformation>;
+            Bounty::get => fn client_bounty_get(
+                bounty_id: *const raw::c_char = cstr!(bounty_id)
+            ) -> JSON<BountyInformation>;
             /// Get a submission Information by using submission Id
             /// Returns JSON encoded `BountySubmissionInformation` as string
-            Bounty::get_submission => fn client_bounty_get_submission(submission_id: u64 = submission_id) -> JSON<BountySubmissionInformation>;
+            Bounty::get_submission => fn client_bounty_get_submission(
+                submission_id: *const raw::c_char = cstr!(submission_id)
+            ) -> JSON<BountySubmissionInformation>;
             /// Create a new Bounty
             /// Returns the `BountyId` as `u64`
             Bounty::post => fn client_bounty_post(
                 repo_owner: *const raw::c_char = cstr!(repo_owner),
                 repo_name: *const raw::c_char = cstr!(repo_name),
                 issue_number: u64 = issue_number,
-                amount: u64 = amount
+                amount: *const raw::c_char = cstr!(amount)
             ) -> u64;
             /// Contribute to a bounty.
             /// Returns the new total bounty amount
-            Bounty::contribute => fn client_bounty_contribute(bounty_id: u64 = bounty_id, amount: u64 = amount) -> u128;
+            Bounty::contribute => fn client_bounty_contribute(
+                bounty_id: *const raw::c_char = cstr!(bounty_id),
+                amount: *const raw::c_char = cstr!(amount)
+            ) -> u128;
             /// Create a submission on a bounty
             /// Returns the `SubmissionId` as `u64`
             Bounty::submit => fn client_bounty_submit(
-                bounty_id: u64 = bounty_id,
+                bounty_id: *const raw::c_char = cstr!(bounty_id),
                 repo_owner: *const raw::c_char = cstr!(repo_owner),
                 repo_name: *const raw::c_char = cstr!(repo_name),
                 issue_number: u64 = issue_number,
-                amount: u64 = amount
+                amount: *const raw::c_char = cstr!(amount)
             ) -> u64;
             /// Approve a Submission using `SubmissionId`
             /// Returns the new total amount on that bounty after this operation
-            Bounty::approve => fn client_bounty_approve(submission_id: u64 = submission_id) -> u128;
+            Bounty::approve => fn client_bounty_approve(
+                submission_id: *const raw::c_char = cstr!(submission_id)
+            ) -> u128;
             /// Get a list of open bounties.
             /// Returns a JSON encoded list of `BountyInformation` as string.
-            Bounty::open_bounties => fn client_bounty_open_bounties(min: u64 = min) -> JSON<Vec<BountyInformation>>;
+            Bounty::open_bounties => fn client_bounty_open_bounties(
+                min: *const raw::c_char = cstr!(min)
+            ) -> JSON<Vec<BountyInformation>>;
             /// Get a list of open submissions on a bounty.
             /// Returns a JSON encoded list of `BountySubmissionInformation` as string.
-            Bounty::open_bounty_submissions => fn client_bounty_open_bounty_submissions(bounty_id: u64 = bounty_id) -> JSON<Vec<BountySubmissionInformation>>;
+            Bounty::open_bounty_submissions => fn client_bounty_open_bounty_submissions(
+                bounty_id: *const raw::c_char = cstr!(bounty_id)
+            ) -> JSON<Vec<BountySubmissionInformation>>;
         }
     };
 }
