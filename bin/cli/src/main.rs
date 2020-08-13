@@ -15,8 +15,8 @@ async fn main() -> Result<()> {
         dirs::config_dir().unwrap().join("sunshine-bounty")
     };
     let mut client = match opts.chain_spec_path {
-        Some(spec) => Client::new(&root, Some(spec.as_path())).await?,
-        None => Client::new(&root, None).await?,
+        Some(spec) => Client::new(&root, spec.as_path()).await?,
+        None => Client::new(&root, "ws://127.0.0.1:9944").await?,
     };
 
     match opts.cmd {
