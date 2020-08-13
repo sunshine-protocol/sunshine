@@ -38,11 +38,19 @@ use sunshine_bounty_utils::bounty::{
     BountySubmission,
     SubmissionState,
 };
+use sunshine_faucet_client::{
+    Faucet,
+    FaucetEventsDecoder,
+};
+use sunshine_identity_client::{
+    Identity,
+    IdentityEventsDecoder,
+};
 
 pub type BalanceOf<T> = <T as Balances>::Balance;
 
 #[module]
-pub trait Bounty: System + Balances {
+pub trait Bounty: System + Balances + Identity + Faucet {
     /// Cid type
     type IpfsReference: Parameter + Member + Default;
 

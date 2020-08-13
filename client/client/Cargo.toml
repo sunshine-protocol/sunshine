@@ -22,6 +22,10 @@ sunshine-bounty-utils = { path = "../../utils" }
 sunshine-client-utils = { git = "https://github.com/sunshine-protocol/sunshine-core" }
 thiserror = "1.0.20"
 
+# work around lack of dynamic event decoding in subxt
+sunshine-faucet-client = { git = "https://github.com/sunshine-protocol/sunshine-identity" }
+sunshine-identity-client = { git = "https://github.com/sunshine-protocol/sunshine-identity" }
+
 [dev-dependencies]
 async-std = { version = "1.6.2", features = ["attributes"] }
 rand = "0.7.3"

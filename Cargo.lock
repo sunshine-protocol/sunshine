@@ -701,6 +701,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "chunked_transfer"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1d29eb15132782371f71da8f947dba48b3717bdb6fa771b9b434d645e40a7193"
+
+[[package]]
 name = "cid"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4165,6 +4171,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cb14183cc7f213ee2410067e1ceeadba2a7478a59432ff0747a335202798b1e2"
 
 [[package]]
+name = "qstring"
+version = "0.7.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d464fae65fff2680baf48019211ce37aaec0c78e9264c84a3e484717f965104e"
+dependencies = [
+ "percent-encoding 2.1.0",
+]
+
+[[package]]
 name = "quick-error"
 version = "1.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4649,6 +4664,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b25a18b1bf7387f0145e7f8324e700805aade3842dd3db2e74e4cdeb4677c09e"
 dependencies = [
  "base64 0.10.1",
+ "log",
+ "ring",
+ "sct",
+ "webpki",
+]
+
+[[package]]
+name = "rustls"
+version = "0.17.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c0d4a31f5d68413404705d6982529b0e11a9aacd4839d1d6222ee3b8cb4015e1"
+dependencies = [
+ "base64 0.11.0",
  "log",
  "ring",
  "sct",
@@ -6835,6 +6863,8 @@ dependencies = [
  "substrate-subxt",
  "sunshine-bounty-utils",
  "sunshine-client-utils",
+ "sunshine-faucet-client",
+ "sunshine-identity-client",
  "test-client",
  "thiserror",
 ]
@@ -7031,6 +7061,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "sunshine-faucet-client"
+version = "0.2.0"
+source = "git+https://github.com/sunshine-protocol/sunshine-identity#73795b06d34b5082ec298a5a726107d87c1dfd91"
+dependencies = [
+ "parity-scale-codec",
+ "substrate-subxt",
+ "sunshine-client-utils",
+ "sunshine-identity-client",
+]
+
+[[package]]
 name = "sunshine-ffi-utils"
 version = "0.1.0"
 source = "git+https://github.com/sunshine-protocol/sunshine-core#9dfd52e341819e04c375eaeb223ead6c4177c1bc"
@@ -7059,6 +7100,25 @@ dependencies = [
  "sunshine-donate",
  "sunshine-org",
  "sunshine-vote",
+]
+
+[[package]]
+name = "sunshine-identity-client"
+version = "0.2.3"
+source = "git+https://github.com/sunshine-protocol/sunshine-identity#73795b06d34b5082ec298a5a726107d87c1dfd91"
+dependencies = [
+ "async-std",
+ "frame-support",
+ "ipld-block-builder",
+ "libipld",
+ "log",
+ "parity-scale-codec",
+ "serde",
+ "serde_json",
+ "substrate-subxt",
+ "sunshine-client-utils",
+ "thiserror",
+ "ureq",
 ]
 
 [[package]]
@@ -7293,6 +7353,8 @@ dependencies = [
  "sunshine-bounty-client",
  "sunshine-bounty-utils",
  "sunshine-client-utils",
+ "sunshine-faucet-client",
+ "sunshine-identity-client",
  "test-node",
 ]
 
@@ -7951,6 +8013,24 @@ name = "untrusted"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a156c684c91ea7d62626509bce3cb4e1d9ed5c4d978f7b4352658f96a4c26b4a"
+
+[[package]]
+name = "ureq"
+version = "1.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "677df6896edc382f1a2abcbb3e4058edfe973cdc4e1ed764b11891a7a289bfc0"
+dependencies = [
+ "base64 0.12.3",
+ "chunked_transfer",
+ "lazy_static",
+ "qstring",
+ "rustls 0.17.0",
+ "serde",
+ "serde_json",
+ "url 2.1.1",
+ "webpki",
+ "webpki-roots 0.19.0",
+]
 
 [[package]]
 name = "url"

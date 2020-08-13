@@ -18,3 +18,7 @@ sunshine-bounty-client = { path = "../../client/client" }
 sunshine-bounty-utils =  { path = "../../utils" }
 sunshine-client-utils = { git = "https://github.com/sunshine-protocol/sunshine-core" }
 test-node = { path = "../node" }
+
+# workaround subxt event decoding
+sunshine-faucet-client = { git = "https://github.com/sunshine-protocol/sunshine-identity" }
+sunshine-identity-client = { git = "https://github.com/sunshine-protocol/sunshine-identity" }

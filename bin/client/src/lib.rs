@@ -104,6 +104,16 @@ impl Bounty for Runtime {
     type BountySubmission = BountyBody;
 }
 
+impl sunshine_identity_client::Identity for Runtime {
+    type Uid = u8;
+    type Cid = CidBytes;
+    type Mask = u8;
+    type Gen = u16;
+    type IdAccountData = ();
+}
+
+impl sunshine_faucet_client::Faucet for Runtime {}
+
 impl substrate_subxt::Runtime for Runtime {
     type Signature = sp_runtime::MultiSignature;
     type Extra = extrinsic::DefaultExtra<Self>;
