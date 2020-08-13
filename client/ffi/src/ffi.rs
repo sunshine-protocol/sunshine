@@ -298,7 +298,7 @@ where
                 }
                 Ok(serde_json::to_string(&v)?)
             }
-            None => Ok(Vec::new()),
+            None => Ok(String::new()),
         }
     }
 
@@ -323,7 +323,7 @@ where
                 }
                 Ok(serde_json::to_string(&v)?)
             }
-            None => Ok(Vec::new()),
+            None => Ok(String::new()),
         }
     }
 
