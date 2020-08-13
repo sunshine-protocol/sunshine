@@ -185,8 +185,8 @@ where
     R: BountyTrait<IpfsReference = CidBytes>,
     C::OffchainClient: Cache<Codec, BountyBody>,
     <R as System>::AccountId: ToString,
-    <R as BountyTrait>::BountyId: From<u64> + Into<u64>,
-    <R as BountyTrait>::SubmissionId: From<u64> + Into<u64>,
+    <R as BountyTrait>::BountyId: From<u64> + Into<u64> + ToString,
+    <R as BountyTrait>::SubmissionId: From<u64> + Into<u64> + ToString,
     <R as Balances>::Balance: Into<u128> + From<u64>,
 {
     pub async fn get(&self, bounty_id: u64) -> Result<String> {
@@ -343,7 +343,7 @@ where
             .await?;
 
         let info = BountyInformation {
-            id: id.into(),
+            id: id.to_string(),
             repo_owner: bounty_body.repo_owner,
             repo_name: bounty_body.repo_name,
             issue_number: bounty_body.issue_number,
@@ -370,11 +370,11 @@ where
 
         let awaiting_review = state.state().awaiting_review();
         let info = BountySubmissionInformation {
-            id: id.into(),
+            id: id.to_string(),
             repo_owner: submission_body.repo_owner,
             repo_name: submission_body.repo_name,
             issue_number: submission_body.issue_number,
-            bounty_id: state.bounty_id().into(),
+            bounty_id: state.bounty_id().to_string(),
             submitter: state.submitter().to_string(),
             amount: state.amount().into(),
             awaiting_review,
