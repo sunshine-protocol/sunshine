@@ -79,11 +79,11 @@ macro_rules! impl_bounty_ffi {
         use $crate::ffi::Bounty;
         gen_ffi! {
             /// Get a bounty Information by using bounty Id
-            /// Returns Cbor encoded `BountyInformation` as bytes
-            Bounty::get => fn client_bounty_get(bounty_id: u64 = bounty_id) -> Cbor<BountyInformation>;
+            /// Returns JSON encoded `BountyInformation` as string
+            Bounty::get => fn client_bounty_get(bounty_id: u64 = bounty_id) -> JSON<BountyInformation>;
             /// Get a submission Information by using submission Id
-            /// Returns Cbor encoded `BountySubmissionInformation` as bytes
-            Bounty::get_submission => fn client_bounty_get_submission(submission_id: u64 = submission_id) -> Cbor<BountySubmissionInformation>;
+            /// Returns JSON encoded `BountySubmissionInformation` as string
+            Bounty::get_submission => fn client_bounty_get_submission(submission_id: u64 = submission_id) -> JSON<BountySubmissionInformation>;
             /// Create a new Bounty
             /// Returns the `BountyId` as `u64`
             Bounty::post => fn client_bounty_post(
@@ -108,11 +108,11 @@ macro_rules! impl_bounty_ffi {
             /// Returns the new total amount on that bounty after this operation
             Bounty::approve => fn client_bounty_approve(submission_id: u64 = submission_id) -> u128;
             /// Get a list of open bounties.
-            /// Returns a Cbor encoded list of `BountyInformation` as bytes.
-            Bounty::open_bounties => fn client_bounty_open_bounties(min: u64 = min) -> Cbor<Vec<BountyInformation>>;
+            /// Returns a JSON encoded list of `BountyInformation` as string.
+            Bounty::open_bounties => fn client_bounty_open_bounties(min: u64 = min) -> JSON<Vec<BountyInformation>>;
             /// Get a list of open submissions on a bounty.
-            /// Returns a Cbor encoded list of `BountySubmissionInformation` as bytes.
-            Bounty::open_bounty_submissions => fn client_bounty_open_bounty_submissions(bounty_id: u64 = bounty_id) -> Cbor<Vec<BountySubmissionInformation>>;
+            /// Returns a JSON encoded list of `BountySubmissionInformation` as string.
+            Bounty::open_bounty_submissions => fn client_bounty_open_bounty_submissions(bounty_id: u64 = bounty_id) -> JSON<Vec<BountySubmissionInformation>>;
         }
     };
 }
