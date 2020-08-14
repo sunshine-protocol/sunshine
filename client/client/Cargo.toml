@@ -28,5 +28,6 @@ sunshine-identity-client = { git = "https://github.com/sunshine-protocol/sunshin
 
 [dev-dependencies]
 async-std = { version = "1.6.2", features = ["attributes"] }
+env_logger = "0.7.1"
 rand = "0.7.3"
 test-client = { path = "../../bin/client", features = ["mock"] }

@@ -6895,8 +6895,10 @@ name = "sunshine-bounty-cli"
 version = "0.1.0"
 dependencies = [
  "clap 3.0.0-beta.1",
+ "ipld-block-builder",
  "libipld",
  "parity-scale-codec",
+ "regex",
  "substrate-subxt",
  "sunshine-bounty-client",
  "sunshine-bounty-utils",
@@ -6909,6 +6911,7 @@ name = "sunshine-bounty-client"
 version = "0.2.0"
 dependencies = [
  "async-std",
+ "env_logger",
  "frame-support",
  "ipld-block-builder",
  "libipld",
