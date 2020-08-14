@@ -1,6 +1,13 @@
-use crate::dto::{
-    BountyInformation,
-    BountySubmissionInformation,
+use crate::{
+    dto::{
+        BountyInformation,
+        BountySubmissionInformation,
+    },
+    ffi_utils::log::{
+        error,
+        info,
+        warn,
+    },
 };
 use anyhow::{
     anyhow,
@@ -11,7 +18,13 @@ use ipld_block_builder::{
     Codec,
     ReadonlyCache,
 };
-use std::marker::PhantomData;
+use std::{
+    fmt::{
+        Debug,
+        Display,
+    },
+    marker::PhantomData,
+};
 use substrate_subxt::{
     balances::{
         AccountData,
@@ -181,25 +194,29 @@ where
 impl<'a, C, R> Bounty<'a, C, R>
 where
     C: BountyClient<R> + Send + Sync,
-    R: Runtime + BountyTrait,
+    R: Runtime + BountyTrait + Debug,
     R: BountyTrait<IpfsReference = CidBytes>,
     C::OffchainClient: Cache<Codec, BountyBody>,
     <R as System>::AccountId: ToString,
-    <R as BountyTrait>::BountyId: From<u64> + Into<u64> + ToString,
-    <R as BountyTrait>::SubmissionId: From<u64> + Into<u64> + ToString,
+    <R as BountyTrait>::BountyId: From<u64> + Into<u64> + Display,
+    <R as BountyTrait>::SubmissionId: From<u64> + Into<u64> + Display,
+    <R as BountyTrait>::BountyPost: From<BountyBody> + Debug,
+    <R as BountyTrait>::BountySubmission: From<BountyBody> + Debug,
     <R as Balances>::Balance: Into<u128> + From<u64>,
 {
     pub async fn get(&self, bounty_id: &str) -> Result<String> {
+        info!("Getting Bounty with id: {}", bounty_id);
         let bounty_state = self
             .client
             .read()
             .await
             .bounty(bounty_id.parse::<u64>()?.into())
             .await?;
-
+        info!("Got bounty State for BountyId: {}", bounty_id);
         let info = self
             .get_bounty_info(bounty_id.parse::<u64>()?.into(), bounty_state)
             .await?;
+        info!("Bounty Info: {:?}", info);
         Ok(serde_json::to_string(&info)?)
     }
 
@@ -209,22 +226,21 @@ where
         repo_name: &str,
         issue_number: u64,
         amount: &str,
-    ) -> Result<u64>
-    where
-        <R as BountyTrait>::BountyPost: From<BountyBody>,
-    {
+    ) -> Result<u64> {
         let bounty = BountyBody {
             repo_owner: repo_owner.to_string(),
             repo_name: repo_name.to_string(),
             issue_number,
         }
         .into();
+        info!("Posting Bounty: {:?}", bounty);
         let event = self
             .client
             .read()
             .await
             .post_bounty(bounty, amount.parse::<u64>()?.into())
             .await?;
+        info!("Bounty Created: {:?}", event);
         Ok(event.id.into())
     }
 
@@ -233,6 +249,7 @@ where
         bounty_id: &str,
         amount: &str,
     ) -> Result<u128> {
+        info!("Contribute to BountyId: {}", bounty_id);
         let event = self
             .client
             .read()
@@ -242,6 +259,7 @@ where
                 amount.parse::<u64>()?.into(),
             )
             .await?;
+        info!("Contibution Added: {:?}", event);
         Ok(event.total.into())
     }
 
@@ -252,16 +270,14 @@ where
         repo_name: &str,
         issue_number: u64,
         amount: &str,
-    ) -> Result<u64>
-    where
-        <R as BountyTrait>::BountySubmission: From<BountyBody>,
-    {
+    ) -> Result<u64> {
         let bounty = BountyBody {
             repo_owner: repo_owner.to_string(),
             repo_name: repo_name.to_string(),
             issue_number,
         }
         .into();
+        info!("Submit for BountyId: {} with {:?}", bounty_id, bounty);
         let event = self
             .client
             .read()
@@ -272,53 +288,72 @@ where
                 amount.parse::<u64>()?.into(),
             )
             .await?;
+        info!("Submission Added: {:?}", event);
         Ok(event.id.into())
     }
 
     pub async fn approve(&self, submission_id: &str) -> Result<u128> {
+        info!("Approving SubmissionId: {}", submission_id);
         let event = self
             .client
             .read()
             .await
             .approve_bounty_submission(submission_id.parse::<u64>()?.into())
             .await?;
+        info!("Approved SubmissionId: {} with {:?}", submission_id, event);
         Ok(event.new_total.into())
     }
 
     pub async fn get_submission(&self, submission_id: &str) -> Result<String> {
+        info!("Getting SubmissionId: {}", submission_id);
         let submission_state = self
             .client
             .read()
             .await
             .submission(submission_id.parse::<u64>()?.into())
             .await?;
+        info!("Got Submission State: {:?}", submission_state);
         let info = self
             .get_submission_info(
                 submission_id.parse::<u64>()?.into(),
                 submission_state,
             )
             .await?;
+        info!("Submission: {:?}", info);
         Ok(serde_json::to_string(&info)?)
     }
 
     pub async fn open_bounties(&self, min: &str) -> Result<String> {
+        info!("Getting Open Bounties with min: {}", min);
         let open_bounties = self
             .client
             .read()
             .await
             .open_bounties(min.parse::<u64>()?.into())
             .await?;
+        info!("is there any Open Bounties? {}", open_bounties.is_some());
         match open_bounties {
             Some(list) => {
                 let mut v = Vec::with_capacity(list.len());
                 for (id, state) in list {
-                    if let Ok(info) = self.get_bounty_info(id, state).await {
-                        v.push(info);
+                    info!("Listing Bounty #{} with State: {:?}", id, state);
+                    match self.get_bounty_info(id, state).await {
+                        Ok(info) => {
+                            info!("Adding it to the list: {:?}", info);
+                            v.push(info);
+                        }
+                        Err(e) => {
+                            warn!("I can't get the info of Bounty #{}. Skipping...", id);
+                            error!("{:?}", e);
+                        }
                     }
                 }
                 Ok(serde_json::to_string(&v)?)
             }
-            None => Ok(String::new()),
+            None => {
+                info!("Empty, No Open Bounties");
+                Ok(String::new())
+            }
         }
     }
 
@@ -326,19 +361,31 @@ where
         &self,
         bounty_id: &str,
     ) -> Result<String> {
+        info!("Getting Open Submissions for BountyId: {}", bounty_id);
         let open_submissions = self
             .client
             .read()
             .await
             .open_submissions(bounty_id.parse::<u64>()?.into())
             .await?;
+        info!(
+            "is there any Open Submissions? {}",
+            open_submissions.is_some()
+        );
         match open_submissions {
             Some(list) => {
                 let mut v = Vec::with_capacity(list.len());
                 for (id, state) in list {
-                    if let Ok(info) = self.get_submission_info(id, state).await
-                    {
-                        v.push(info);
+                    info!("Listing Submission #{} with State: {:?}", id, state);
+                    match self.get_submission_info(id, state).await {
+                        Ok(info) => {
+                            info!("Adding it to the list: {:?}", info);
+                            v.push(info);
+                        }
+                        Err(e) => {
+                            warn!("I can't get the info of Submission #{}. Skipping..", id);
+                            error!("{:?}", e);
+                        }
                     }
                 }
                 Ok(serde_json::to_string(&v)?)
@@ -352,8 +399,8 @@ where
         id: <R as BountyTrait>::BountyId,
         state: BountyState<R>,
     ) -> Result<BountyInformation> {
+        info!("Get bounty info of id: {}", id);
         let event_cid = state.info().to_cid()?;
-
         let bounty_body: BountyBody = self
             .client
             .read()
@@ -361,7 +408,7 @@ where
             .offchain_client()
             .get(&event_cid)
             .await?;
-
+        info!("Bounty Body: {:?}", bounty_body);
         let info = BountyInformation {
             id: id.to_string(),
             repo_owner: bounty_body.repo_owner,
@@ -378,6 +425,7 @@ where
         id: <R as BountyTrait>::SubmissionId,
         state: SubState<R>,
     ) -> Result<BountySubmissionInformation> {
+        info!("Get submission info of id: {}", id);
         let event_cid = state.submission().to_cid()?;
 
         let submission_body: BountyBody = self
@@ -387,7 +435,7 @@ where
             .offchain_client()
             .get(&event_cid)
             .await?;
-
+        info!("Submission Body: {:?}", submission_body);
         let awaiting_review = state.state().awaiting_review();
         let info = BountySubmissionInformation {
             id: id.to_string(),
