@@ -284,22 +284,22 @@ mod tests {
             repo_name: "sunshine-bounty".to_string(),
             issue_number: 124,
         };
-        let event = client.post_bounty(bounty, 10u128).await.unwrap();
-        let expected_event = BountyPostedEvent {
+        let event1 = client.post_bounty(bounty, 10u128).await.unwrap();
+        let expected_event1 = BountyPostedEvent {
             depositer: alice_account_id.clone(),
             amount: 10,
             id: 1,
-            description: event.description.clone(),
+            description: event1.description.clone(),
         };
-        assert_eq!(event, expected_event);
-        let event = client.contribute_to_bounty(1, 5u128).await.unwrap();
-        let expected_event = BountyRaiseContributionEvent {
+        assert_eq!(event1, expected_event1);
+        let event2 = client.contribute_to_bounty(1, 10u128).await.unwrap();
+        let expected_event2 = BountyRaiseContributionEvent {
             contributor: alice_account_id,
-            amount: 5,
+            amount: 10,
             bounty_id: 1,
-            total: 15,
-            bounty_ref: event.bounty_ref.clone(),
+            total: 20,
+            bounty_ref: event2.bounty_ref.clone(),
         };
-        assert_eq!(event, expected_event);
+        assert_eq!(event2, expected_event2);
     }
 }
