@@ -40,7 +40,7 @@ pub struct TextBlock {
     pub text: String,
 }
 
-#[derive(Default, Clone, DagCbor, Encode, Decode)]
+#[derive(Debug, Default, Clone, DagCbor, Encode, Decode)]
 pub struct BountyBody {
     pub repo_owner: String,
     pub repo_name: String,
