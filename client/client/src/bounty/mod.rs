@@ -3,7 +3,6 @@ mod subxt;
 pub use subxt::*;
 
 use crate::error::Error;
-use codec::Decode;
 use substrate_subxt::{
     Runtime,
     SignedExtension,
@@ -139,10 +138,9 @@ where
         let mut bounties = self.chain_client().bounties_iter(None).await?;
         let mut bounties_above_min =
             Vec::<(T::BountyId, BountyState<T>)>::new();
-        while let Some((id, bounty)) = bounties.next().await? {
+        while let Some((_, bounty)) = bounties.next().await? {
             if bounty.total() >= min {
-                let decoded_key = Decode::decode(&mut &id.0[..])?;
-                bounties_above_min.push((decoded_key, bounty));
+                bounties_above_min.push((bounty.id(), bounty));
             }
         }
         if bounties_above_min.is_empty() {
@@ -159,10 +157,10 @@ where
             self.chain_client().submissions_iter(None).await?;
         let mut submissions_for_bounty =
             Vec::<(T::SubmissionId, SubState<T>)>::new();
-        while let Some((id, submission)) = submissions.next().await? {
+        while let Some((_, submission)) = submissions.next().await? {
             if submission.bounty_id() == bounty_id {
-                let decoded_key = Decode::decode(&mut &id.0[..])?;
-                submissions_for_bounty.push((decoded_key, submission));
+                submissions_for_bounty
+                    .push((submission.submission_id(), submission));
             }
         }
         if submissions_for_bounty.is_empty() {
@@ -258,44 +256,20 @@ mod tests {
         let bounties = client.open_bounties(9u128).await.unwrap().unwrap();
         assert_eq!(bounties.len(), 2);
         let expected_bounty1 = BountyInformation::new(
+            1u64,
             event1.description,
             alice_account_id.clone(),
             10,
         );
-        let expected_bounty2 =
-            BountyInformation::new(event2.description, alice_account_id, 10);
-        assert_eq!(bounties.get(0).unwrap().1, expected_bounty1);
-        assert_eq!(bounties.get(1).unwrap().1, expected_bounty2);
+        let expected_bounty2 = BountyInformation::new(
+            2u64,
+            event2.description,
+            alice_account_id,
+            10,
+        );
+        assert_eq!(bounties.get(0).unwrap().1, expected_bounty2);
+        assert_eq!(bounties.get(0).unwrap().0, 2u64);
+        assert_eq!(bounties.get(1).unwrap().1, expected_bounty1);
+        assert_eq!(bounties.get(1).unwrap().0, 1u64);
     }
-
-    // #[async_std::test]
-    // async fn get_submissions_test() {
-    //     let (node, _node_tmp) = test_node();
-    //     let (client, _client_tmp) =
-    //         Client::mock(&node, AccountKeyring::Alice).await;
-    //     let alice_account_id = AccountKeyring::Alice.to_account_id();
-    // }
-
-    // #[async_std::test]
-    // async fn contribute_to_bounty_test() {
-    //     let (node, _node_tmp) = test_node();
-    //     let (client, _client_tmp) =
-    //         Client::mock(&node, AccountKeyring::Alice).await;
-    //     let alice_account_id = AccountKeyring::Alice.to_account_id();
-    //     let bounty = BountyBody {
-    //         repo_owner: "sunshine-protocol".to_string(),
-    //         repo_name: "sunshine-bounty".to_string(),
-    //         issue_number: 124,
-    //     };
-    //     let _ = client.post_bounty(bounty, 10u128).await.unwrap();
-    //     let event = client.contribute_to_bounty(1, 5u128).await.unwrap();
-    //     let expected_event = BountyRaiseContributionEvent {
-    //         contributor: alice_account_id,
-    //         amount: 5,
-    //         bounty_id: 1,
-    //         total: 15,
-    //         bounty_ref: event.bounty_ref.clone(),
-    //     };
-    //     assert_eq!(event, expected_event);
-    // }
 }

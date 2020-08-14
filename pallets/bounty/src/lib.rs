@@ -52,12 +52,14 @@ type BalanceOf<T> = <<T as Trait>::Currency as Currency<
     <T as frame_system::Trait>::AccountId,
 >>::Balance;
 type Bounty<T> = BountyInformation<
+    <T as Trait>::BountyId,
     <T as Trait>::IpfsReference,
     <T as frame_system::Trait>::AccountId,
     BalanceOf<T>,
 >;
 type BountySub<T> = BountySubmission<
     <T as Trait>::BountyId,
+    <T as Trait>::SubmissionId,
     <T as Trait>::IpfsReference,
     <T as frame_system::Trait>::AccountId,
     BalanceOf<T>,
@@ -187,8 +189,8 @@ decl_module! {
                 WithdrawReasons::from(WithdrawReason::Transfer),
                 ExistenceRequirement::AllowDeath,
             )?;
-            let bounty = Bounty::<T>::new(info.clone(), depositer.clone(), amount);
             let id = Self::bounty_generate_uid();
+            let bounty = Bounty::<T>::new(id, info.clone(), depositer.clone(), amount);
             T::Currency::resolve_creating(&Self::bounty_account_id(id), imb);
             <Bounties<T>>::insert(id, bounty);
             <BountyTips<T>>::insert(id, &depositer, amount);
@@ -233,8 +235,8 @@ decl_module! {
             let bounty = <Bounties<T>>::get(bounty_id).ok_or(Error::<T>::BountyDNE)?;
             ensure!(submitter != bounty.depositer(), Error::<T>::DepositerCannotSubmitForBounty);
             ensure!(amount <= bounty.total(), Error::<T>::BountySubmissionExceedsTotalAvailableFunding);
-            let submission = BountySub::<T>::new(bounty_id, submission_ref.clone(), submitter.clone(), amount);
             let id = Self::submission_generate_uid();
+            let submission = BountySub::<T>::new(bounty_id, id, submission_ref.clone(), submitter.clone(), amount);
             <Submissions<T>>::insert(id, submission);
             Self::deposit_event(RawEvent::BountySubmissionPosted(submitter, bounty_id, amount, id, bounty.info(), submission_ref));
             Ok(())

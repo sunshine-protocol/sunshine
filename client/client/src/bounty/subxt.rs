@@ -102,12 +102,14 @@ pub trait Bounty: System + Balances + Identity + Faucet {
 // ~~ Storage ~~
 
 pub type BountyState<T> = BountyInformation<
+    <T as Bounty>::BountyId,
     <T as Bounty>::IpfsReference,
     <T as System>::AccountId,
     BalanceOf<T>,
 >;
 pub type SubState<T> = BountySubmission<
     <T as Bounty>::BountyId,
+    <T as Bounty>::SubmissionId,
     <T as Bounty>::IpfsReference,
     <T as System>::AccountId,
     BalanceOf<T>,
