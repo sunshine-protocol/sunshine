@@ -1,8 +1,15 @@
+use crate::utils::GithubIssueMetadata;
 use clap::Clap;
 use core::fmt::{
     Debug,
     Display,
 };
+use ipld_block_builder::{
+    Cache,
+    Codec,
+    ReadonlyCache,
+};
+use std::convert::TryInto;
 use substrate_subxt::{
     balances::Balances,
     sp_core::crypto::Ss58Codec,
@@ -16,13 +23,14 @@ use sunshine_bounty_client::{
     },
     BountyBody,
 };
-use sunshine_client_utils::Result;
+use sunshine_client_utils::{
+    cid::CidBytes,
+    Result,
+};
 
 #[derive(Clone, Debug, Clap)]
 pub struct BountyPostCommand {
-    pub repo_owner: String,
-    pub repo_name: String,
-    pub issue_number: u64,
+    pub issue_url: String,
     pub amount: u128,
 }
 
@@ -37,10 +45,12 @@ impl BountyPostCommand {
         <R as Bounty>::BountyId: Display,
         <R as Bounty>::BountyPost: From<BountyBody>,
     {
+        let metadata: GithubIssueMetadata =
+            self.issue_url.as_str().try_into()?;
         let bounty: <R as Bounty>::BountyPost = BountyBody {
-            repo_owner: (*self.repo_owner).to_string(),
-            repo_name: (*self.repo_name).to_string(),
-            issue_number: self.issue_number,
+            repo_owner: metadata.owner,
+            repo_name: metadata.repo,
+            issue_number: metadata.issue,
         }
         .into();
         let event = client.post_bounty(bounty, self.amount.into()).await?;
@@ -81,9 +91,7 @@ impl BountyContributeCommand {
 
 #[derive(Clone, Debug, Clap)]
 pub struct BountySubmitCommand {
-    pub repo_owner: String,
-    pub repo_name: String,
-    pub issue_number: u64,
+    pub issue_url: String,
     pub bounty_id: u64,
     pub amount: u128,
 }
@@ -100,10 +108,12 @@ impl BountySubmitCommand {
         <R as Bounty>::SubmissionId: Display,
         <R as Bounty>::BountySubmission: From<BountyBody>,
     {
+        let metadata: GithubIssueMetadata =
+            self.issue_url.as_str().try_into()?;
         let bounty: <R as Bounty>::BountySubmission = BountyBody {
-            repo_owner: (*self.repo_owner).to_string(),
-            repo_name: (*self.repo_name).to_string(),
-            issue_number: self.issue_number,
+            repo_owner: metadata.owner,
+            repo_name: metadata.repo,
+            issue_number: metadata.issue,
         }
         .into();
         let event = client
@@ -211,19 +221,41 @@ impl GetOpenBountiesCommand {
         client: &C,
     ) -> Result<()>
     where
+        R: Bounty<IpfsReference = CidBytes>,
+        C::OffchainClient: Cache<Codec, BountyBody>,
         <R as Balances>::Balance: From<u128> + Display,
         <R as Bounty>::BountyId: Display,
         <R as Bounty>::SubmissionId: Display + From<u64>,
     {
         let open_bounties = client.open_bounties(self.min.into()).await?;
         if let Some(b) = open_bounties {
-            b.into_iter().for_each(|(id, bounty)| {
-                println!(
-                    "Live BountyID {} has total available balance {}",
-                    id,
-                    bounty.total()
-                );
-            });
+            for (id, bounty) in b.into_iter() {
+                let event_cid = bounty.info().to_cid()?;
+                match client.offchain_client().get(&event_cid).await {
+                    Ok(bounty_body) => {
+                        println!(
+                            "Live BountyID {} has total available balance {} at {} added by {}",
+                            id,
+                            bounty.total(),
+                            format!(
+                                "https://github.com/{}/{}/issues/{}",
+                                bounty_body.repo_owner,
+                                bounty_body.repo_name,
+                                bounty_body.issue_number
+                            ),
+                            bounty.depositer().to_string()
+                        );
+                    }
+                    Err(e) => {
+                        eprintln!(
+                            "Error while getting bounty {}. skipping..",
+                            id
+                        );
+                        eprintln!("{}", e);
+                        continue
+                    }
+                }
+            }
         } else {
             println!("No open bounties above the passed input minimum balance");
         }
@@ -242,6 +274,8 @@ impl GetOpenSubmissionsCommand {
         client: &C,
     ) -> Result<()>
     where
+        R: Bounty<IpfsReference = CidBytes>,
+        C::OffchainClient: Cache<Codec, BountyBody>,
         <R as Balances>::Balance: Display,
         <R as Bounty>::BountyId: From<u64> + Display,
         <R as Bounty>::SubmissionId: Display,
@@ -249,13 +283,32 @@ impl GetOpenSubmissionsCommand {
         let open_submissions =
             client.open_submissions(self.bounty_id.into()).await?;
         if let Some(s) = open_submissions {
-            s.into_iter().for_each(|(id, sub)| {
-                println!(
-                    "Live SubmissionID {} requests total balance {}",
-                    id,
-                    sub.amount()
-                );
-            });
+            for (id, sub) in s.into_iter() {
+                let event_cid = sub.submission().to_cid()?;
+                match client.offchain_client().get(&event_cid).await {
+                    Ok(submission_body) => {
+                        println!("Live SubmissionID {} requests total balance {} at {} submitted by {}",
+                            id,
+                            sub.amount(),
+                            format!(
+                                "https://github.com/{}/{}/issues/{}",
+                                submission_body.repo_owner,
+                                submission_body.repo_name,
+                                submission_body.issue_number
+                            ),
+                            sub.submitter().to_string()
+                        );
+                    }
+                    Err(e) => {
+                        eprintln!(
+                            "Error while getting submission {}. skipping..",
+                            id
+                        );
+                        eprintln!("{}", e);
+                        continue
+                    }
+                };
+            }
         } else {
             println!("No open submissions for the passed in BountyID");
         }
