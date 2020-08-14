@@ -6986,7 +6986,7 @@ dependencies = [
 [[package]]
 name = "sunshine-cli-utils"
 version = "0.1.0"
-source = "git+https://github.com/sunshine-protocol/sunshine-core#b15fa47a17ea53107598332f9fc8c99d0b9dab75"
+source = "git+https://github.com/sunshine-protocol/sunshine-core#c0ebde51041ba66bb0a4ad14daf67d2f7e8f3834"
 dependencies = [
  "async-std",
  "clap 3.0.0-beta.1",
@@ -6999,7 +6999,7 @@ dependencies = [
 [[package]]
 name = "sunshine-client-utils"
 version = "0.1.0"
-source = "git+https://github.com/sunshine-protocol/sunshine-core#b15fa47a17ea53107598332f9fc8c99d0b9dab75"
+source = "git+https://github.com/sunshine-protocol/sunshine-core#c0ebde51041ba66bb0a4ad14daf67d2f7e8f3834"
 dependencies = [
  "anyhow",
  "async-std",
@@ -7024,7 +7024,7 @@ dependencies = [
 [[package]]
 name = "sunshine-codec"
 version = "0.1.0"
-source = "git+https://github.com/sunshine-protocol/sunshine-core#b15fa47a17ea53107598332f9fc8c99d0b9dab75"
+source = "git+https://github.com/sunshine-protocol/sunshine-core#c0ebde51041ba66bb0a4ad14daf67d2f7e8f3834"
 dependencies = [
  "anyhow",
  "hash-db",
@@ -7055,7 +7055,7 @@ dependencies = [
 [[package]]
 name = "sunshine-crypto"
 version = "0.1.0"
-source = "git+https://github.com/sunshine-protocol/sunshine-core#b15fa47a17ea53107598332f9fc8c99d0b9dab75"
+source = "git+https://github.com/sunshine-protocol/sunshine-core#c0ebde51041ba66bb0a4ad14daf67d2f7e8f3834"
 dependencies = [
  "aead 0.2.0",
  "anyhow",
@@ -7130,7 +7130,7 @@ dependencies = [
 [[package]]
 name = "sunshine-ffi-utils"
 version = "0.1.0"
-source = "git+https://github.com/sunshine-protocol/sunshine-core#b15fa47a17ea53107598332f9fc8c99d0b9dab75"
+source = "git+https://github.com/sunshine-protocol/sunshine-core#c0ebde51041ba66bb0a4ad14daf67d2f7e8f3834"
 dependencies = [
  "allo-isolate",
  "async-std",
@@ -7180,7 +7180,7 @@ dependencies = [
 [[package]]
 name = "sunshine-keystore"
 version = "0.1.0"
-source = "git+https://github.com/sunshine-protocol/sunshine-core#b15fa47a17ea53107598332f9fc8c99d0b9dab75"
+source = "git+https://github.com/sunshine-protocol/sunshine-core#c0ebde51041ba66bb0a4ad14daf67d2f7e8f3834"
 dependencies = [
  "anyhow",
  "async-std",
@@ -7230,7 +7230,7 @@ dependencies = [
 [[package]]
 name = "sunshine-pallet-utils"
 version = "0.1.0"
-source = "git+https://github.com/sunshine-protocol/sunshine-core#b15fa47a17ea53107598332f9fc8c99d0b9dab75"
+source = "git+https://github.com/sunshine-protocol/sunshine-core#c0ebde51041ba66bb0a4ad14daf67d2f7e8f3834"
 dependencies = [
  "blake2-rfc",
  "hash-db",
