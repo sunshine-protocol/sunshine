@@ -16,3 +16,5 @@ sunshine-bounty-client = { path = "../client" }
 sunshine-bounty-utils = { path = "../../utils" }
 sunshine-client-utils = { git = "https://github.com/sunshine-protocol/sunshine-core" }
 thiserror = "1.0.20"
+regex = "1.3.9"
+ipld-block-builder = "0.4.1"
