@@ -6911,6 +6911,7 @@ name = "sunshine-bounty-client"
 version = "0.2.0"
 dependencies = [
  "async-std",
+ "env_logger",
  "frame-support",
  "ipld-block-builder",
  "libipld",

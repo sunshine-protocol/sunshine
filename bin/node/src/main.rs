@@ -1,14 +1,15 @@
 //! Substrate Node Template CLI library.
 
 use sc_cli::{
-    Database,
     RunCmd,
+    Runner,
     RuntimeVersion,
     Subcommand,
     SubstrateCli,
 };
 use sc_service::{
     ChainSpec,
+    DatabaseConfig,
     Role,
     ServiceParams,
 };
@@ -79,18 +80,11 @@ impl SubstrateCli for Cli {
 }
 
 fn main() -> sc_cli::Result<()> {
-    let mut cli = <Cli as SubstrateCli>::from_args();
-    let db = cli
-        .run
-        .import_params
-        .database_params
-        .database
-        .unwrap_or(Database::ParityDb);
-    cli.run.import_params.database_params.database = Some(db);
-
+    let cli = <Cli as SubstrateCli>::from_args();
     match &cli.subcommand {
         Some(subcommand) => {
-            let runner = cli.create_runner(subcommand)?;
+            let mut runner = cli.create_runner(subcommand)?;
+            force_parity_db(&mut runner);
             runner.run_subcommand(subcommand, |config| {
                 let ServiceParams {
                     client,
@@ -103,7 +97,8 @@ fn main() -> sc_cli::Result<()> {
             })
         }
         None => {
-            let runner = cli.create_runner(&cli.run)?;
+            let mut runner = cli.create_runner(&cli.run)?;
+            force_parity_db(&mut runner);
             runner.run_node_until_exit(|config| {
                 match config.role {
                     Role::Light => service::new_light(config),
@@ -113,4 +108,10 @@ fn main() -> sc_cli::Result<()> {
             })
         }
     }
+}
+
+fn force_parity_db(runner: &mut Runner<Cli>) {
+    let config = runner.config_mut();
+    let path = config.database.path().unwrap().to_path_buf();
+    config.database = DatabaseConfig::ParityDb { path };
 }

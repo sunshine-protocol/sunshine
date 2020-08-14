@@ -174,7 +174,7 @@ pub fn testnet_genesis(
             balances: endowed_accounts
                 .iter()
                 .cloned()
-                .map(|k| (k, 1 << 60))
+                .map(|k| (k, 1 << 127))
                 .collect(),
         }),
         pallet_aura: Some(AuraConfig {
