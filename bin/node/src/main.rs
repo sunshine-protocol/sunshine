@@ -1,6 +1,7 @@
 //! Substrate Node Template CLI library.
 
 use sc_cli::{
+    Database,
     RunCmd,
     RuntimeVersion,
     Subcommand,
@@ -78,7 +79,14 @@ impl SubstrateCli for Cli {
 }
 
 fn main() -> sc_cli::Result<()> {
-    let cli = <Cli as SubstrateCli>::from_args();
+    let mut cli = <Cli as SubstrateCli>::from_args();
+    let db = cli
+        .run
+        .import_params
+        .database_params
+        .database
+        .unwrap_or(Database::ParityDb);
+    cli.run.import_params.database_params.database = Some(db);
 
     match &cli.subcommand {
         Some(subcommand) => {
