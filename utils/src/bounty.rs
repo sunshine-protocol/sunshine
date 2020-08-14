@@ -80,7 +80,9 @@ impl<
 }
 
 #[derive(new, PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-pub struct BountyInformation<IpfsReference, AccountId, Currency> {
+pub struct BountyInformation<BountyId, IpfsReference, AccountId, Currency> {
+    // Bounty identifier (pre-hash key for storage value)
+    id: BountyId,
     // Storage cid
     info: IpfsReference,
     // Whoever posts the bounty
@@ -90,14 +92,18 @@ pub struct BountyInformation<IpfsReference, AccountId, Currency> {
 }
 
 impl<
+        BountyId: Copy,
         IpfsReference: Clone,
         AccountId: Clone,
         Currency: Copy
             + PartialOrd
             + sp_std::ops::Sub<Output = Currency>
             + sp_std::ops::Add<Output = Currency>,
-    > BountyInformation<IpfsReference, AccountId, Currency>
+    > BountyInformation<BountyId, IpfsReference, AccountId, Currency>
 {
+    pub fn id(&self) -> BountyId {
+        self.id
+    }
     pub fn info(&self) -> IpfsReference {
         self.info.clone()
     }
@@ -178,10 +184,16 @@ impl<BlockNumber: Copy, VoteId: Copy> SubmissionState2<BlockNumber, VoteId> {
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-pub struct BountySubmission<BountyId, IpfsReference, AccountId, Currency, State>
-{
-    /// The bounty for which this submission pertains
-    bounty: BountyId,
+pub struct BountySubmission<
+    BountyId,
+    SubmissionId,
+    IpfsReference,
+    AccountId,
+    Currency,
+    State,
+> {
+    /// The identifiers for the parent bounty and this storage item
+    id: (BountyId, SubmissionId),
     /// The IPFS reference to the application information
     submission_ref: IpfsReference,
     /// The submitter is logged with submission
@@ -194,21 +206,37 @@ pub struct BountySubmission<BountyId, IpfsReference, AccountId, Currency, State>
 
 impl<
         BountyId: Copy,
+        SubmissionId: Copy,
         IpfsReference: Clone,
         AccountId: Clone + PartialEq,
         Currency: Copy + PartialOrd + sp_std::ops::Sub<Output = Currency>,
         State: Copy + Default,
-    > BountySubmission<BountyId, IpfsReference, AccountId, Currency, State>
+    >
+    BountySubmission<
+        BountyId,
+        SubmissionId,
+        IpfsReference,
+        AccountId,
+        Currency,
+        State,
+    >
 {
     pub fn new(
         bounty: BountyId,
+        submission: SubmissionId,
         submission_ref: IpfsReference,
         submitter: AccountId,
         amount: Currency,
-    ) -> BountySubmission<BountyId, IpfsReference, AccountId, Currency, State>
-    {
+    ) -> BountySubmission<
+        BountyId,
+        SubmissionId,
+        IpfsReference,
+        AccountId,
+        Currency,
+        State,
+    > {
         BountySubmission {
-            bounty,
+            id: (bounty, submission),
             submission_ref,
             submitter,
             amount,
@@ -216,7 +244,10 @@ impl<
         }
     }
     pub fn bounty_id(&self) -> BountyId {
-        self.bounty
+        self.id.0
+    }
+    pub fn submission_id(&self) -> SubmissionId {
+        self.id.1
     }
     pub fn submission(&self) -> IpfsReference {
         self.submission_ref.clone()

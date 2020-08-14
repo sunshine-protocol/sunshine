@@ -71,6 +71,7 @@ type Bounty<T> = BountyInfo2<
 >;
 type BountySub<T> = BountySubmission<
     <T as Trait>::BountyId,
+    <T as Trait>::SubmissionId,
     <T as vote::Trait>::IpfsReference,
     <T as frame_system::Trait>::AccountId,
     BalanceOf<T>,
@@ -272,8 +273,8 @@ decl_module! {
             let bounty = <Bounties<T>>::get(bounty_id).ok_or(Error::<T>::BountyDNE)?;
             ensure!(submitter != bounty.gov().leader(), Error::<T>::DepositerCannotSubmitForBounty);
             ensure!(amount <= bounty.total(), Error::<T>::BountySubmissionExceedsTotalAvailableFunding);
-            let submission = BountySub::<T>::new(bounty_id, submission_ref, submitter.clone(), amount);
             let id = Self::submission_generate_uid();
+            let submission = BountySub::<T>::new(bounty_id, id, submission_ref, submitter.clone(), amount);
             <Submissions<T>>::insert(id, submission);
             Self::deposit_event(RawEvent::BountySubmissionPosted(submitter, bounty_id, amount, id, bounty.info(), submission_ref));
             Ok(())
