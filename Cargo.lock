@@ -735,9 +735,9 @@ dependencies = [
 
 [[package]]
 name = "chrono"
-version = "0.4.13"
+version = "0.4.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c74d84029116787153e02106bf53e66828452a4b325cc8652b788b5967c0a0b6"
+checksum = "942f72db697d8767c22d46a598e01f2d3b475501ea43d0db4f16d90259182d0b"
 dependencies = [
  "num-integer",
  "num-traits 0.2.12",
@@ -2220,9 +2220,9 @@ checksum = "2ee15951c035f79eddbef745611ec962f63f4558f1dadf98ab723cc603487c6f"
 
 [[package]]
 name = "ipfs-embed"
-version = "0.3.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "273d44a3affa0ead19c839b9a2ec3a1731bcc8d02104ef9b4e1c0e5e889a74d1"
+checksum = "c9d01d1a2c641d8daceb2d497bde9fd1b193d6d74676e9c699738fd418245a02"
 dependencies = [
  "async-std",
  "ip_network",
@@ -2967,9 +2967,9 @@ dependencies = [
 
 [[package]]
 name = "libz-sys"
-version = "1.0.25"
+version = "1.0.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2eb5e43362e38e2bca2fd5f5134c4d4564a23a5c28e9b95411652021a8675ebe"
+checksum = "6ca8894883d250240341478bf987467332fbdd5da5c42426c69a8f93dbc302f2"
 dependencies = [
  "cc",
  "libc",
@@ -4043,9 +4043,9 @@ checksum = "feb3b2b1033b8a60b4da6ee470325f887758c95d5320f52f9ce0df055a55940e"
 
 [[package]]
 name = "polling"
-version = "0.1.3"
+version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b6d83023eb990619815bb41b45625b02da62b00d0f24b0a08aae37697b3f6c94"
+checksum = "9e09dffb745feffca5be3dea51c02b7b368c4597ab0219a82acaf9799ab3e0d1"
 dependencies = [
  "cfg-if",
  "libc",
@@ -4750,19 +4750,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b25a18b1bf7387f0145e7f8324e700805aade3842dd3db2e74e4cdeb4677c09e"
 dependencies = [
  "base64 0.10.1",
- "log",
- "ring",
- "sct",
- "webpki",
-]
-
-[[package]]
-name = "rustls"
-version = "0.17.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c0d4a31f5d68413404705d6982529b0e11a9aacd4839d1d6222ee3b8cb4015e1"
-dependencies = [
- "base64 0.11.0",
  "log",
  "ring",
  "sct",
@@ -6989,7 +6976,7 @@ dependencies = [
 [[package]]
 name = "sunshine-cli-utils"
 version = "0.1.0"
-source = "git+https://github.com/sunshine-protocol/sunshine-core#c0ebde51041ba66bb0a4ad14daf67d2f7e8f3834"
+source = "git+https://github.com/sunshine-protocol/sunshine-core#26f46c54bec675b79be66448082dcf20a60f5704"
 dependencies = [
  "async-std",
  "clap 3.0.0-beta.1",
@@ -7002,7 +6989,7 @@ dependencies = [
 [[package]]
 name = "sunshine-client-utils"
 version = "0.1.0"
-source = "git+https://github.com/sunshine-protocol/sunshine-core#c0ebde51041ba66bb0a4ad14daf67d2f7e8f3834"
+source = "git+https://github.com/sunshine-protocol/sunshine-core#26f46c54bec675b79be66448082dcf20a60f5704"
 dependencies = [
  "anyhow",
  "async-std",
@@ -7027,7 +7014,7 @@ dependencies = [
 [[package]]
 name = "sunshine-codec"
 version = "0.1.0"
-source = "git+https://github.com/sunshine-protocol/sunshine-core#c0ebde51041ba66bb0a4ad14daf67d2f7e8f3834"
+source = "git+https://github.com/sunshine-protocol/sunshine-core#26f46c54bec675b79be66448082dcf20a60f5704"
 dependencies = [
  "anyhow",
  "hash-db",
@@ -7058,7 +7045,7 @@ dependencies = [
 [[package]]
 name = "sunshine-crypto"
 version = "0.1.0"
-source = "git+https://github.com/sunshine-protocol/sunshine-core#c0ebde51041ba66bb0a4ad14daf67d2f7e8f3834"
+source = "git+https://github.com/sunshine-protocol/sunshine-core#26f46c54bec675b79be66448082dcf20a60f5704"
 dependencies = [
  "aead 0.2.0",
  "anyhow",
@@ -7133,7 +7120,7 @@ dependencies = [
 [[package]]
 name = "sunshine-ffi-utils"
 version = "0.1.0"
-source = "git+https://github.com/sunshine-protocol/sunshine-core#c0ebde51041ba66bb0a4ad14daf67d2f7e8f3834"
+source = "git+https://github.com/sunshine-protocol/sunshine-core#26f46c54bec675b79be66448082dcf20a60f5704"
 dependencies = [
  "allo-isolate",
  "async-std",
@@ -7183,7 +7170,7 @@ dependencies = [
 [[package]]
 name = "sunshine-keystore"
 version = "0.1.0"
-source = "git+https://github.com/sunshine-protocol/sunshine-core#c0ebde51041ba66bb0a4ad14daf67d2f7e8f3834"
+source = "git+https://github.com/sunshine-protocol/sunshine-core#26f46c54bec675b79be66448082dcf20a60f5704"
 dependencies = [
  "anyhow",
  "async-std",
@@ -7213,6 +7200,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "sunshine-node-utils"
+version = "0.1.0"
+source = "git+https://github.com/sunshine-protocol/sunshine-core#26f46c54bec675b79be66448082dcf20a60f5704"
+dependencies = [
+ "sc-basic-authorship",
+ "sc-client-api",
+ "sc-client-db",
+ "sc-consensus",
+ "sc-consensus-aura",
+ "sc-finality-grandpa",
+ "sc-service",
+ "sc-transaction-pool",
+ "sp-consensus",
+ "sp-consensus-aura",
+ "sp-core",
+ "sp-finality-grandpa",
+ "sp-inherents",
+]
+
+[[package]]
 name = "sunshine-org"
 version = "0.2.0"
 dependencies = [
@@ -7233,7 +7240,7 @@ dependencies = [
 [[package]]
 name = "sunshine-pallet-utils"
 version = "0.1.0"
-source = "git+https://github.com/sunshine-protocol/sunshine-core#c0ebde51041ba66bb0a4ad14daf67d2f7e8f3834"
+source = "git+https://github.com/sunshine-protocol/sunshine-core#26f46c54bec675b79be66448082dcf20a60f5704"
 dependencies = [
  "blake2-rfc",
  "hash-db",
@@ -7421,29 +7428,15 @@ dependencies = [
 name = "test-node"
 version = "0.1.0"
 dependencies = [
- "futures 0.3.5",
- "log",
- "sc-basic-authorship",
  "sc-cli",
- "sc-client-api",
- "sc-client-db",
- "sc-consensus",
- "sc-consensus-aura",
  "sc-executor",
- "sc-finality-grandpa",
- "sc-network",
  "sc-service",
- "sc-transaction-pool",
- "sp-consensus",
- "sp-consensus-aura",
  "sp-core",
- "sp-finality-grandpa",
- "sp-inherents",
  "sp-runtime",
- "sp-transaction-pool",
  "structopt",
  "substrate-build-script-utils",
- "sunshine-client-utils",
+ "sunshine-node-utils",
+ "sunshine-pallet-utils",
  "test-runtime",
 ]
 
@@ -7968,7 +7961,7 @@ version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3bfd5b7557925ce778ff9b9ef90e3ade34c524b5ff10e239c69a42d546d2af56"
 dependencies = [
- "rand 0.7.3",
+ "rand 0.5.6",
 ]
 
 [[package]]
@@ -8076,20 +8069,20 @@ checksum = "a156c684c91ea7d62626509bce3cb4e1d9ed5c4d978f7b4352658f96a4c26b4a"
 
 [[package]]
 name = "ureq"
-version = "1.3.0"
+version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "677df6896edc382f1a2abcbb3e4058edfe973cdc4e1ed764b11891a7a289bfc0"
+checksum = "b770aa61edaa144d3af86a8b0ccbb1bf8ca9dd0c1ac2a17081f35943aae6eb82"
 dependencies = [
  "base64 0.12.3",
  "chunked_transfer",
  "lazy_static",
  "qstring",
- "rustls 0.17.0",
+ "rustls 0.18.0",
  "serde",
  "serde_json",
  "url 2.1.1",
  "webpki",
- "webpki-roots 0.19.0",
+ "webpki-roots 0.20.0",
 ]
 
 [[package]]
@@ -8328,6 +8321,15 @@ name = "webpki-roots"
 version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8eff4b7516a57307f9349c64bf34caa34b940b66fed4b2fb3136cb7386e5739"
+dependencies = [
+ "webpki",
+]
+
+[[package]]
+name = "webpki-roots"
+version = "0.20.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0f20dea7535251981a9670857150d571846545088359b28e4951d350bdaf179f"
 dependencies = [
  "webpki",
 ]

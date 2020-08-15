@@ -145,7 +145,7 @@ impl<S: Store> From<S> for OffchainClient<S> {
 pub struct Node;
 
 impl NodeConfig for Node {
-    type ChainSpec = test_node::chain_spec::ChainSpec;
+    type ChainSpec = test_node::ChainSpec;
     type Runtime = Runtime;
 
     fn impl_name() -> &'static str {
@@ -165,7 +165,7 @@ impl NodeConfig for Node {
     }
 
     fn chain_spec_dev() -> Self::ChainSpec {
-        test_node::chain_spec::development_config()
+        test_node::development_config()
     }
 
     fn chain_spec_from_json_bytes(
@@ -177,13 +177,13 @@ impl NodeConfig for Node {
     fn new_light(
         config: Configuration,
     ) -> Result<(TaskManager, Arc<RpcHandlers>), ScServiceError> {
-        Ok(test_node::service::new_light(config)?)
+        Ok(test_node::new_light(config)?)
     }
 
     fn new_full(
         config: Configuration,
     ) -> Result<(TaskManager, Arc<RpcHandlers>), ScServiceError> {
-        Ok(test_node::service::new_full(config)?)
+        Ok(test_node::new_full(config)?)
     }
 }
 

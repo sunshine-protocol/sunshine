@@ -1,5 +1,3 @@
-//! Substrate Node Template CLI library.
-
 use sc_cli::{
     RunCmd,
     Runner,
@@ -14,10 +12,6 @@ use sc_service::{
     ServiceParams,
 };
 use structopt::StructOpt;
-use test_node::{
-    chain_spec,
-    service,
-};
 
 #[derive(Debug, StructOpt)]
 pub struct Cli {
@@ -62,12 +56,10 @@ impl SubstrateCli for Cli {
         id: &str,
     ) -> Result<Box<dyn sc_service::ChainSpec>, String> {
         Ok(match id {
-            "dev" => Box::new(chain_spec::development_config()),
-            "" | "local" => Box::new(chain_spec::local_testnet_config()),
+            "dev" => Box::new(test_node::development_config()),
+            "" | "local" => Box::new(test_node::local_testnet_config()),
             path => {
-                Box::new(chain_spec::ChainSpec::from_json_file(
-                    std::path::PathBuf::from(path),
-                )?)
+                Box::new(test_node::ChainSpec::from_json_file(path.into())?)
             }
         })
     }
@@ -92,7 +84,7 @@ fn main() -> sc_cli::Result<()> {
                     task_manager,
                     import_queue,
                     ..
-                } = service::new_full_params(config)?.0;
+                } = test_node::new_full_params(config)?.0;
                 Ok((client, backend, import_queue, task_manager))
             })
         }
@@ -101,8 +93,8 @@ fn main() -> sc_cli::Result<()> {
             force_parity_db(&mut runner);
             runner.run_node_until_exit(|config| {
                 match config.role {
-                    Role::Light => service::new_light(config),
-                    _ => service::new_full(config),
+                    Role::Light => test_node::new_light(config),
+                    _ => test_node::new_full(config),
                 }
                 .map(|service| service.0)
             })
