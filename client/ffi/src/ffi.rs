@@ -2,6 +2,7 @@ use crate::{
     dto::{
         BountyInformation,
         BountySubmissionInformation,
+        ContributionInformation,
     },
     ffi_utils::log::{
         error,
@@ -407,6 +408,75 @@ where
                             error!("{:?}", e);
                         }
                     }
+                }
+                Ok(serde_json::to_string(&v)?)
+            }
+            None => Ok(String::new()),
+        }
+    }
+
+    pub async fn open_bounty_contributions(
+        &self,
+        bounty_id: &str,
+    ) -> Result<String> {
+        info!("Getting Contributions to BountyId: {}", bounty_id);
+        let open_contributions = self
+            .client
+            .read()
+            .await
+            .bounty_contributions(bounty_id.parse::<u64>()?.into())
+            .await?;
+        info!(
+            "is there any Open Contributions? {}",
+            open_contributions.is_some()
+        );
+        match open_contributions {
+            Some(list) => {
+                let mut v: Vec<ContributionInformation> =
+                    Vec::with_capacity(list.len());
+                for c in list {
+                    info!("Listing Bounty #{} Contribution by Account {} of Amount {:?}", c.id(), c.account(), c.total());
+                    let info = ContributionInformation {
+                        id: c.id().to_string(),
+                        account: c.account().to_string(),
+                        total: c.total().into(),
+                    };
+                    info!("Adding it to the list: {:?}", info);
+                    v.push(info);
+                }
+                Ok(serde_json::to_string(&v)?)
+            }
+            None => Ok(String::new()),
+        }
+    }
+
+    pub async fn open_account_contributions(
+        &self,
+        account_id: &str,
+    ) -> Result<String> {
+        info!("Getting Contributions by {}", account_id);
+        let open_contributions = self
+            .client
+            .read()
+            .await
+            .account_contributions(account_id.parse::<Ss58<R>>()?.0)
+            .await?;
+        info!(
+            "is there any Open Contributions? {}",
+            open_contributions.is_some()
+        );
+        match open_contributions {
+            Some(list) => {
+                let mut v = Vec::with_capacity(list.len());
+                for c in list {
+                    info!("Listing Bounty #{} Contribution by Account {} of Amount {:?}", c.id(), c.account(), c.total());
+                    let info = ContributionInformation {
+                        id: c.id().to_string(),
+                        account: c.account().to_string(),
+                        total: c.total().into(),
+                    };
+                    info!("Adding it to the list: {:?}", info);
+                    v.push(info);
                 }
                 Ok(serde_json::to_string(&v)?)
             }

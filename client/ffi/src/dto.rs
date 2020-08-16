@@ -22,3 +22,10 @@ pub struct BountySubmissionInformation {
     pub awaiting_review: bool,
     pub approved: bool,
 }
+
+#[derive(Debug, Serialize)]
+pub struct ContributionInformation {
+    pub id: String,
+    pub account: String,
+    pub total: u128,
+}
