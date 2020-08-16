@@ -141,7 +141,10 @@ where
         bounty_id: T::BountyId,
         account: T::AccountId,
     ) -> Result<BalanceOf<T>> {
-        Ok(self.chain_client().bounty_tips(bounty_id, account, None).await?)
+        Ok(self
+            .chain_client()
+            .bounty_tips(bounty_id, account, None)
+            .await?)
     }
     async fn open_bounties(
         &self,
@@ -317,7 +320,10 @@ mod tests {
         };
         assert_eq!(event1, expected_event1);
 
-        let expected_amount = client.contribution(1, alice_account_id.clone()).await.unwrap();
+        let expected_amount = client
+            .contribution(1, alice_account_id.clone())
+            .await
+            .unwrap();
         assert_eq!(expected_amount, 1000);
 
         let b = client
@@ -339,7 +345,10 @@ mod tests {
         };
         assert_eq!(event2, expected_event2);
 
-        let expected_amount = client.contribution(1, alice_account_id.clone()).await.unwrap();
+        let expected_amount = client
+            .contribution(1, alice_account_id.clone())
+            .await
+            .unwrap();
         assert_eq!(expected_amount, 2000);
 
         let b = client
