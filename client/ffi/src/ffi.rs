@@ -415,7 +415,7 @@ where
         }
     }
 
-    pub async fn open_bounty_contributions(
+    pub async fn bounty_contributions(
         &self,
         bounty_id: &str,
     ) -> Result<String> {
@@ -450,7 +450,7 @@ where
         }
     }
 
-    pub async fn open_account_contributions(
+    pub async fn account_contributions(
         &self,
         account_id: &str,
     ) -> Result<String> {
