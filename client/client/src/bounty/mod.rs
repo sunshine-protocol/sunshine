@@ -41,6 +41,11 @@ pub trait BountyClient<T: Runtime + Bounty>: Client<T> {
         &self,
         submission_id: T::SubmissionId,
     ) -> Result<SubState<T>>;
+    async fn contribution(
+        &self,
+        bounty_id: T::BountyId,
+        account: T::AccountId,
+    ) -> Result<BalanceOf<T>>;
     async fn open_bounties(
         &self,
         min: BalanceOf<T>,
@@ -130,6 +135,13 @@ where
         submission_id: T::SubmissionId,
     ) -> Result<SubState<T>> {
         Ok(self.chain_client().submissions(submission_id, None).await?)
+    }
+    async fn contribution(
+        &self,
+        bounty_id: T::BountyId,
+        account: T::AccountId,
+    ) -> Result<BalanceOf<T>> {
+        Ok(self.chain_client().bounty_tips(bounty_id, account, None).await?)
     }
     async fn open_bounties(
         &self,
@@ -305,6 +317,9 @@ mod tests {
         };
         assert_eq!(event1, expected_event1);
 
+        let expected_amount = client.contribution(1, alice_account_id.clone()).await.unwrap();
+        assert_eq!(expected_amount, 1000);
+
         let b = client
             .chain_client()
             .account(&alice_account_id, None)
@@ -323,6 +338,9 @@ mod tests {
             bounty_ref: event2.bounty_ref.clone(),
         };
         assert_eq!(event2, expected_event2);
+
+        let expected_amount = client.contribution(1, alice_account_id.clone()).await.unwrap();
+        assert_eq!(expected_amount, 2000);
 
         let b = client
             .chain_client()

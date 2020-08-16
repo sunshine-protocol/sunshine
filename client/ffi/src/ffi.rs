@@ -197,7 +197,7 @@ where
     R: Runtime + BountyTrait + Debug,
     R: BountyTrait<IpfsReference = CidBytes>,
     C::OffchainClient: Cache<Codec, BountyBody>,
-    <R as System>::AccountId: ToString,
+    <R as System>::AccountId: Ss58Codec,
     <R as BountyTrait>::BountyId: From<u64> + Into<u64> + Display,
     <R as BountyTrait>::SubmissionId: From<u64> + Into<u64> + Display,
     <R as BountyTrait>::BountyPost: From<BountyBody> + Debug,
@@ -321,6 +321,18 @@ where
             .await?;
         info!("Submission: {:?}", info);
         Ok(serde_json::to_string(&info)?)
+    }
+
+    pub async fn get_contribution(&self, account: &str, bounty_id: &str) -> Result<String> {
+        info!("Getting the contribution for Account {} in Bounty {}", account, bounty_id);
+        let amount = self
+            .client
+            .read()
+            .await
+            .contribution(bounty_id.parse::<u64>()?.into(), account.parse::<Ss58<R>>()?.into())
+            .await?;
+        info!("Contributed Balance: {:?}", amount);
+        Ok(serde_json::to_string(&amount)?)
     }
 
     pub async fn open_bounties(&self, min: &str) -> Result<String> {

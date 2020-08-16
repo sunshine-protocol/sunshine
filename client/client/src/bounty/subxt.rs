@@ -128,6 +128,13 @@ pub struct SubmissionsStore<T: Bounty> {
     pub id: T::SubmissionId,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
+pub struct BountyTipsStore<T: Bounty> {
+    #[store(returns = BalanceOf<T>)]
+    pub id: T::BountyId,
+    pub account: T::AccountId,
+}
+
 // ~~ (Calls, Events) ~~
 
 #[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
