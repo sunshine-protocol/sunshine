@@ -334,14 +334,19 @@ where
             "Getting the contribution for Account {} in Bounty {}",
             account.0, bounty_id
         );
-        let amount = self
+        let c = self
             .client
             .read()
             .await
             .contribution(bounty_id.parse::<u64>()?.into(), account.0)
             .await?;
-        info!("Contributed Balance: {:?}", amount.total());
-        Ok(serde_json::to_string(&amount.total())?)
+        let info = ContributionInformation {
+            id: c.id().to_string(),
+            account: c.account().to_string(),
+            total: c.total().into(),
+        };
+        info!("Contribution: {:?}", info);
+        Ok(serde_json::to_string(&info)?)
     }
 
     pub async fn open_bounties(&self, min: &str) -> Result<String> {
