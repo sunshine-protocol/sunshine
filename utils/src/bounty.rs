@@ -127,6 +127,45 @@ impl<
     }
 }
 
+#[derive(new, PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+pub struct Contribution<BountyId, AccountId, Currency> {
+    id: BountyId,
+    account: AccountId,
+    total: Currency,
+}
+
+impl<
+        BountyId: Copy,
+        AccountId: Clone,
+        Currency: Copy
+            + PartialOrd
+            + sp_std::ops::Sub<Output = Currency>
+            + sp_std::ops::Add<Output = Currency>,
+    > Contribution<BountyId, AccountId, Currency>
+{
+    pub fn id(&self) -> BountyId {
+        self.id
+    }
+    pub fn account(&self) -> AccountId {
+        self.account.clone()
+    }
+    pub fn total(&self) -> Currency {
+        self.total
+    }
+    pub fn add_total(&self, c: Currency) -> Self {
+        Self {
+            total: self.total + c,
+            ..self.clone()
+        }
+    }
+    pub fn subtract_total(&self, c: Currency) -> Self {
+        Self {
+            total: self.total - c,
+            ..self.clone()
+        }
+    }
+}
+
 #[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug)]
 /// All variants hold identifiers which point to larger objects in runtime storage maps
 pub enum SubmissionState {

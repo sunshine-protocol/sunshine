@@ -44,6 +44,7 @@ use sp_std::{
 use util::bounty::{
     BountyInformation,
     BountySubmission,
+    Contribution,
     SubmissionState,
 };
 
@@ -64,6 +65,11 @@ type BountySub<T> = BountySubmission<
     <T as frame_system::Trait>::AccountId,
     BalanceOf<T>,
     SubmissionState,
+>;
+type Contrib<T> = Contribution<
+    <T as Trait>::BountyId,
+    <T as frame_system::Trait>::AccountId,
+    BalanceOf<T>,
 >;
 
 pub trait Trait: frame_system::Trait {
@@ -160,9 +166,9 @@ decl_storage! {
         pub Bounties get(fn bounties): map
             hasher(blake2_128_concat) T::BountyId => Option<Bounty<T>>;
         /// Tips for existing Bounties
-        pub BountyTips get(fn bounty_tips): double_map
+        pub Contributions get(fn contributions): double_map
             hasher(blake2_128_concat) T::BountyId,
-            hasher(blake2_128_concat) T::AccountId => Option<BalanceOf<T>>;
+            hasher(blake2_128_concat) T::AccountId => Option<Contrib<T>>;
 
         /// Posted Submissions
         pub Submissions get(fn submissions): map
@@ -193,7 +199,7 @@ decl_module! {
             let bounty = Bounty::<T>::new(id, info.clone(), depositer.clone(), amount);
             T::Currency::resolve_creating(&Self::bounty_account_id(id), imb);
             <Bounties<T>>::insert(id, bounty);
-            <BountyTips<T>>::insert(id, &depositer, amount);
+            <Contributions<T>>::insert(id, &depositer, Contrib::<T>::new(id, depositer.clone(), amount));
             Self::deposit_event(RawEvent::BountyPosted(depositer, amount, id, info));
             Ok(())
         }
@@ -212,14 +218,14 @@ decl_module! {
                 amount,
                 ExistenceRequirement::KeepAlive,
             )?;
-            let new_amount = if let Some(a) = <BountyTips<T>>::get(bounty_id, &contributor) {
-                amount + a
+            let new_contribution = if let Some(a) = <Contributions<T>>::get(bounty_id, &contributor) {
+                a.add_total(amount)
             } else {
-                amount
+                Contrib::<T>::new(bounty_id, contributor.clone(), amount)
             };
             let new_bounty = bounty.add_total(amount);
             let total = new_bounty.total();
-            <BountyTips<T>>::insert(bounty_id, &contributor, new_amount);
+            <Contributions<T>>::insert(bounty_id, &contributor, new_contribution);
             <Bounties<T>>::insert(bounty_id, new_bounty);
             Self::deposit_event(RawEvent::BountyRaiseContribution(contributor, amount, bounty_id, total, bounty.info()));
             Ok(())

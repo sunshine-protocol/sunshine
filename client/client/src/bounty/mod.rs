@@ -41,6 +41,11 @@ pub trait BountyClient<T: Runtime + Bounty>: Client<T> {
         &self,
         submission_id: T::SubmissionId,
     ) -> Result<SubState<T>>;
+    async fn contribution(
+        &self,
+        bounty_id: T::BountyId,
+        account: T::AccountId,
+    ) -> Result<Contrib<T>>;
     async fn open_bounties(
         &self,
         min: BalanceOf<T>,
@@ -49,6 +54,14 @@ pub trait BountyClient<T: Runtime + Bounty>: Client<T> {
         &self,
         bounty_id: T::BountyId,
     ) -> Result<Option<Vec<(T::SubmissionId, SubState<T>)>>>;
+    async fn bounty_contributions(
+        &self,
+        bounty_id: T::BountyId,
+    ) -> Result<Option<Vec<Contrib<T>>>>;
+    async fn account_contributions(
+        &self,
+        account_id: T::AccountId,
+    ) -> Result<Option<Vec<Contrib<T>>>>;
 }
 
 #[async_trait]
@@ -131,6 +144,16 @@ where
     ) -> Result<SubState<T>> {
         Ok(self.chain_client().submissions(submission_id, None).await?)
     }
+    async fn contribution(
+        &self,
+        bounty_id: T::BountyId,
+        account: T::AccountId,
+    ) -> Result<Contrib<T>> {
+        Ok(self
+            .chain_client()
+            .contributions(bounty_id, account, None)
+            .await?)
+    }
     async fn open_bounties(
         &self,
         min: BalanceOf<T>,
@@ -167,6 +190,42 @@ where
             Ok(None)
         } else {
             Ok(Some(submissions_for_bounty))
+        }
+    }
+    async fn bounty_contributions(
+        &self,
+        bounty_id: T::BountyId,
+    ) -> Result<Option<Vec<Contrib<T>>>> {
+        let mut contributions =
+            self.chain_client().contributions_iter(None).await?;
+        let mut contributions_for_bounty = Vec::<Contrib<T>>::new();
+        while let Some((_, contrib)) = contributions.next().await? {
+            if contrib.id() == bounty_id {
+                contributions_for_bounty.push(contrib);
+            }
+        }
+        if contributions_for_bounty.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(contributions_for_bounty))
+        }
+    }
+    async fn account_contributions(
+        &self,
+        account_id: T::AccountId,
+    ) -> Result<Option<Vec<Contrib<T>>>> {
+        let mut contributions =
+            self.chain_client().contributions_iter(None).await?;
+        let mut contributions_by_account = Vec::<Contrib<T>>::new();
+        while let Some((_, contrib)) = contributions.next().await? {
+            if contrib.account() == account_id {
+                contributions_by_account.push(contrib);
+            }
+        }
+        if contributions_by_account.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(contributions_by_account))
         }
     }
 }
@@ -305,6 +364,12 @@ mod tests {
         };
         assert_eq!(event1, expected_event1);
 
+        let expected_contrib = client
+            .contribution(1, alice_account_id.clone())
+            .await
+            .unwrap();
+        assert_eq!(expected_contrib.total(), 1000);
+
         let b = client
             .chain_client()
             .account(&alice_account_id, None)
@@ -324,6 +389,12 @@ mod tests {
         };
         assert_eq!(event2, expected_event2);
 
+        let expected_contrib = client
+            .contribution(1, alice_account_id.clone())
+            .await
+            .unwrap();
+        assert_eq!(expected_contrib.total(), 2000);
+
         let b = client
             .chain_client()
             .account(&alice_account_id, None)
@@ -332,5 +403,16 @@ mod tests {
             .data
             .free;
         println!("{}", b);
+
+        let account_contributions = client
+            .account_contributions(alice_account_id.clone())
+            .await
+            .unwrap()
+            .unwrap();
+        let bounty_contributions =
+            client.bounty_contributions(1).await.unwrap().unwrap();
+        assert_eq!(account_contributions, bounty_contributions);
+        assert_eq!(account_contributions.len(), 1);
+        assert_eq!(account_contributions.get(0).unwrap().total(), 2000);
     }
 }

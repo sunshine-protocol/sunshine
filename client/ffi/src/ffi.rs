@@ -2,6 +2,7 @@ use crate::{
     dto::{
         BountyInformation,
         BountySubmissionInformation,
+        ContributionInformation,
     },
     ffi_utils::log::{
         error,
@@ -197,7 +198,7 @@ where
     R: Runtime + BountyTrait + Debug,
     R: BountyTrait<IpfsReference = CidBytes>,
     C::OffchainClient: Cache<Codec, BountyBody>,
-    <R as System>::AccountId: ToString,
+    <R as System>::AccountId: Ss58Codec + Into<<R as System>::Address>,
     <R as BountyTrait>::BountyId: From<u64> + Into<u64> + Display,
     <R as BountyTrait>::SubmissionId: From<u64> + Into<u64> + Display,
     <R as BountyTrait>::BountyPost: From<BountyBody> + Debug,
@@ -323,6 +324,31 @@ where
         Ok(serde_json::to_string(&info)?)
     }
 
+    pub async fn get_contribution(
+        &self,
+        acc: &str,
+        bounty_id: &str,
+    ) -> Result<String> {
+        let account = acc.parse::<Ss58<R>>()?;
+        info!(
+            "Getting the contribution for Account {} in Bounty {}",
+            account.0, bounty_id
+        );
+        let c = self
+            .client
+            .read()
+            .await
+            .contribution(bounty_id.parse::<u64>()?.into(), account.0)
+            .await?;
+        let info = ContributionInformation {
+            id: c.id().to_string(),
+            account: c.account().to_string(),
+            total: c.total().into(),
+        };
+        info!("Contribution: {:?}", info);
+        Ok(serde_json::to_string(&info)?)
+    }
+
     pub async fn open_bounties(&self, min: &str) -> Result<String> {
         info!("Getting Open Bounties with min: {}", min);
         let open_bounties = self
@@ -387,6 +413,75 @@ where
                             error!("{:?}", e);
                         }
                     }
+                }
+                Ok(serde_json::to_string(&v)?)
+            }
+            None => Ok(String::new()),
+        }
+    }
+
+    pub async fn bounty_contributions(
+        &self,
+        bounty_id: &str,
+    ) -> Result<String> {
+        info!("Getting Contributions to BountyId: {}", bounty_id);
+        let open_contributions = self
+            .client
+            .read()
+            .await
+            .bounty_contributions(bounty_id.parse::<u64>()?.into())
+            .await?;
+        info!(
+            "is there any Open Contributions? {}",
+            open_contributions.is_some()
+        );
+        match open_contributions {
+            Some(list) => {
+                let mut v: Vec<ContributionInformation> =
+                    Vec::with_capacity(list.len());
+                for c in list {
+                    info!("Listing Bounty #{} Contribution by Account {} of Amount {:?}", c.id(), c.account(), c.total());
+                    let info = ContributionInformation {
+                        id: c.id().to_string(),
+                        account: c.account().to_string(),
+                        total: c.total().into(),
+                    };
+                    info!("Adding it to the list: {:?}", info);
+                    v.push(info);
+                }
+                Ok(serde_json::to_string(&v)?)
+            }
+            None => Ok(String::new()),
+        }
+    }
+
+    pub async fn account_contributions(
+        &self,
+        account_id: &str,
+    ) -> Result<String> {
+        info!("Getting Contributions by {}", account_id);
+        let open_contributions = self
+            .client
+            .read()
+            .await
+            .account_contributions(account_id.parse::<Ss58<R>>()?.0)
+            .await?;
+        info!(
+            "is there any Open Contributions? {}",
+            open_contributions.is_some()
+        );
+        match open_contributions {
+            Some(list) => {
+                let mut v = Vec::with_capacity(list.len());
+                for c in list {
+                    info!("Listing Bounty #{} Contribution by Account {} of Amount {:?}", c.id(), c.account(), c.total());
+                    let info = ContributionInformation {
+                        id: c.id().to_string(),
+                        account: c.account().to_string(),
+                        total: c.total().into(),
+                    };
+                    info!("Adding it to the list: {:?}", info);
+                    v.push(info);
                 }
                 Ok(serde_json::to_string(&v)?)
             }
