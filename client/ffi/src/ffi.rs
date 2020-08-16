@@ -339,8 +339,8 @@ where
             .await
             .contribution(bounty_id.parse::<u64>()?.into(), account.0)
             .await?;
-        info!("Contributed Balance: {:?}", amount);
-        Ok(serde_json::to_string(&amount)?)
+        info!("Contributed Balance: {:?}", amount.total());
+        Ok(serde_json::to_string(&amount.total())?)
     }
 
     pub async fn open_bounties(&self, min: &str) -> Result<String> {
