@@ -36,6 +36,7 @@ use substrate_subxt::{
 use sunshine_bounty_utils::bounty::{
     BountyInformation,
     BountySubmission,
+    Contribution,
     SubmissionState,
 };
 use sunshine_faucet_client::{
@@ -115,6 +116,11 @@ pub type SubState<T> = BountySubmission<
     BalanceOf<T>,
     SubmissionState,
 >;
+pub type Contrib<T> = Contribution<
+    <T as Bounty>::BountyId,
+    <T as System>::AccountId,
+    BalanceOf<T>,
+>;
 
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
 pub struct BountiesStore<T: Bounty> {
@@ -129,8 +135,8 @@ pub struct SubmissionsStore<T: Bounty> {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
-pub struct BountyTipsStore<T: Bounty> {
-    #[store(returns = BalanceOf<T>)]
+pub struct ContributionsStore<T: Bounty> {
+    #[store(returns = Contrib<T>)]
     pub id: T::BountyId,
     pub account: T::AccountId,
 }

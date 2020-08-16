@@ -45,7 +45,7 @@ pub trait BountyClient<T: Runtime + Bounty>: Client<T> {
         &self,
         bounty_id: T::BountyId,
         account: T::AccountId,
-    ) -> Result<BalanceOf<T>>;
+    ) -> Result<Contrib<T>>;
     async fn open_bounties(
         &self,
         min: BalanceOf<T>,
@@ -54,6 +54,14 @@ pub trait BountyClient<T: Runtime + Bounty>: Client<T> {
         &self,
         bounty_id: T::BountyId,
     ) -> Result<Option<Vec<(T::SubmissionId, SubState<T>)>>>;
+    async fn bounty_contributions(
+        &self,
+        bounty_id: T::BountyId,
+    ) -> Result<Option<Vec<Contrib<T>>>>;
+    async fn account_contributions(
+        &self,
+        account_id: T::AccountId,
+    ) -> Result<Option<Vec<Contrib<T>>>>;
 }
 
 #[async_trait]
@@ -140,10 +148,10 @@ where
         &self,
         bounty_id: T::BountyId,
         account: T::AccountId,
-    ) -> Result<BalanceOf<T>> {
+    ) -> Result<Contrib<T>> {
         Ok(self
             .chain_client()
-            .bounty_tips(bounty_id, account, None)
+            .contributions(bounty_id, account, None)
             .await?)
     }
     async fn open_bounties(
@@ -182,6 +190,42 @@ where
             Ok(None)
         } else {
             Ok(Some(submissions_for_bounty))
+        }
+    }
+    async fn bounty_contributions(
+        &self,
+        bounty_id: T::BountyId,
+    ) -> Result<Option<Vec<Contrib<T>>>> {
+        let mut contributions =
+            self.chain_client().contributions_iter(None).await?;
+        let mut contributions_for_bounty = Vec::<Contrib<T>>::new();
+        while let Some((_, contrib)) = contributions.next().await? {
+            if contrib.id() == bounty_id {
+                contributions_for_bounty.push(contrib);
+            }
+        }
+        if contributions_for_bounty.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(contributions_for_bounty))
+        }
+    }
+    async fn account_contributions(
+        &self,
+        account_id: T::AccountId,
+    ) -> Result<Option<Vec<Contrib<T>>>> {
+        let mut contributions =
+            self.chain_client().contributions_iter(None).await?;
+        let mut contributions_by_account = Vec::<Contrib<T>>::new();
+        while let Some((_, contrib)) = contributions.next().await? {
+            if contrib.account() == account_id {
+                contributions_by_account.push(contrib);
+            }
+        }
+        if contributions_by_account.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(contributions_by_account))
         }
     }
 }
@@ -320,11 +364,11 @@ mod tests {
         };
         assert_eq!(event1, expected_event1);
 
-        let expected_amount = client
+        let expected_contrib = client
             .contribution(1, alice_account_id.clone())
             .await
             .unwrap();
-        assert_eq!(expected_amount, 1000);
+        assert_eq!(expected_contrib.total(), 1000);
 
         let b = client
             .chain_client()
@@ -345,11 +389,11 @@ mod tests {
         };
         assert_eq!(event2, expected_event2);
 
-        let expected_amount = client
+        let expected_contrib = client
             .contribution(1, alice_account_id.clone())
             .await
             .unwrap();
-        assert_eq!(expected_amount, 2000);
+        assert_eq!(expected_contrib.total(), 2000);
 
         let b = client
             .chain_client()
