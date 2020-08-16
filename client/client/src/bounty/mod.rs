@@ -403,5 +403,16 @@ mod tests {
             .data
             .free;
         println!("{}", b);
+
+        let account_contributions = client
+            .account_contributions(alice_account_id.clone())
+            .await
+            .unwrap()
+            .unwrap();
+        let bounty_contributions =
+            client.bounty_contributions(1).await.unwrap().unwrap();
+        assert_eq!(account_contributions, bounty_contributions);
+        assert_eq!(account_contributions.len(), 1);
+        assert_eq!(account_contributions.get(0).unwrap().total(), 2000);
     }
 }
