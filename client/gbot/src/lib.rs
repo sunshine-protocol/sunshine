@@ -99,8 +99,7 @@ impl GBot {
             .create_comment(
                 issue_number,
                 format!(
-                    "☀️ Sunshine Bounty Posted ☀️ \n
-                    BountyID: {} | Total Amount: {}",
+                    "## ☀️ Sunshine Bounty Posted ☀️ <br> BountyID: {} 🌻 Total Amount: {}",
                     bounty_id, amount,
                 ),
             )
@@ -130,8 +129,7 @@ impl GBot {
             .update_comment(
                 bounty_comment.id,
                 format!(
-                    "☀️ Sunshine Bounty Posted ☀️ \n
-                    BountyID: {} | Total Amount: {}",
+                    "## ☀️ Sunshine Bounty Posted ☀️ <br> BountyID: {} 🌻 Total Amount: {}",
                     bounty_id, new_balance,
                 ),
             )
@@ -185,8 +183,7 @@ impl GBot {
             .create_comment(
                 submission_issue_number,
                 format!(
-                    "☀️ Sunshine Submission Posted ☀️ \n
-                    BountyID: {} | SubmissionID: {} | Amount Requested: {} | [Bounty Issue]({})",
+                    "## ☀️ Sunshine Submission Posted ☀️ <br> BountyID: {} 🌻 SubmissionID: {} 🌻 Amount Requested: {} 🌻 [Bounty Issue]({})",
                     bounty_id, submission_id, amount, bounty_issue_ref,
                 ),
             )
@@ -229,8 +226,7 @@ impl GBot {
             .update_comment(
                 submission_comment.id,
                 format!(
-                    "☀️ Sunshine Submission Approved ☀️ \n
-                    BountyID: {} | SubmissionID: {} | Amount Received: {} | [Bounty Issue]({})",
+                    "## ☀️ Sunshine Submission Approved ☀️ <br> BountyID: {} 🌻 SubmissionID: {} 🌻 Amount Received: {} 🌻 [Bounty Issue]({})",
                     bounty_id, submission_id, amount_received, bounty_issue_ref,
                 ),
             )

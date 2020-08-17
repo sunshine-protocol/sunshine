@@ -9,21 +9,21 @@ async fn main() -> std::result::Result<(), Error> {
     let github_bot = GBot::new()?;
     github_bot
         .new_bounty_issue(
-            1729,
+            1234,
             2u64,
             "sunshine-protocol".to_string(),
             "sunshine-bounty".to_string(),
-            146u64,
+            162u64,
         )
         .await?;
     println!("Bounty Post Succeeded");
     github_bot
         .update_bounty_issue(
-            5000,
+            5678,
             2u64,
             "sunshine-protocol".to_string(),
             "sunshine-bounty".to_string(),
-            146u64,
+            162u64,
         )
         .await?;
     println!("Bounty Contribution Succeeded");
@@ -34,7 +34,7 @@ async fn main() -> std::result::Result<(), Error> {
             1u64,
             "sunshine-protocol".to_string(),
             "sunshine-bounty".to_string(),
-            146u64,
+            162u64,
             "sunshine-protocol".to_string(),
             "sunshine-bounty".to_string(),
             111u64,
@@ -48,7 +48,7 @@ async fn main() -> std::result::Result<(), Error> {
             1u64,
             "sunshine-protocol".to_string(),
             "sunshine-bounty".to_string(),
-            146u64,
+            162u64,
             "sunshine-protocol".to_string(),
             "sunshine-bounty".to_string(),
             111u64,
