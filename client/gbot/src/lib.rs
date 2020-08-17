@@ -1,12 +1,16 @@
 #![allow(clippy::too_many_arguments)]
 
 mod error;
+mod util;
 pub use error::Error;
 use error::Result;
-
 use octocrab::{
     models::Comment,
     Octocrab,
+};
+use util::{
+    GithubIssue,
+    IssueComment,
 };
 
 const GITHUB_BASE_URL: &str = "https://github.com";
@@ -27,10 +31,10 @@ impl GBot {
         repo_owner: String,
         repo_name: String,
         issue_number: u64,
-    ) -> Result<Option<Comment>> {
+    ) -> Result<Option<IssueComment>> {
         let page = self
             .crab
-            .issues(repo_owner, repo_name)
+            .issues(repo_owner.clone(), repo_name.clone())
             .list_comments(issue_number)
             .since(chrono::Utc::now())
             .per_page(100)
@@ -39,13 +43,41 @@ impl GBot {
             .await?;
         let mut comments_by_author = Vec::<Comment>::new();
         let current_user = self.crab.current().user().await?;
+        // TODO: is this the right order? is there a better way to get the last comment
         for c in page {
             if c.user == current_user {
                 comments_by_author.push(c);
             }
         }
-        Ok(comments_by_author.pop())
+        if let Some(last_comment) = comments_by_author.pop() {
+            Ok(Some(IssueComment {
+                issue: GithubIssue {
+                    repo_name,
+                    repo_owner,
+                    issue_number,
+                },
+                comment: last_comment,
+            }))
+        } else {
+            Ok(None)
+        }
     }
+}
+
+#[macro_export]
+macro_rules! fail {
+    ( $y:expr ) => {{
+        return Err($y.into())
+    }};
+}
+
+#[macro_export]
+macro_rules! ensure {
+    ( $x:expr, $y:expr $(,)? ) => {{
+        if !$x {
+            $crate::fail!($y);
+        }
+    }};
 }
 
 impl GBot {
@@ -57,6 +89,16 @@ impl GBot {
         repo_name: String,
         issue_number: u64,
     ) -> Result<()> {
+        ensure!(
+            self.get_last_comment(
+                repo_owner.clone(),
+                repo_name.clone(),
+                issue_number
+            )
+            .await?
+            .is_none(),
+            Error::CannotReuseIssues
+        );
         let new_issues_handler = self.crab.issues(repo_owner, repo_name);
         let _ = new_issues_handler
             .create_comment(
@@ -102,6 +144,16 @@ impl GBot {
         bounty_repo_name: String,
         bounty_issue_number: u64,
     ) -> Result<()> {
+        ensure!(
+            self.get_last_comment(
+                submission_repo_owner.clone(),
+                submission_repo_name.clone(),
+                submission_issue_number
+            )
+            .await?
+            .is_none(),
+            Error::CannotReuseIssues
+        );
         let submission_issues_handler = self.crab.issues(
             submission_repo_owner.clone(),
             submission_repo_name.clone(),
