@@ -1,39 +1,10 @@
 use crate::error::Error;
-use octocrab::models::Comment;
 use std::str::FromStr;
-
-#[derive(Debug, Clone)]
-pub struct GithubIssue {
-    pub repo_owner: String,
-    pub repo_name: String,
-    pub issue_number: u64,
-}
-
-#[derive(Debug, Clone)]
-pub struct IssueComment {
-    pub issue: GithubIssue,
-    pub comment: Comment,
-}
 
 #[derive(Debug, Clone)]
 pub struct Bounty {
     pub id: u64,
     pub total: u128,
-}
-
-impl Bounty {
-    pub fn add_total(&self, c: u128) -> Self {
-        Bounty {
-            total: self.total + c,
-            ..self.clone()
-        }
-    }
-    pub fn subtract_total(&self, c: u128) -> Self {
-        Bounty {
-            total: self.total - c,
-            ..self.clone()
-        }
-    }
 }
 
 impl FromStr for Bounty {

@@ -16,6 +16,10 @@ pub enum Error {
     ParseSubmissionError,
     #[error("Issues cannot be reused for other bounties or submissions")]
     CannotReuseIssues,
+    #[error("Contributions update Bounty Issues")]
+    ContributionMustRefValidBountyIssue,
+    #[error("Passed incorrect bounty id into update bounty")]
+    CannotUpdateDifferentBounty,
 }
 
 pub type Result<T> = core::result::Result<T, Error>;

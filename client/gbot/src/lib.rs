@@ -9,8 +9,8 @@ use octocrab::{
     Octocrab,
 };
 use util::{
-    GithubIssue,
-    IssueComment,
+    Bounty,
+    Submission,
 };
 
 const GITHUB_BASE_URL: &str = "https://github.com";
@@ -31,7 +31,7 @@ impl GBot {
         repo_owner: String,
         repo_name: String,
         issue_number: u64,
-    ) -> Result<Option<IssueComment>> {
+    ) -> Result<Option<Comment>> {
         let page = self
             .crab
             .issues(repo_owner.clone(), repo_name.clone())
@@ -50,14 +50,7 @@ impl GBot {
             }
         }
         if let Some(last_comment) = comments_by_author.pop() {
-            Ok(Some(IssueComment {
-                issue: GithubIssue {
-                    repo_name,
-                    repo_owner,
-                    issue_number,
-                },
-                comment: last_comment,
-            }))
+            Ok(Some(last_comment))
         } else {
             Ok(None)
         }
@@ -81,7 +74,7 @@ macro_rules! ensure {
 }
 
 impl GBot {
-    pub async fn issue_comment_bounty_post(
+    pub async fn new_bounty_issue(
         &self,
         amount: u128,
         bounty_id: u64,
@@ -104,29 +97,46 @@ impl GBot {
             .create_comment(
                 issue_number,
                 format!(
-                    "${} Bounty Posted On Chain, BountyId {}",
-                    amount, bounty_id,
+                    "☀️ Sunshine Bounty Posted ☀️ \n
+                    BountyID: {} | Total Amount: {}",
+                    bounty_id, amount,
                 ),
             )
             .await?;
         Ok(())
     }
-    pub async fn issue_comment_bounty_contribute(
+    pub async fn update_bounty_issue(
         &self,
-        last_contribution: u128,
-        total_balance: u128,
+        new_balance: u128,
         bounty_id: u64,
         repo_owner: String,
         repo_name: String,
         issue_number: u64,
     ) -> Result<()> {
+        let bounty_comment = self
+            .get_last_comment(
+                repo_owner.clone(),
+                repo_name.clone(),
+                issue_number,
+            )
+            .await?
+            .ok_or(Error::ContributionMustRefValidBountyIssue)?;
+        let posted_bounty = bounty_comment
+            .body
+            .ok_or(Error::ContributionMustRefValidBountyIssue)?
+            .parse::<Bounty>()?;
+        ensure!(
+            posted_bounty.id == bounty_id,
+            Error::CannotUpdateDifferentBounty
+        );
         let new_issues_handler = self.crab.issues(repo_owner, repo_name);
         let _ = new_issues_handler
             .create_comment(
                 issue_number,
                 format!(
-                    "Contribution to Bounty {} of Balance ${} increases Total Bounty Balance to ${}",
-                    bounty_id, last_contribution, total_balance
+                    "☀️ Sunshine Bounty Posted ☀️ \n
+                    BountyID: {} | Total Amount: {}",
+                    bounty_id, new_balance,
                 ),
             )
             .await?;
