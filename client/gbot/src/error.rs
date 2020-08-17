@@ -17,7 +17,9 @@ pub enum Error {
     #[error("Issues cannot be reused for other bounties or submissions")]
     CannotReuseIssues,
     #[error("Contributions update Bounty Issues")]
-    ContributionMustRefValidBountyIssue,
+    MustRefValidBountyIssue,
+    #[error("Submission approvals must update Submission Issues")]
+    MustRefValidSubmissionIssue,
     #[error("Passed incorrect bounty id into update bounty")]
     CannotUpdateDifferentBounty,
 }

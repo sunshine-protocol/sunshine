@@ -6935,6 +6935,7 @@ version = "0.0.1"
 dependencies = [
  "chrono",
  "env_logger",
+ "lazy_static",
  "octocrab",
  "thiserror",
  "tokio 0.2.22",

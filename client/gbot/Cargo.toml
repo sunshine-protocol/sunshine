@@ -9,6 +9,7 @@ description = "github bot for sunshine bounty"
 chrono = { version = "0.4.11", features = ["serde"] }
 octocrab = { git = "https://github.com/4meta5/octocrab", branch = "just-update-comment" }
 thiserror = "1.0.20"
+lazy_static = "1.4.0"
 
 [dev-dependencies]
 tokio = { version = "0.2.22", default-features = false, features = ["macros"] }

@@ -7,33 +7,53 @@ use sunshine_bounty_gbot::{
 async fn main() -> std::result::Result<(), Error> {
     env_logger::init();
     let github_bot = GBot::new()?;
-    let last_bounty_comment = github_bot
-        .get_last_comment(
+    github_bot
+        .new_bounty_issue(
+            1729,
+            2u64,
             "sunshine-protocol".to_string(),
             "sunshine-bounty".to_string(),
-            124,
+            146u64,
         )
         .await?;
-    println!("{:?}", last_bounty_comment.unwrap());
-    // github_bot
-    //     .new_bounty_issue(
-    //         1738,
-    //         1u64,
-    //         "sunshine-protocol".to_string(),
-    //         "sunshine-bounty".to_string(),
-    //         124u64,
-    //     )
-    //     .await?;
-    // println!("Bounty Post Succeeded");
+    println!("Bounty Post Succeeded");
     github_bot
         .update_bounty_issue(
-            1748,
-            1u64,
+            5000,
+            2u64,
             "sunshine-protocol".to_string(),
             "sunshine-bounty".to_string(),
-            124u64,
+            146u64,
         )
         .await?;
     println!("Bounty Contribution Succeeded");
+    github_bot
+        .new_submission_issue(
+            1000,
+            2u64,
+            1u64,
+            "sunshine-protocol".to_string(),
+            "sunshine-bounty".to_string(),
+            146u64,
+            "sunshine-protocol".to_string(),
+            "sunshine-bounty".to_string(),
+            111u64,
+        )
+        .await?;
+    println!("Bounty Submission Succeeded");
+    github_bot
+        .approve_submission_issue(
+            500,
+            2u64,
+            1u64,
+            "sunshine-protocol".to_string(),
+            "sunshine-bounty".to_string(),
+            146u64,
+            "sunshine-protocol".to_string(),
+            "sunshine-bounty".to_string(),
+            111u64,
+        )
+        .await?;
+    println!("Bounty Approval Succeeded");
     Ok(())
 }
