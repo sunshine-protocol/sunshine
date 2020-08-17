@@ -6,19 +6,25 @@ use sunshine_bounty_gbot::{
 #[tokio::main]
 async fn main() -> std::result::Result<(), Error> {
     env_logger::init();
-    println!("Bot Started");
     let github_bot = GBot::new()?;
-    println!("Authentication Succeeded");
-    github_bot
-        .new_bounty_issue(
-            1738,
-            1u64,
+    let last_bounty_comment = github_bot
+        .get_last_comment(
             "sunshine-protocol".to_string(),
             "sunshine-bounty".to_string(),
-            124u64,
+            124,
         )
         .await?;
-    println!("Bounty Post Succeeded");
+    println!("{:?}", last_bounty_comment.unwrap());
+    // github_bot
+    //     .new_bounty_issue(
+    //         1738,
+    //         1u64,
+    //         "sunshine-protocol".to_string(),
+    //         "sunshine-bounty".to_string(),
+    //         124u64,
+    //     )
+    //     .await?;
+    // println!("Bounty Post Succeeded");
     github_bot
         .update_bounty_issue(
             1748,

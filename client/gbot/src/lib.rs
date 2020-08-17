@@ -2,6 +2,14 @@
 
 mod error;
 mod util;
+use chrono::{
+    DateTime,
+    NaiveDate,
+    NaiveDateTime,
+    NaiveTime,
+    TimeZone,
+    Utc,
+};
 pub use error::Error;
 use error::Result;
 use octocrab::{
@@ -14,6 +22,14 @@ use util::{
 };
 
 const GITHUB_BASE_URL: &str = "https://github.com";
+
+// TODO: const? lazy_static?
+pub fn recent_time() -> DateTime<Utc> {
+    let d = NaiveDate::from_ymd(2020, 08, 14);
+    let t = NaiveTime::from_hms_milli(12, 34, 56, 789);
+    let ndt = NaiveDateTime::new(d, t);
+    DateTime::<Utc>::from_utc(ndt, Utc)
+}
 
 #[derive(Debug, Clone)]
 pub struct GBot {
@@ -32,26 +48,18 @@ impl GBot {
         repo_name: String,
         issue_number: u64,
     ) -> Result<Option<Comment>> {
-        let page = self
+        let recent_time = recent_time();
+        let mut page = self
             .crab
             .issues(repo_owner.clone(), repo_name.clone())
             .list_comments(issue_number)
-            .since(chrono::Utc::now())
-            .per_page(100)
-            .page(2u32)
+            .since(recent_time)
             .send()
             .await?;
         let mut comments_by_author = Vec::<Comment>::new();
         let current_user = self.crab.current().user().await?;
-        // TODO: is this the right order? is there a better way to get the last comment
-        println!("Bot User is {:?}", current_user);
-        for c in page.into_iter() {
-            println!("{:?} =!= {:?}", c.user, current_user);
-            if c.user == current_user {
-                comments_by_author.push(c);
-            }
-        }
-        Ok(comments_by_author.pop())
+        let mut items_on_page = page.take_items();
+        Ok(items_on_page.pop())
     }
 }
 
