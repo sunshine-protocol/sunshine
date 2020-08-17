@@ -6934,6 +6934,7 @@ dependencies = [
 name = "sunshine-bounty-gbot"
 version = "0.0.1"
 dependencies = [
+ "chrono",
  "env_logger",
  "octocrab",
  "thiserror",

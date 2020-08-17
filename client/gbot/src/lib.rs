@@ -4,7 +4,10 @@ mod error;
 pub use error::Error;
 use error::Result;
 
-use octocrab::Octocrab;
+use octocrab::{
+    models::Comment,
+    Octocrab,
+};
 
 const GITHUB_BASE_URL: &str = "https://github.com";
 
@@ -18,6 +21,30 @@ impl GBot {
         let token = std::env::var("GITHUB_TOKEN")?;
         let crab = Octocrab::builder().personal_token(token).build()?;
         Ok(GBot { crab })
+    }
+    pub async fn get_last_comment(
+        &self,
+        repo_owner: String,
+        repo_name: String,
+        issue_number: u64,
+    ) -> Result<Option<Comment>> {
+        let page = self
+            .crab
+            .issues(repo_owner, repo_name)
+            .list_comments(issue_number)
+            .since(chrono::Utc::now())
+            .per_page(100)
+            .page(2u32)
+            .send()
+            .await?;
+        let mut comments_by_author = Vec::<Comment>::new();
+        let current_user = self.crab.current().user().await?;
+        for c in page {
+            if c.user == current_user {
+                comments_by_author.push(c);
+            }
+        }
+        Ok(comments_by_author.pop())
     }
 }
 

@@ -6,6 +6,7 @@ edition = "2018"
 description = "github bot for sunshine bounty"
 
 [dependencies]
+chrono = { version = "0.4.11", features = ["serde"] }
 octocrab = "0.5.0"
 thiserror = "1.0.20"
 
