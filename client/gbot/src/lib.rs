@@ -1,7 +1,7 @@
 #![allow(clippy::too_many_arguments)]
 
 mod error;
-mod util;
+mod parser;
 use chrono::{
     DateTime,
     NaiveDate,
@@ -19,7 +19,7 @@ use octocrab::{
 const GITHUB_BASE_URL: &str = "https://github.com";
 
 fn recent_time() -> DateTime<Utc> {
-    let d = NaiveDate::from_ymd(2020, 08, 14);
+    let d = NaiveDate::from_ymd(2020, 8, 14);
     let t = NaiveTime::from_hms_milli(12, 34, 56, 789);
     let ndt = NaiveDateTime::new(d, t);
     DateTime::<Utc>::from_utc(ndt, Utc)
