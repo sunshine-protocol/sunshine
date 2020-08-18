@@ -1,7 +1,6 @@
 #![allow(clippy::too_many_arguments)]
 
 mod error;
-mod parser;
 use chrono::{
     DateTime,
     NaiveDate,
