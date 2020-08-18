@@ -123,6 +123,12 @@ pub type Contrib<T> = Contribution<
 >;
 
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
+pub struct IssueHashSetStore<T: Bounty> {
+    #[store(returns = ())]
+    pub hash: T::Hash,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
 pub struct BountiesStore<T: Bounty> {
     #[store(returns = BountyState<T>)]
     pub id: T::BountyId,

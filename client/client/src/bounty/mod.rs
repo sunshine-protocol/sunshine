@@ -86,6 +86,8 @@ where
         amount: BalanceOf<T>,
     ) -> Result<BountyPostedEvent<T>> {
         let signer = self.chain_signer()?;
+        // TODO: hash it and check that the hash is not in the IssueHashSetStore
+        // do the same thing for submissions
         let info = crate::post(self, bounty).await?;
         self.chain_client()
             .post_bounty_and_watch(&signer, info.into(), amount)
