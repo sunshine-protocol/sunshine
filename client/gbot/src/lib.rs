@@ -64,15 +64,6 @@ impl GBot {
     }
 }
 
-#[macro_export]
-macro_rules! ensure {
-    ( $x:expr, $y:expr $(,)? ) => {{
-        if !$x {
-            return Err($y.into())
-        }
-    }};
-}
-
 impl GBot {
     pub async fn new_bounty_issue(
         &self,
