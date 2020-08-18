@@ -182,7 +182,6 @@ impl GBot {
             )
             .await?
             .ok_or(Error::MustRefValidSubmissionIssue)?;
-        // TODO: parse comment into Submission and verify bounty_id, submission_id are valid
         let new_issues_handler = self
             .crab
             .issues(submission_repo_owner, submission_repo_name);
