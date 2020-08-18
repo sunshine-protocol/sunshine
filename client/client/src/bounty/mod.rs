@@ -2,10 +2,7 @@ mod subxt;
 
 use crate::error::Error;
 use codec::Encode;
-use std::convert::TryInto;
 use substrate_subxt::{
-    sp_core::H256,
-    system::System,
     Runtime,
     SignedExtension,
     SignedExtra,
@@ -16,16 +13,6 @@ use sunshine_client_utils::{
     Client,
     Result,
 };
-
-fn slice_to_array(from: &[u8]) -> [u8; 32] {
-    if let Ok(s) = from.try_into() {
-        s
-    } else {
-        let mut buf: [u8; 32] = Default::default();
-        buf.clone_from_slice(&from[0..32]);
-        buf
-    }
-}
 
 #[async_trait]
 pub trait BountyClient<T: Runtime + Bounty>: Client<T> {
@@ -83,7 +70,6 @@ where
     T: Runtime + Bounty,
     <<T::Extra as SignedExtra<T>>::Extra as SignedExtension>::AdditionalSigned:
         Send + Sync,
-    <T as System>::Hash: From<H256>,
     <T as Bounty>::IpfsReference: From<libipld::cid::Cid>,
     C: Client<T>,
     C::OffchainClient: ipld_block_builder::Cache<
@@ -100,16 +86,10 @@ where
         amount: BalanceOf<T>,
     ) -> Result<BountyPostedEvent<T>> {
         let signer = self.chain_signer()?;
-        let issue_hash =
-            H256::from(slice_to_array(Encode::encode(&bounty).as_slice()));
+        let issue = Encode::encode(&bounty);
         let info = crate::post(self, bounty).await?;
         self.chain_client()
-            .post_bounty_and_watch(
-                &signer,
-                issue_hash.into(),
-                info.into(),
-                amount,
-            )
+            .post_bounty_and_watch(&signer, issue, info.into(), amount)
             .await?
             .bounty_posted()?
             .ok_or_else(|| Error::EventNotFound.into())
@@ -133,14 +113,13 @@ where
         amount: BalanceOf<T>,
     ) -> Result<BountySubmissionPostedEvent<T>> {
         let signer = self.chain_signer()?;
-        let issue_hash =
-            H256::from(slice_to_array(Encode::encode(&submission).as_slice()));
+        let issue = Encode::encode(&submission);
         let submission_ref = crate::post(self, submission).await?;
         self.chain_client()
             .submit_for_bounty_and_watch(
                 &signer,
                 bounty_id,
-                issue_hash.into(),
+                issue,
                 submission_ref.into(),
                 amount,
             )
@@ -315,7 +294,6 @@ mod tests {
             depositer: alice_account_id,
             amount: 10,
             id: 1,
-            issue_hash: event.issue_hash,
             description: event.description.clone(),
         };
         assert_eq!(event, expected_event);
@@ -385,7 +363,6 @@ mod tests {
             depositer: alice_account_id.clone(),
             amount: 1000,
             id: 1,
-            issue_hash: event1.issue_hash,
             description: event1.description.clone(),
         };
         assert_eq!(event1, expected_event1);

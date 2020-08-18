@@ -8,6 +8,10 @@ use frame_support::{
     weights::Weight,
 };
 use frame_system::{self as system,};
+use rand::{
+    rngs::OsRng,
+    RngCore,
+};
 use sp_core::H256;
 use sp_runtime::{
     testing::Header,
@@ -100,7 +104,13 @@ pub type System = system::Module<Test>;
 pub type Balances = pallet_balances::Module<Test>;
 pub type Bounty = Module<Test>;
 
-fn get_last_event() -> RawEvent<u64, H256, u32, u64, u64, u64> {
+fn random(output_len: usize) -> Vec<u8> {
+    let mut buf = vec![0u8; output_len];
+    OsRng.fill_bytes(&mut buf);
+    buf
+}
+
+fn get_last_event() -> RawEvent<u64, u32, u64, u64, u64> {
     System::events()
         .into_iter()
         .map(|r| r.event)
@@ -142,7 +152,7 @@ fn post_bounty_works() {
         assert_noop!(
             Bounty::post_bounty(
                 Origin::signed(1),
-                H256::random(),
+                random(10),
                 10u32, // cid
                 9,     // amount
             ),
@@ -151,7 +161,7 @@ fn post_bounty_works() {
         assert_noop!(
             Bounty::post_bounty(
                 Origin::signed(1),
-                H256::random(),
+                random(10),
                 10u32, // cid
                 101,   // amount
             ),
@@ -161,17 +171,14 @@ fn post_bounty_works() {
                 message: Some("InsufficientBalance",),
             },
         );
-        let issue_hash = H256::random();
+        let issue_hash = random(10);
         assert_ok!(Bounty::post_bounty(
             Origin::signed(1),
-            issue_hash,
+            issue_hash.clone(),
             10u32, // constitution
             10,    // funding reserved
         ));
-        assert_eq!(
-            RawEvent::BountyPosted(1, 10, 1, issue_hash, 10),
-            get_last_event()
-        );
+        assert_eq!(RawEvent::BountyPosted(1, 10, 1, 10), get_last_event());
         assert_noop!(
             Bounty::post_bounty(
                 Origin::signed(1),
@@ -189,7 +196,7 @@ fn contribution_works() {
     new_test_ext().execute_with(|| {
         assert_ok!(Bounty::post_bounty(
             Origin::signed(1),
-            H256::random(),
+            random(10),
             10u32, // constitution
             10,    // funding reserved
         ));
@@ -224,7 +231,7 @@ fn submission_works() {
             Bounty::submit_for_bounty(
                 Origin::signed(2),
                 1,
-                H256::random(),
+                random(10),
                 10u32,
                 15u64,
             ),
@@ -232,7 +239,7 @@ fn submission_works() {
         );
         assert_ok!(Bounty::post_bounty(
             Origin::signed(1),
-            H256::random(),
+            random(10),
             10u32, // constitution
             21,    // funding reserved
         ));
@@ -240,7 +247,7 @@ fn submission_works() {
             Bounty::submit_for_bounty(
                 Origin::signed(1),
                 1,
-                H256::random(),
+                random(10),
                 10u32,
                 15u64,
             ),
@@ -250,22 +257,22 @@ fn submission_works() {
             Bounty::submit_for_bounty(
                 Origin::signed(2),
                 1,
-                H256::random(),
+                random(10),
                 10u32,
                 22u64,
             ),
             Error::<Test>::BountySubmissionExceedsTotalAvailableFunding,
         );
-        let issue_hash = H256::random();
+        let issue_hash = random(10);
         assert_ok!(Bounty::submit_for_bounty(
             Origin::signed(2),
             1,
-            issue_hash,
+            issue_hash.clone(),
             10u32,
             10u64,
         ));
         assert_eq!(
-            RawEvent::BountySubmissionPosted(2, 1, 10, 1, 10, issue_hash, 10),
+            RawEvent::BountySubmissionPosted(2, 1, 10, 1, 10, 10),
             get_last_event()
         );
         assert_noop!(
@@ -290,7 +297,7 @@ fn submission_approval_works() {
         );
         assert_ok!(Bounty::post_bounty(
             Origin::signed(1),
-            H256::random(),
+            random(10),
             10u32, // constitution
             21,    // funding reserved
         ));
@@ -301,7 +308,7 @@ fn submission_approval_works() {
         assert_ok!(Bounty::submit_for_bounty(
             Origin::signed(2),
             1,
-            H256::random(),
+            random(10),
             10u32,
             10u64,
         ));

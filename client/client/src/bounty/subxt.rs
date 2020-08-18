@@ -123,12 +123,6 @@ pub type Contrib<T> = Contribution<
 >;
 
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
-pub struct IssueHashSetStore<T: System> {
-    #[store(returns = ())]
-    pub issue_hash: T::Hash,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
 pub struct BountiesStore<T: Bounty> {
     #[store(returns = BountyState<T>)]
     pub id: T::BountyId,
@@ -151,7 +145,7 @@ pub struct ContributionsStore<T: Bounty> {
 
 #[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
 pub struct PostBountyCall<T: Bounty> {
-    pub issue_hash: T::Hash,
+    pub issue: Vec<u8>,
     pub info: T::IpfsReference,
     pub amount: BalanceOf<T>,
 }
@@ -161,7 +155,6 @@ pub struct BountyPostedEvent<T: Bounty> {
     pub depositer: <T as System>::AccountId,
     pub amount: BalanceOf<T>,
     pub id: T::BountyId,
-    pub issue_hash: T::Hash,
     pub description: T::IpfsReference,
 }
 
@@ -183,7 +176,7 @@ pub struct BountyRaiseContributionEvent<T: Bounty> {
 #[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
 pub struct SubmitForBountyCall<T: Bounty> {
     pub bounty_id: T::BountyId,
-    pub issue_hash: T::Hash,
+    pub issue: Vec<u8>,
     pub submission_ref: T::IpfsReference,
     pub amount: BalanceOf<T>,
 }
@@ -195,7 +188,6 @@ pub struct BountySubmissionPostedEvent<T: Bounty> {
     pub amount: BalanceOf<T>,
     pub id: T::SubmissionId,
     pub bounty_ref: T::IpfsReference,
-    pub issue_hash: T::Hash,
     pub submission_ref: T::IpfsReference,
 }
 

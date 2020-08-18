@@ -71,6 +71,7 @@ type Contrib<T> = Contribution<
     <T as frame_system::Trait>::AccountId,
     BalanceOf<T>,
 >;
+type EncodedIssue = Vec<u8>;
 
 pub trait Trait: frame_system::Trait {
     /// The overarching event type
@@ -123,18 +124,17 @@ decl_event!(
     pub enum Event<T>
     where
         <T as frame_system::Trait>::AccountId,
-        <T as frame_system::Trait>::Hash,
         <T as Trait>::IpfsReference,
         <T as Trait>::BountyId,
         <T as Trait>::SubmissionId,
         Balance = BalanceOf<T>,
     {
-        /// Poster, Initial Amount, Identifier, Unique Issue Hash, Bounty Metadata (i.e. github issue reference)
-        BountyPosted(AccountId, Balance, BountyId, Hash, IpfsReference),
+        /// Poster, Initial Amount, Identifier, Bounty Metadata (i.e. github issue reference)
+        BountyPosted(AccountId, Balance, BountyId, IpfsReference),
         /// Contributor, This Contribution Amount, Identifier, Full Amount After Contribution, Bounty Metadata
         BountyRaiseContribution(AccountId, Balance, BountyId, Balance, IpfsReference),
-        /// Submitter, Bounty Identifier, Amount Requested, Submission Identifier, Bounty Metadata, Unique Issue Hash, Submission Metadata
-        BountySubmissionPosted(AccountId, BountyId, Balance, SubmissionId, IpfsReference, Hash, IpfsReference),
+        /// Submitter, Bounty Identifier, Amount Requested, Submission Identifier, Bounty Metadata, Submission Metadata
+        BountySubmissionPosted(AccountId, BountyId, Balance, SubmissionId, IpfsReference, IpfsReference),
         /// Bounty Identifier, Full Amount Left After Payment, Submission Identifier, Amount Requested, Bounty Metadata, Submission Metadata
         BountyPaymentExecuted(BountyId, Balance, SubmissionId, Balance, AccountId, IpfsReference, IpfsReference),
     }
@@ -166,7 +166,7 @@ decl_storage! {
 
         /// Prevent overlapping usage of issues
         pub IssueHashSet get(fn issue_hash_set): map
-            hasher(blake2_128_concat) T::Hash => Option<()>;
+            hasher(blake2_128_concat) EncodedIssue => Option<()>;
         /// Posted Bounties
         pub Bounties get(fn bounties): map
             hasher(blake2_128_concat) T::BountyId => Option<Bounty<T>>;
@@ -189,11 +189,11 @@ decl_module! {
         #[weight = 0]
         fn post_bounty(
             origin,
-            issue_hash: T::Hash,
+            issue: EncodedIssue,
             info: T::IpfsReference,
             amount: BalanceOf<T>,
         ) -> DispatchResult {
-            ensure!(<IssueHashSet<T>>::get(issue_hash).is_none(), Error::<T>::IssueAlreadyClaimedForBountyOrSubmission);
+            ensure!(<IssueHashSet>::get(issue.clone()).is_none(), Error::<T>::IssueAlreadyClaimedForBountyOrSubmission);
             ensure!(amount >= T::MinDeposit::get(), Error::<T>::BountyPostMustExceedMinDeposit);
             let depositer = ensure_signed(origin)?;
             let imb = T::Currency::withdraw(
@@ -205,10 +205,10 @@ decl_module! {
             let id = Self::bounty_generate_uid();
             let bounty = Bounty::<T>::new(id, info.clone(), depositer.clone(), amount);
             T::Currency::resolve_creating(&Self::bounty_account_id(id), imb);
-            <IssueHashSet<T>>::insert(issue_hash, ());
+            <IssueHashSet>::insert(issue, ());
             <Bounties<T>>::insert(id, bounty);
             <Contributions<T>>::insert(id, &depositer, Contrib::<T>::new(id, depositer.clone(), amount));
-            Self::deposit_event(RawEvent::BountyPosted(depositer, amount, id, issue_hash, info));
+            Self::deposit_event(RawEvent::BountyPosted(depositer, amount, id, info));
             Ok(())
         }
         #[weight = 0]
@@ -242,11 +242,11 @@ decl_module! {
         fn submit_for_bounty(
             origin,
             bounty_id: T::BountyId,
-            issue_hash: T::Hash,
+            issue: EncodedIssue,
             submission_ref: T::IpfsReference,
             amount: BalanceOf<T>,
         ) -> DispatchResult {
-            ensure!(<IssueHashSet<T>>::get(issue_hash).is_none(), Error::<T>::IssueAlreadyClaimedForBountyOrSubmission);
+            ensure!(<IssueHashSet>::get(issue.clone()).is_none(), Error::<T>::IssueAlreadyClaimedForBountyOrSubmission);
             let submitter = ensure_signed(origin)?;
             let bounty = <Bounties<T>>::get(bounty_id).ok_or(Error::<T>::BountyDNE)?;
             ensure!(submitter != bounty.depositer(), Error::<T>::DepositerCannotSubmitForBounty);
@@ -254,8 +254,8 @@ decl_module! {
             let id = Self::submission_generate_uid();
             let submission = BountySub::<T>::new(bounty_id, id, submission_ref.clone(), submitter.clone(), amount);
             <Submissions<T>>::insert(id, submission);
-            <IssueHashSet<T>>::insert(issue_hash, ());
-            Self::deposit_event(RawEvent::BountySubmissionPosted(submitter, bounty_id, amount, id, bounty.info(), issue_hash, submission_ref));
+            <IssueHashSet>::insert(issue, ());
+            Self::deposit_event(RawEvent::BountySubmissionPosted(submitter, bounty_id, amount, id, bounty.info(), submission_ref));
             Ok(())
         }
         #[weight = 0]
