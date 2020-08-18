@@ -8,8 +8,6 @@ pub enum Error {
     NoGithubToken(#[from] std::env::VarError),
     #[error(transparent)]
     ParseIntError(#[from] std::num::ParseIntError),
-    #[error("Issues cannot be reused for other bounties or submissions")]
-    CannotReuseIssues,
     #[error("Contributions update Bounty Issues")]
     MustRefValidBountyIssue,
     #[error("Submission approvals must update Submission Issues")]

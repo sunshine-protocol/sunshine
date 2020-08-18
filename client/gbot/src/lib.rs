@@ -82,17 +82,6 @@ impl GBot {
         repo_name: String,
         issue_number: u64,
     ) -> Result<()> {
-        // TODO: move check to before chain client call
-        ensure!(
-            self.get_last_comment(
-                repo_owner.clone(),
-                repo_name.clone(),
-                issue_number
-            )
-            .await?
-            .is_none(),
-            Error::CannotReuseIssues
-        );
         let new_issues_handler = self.crab.issues(repo_owner, repo_name);
         let _ = new_issues_handler
             .create_comment(
@@ -113,7 +102,6 @@ impl GBot {
         repo_name: String,
         issue_number: u64,
     ) -> Result<()> {
-        // TODO: move check to before chain client call
         let bounty_comment = self
             .get_last_comment(
                 repo_owner.clone(),
@@ -122,7 +110,6 @@ impl GBot {
             )
             .await?
             .ok_or(Error::MustRefValidBountyIssue)?;
-        // TODO: parse comment into Bounty and verify that bounty_id are equal
         let new_issues_handler = self.crab.issues(repo_owner, repo_name);
         let _ = new_issues_handler
             .update_comment(
@@ -147,33 +134,12 @@ impl GBot {
         submission_repo_name: String,
         submission_issue_number: u64,
     ) -> Result<()> {
-        // TODO: move check to before chain client call
-        ensure!(
-            self.get_last_comment(
-                bounty_repo_owner.clone(),
-                bounty_repo_name.clone(),
-                bounty_issue_number
-            )
-            .await?
-            .is_some(),
-            Error::MustRefValidBountyIssue
-        ); // TODO: check that the issue refers to the same BountyID
         let bounty_issue_ref = format!(
             "{}/{}/{}/issues/{}",
             GITHUB_BASE_URL,
             bounty_repo_owner,
             bounty_repo_name,
             bounty_issue_number
-        );
-        ensure!(
-            self.get_last_comment(
-                submission_repo_owner.clone(),
-                submission_repo_name.clone(),
-                submission_issue_number
-            )
-            .await?
-            .is_none(),
-            Error::CannotReuseIssues
         );
         let new_issues_handler = self
             .crab
@@ -208,7 +174,6 @@ impl GBot {
             bounty_repo_name,
             bounty_issue_number
         );
-        // TODO: move check to before chain client call
         let submission_comment = self
             .get_last_comment(
                 submission_repo_owner.clone(),
