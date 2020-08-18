@@ -7,7 +7,7 @@ description = "github bot for sunshine bounty"
 
 [dependencies]
 chrono = { version = "0.4.11", features = ["serde"] }
-octocrab = { git = "https://github.com/XAMPPRocky/octocrab" }
+octocrab = "0.6.0"
 thiserror = "1.0.20"
 lazy_static = "1.4.0"
 

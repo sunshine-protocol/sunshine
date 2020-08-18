@@ -3456,7 +3456,8 @@ checksum = "1ab52be62400ca80aa00285d25253d7f7c437b7375c4de678f5405d3afe82ca5"
 [[package]]
 name = "octocrab"
 version = "0.6.0"
-source = "git+https://github.com/XAMPPRocky/octocrab#1bc9e077efb6b9170ff5c1b8d496e0a0df0a3870"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a315f443b7b54de70cf158955bd7a29896a3d8d9a0d2c9c006194401a2e05257"
 dependencies = [
  "arc-swap",
  "async-trait",
