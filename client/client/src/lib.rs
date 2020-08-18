@@ -42,9 +42,9 @@ pub struct TextBlock {
 
 #[derive(Debug, Default, Clone, DagCbor, Encode, Decode)]
 pub struct GithubIssue {
+    pub issue_number: u64,
     pub repo_owner: String,
     pub repo_name: String,
-    pub issue_number: u64,
 }
 
 pub(crate) async fn post<R, C, V>(

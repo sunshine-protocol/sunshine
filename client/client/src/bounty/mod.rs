@@ -17,6 +17,16 @@ use sunshine_client_utils::{
     Result,
 };
 
+fn slice_to_array(from: &[u8]) -> [u8; 32] {
+    if let Ok(s) = from.try_into() {
+        s
+    } else {
+        let mut buf: [u8; 32] = Default::default();
+        buf.clone_from_slice(&from[0..32]);
+        buf
+    }
+}
+
 #[async_trait]
 pub trait BountyClient<T: Runtime + Bounty>: Client<T> {
     async fn post_bounty(
@@ -90,11 +100,8 @@ where
         amount: BalanceOf<T>,
     ) -> Result<BountyPostedEvent<T>> {
         let signer = self.chain_signer()?;
-        let buf: [u8; 32] = Encode::encode(&bounty)
-            .as_slice()
-            .try_into()
-            .map_err(|_| Error::EncodedIssueExceededBuffer)?;
-        let issue_hash = H256::from(buf);
+        let issue_hash =
+            H256::from(slice_to_array(Encode::encode(&bounty).as_slice()));
         let info = crate::post(self, bounty).await?;
         self.chain_client()
             .post_bounty_and_watch(
@@ -126,11 +133,8 @@ where
         amount: BalanceOf<T>,
     ) -> Result<BountySubmissionPostedEvent<T>> {
         let signer = self.chain_signer()?;
-        let buf: [u8; 32] = Encode::encode(&submission)
-            .as_slice()
-            .try_into()
-            .map_err(|_| Error::EncodedIssueExceededBuffer)?;
-        let issue_hash = H256::from(buf);
+        let issue_hash =
+            H256::from(slice_to_array(Encode::encode(&submission).as_slice()));
         let submission_ref = crate::post(self, submission).await?;
         self.chain_client()
             .submit_for_bounty_and_watch(
@@ -325,13 +329,13 @@ mod tests {
         let bounty1 = GithubIssue {
             repo_owner: "sunshine-protocol".to_string(),
             repo_name: "sunshine-bounty".to_string(),
-            issue_number: 124,
+            issue_number: 125,
         };
         let event1 = client.post_bounty(bounty1, 10u128).await.unwrap();
         let bounty2 = GithubIssue {
             repo_owner: "sunshine-protocol".to_string(),
             repo_name: "sunshine-bounty".to_string(),
-            issue_number: 124,
+            issue_number: 126,
         };
         let event2 = client.post_bounty(bounty2, 10u128).await.unwrap();
         let bounties = client.open_bounties(9u128).await.unwrap().unwrap();
