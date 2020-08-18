@@ -41,7 +41,7 @@ pub struct TextBlock {
 }
 
 #[derive(Debug, Default, Clone, DagCbor, Encode, Decode)]
-pub struct BountyBody {
+pub struct GithubIssue {
     pub repo_owner: String,
     pub repo_name: String,
     pub issue_number: u64,

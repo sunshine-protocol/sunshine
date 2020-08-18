@@ -21,7 +21,7 @@ use sunshine_bounty_client::{
         Bounty,
         BountyClient,
     },
-    BountyBody,
+    GithubIssue,
 };
 use sunshine_client_utils::{
     cid::CidBytes,
@@ -43,11 +43,11 @@ impl BountyPostCommand {
         <R as System>::AccountId: Ss58Codec,
         <R as Balances>::Balance: From<u128> + Display,
         <R as Bounty>::BountyId: Display,
-        <R as Bounty>::BountyPost: From<BountyBody>,
+        <R as Bounty>::BountyPost: From<GithubIssue>,
     {
         let metadata: GithubIssueMetadata =
             self.issue_url.as_str().try_into()?;
-        let bounty: <R as Bounty>::BountyPost = BountyBody {
+        let bounty: <R as Bounty>::BountyPost = GithubIssue {
             repo_owner: metadata.owner,
             repo_name: metadata.repo,
             issue_number: metadata.issue,
@@ -106,11 +106,11 @@ impl BountySubmitCommand {
         <R as Balances>::Balance: From<u128> + Display,
         <R as Bounty>::BountyId: From<u64> + Display,
         <R as Bounty>::SubmissionId: Display,
-        <R as Bounty>::BountySubmission: From<BountyBody>,
+        <R as Bounty>::BountySubmission: From<GithubIssue>,
     {
         let metadata: GithubIssueMetadata =
             self.issue_url.as_str().try_into()?;
-        let bounty: <R as Bounty>::BountySubmission = BountyBody {
+        let bounty: <R as Bounty>::BountySubmission = GithubIssue {
             repo_owner: metadata.owner,
             repo_name: metadata.repo,
             issue_number: metadata.issue,
@@ -222,7 +222,7 @@ impl GetOpenBountiesCommand {
     ) -> Result<()>
     where
         R: Bounty<IpfsReference = CidBytes>,
-        C::OffchainClient: Cache<Codec, BountyBody>,
+        C::OffchainClient: Cache<Codec, GithubIssue>,
         <R as Balances>::Balance: From<u128> + Display,
         <R as Bounty>::BountyId: Display,
         <R as Bounty>::SubmissionId: Display + From<u64>,
@@ -275,7 +275,7 @@ impl GetOpenSubmissionsCommand {
     ) -> Result<()>
     where
         R: Bounty<IpfsReference = CidBytes>,
-        C::OffchainClient: Cache<Codec, BountyBody>,
+        C::OffchainClient: Cache<Codec, GithubIssue>,
         <R as Balances>::Balance: Display,
         <R as Bounty>::BountyId: From<u64> + Display,
         <R as Bounty>::SubmissionId: Display,

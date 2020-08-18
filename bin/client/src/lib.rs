@@ -99,9 +99,9 @@ impl Bank for Runtime {
 impl Bounty for Runtime {
     type IpfsReference = CidBytes;
     type BountyId = u64;
-    type BountyPost = BountyBody;
+    type BountyPost = GithubIssue;
     type SubmissionId = u64;
-    type BountySubmission = BountyBody;
+    type BountySubmission = GithubIssue;
 }
 
 impl sunshine_identity_client::Identity for Runtime {
@@ -120,7 +120,7 @@ impl substrate_subxt::Runtime for Runtime {
 }
 
 pub struct OffchainClient<S> {
-    bounties: IpldCache<S, Codec, BountyBody>,
+    bounties: IpldCache<S, Codec, GithubIssue>,
     constitutions: IpldCache<S, Codec, TextBlock>,
 }
 
@@ -133,7 +133,7 @@ impl<S: Store> OffchainClient<S> {
     }
 }
 
-derive_cache!(OffchainClient, bounties, Codec, BountyBody);
+derive_cache!(OffchainClient, bounties, Codec, GithubIssue);
 derive_cache!(OffchainClient, constitutions, Codec, TextBlock);
 
 impl<S: Store> From<S> for OffchainClient<S> {
