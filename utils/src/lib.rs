@@ -11,6 +11,7 @@ extern crate derive_new;
 pub mod bank;
 pub mod bounty;
 pub mod court;
+pub mod doc;
 pub mod drip;
 pub mod grant;
 pub mod kickback;
