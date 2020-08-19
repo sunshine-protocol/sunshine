@@ -8,54 +8,52 @@ async fn main() -> std::result::Result<(), Error> {
     env_logger::init();
     let github_bot = GBot::new()?;
     github_bot
-        .issue_comment_bounty_post(
-            1738,
-            1u64,
+        .new_bounty_issue(
+            1234,
+            2u64,
             "sunshine-protocol".to_string(),
             "sunshine-bounty".to_string(),
-            124u64,
+            162u64,
         )
         .await?;
     println!("Bounty Post Succeeded");
     github_bot
-        .issue_comment_bounty_contribute(
-            10,
-            1748,
-            1u64,
+        .update_bounty_issue(
+            5678,
+            2u64,
             "sunshine-protocol".to_string(),
             "sunshine-bounty".to_string(),
-            124u64,
+            162u64,
         )
         .await?;
-    println!("Bounty Contribution Post Succeeded");
+    println!("Bounty Contribution Succeeded");
     github_bot
-        .issue_comment_bounty_submission(
-            100u128,
-            1u64,
+        .new_submission_issue(
+            1000,
+            2u64,
             1u64,
             "sunshine-protocol".to_string(),
             "sunshine-bounty".to_string(),
-            141u64,
+            162u64,
             "sunshine-protocol".to_string(),
             "sunshine-bounty".to_string(),
-            124u64,
+            111u64,
         )
         .await?;
-    println!("Bounty Post Submission Succeeded");
+    println!("Bounty Submission Succeeded");
     github_bot
-        .issue_comment_submission_approval(
-            100u128,
-            1648u128,
-            1u64,
+        .approve_submission_issue(
+            500,
+            2u64,
             1u64,
             "sunshine-protocol".to_string(),
             "sunshine-bounty".to_string(),
-            141u64,
+            162u64,
             "sunshine-protocol".to_string(),
             "sunshine-bounty".to_string(),
-            124u64,
+            111u64,
         )
         .await?;
-    println!("Bounty Submission Approval Succeeded");
+    println!("Bounty Approval Succeeded");
     Ok(())
 }

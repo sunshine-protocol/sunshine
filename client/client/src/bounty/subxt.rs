@@ -145,6 +145,7 @@ pub struct ContributionsStore<T: Bounty> {
 
 #[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
 pub struct PostBountyCall<T: Bounty> {
+    pub issue: Vec<u8>,
     pub info: T::IpfsReference,
     pub amount: BalanceOf<T>,
 }
@@ -175,6 +176,7 @@ pub struct BountyRaiseContributionEvent<T: Bounty> {
 #[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
 pub struct SubmitForBountyCall<T: Bounty> {
     pub bounty_id: T::BountyId,
+    pub issue: Vec<u8>,
     pub submission_ref: T::IpfsReference,
     pub amount: BalanceOf<T>,
 }

@@ -49,7 +49,7 @@ use sunshine_bounty_client::{
         BountyState,
         SubState,
     },
-    BountyBody,
+    GithubIssue,
 };
 use sunshine_client_utils::{
     cid::CidBytes,
@@ -197,12 +197,12 @@ where
     C: BountyClient<R> + Send + Sync,
     R: Runtime + BountyTrait + Debug,
     R: BountyTrait<IpfsReference = CidBytes>,
-    C::OffchainClient: Cache<Codec, BountyBody>,
+    C::OffchainClient: Cache<Codec, GithubIssue>,
     <R as System>::AccountId: Ss58Codec + Into<<R as System>::Address>,
     <R as BountyTrait>::BountyId: From<u64> + Into<u64> + Display,
     <R as BountyTrait>::SubmissionId: From<u64> + Into<u64> + Display,
-    <R as BountyTrait>::BountyPost: From<BountyBody> + Debug,
-    <R as BountyTrait>::BountySubmission: From<BountyBody> + Debug,
+    <R as BountyTrait>::BountyPost: From<GithubIssue> + Debug,
+    <R as BountyTrait>::BountySubmission: From<GithubIssue> + Debug,
     <R as Balances>::Balance: Into<u128> + From<u64>,
 {
     pub async fn get(&self, bounty_id: &str) -> Result<String> {
@@ -228,7 +228,7 @@ where
         issue_number: u64,
         amount: &str,
     ) -> Result<u64> {
-        let bounty = BountyBody {
+        let bounty = GithubIssue {
             repo_owner: repo_owner.to_string(),
             repo_name: repo_name.to_string(),
             issue_number,
@@ -272,7 +272,7 @@ where
         issue_number: u64,
         amount: &str,
     ) -> Result<u64> {
-        let bounty = BountyBody {
+        let bounty = GithubIssue {
             repo_owner: repo_owner.to_string(),
             repo_name: repo_name.to_string(),
             issue_number,
@@ -496,7 +496,7 @@ where
     ) -> Result<BountyInformation> {
         info!("Get bounty info of id: {}", id);
         let event_cid = state.info().to_cid()?;
-        let bounty_body: BountyBody = self
+        let bounty_body: GithubIssue = self
             .client
             .read()
             .await
@@ -523,7 +523,7 @@ where
         info!("Get submission info of id: {}", id);
         let event_cid = state.submission().to_cid()?;
 
-        let submission_body: BountyBody = self
+        let submission_body: GithubIssue = self
             .client
             .read()
             .await

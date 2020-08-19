@@ -1,13 +1,13 @@
 mod subxt;
 
-pub use subxt::*;
-
 use crate::error::Error;
+use codec::Encode;
 use substrate_subxt::{
     Runtime,
     SignedExtension,
     SignedExtra,
 };
+pub use subxt::*;
 use sunshine_client_utils::{
     async_trait,
     Client,
@@ -86,9 +86,10 @@ where
         amount: BalanceOf<T>,
     ) -> Result<BountyPostedEvent<T>> {
         let signer = self.chain_signer()?;
+        let issue = Encode::encode(&bounty);
         let info = crate::post(self, bounty).await?;
         self.chain_client()
-            .post_bounty_and_watch(&signer, info.into(), amount)
+            .post_bounty_and_watch(&signer, issue, info.into(), amount)
             .await?
             .bounty_posted()?
             .ok_or_else(|| Error::EventNotFound.into())
@@ -112,11 +113,13 @@ where
         amount: BalanceOf<T>,
     ) -> Result<BountySubmissionPostedEvent<T>> {
         let signer = self.chain_signer()?;
+        let issue = Encode::encode(&submission);
         let submission_ref = crate::post(self, submission).await?;
         self.chain_client()
             .submit_for_bounty_and_watch(
                 &signer,
                 bounty_id,
+                issue,
                 submission_ref.into(),
                 amount,
             )
@@ -249,7 +252,7 @@ mod tests {
             Client,
         },
         utils::bounty::BountyInformation,
-        BountyBody,
+        GithubIssue,
     };
 
     // For testing purposes only, NEVER use this to generate AccountIds in practice because it's random
@@ -281,7 +284,7 @@ mod tests {
         let (node, _node_tmp) = test_node();
         let client = Client::mock(&node, AccountKeyring::Alice).await;
         let alice_account_id = AccountKeyring::Alice.to_account_id();
-        let bounty = BountyBody {
+        let bounty = GithubIssue {
             repo_owner: "sunshine-protocol".to_string(),
             repo_name: "sunshine-bounty".to_string(),
             issue_number: 124,
@@ -301,16 +304,16 @@ mod tests {
         let (node, _node_tmp) = test_node();
         let client = Client::mock(&node, AccountKeyring::Alice).await;
         let alice_account_id = AccountKeyring::Alice.to_account_id();
-        let bounty1 = BountyBody {
+        let bounty1 = GithubIssue {
             repo_owner: "sunshine-protocol".to_string(),
             repo_name: "sunshine-bounty".to_string(),
-            issue_number: 124,
+            issue_number: 125,
         };
         let event1 = client.post_bounty(bounty1, 10u128).await.unwrap();
-        let bounty2 = BountyBody {
+        let bounty2 = GithubIssue {
             repo_owner: "sunshine-protocol".to_string(),
             repo_name: "sunshine-bounty".to_string(),
-            issue_number: 124,
+            issue_number: 126,
         };
         let event2 = client.post_bounty(bounty2, 10u128).await.unwrap();
         let bounties = client.open_bounties(9u128).await.unwrap().unwrap();
@@ -340,7 +343,7 @@ mod tests {
         let (node, _node_tmp) = test_node();
         let client = Client::mock(&node, AccountKeyring::Alice).await;
         let alice_account_id = AccountKeyring::Alice.to_account_id();
-        let bounty = BountyBody {
+        let bounty = GithubIssue {
             repo_owner: "sunshine-protocol".to_string(),
             repo_name: "sunshine-bounty".to_string(),
             issue_number: 124,
