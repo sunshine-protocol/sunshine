@@ -72,8 +72,6 @@ pub enum OrgSubCommand {
     BurnShares(shares::SharesBurnCommand),
     BatchIssueShares(shares::SharesBatchIssueCommand),
     BatchBurnShares(shares::SharesBatchBurnCommand),
-    LockShares(shares::SharesLockCommand),
-    UnlockShares(shares::SharesUnLockCommand),
     // full org stuff
     RegisterFlatOrg(org::OrgRegisterFlatCommand),
     RegisterWeightedOrg(org::OrgRegisterWeightedCommand),

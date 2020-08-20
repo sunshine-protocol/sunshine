@@ -47,8 +47,6 @@ async fn main() -> Result<()> {
                 OrgSubCommand::BatchBurnShares(cmd) => {
                     cmd.exec(&client).await?
                 }
-                OrgSubCommand::LockShares(cmd) => cmd.exec(&client).await?,
-                OrgSubCommand::UnlockShares(cmd) => cmd.exec(&client).await?,
                 OrgSubCommand::RegisterFlatOrg(cmd) => {
                     cmd.exec(&client).await?
                 }

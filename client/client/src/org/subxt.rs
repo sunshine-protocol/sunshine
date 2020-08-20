@@ -97,6 +97,13 @@ pub struct OrganizationStatesStore<T: Org> {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
+pub struct OrgHierarchyStore<T: Org> {
+    #[store(returns = ())]
+    pub parent: T::OrgId,
+    pub child: T::OrgId,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
 pub struct TotalIssuanceStore<T: Org> {
     #[store(returns = T::Shares)]
     pub org: T::OrgId,
@@ -199,28 +206,4 @@ pub struct BatchBurnSharesCall<'a, T: Org> {
 pub struct SharesBatchBurnedEvent<T: Org> {
     pub organization: T::OrgId,
     pub total_new_shares_burned: T::Shares,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
-pub struct LockSharesCall<'a, T: Org> {
-    pub organization: T::OrgId,
-    pub who: &'a <T as System>::AccountId,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
-pub struct SharesLockedEvent<T: Org> {
-    pub organization: T::OrgId,
-    pub who: <T as System>::AccountId,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
-pub struct UnlockSharesCall<'a, T: Org> {
-    pub organization: T::OrgId,
-    pub who: &'a <T as System>::AccountId,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
-pub struct SharesUnlockedEvent<T: Org> {
-    pub organization: T::OrgId,
-    pub who: <T as System>::AccountId,
 }

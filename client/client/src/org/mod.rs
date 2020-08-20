@@ -55,16 +55,6 @@ pub trait OrgClient<T: Runtime + Org>: Client<T> {
         organization: <T as Org>::OrgId,
         old_accounts: &[(<T as System>::AccountId, <T as Org>::Shares)],
     ) -> Result<SharesBatchBurnedEvent<T>>;
-    async fn lock_shares(
-        &self,
-        org: <T as Org>::OrgId,
-        who: &<T as System>::AccountId,
-    ) -> Result<SharesLockedEvent<T>>;
-    async fn unlock_shares(
-        &self,
-        org: <T as Org>::OrgId,
-        who: &<T as System>::AccountId,
-    ) -> Result<SharesUnlockedEvent<T>>;
 }
 
 #[async_trait]
@@ -170,30 +160,6 @@ where
             .batch_burn_shares_and_watch(&signer, organization, old_accounts)
             .await?
             .shares_batch_burned()?
-            .ok_or_else(|| Error::EventNotFound.into())
-    }
-    async fn lock_shares(
-        &self,
-        org: <T as Org>::OrgId,
-        who: &<T as System>::AccountId,
-    ) -> Result<SharesLockedEvent<T>> {
-        let signer = self.chain_signer()?;
-        self.chain_client()
-            .lock_shares_and_watch(&signer, org, who)
-            .await?
-            .shares_locked()?
-            .ok_or_else(|| Error::EventNotFound.into())
-    }
-    async fn unlock_shares(
-        &self,
-        org: <T as Org>::OrgId,
-        who: &<T as System>::AccountId,
-    ) -> Result<SharesUnlockedEvent<T>> {
-        let signer = self.chain_signer()?;
-        self.chain_client()
-            .unlock_shares_and_watch(&signer, org, who)
-            .await?
-            .shares_unlocked()?
             .ok_or_else(|| Error::EventNotFound.into())
     }
 }
