@@ -104,7 +104,7 @@ impl<
     }
 
     pub fn is_unlocked(&self) -> bool {
-        matches!(self.state, ProfileState::Locked)
+        matches!(self.state, ProfileState::Unlocked)
     }
 }
 

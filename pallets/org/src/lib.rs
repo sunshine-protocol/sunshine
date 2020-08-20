@@ -79,7 +79,7 @@ pub trait Trait: system::Trait {
     type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 
     /// Cid type
-    type Cid: Copy + Parameter + Member + Default;
+    type Cid: Parameter + Member + Default;
 
     /// Organizational identifier
     type OrgId: Parameter

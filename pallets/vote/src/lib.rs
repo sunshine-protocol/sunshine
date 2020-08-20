@@ -67,6 +67,13 @@ use util::{
     },
 };
 
+type VoteSt<T> = VoteState<
+    <T as Trait>::Signal,
+    <T as frame_system::Trait>::BlockNumber,
+    <T as org::Trait>::Cid,
+>;
+type VoteVec<T> = Vote<<T as Trait>::Signal, <T as org::Trait>::Cid>;
+
 pub trait Trait: frame_system::Trait + org::Trait {
     /// The overarching event type
     type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
@@ -137,7 +144,7 @@ decl_storage! {
 
         /// The state of a vote
         pub VoteStates get(fn vote_states): map
-            hasher(opaque_blake2_256) T::VoteId => Option<VoteState<T::Signal, T::BlockNumber, T::IpfsReference>>;
+            hasher(opaque_blake2_256) T::VoteId => Option<VoteSt<T>>;
 
         /// Total signal minted for the vote; sum of all participant signal for the vote
         pub TotalSignalIssuance get(fn total_signal_issuance): map
@@ -146,7 +153,7 @@ decl_storage! {
         /// Tracks all votes and signal for each participating account
         pub VoteLogger get(fn vote_logger): double_map
             hasher(opaque_blake2_256) T::VoteId,
-            hasher(opaque_blake2_256) T::AccountId  => Option<Vote<T::Signal, T::IpfsReference>>;
+            hasher(opaque_blake2_256) T::AccountId  => Option<VoteVec<T>>;
     }
 }
 
@@ -158,7 +165,7 @@ decl_module! {
         #[weight = 0]
         pub fn create_signal_vote(
             origin,
-            topic: Option<T::IpfsReference>,
+            topic: Option<T::Cid>,
             organization: OrgRep<T::OrgId>,
             threshold: Threshold<T::Signal>,
             duration: Option<T::BlockNumber>,
@@ -181,7 +188,7 @@ decl_module! {
         #[weight = 0]
         pub fn create_percent_vote(
             origin,
-            topic: Option<T::IpfsReference>,
+            topic: Option<T::Cid>,
             organization: OrgRep<T::OrgId>,
             threshold: Threshold<Permill>,
             duration: Option<T::BlockNumber>,
@@ -206,7 +213,7 @@ decl_module! {
             origin,
             vote_id: T::VoteId,
             direction: VoterView,
-            justification: Option<T::IpfsReference>,
+            justification: Option<T::Cid>,
         ) -> DispatchResult {
             let voter = ensure_signed(origin)?;
             Self::vote_on_proposal(vote_id, voter.clone(), direction, justification)?;
@@ -278,12 +285,12 @@ impl<T: Trait>
         Threshold<T::Signal>,
         Threshold<Permill>,
         T::BlockNumber,
-        T::IpfsReference,
+        T::Cid,
     > for Module<T>
 {
     type VoteIdentifier = T::VoteId;
     fn open_vote(
-        topic: Option<T::IpfsReference>,
+        topic: Option<T::Cid>,
         organization: OrgRep<T::OrgId>,
         threshold: Threshold<T::Signal>,
         duration: Option<T::BlockNumber>,
@@ -321,7 +328,7 @@ impl<T: Trait>
         Ok(new_vote_id)
     }
     fn open_percent_vote(
-        topic: Option<T::IpfsReference>,
+        topic: Option<T::Cid>,
         organization: OrgRep<T::OrgId>,
         threshold: Threshold<Permill>,
         duration: Option<T::BlockNumber>,
@@ -370,10 +377,10 @@ impl<T: Trait>
     }
 }
 
-impl<T: Trait> UpdateVoteTopic<T::VoteId, T::IpfsReference> for Module<T> {
+impl<T: Trait> UpdateVoteTopic<T::VoteId, T::Cid> for Module<T> {
     fn update_vote_topic(
         vote_id: T::VoteId,
-        new_topic: T::IpfsReference,
+        new_topic: T::Cid,
         clear_previous_vote_state: bool,
     ) -> DispatchResult {
         let old_vote_state = <VoteStates<T>>::get(vote_id)
@@ -420,24 +427,22 @@ impl<T: Trait> MintableSignal<T::AccountId, T::OrgId, T::VoteId, T::Signal>
                 .ok_or(Error::<T>::CannotMintSignalBecauseMembershipShapeDNE)?;
         // total issuance
         let total_minted: T::Signal = new_vote_group.total().into();
-        new_vote_group.account_ownership().into_iter().for_each(
-            |(who, shares)| {
-                let minted_signal: T::Signal = shares.into();
-                let new_vote =
-                    Vote::new(minted_signal, VoterView::Uninitialized, None);
-                <VoteLogger<T>>::insert(vote_id, who, new_vote);
-            },
-        );
+        new_vote_group.vec().into_iter().for_each(|(who, shares)| {
+            let minted_signal: T::Signal = shares.into();
+            let new_vote =
+                Vote::new(minted_signal, VoterView::Uninitialized, None);
+            <VoteLogger<T>>::insert(vote_id, who, new_vote);
+        });
         <TotalSignalIssuance<T>>::insert(vote_id, total_minted);
         Ok(total_minted)
     }
 }
 
-impl<T: Trait> ApplyVote<T::IpfsReference> for Module<T> {
+impl<T: Trait> ApplyVote<T::Cid> for Module<T> {
     type Signal = T::Signal;
     type Direction = VoterView;
-    type Vote = Vote<T::Signal, T::IpfsReference>;
-    type State = VoteState<T::Signal, T::BlockNumber, T::IpfsReference>;
+    type Vote = Vote<T::Signal, T::Cid>;
+    type State = VoteState<T::Signal, T::BlockNumber, T::Cid>;
 
     fn apply_vote(
         state: Self::State,
@@ -449,7 +454,7 @@ impl<T: Trait> ApplyVote<T::IpfsReference> for Module<T> {
     }
 }
 
-impl<T: Trait> CheckVoteStatus<T::IpfsReference, T::VoteId> for Module<T> {
+impl<T: Trait> CheckVoteStatus<T::Cid, T::VoteId> for Module<T> {
     fn check_vote_expired(state: &Self::State) -> bool {
         let now = system::Module::<T>::block_number();
         if let Some(n) = state.expires() {
@@ -459,14 +464,12 @@ impl<T: Trait> CheckVoteStatus<T::IpfsReference, T::VoteId> for Module<T> {
     }
 }
 
-impl<T: Trait> VoteOnProposal<T::AccountId, T::VoteId, T::IpfsReference>
-    for Module<T>
-{
+impl<T: Trait> VoteOnProposal<T::AccountId, T::VoteId, T::Cid> for Module<T> {
     fn vote_on_proposal(
         vote_id: T::VoteId,
         voter: T::AccountId,
         direction: Self::Direction,
-        justification: Option<T::IpfsReference>,
+        justification: Option<T::Cid>,
     ) -> DispatchResult {
         // get the vote state
         let vote_state = <VoteStates<T>>::get(vote_id)

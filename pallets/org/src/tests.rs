@@ -70,7 +70,7 @@ impl frame_system::Trait for TestRuntime {
 }
 impl Trait for TestRuntime {
     type Event = TestEvent;
-    type IpfsReference = u32; // TODO: replace with utils_identity::Cid
+    type Cid = u32;
     type OrgId = u64;
     type Shares = u64;
 }
@@ -113,8 +113,7 @@ fn genesis_config_works() {
     new_test_ext().execute_with(|| {
         assert_eq!(Org::organization_counter(), 1);
         let constitution = 1738;
-        let expected_organization =
-            Organization::new(Some(1), None, constitution);
+        let expected_organization = Organization::new(Some(1), 1, constitution);
         let org_in_storage = Org::organization_states(1u64).unwrap();
         assert_eq!(expected_organization, org_in_storage);
         for i in 1u64..7u64 {
@@ -162,66 +161,6 @@ fn organization_registration() {
                 50,
             ),
         );
-    });
-}
-
-#[test]
-fn share_reservation() {
-    new_test_ext().execute_with(|| {
-        let one = Origin::signed(1);
-        assert_ok!(Org::reserve_shares(one.clone(), 1, 1));
-        let profile = Org::members(1, 1).unwrap();
-        let first_times_reserved = profile.times_reserved();
-        // // check that method calculates correctly
-        assert_eq!(first_times_reserved, 1);
-        assert_ok!(Org::reserve_shares(one.clone(), 1, 1));
-        let second_profile = Org::members(1, 1).unwrap();
-        let second_times_reserved = second_profile.times_reserved();
-        assert_eq!(second_times_reserved, 2);
-        let mut n = 0u32;
-        while n < 20 {
-            assert_ok!(Org::reserve_shares(one.clone(), 1, 1));
-            n += 1;
-        }
-        let n_profile = Org::members(1, 1).unwrap();
-        let n_times_reserved = n_profile.times_reserved();
-        assert_eq!(n_times_reserved, 22);
-
-        // check same logic with another member of the first group
-        assert_ok!(Org::reserve_shares(one.clone(), 1, 2));
-        let a_profile = Org::members(1, 2).unwrap();
-        let a_first_times_reserved = a_profile.times_reserved();
-        // // check that method calculates correctly
-        assert_eq!(a_first_times_reserved, 1);
-        assert_ok!(Org::reserve_shares(one.clone(), 1, 2));
-        let a_second_profile = Org::members(1, 2).unwrap();
-        let a_second_times_reserved = a_second_profile.times_reserved();
-        assert_eq!(a_second_times_reserved, 2);
-        let mut a_n = 0u32;
-        while a_n < 20 {
-            assert_ok!(Org::reserve_shares(one.clone(), 1, 2));
-            a_n += 1;
-        }
-        let a_n_profile = Org::members(1, 2).unwrap();
-        let a_n_times_reserved = a_n_profile.times_reserved();
-        assert_eq!(a_n_times_reserved, 22);
-    });
-}
-
-#[test]
-fn share_unreservation() {
-    new_test_ext().execute_with(|| {
-        let one = Origin::signed(1);
-        assert_ok!(Org::reserve_shares(one.clone(), 1, 1));
-        let profile = Org::members(1, 1).unwrap();
-        let first_times_reserved = profile.times_reserved();
-        // // check that method calculates correctly
-        assert_eq!(first_times_reserved, 1);
-        assert_ok!(Org::unreserve_shares(one.clone(), 1, 1));
-        let un_profile = Org::members(1, 1).unwrap();
-        let first_times_un_reserved = un_profile.times_reserved();
-        // // check that method calculates correctly
-        assert_eq!(first_times_un_reserved, 0);
     });
 }
 

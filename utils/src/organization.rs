@@ -34,14 +34,14 @@ pub struct Organization<AccountId, OrgId, IpfsRef> {
     constitution: IpfsRef,
 }
 
-impl<AccountId: Clone + PartialEq, OrgId: Copy, IpfsRef: Copy>
+impl<AccountId: Clone + PartialEq, OrgId: Copy, IpfsRef: Clone>
     Organization<AccountId, OrgId, IpfsRef>
 {
     pub fn id(&self) -> OrgId {
         self.id
     }
     pub fn constitution(&self) -> IpfsRef {
-        self.constitution
+        self.constitution.clone()
     }
     pub fn is_sudo(&self, cmp: &AccountId) -> bool {
         if let Some(unwrapped_sudo) = &self.sudo {

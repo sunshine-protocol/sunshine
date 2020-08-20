@@ -158,62 +158,6 @@ impl SharesBurnCommand {
 }
 
 #[derive(Clone, Debug, Clap)]
-pub struct SharesReserveCommand {
-    pub organization: u64,
-    pub who: String,
-}
-
-impl SharesReserveCommand {
-    pub async fn exec<R: Runtime + Shares, C: SharesClient<R>>(
-        &self,
-        client: &C,
-    ) -> Result<()>
-    where
-        <R as System>::AccountId: Ss58Codec,
-        <R as Org>::OrgId: From<u64> + Display,
-        <R as Org>::Shares: From<u64> + Display,
-    {
-        let account: Ss58<R> = self.who.parse()?;
-        let event = client
-            .reserve_shares(self.organization.into(), &account.0)
-            .await?;
-        println!(
-            "Account {} reserves {:?} shares in the context of Org {}",
-            event.who, event.amount_reserved, event.organization
-        );
-        Ok(())
-    }
-}
-
-#[derive(Clone, Debug, Clap)]
-pub struct SharesUnReserveCommand {
-    pub organization: u64,
-    pub who: String,
-}
-
-impl SharesUnReserveCommand {
-    pub async fn exec<R: Runtime + Shares, C: SharesClient<R>>(
-        &self,
-        client: &C,
-    ) -> Result<()>
-    where
-        <R as System>::AccountId: Ss58Codec,
-        <R as Org>::OrgId: From<u64> + Display,
-        <R as Org>::Shares: From<u64> + Display,
-    {
-        let account: Ss58<R> = self.who.parse()?;
-        let event = client
-            .unreserve_shares(self.organization.into(), &account.0)
-            .await?;
-        println!(
-            "Account {} unreserves {:?} shares in the context of Org {}",
-            event.who, event.amount_unreserved, event.organization
-        );
-        Ok(())
-    }
-}
-
-#[derive(Clone, Debug, Clap)]
 pub struct SharesLockCommand {
     pub organization: u64,
     pub who: String,

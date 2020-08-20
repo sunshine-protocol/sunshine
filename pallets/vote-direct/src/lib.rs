@@ -39,7 +39,7 @@ use sp_std::{
     prelude::*,
 };
 use util::{
-    share::SimpleShareGenesis,
+    share::WeightedVector,
     traits::{
         AccessGenesis,
         Apply,
@@ -161,7 +161,7 @@ decl_module! {
         pub fn create_signal_vote(
             origin,
             topic: Option<T::IpfsReference>,
-            src: SimpleShareGenesis<T::AccountId, T::Signal>,
+            src: WeightedVector<T::AccountId, T::Signal>,
             threshold: Threshold<T::Signal>,
             duration: Option<T::BlockNumber>,
         ) -> DispatchResult {
@@ -181,7 +181,7 @@ decl_module! {
         pub fn create_percent_vote(
             origin,
             topic: Option<T::IpfsReference>,
-            src: SimpleShareGenesis<T::AccountId, T::Signal>,
+            src: WeightedVector<T::AccountId, T::Signal>,
             threshold: Threshold<Permill>,
             duration: Option<T::BlockNumber>,
         ) -> DispatchResult {
@@ -270,7 +270,7 @@ impl<T: Trait> GetVoteOutcome<T::VoteId> for Module<T> {
 
 impl<T: Trait>
     OpenVote<
-        SimpleShareGenesis<T::AccountId, T::Signal>,
+        WeightedVector<T::AccountId, T::Signal>,
         Threshold<T::Signal>,
         Threshold<Permill>,
         T::BlockNumber,
@@ -280,7 +280,7 @@ impl<T: Trait>
     type VoteIdentifier = T::VoteId;
     fn open_vote(
         topic: Option<T::IpfsReference>,
-        src: SimpleShareGenesis<T::AccountId, T::Signal>,
+        src: WeightedVector<T::AccountId, T::Signal>,
         threshold: Threshold<T::Signal>,
         duration: Option<T::BlockNumber>,
     ) -> Result<Self::VoteIdentifier, DispatchError> {
@@ -290,13 +290,11 @@ impl<T: Trait>
         );
         let vote_id = Self::generate_unique_id();
         // iterate through src and mint the signal
-        src.account_ownership()
-            .iter()
-            .for_each(|(who, vote_power)| {
-                let new_vote =
-                    Vote::new(*vote_power, VoterView::Uninitialized, None);
-                <VoteLogger<T>>::insert(vote_id, who, new_vote);
-            });
+        src.vec().iter().for_each(|(who, vote_power)| {
+            let new_vote =
+                Vote::new(*vote_power, VoterView::Uninitialized, None);
+            <VoteLogger<T>>::insert(vote_id, who, new_vote);
+        });
         <TotalSignalIssuance<T>>::insert(vote_id, src.total());
         let now = system::Module::<T>::block_number();
         let ends: Option<T::BlockNumber> = if let Some(time_to_add) = duration {
@@ -315,7 +313,7 @@ impl<T: Trait>
     }
     fn open_percent_vote(
         topic: Option<T::IpfsReference>,
-        src: SimpleShareGenesis<T::AccountId, T::Signal>,
+        src: WeightedVector<T::AccountId, T::Signal>,
         threshold: Threshold<Permill>,
         duration: Option<T::BlockNumber>,
     ) -> Result<Self::VoteIdentifier, DispatchError> {
@@ -327,13 +325,11 @@ impl<T: Trait>
         );
         let vote_id = Self::generate_unique_id();
         // iterate through src and mint the signal
-        src.account_ownership()
-            .iter()
-            .for_each(|(who, vote_power)| {
-                let new_vote =
-                    Vote::new(*vote_power, VoterView::Uninitialized, None);
-                <VoteLogger<T>>::insert(vote_id, who, new_vote);
-            });
+        src.vec().iter().for_each(|(who, vote_power)| {
+            let new_vote =
+                Vote::new(*vote_power, VoterView::Uninitialized, None);
+            <VoteLogger<T>>::insert(vote_id, who, new_vote);
+        });
         <TotalSignalIssuance<T>>::insert(vote_id, src.total());
         let now = system::Module::<T>::block_number();
         let ends: Option<T::BlockNumber> = if let Some(time_to_add) = duration {

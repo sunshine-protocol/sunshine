@@ -51,7 +51,7 @@ use util::{
         SubmissionState2,
     },
     grant::ChallengeNorms,
-    share::SimpleShareGenesis,
+    share::WeightedVector,
     traits::{
         AccessGenesis,
         GetVoteOutcome,
@@ -443,18 +443,17 @@ impl<T: Trait> Module<T> {
     ) -> Result<(BalanceOf<T>, BalanceOf<T>), DispatchError> {
         let from = Self::bounty_account_id(id);
         let total = T::Currency::total_balance(&from);
-        let contributors: SimpleShareGenesis<T::AccountId, BalanceOf<T>> =
+        let contributors: WeightedVector<T::AccountId, BalanceOf<T>> =
             <BountyTips<T>>::iter()
                 .filter(|(i, _, _)| i == &id)
                 .map(|(_, ac, amt)| (ac, amt))
                 .collect::<Vec<(T::AccountId, BalanceOf<T>)>>()
                 .into();
-        let num_of_accounts: u32 =
-            contributors.account_ownership().len() as u32;
+        let num_of_accounts: u32 = contributors.vec().len() as u32;
         if num_of_accounts == 1 {
             T::Currency::transfer(
                 &from,
-                &contributors.account_ownership()[0].0,
+                &contributors.vec()[0].0,
                 total,
                 ExistenceRequirement::AllowDeath,
             )?;
@@ -464,7 +463,7 @@ impl<T: Trait> Module<T> {
             todo!()
             // let mut total_to_contributors = BalanceOf::<T>::zero();
             // let den: T::Signal = contributors.total();
-            // for (acc, nom) in contributors.account_ownership().iter() {
+            // for (acc, nom) in contributors.vec().iter() {
             //     let due_proportion =
             //         Permill::from_rational_approximation(nom, &den);
             //     let due_amount: BalanceOf<T> = due_proportion * total;

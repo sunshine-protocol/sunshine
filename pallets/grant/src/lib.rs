@@ -80,14 +80,14 @@ type GovernanceOf<T> = ResolutionMetadata<
     >,
 >;
 type FoundationOf<T> =
-    Foundation<<T as org::Trait>::IpfsReference, BalanceOf<T>, GovernanceOf<T>>;
+    Foundation<<T as org::Trait>::Cid, BalanceOf<T>, GovernanceOf<T>>;
 type RecipientOf<T> = Recipient<
     <T as frame_system::Trait>::AccountId,
     OrgRep<<T as org::Trait>::OrgId>,
 >;
 type GrantApp<T> = GrantApplication<
     <T as Trait>::FoundationId,
-    <T as org::Trait>::IpfsReference,
+    <T as org::Trait>::Cid,
     RecipientOf<T>,
     BalanceOf<T>,
     ApplicationState<<T as vote::Trait>::VoteId>,
@@ -95,7 +95,7 @@ type GrantApp<T> = GrantApplication<
 type Milestone<T> = MilestoneSubmission<
     <T as Trait>::FoundationId,
     <T as Trait>::ApplicationId,
-    <T as org::Trait>::IpfsReference,
+    <T as org::Trait>::Cid,
     RecipientOf<T>,
     BalanceOf<T>,
     MilestoneStatus<<T as vote::Trait>::VoteId>,
@@ -160,7 +160,7 @@ decl_event!(
     pub enum Event<T>
     where
         <T as frame_system::Trait>::AccountId,
-        <T as org::Trait>::IpfsReference,
+        <T as org::Trait>::Cid,
         <T as vote::Trait>::VoteId,
         <T as Trait>::FoundationId,
         <T as Trait>::ApplicationId,
@@ -168,15 +168,15 @@ decl_event!(
         Balance = BalanceOf<T>,
         Recipient = RecipientOf<T>,
     {
-        FoundationCreated(FoundationId, Balance, IpfsReference),
+        FoundationCreated(FoundationId, Balance, Cid),
         FoundationDonation(AccountId, Balance, FoundationId, Balance),
-        ApplicationSubmitted(FoundationId, ApplicationId, Recipient, Balance, IpfsReference),
+        ApplicationSubmitted(FoundationId, ApplicationId, Recipient, Balance, Cid),
         ApplicationReviewTriggered(FoundationId, ApplicationId, VoteId),
-        ApplicationApproved(FoundationId, ApplicationId, IpfsReference),
+        ApplicationApproved(FoundationId, ApplicationId, Cid),
         ApplicationRejected(FoundationId, ApplicationId),
-        MilestoneSubmitted(FoundationId, ApplicationId, MilestoneId, Recipient, Balance, IpfsReference),
+        MilestoneSubmitted(FoundationId, ApplicationId, MilestoneId, Recipient, Balance, Cid),
         MilestoneReviewTriggered(FoundationId, ApplicationId, MilestoneId, VoteId),
-        MilestoneApproved(FoundationId, ApplicationId, MilestoneId, IpfsReference),
+        MilestoneApproved(FoundationId, ApplicationId, MilestoneId, Cid),
         MilestoneRejected(FoundationId, ApplicationId, MilestoneId),
     }
 );
@@ -248,7 +248,7 @@ decl_module! {
         #[weight = 0]
         fn create_foundation(
             origin,
-            info: T::IpfsReference,
+            info: T::Cid,
             amount: BalanceOf<T>,
             governance: GovernanceOf<T>,
         ) -> DispatchResult {
@@ -298,7 +298,7 @@ decl_module! {
         fn submit_application(
             origin,
             foundation_id: T::FoundationId,
-            submission_ref: T::IpfsReference,
+            submission_ref: T::Cid,
             recipient: RecipientOf<T>,
             amount_requested: BalanceOf<T>,
         ) -> DispatchResult {
@@ -366,7 +366,7 @@ decl_module! {
             origin,
             foundation_id: T::FoundationId,
             application_id: T::ApplicationId,
-            submission_ref: T::IpfsReference,
+            submission_ref: T::Cid,
             recipient: RecipientOf<T>,
             amount_requested: BalanceOf<T>,
         ) -> DispatchResult {
