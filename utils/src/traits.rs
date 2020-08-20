@@ -50,16 +50,16 @@ pub trait VerifyShape {
 }
 pub trait AccessGenesis<AccountId, Shares> {
     fn total(&self) -> Shares;
-    fn account_ownership(&self) -> Vec<(AccountId, Shares)>;
+    fn vec(&self) -> Vec<(AccountId, Shares)>;
 }
 pub trait AccessProfile<Shares> {
     fn total(&self) -> Shares;
 }
-use crate::share::SimpleShareGenesis;
+use crate::share::WeightedVector;
 pub trait ShareInformation<OrgId, AccountId, Shares> {
     type Profile: AccessProfile<Shares>;
     type Genesis: From<Vec<(AccountId, Shares)>>
-        + Into<SimpleShareGenesis<AccountId, Shares>>
+        + Into<WeightedVector<AccountId, Shares>>
         + VerifyShape
         + AccessGenesis<AccountId, Shares>;
     /// Gets the total number of shares issued for an organization's share identifier
@@ -96,20 +96,6 @@ pub trait ShareIssuance<OrgId, AccountId, Shares>:
         genesis: Self::Genesis,
     ) -> DispatchResult;
 }
-pub trait ReserveProfile<OrgId, AccountId, Shares>:
-    ShareIssuance<OrgId, AccountId, Shares>
-{
-    fn reserve(
-        organization: OrgId,
-        who: &AccountId,
-        amount: Option<Shares>,
-    ) -> Result<Shares>;
-    fn unreserve(
-        organization: OrgId,
-        who: &AccountId,
-        amount: Option<Shares>,
-    ) -> Result<Shares>;
-}
 pub trait LockProfile<OrgId, AccountId> {
     fn lock_profile(organization: OrgId, who: &AccountId) -> DispatchResult;
     fn unlock_profile(organization: OrgId, who: &AccountId) -> DispatchResult;
@@ -121,7 +107,6 @@ pub trait RegisterOrganization<OrgId, AccountId, Hash> {
     fn organization_from_src(
         src: Self::OrgSrc,
         org_id: OrgId,
-        parent_id: Option<OrgId>,
         supervisor: Option<AccountId>,
         value_constitution: Hash,
     ) -> Result<Self::OrganizationState>;
