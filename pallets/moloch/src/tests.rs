@@ -143,7 +143,15 @@ fn new_test_ext() -> sp_io::TestExternalities {
         .build_storage::<Test>()
         .unwrap();
     pallet_balances::GenesisConfig::<Test> {
-        balances: vec![(1, 100), (2, 98), (3, 200), (4, 75), (5, 10), (6, 69)],
+        balances: vec![
+            (1, 100),
+            (2, 98),
+            (3, 200),
+            (4, 75),
+            (5, 10),
+            (6, 69),
+            (7, 77),
+        ],
     }
     .assimilate_storage(&mut t)
     .unwrap();
@@ -171,5 +179,103 @@ fn genesis_config_works() {
             assert!(Org::is_member_of_group(1u64, &i));
         }
         assert!(System::events().is_empty());
+    });
+}
+
+#[test]
+fn summon_works() {
+    new_test_ext().execute_with(|| {
+        assert_noop!(
+            Bank::summon(Origin::signed(1), 1, 19, None),
+            Error::<Test>::CannotOpenBankAccountIfDepositIsBelowModuleMinimum
+        );
+        assert_noop!(
+            Bank::summon(Origin::signed(5), 1, 21, None),
+            Error::<Test>::InsufficientBalanceToFundBankOpen
+        );
+        assert_noop!(
+            Bank::summon(Origin::signed(70), 1, 21, None),
+            Error::<Test>::NotPermittedToOpenBankAccountForOrg
+        );
+        assert_ok!(Bank::summon(Origin::signed(1), 1, 20, None),);
+        let expected_event = RawEvent::BankAccountOpened(1, 1, 20, 1, None);
+        assert_eq!(get_last_event(), expected_event);
+    });
+}
+
+#[test]
+fn propose_works() {
+    new_test_ext().execute_with(|| {
+        assert_noop!(
+            Bank::propose_spend(Origin::signed(1), 1, 19, 1),
+            Error::<Test>::BankMustExistToProposeFrom
+        );
+        assert_ok!(Bank::summon(Origin::signed(1), 1, 20, None),);
+        assert_noop!(
+            Bank::propose_spend(Origin::signed(7), 1, 10, 7),
+            Error::<Test>::MustBeMemberToSponsorProposal
+        );
+        assert_noop!(
+            Bank::propose_member(Origin::signed(7), 1, 0, 100, 7),
+            Error::<Test>::MustBeMemberToSponsorProposal
+        );
+        assert_ok!(Bank::propose_spend(Origin::signed(1), 1, 10, 7),);
+        let expected_event = RawEvent::SpendProposedByMember(1, 1, 1, 10, 7);
+        assert_eq!(get_last_event(), expected_event);
+        assert_ok!(Bank::propose_member(Origin::signed(1), 1, 10, 5, 7),);
+        let expected_event = RawEvent::NewMemberProposal(1, 1, 1, 10, 5, 7);
+        assert_eq!(get_last_event(), expected_event);
+    });
+}
+
+#[test]
+fn trigger_vote_works() {
+    new_test_ext().execute_with(|| {
+        assert_noop!(
+            Bank::trigger_vote_on_spend_proposal(Origin::signed(1), 1, 1),
+            Error::<Test>::CannotTriggerVoteIfBaseBankDNE
+        );
+        assert_noop!(
+            Bank::trigger_vote_on_member_proposal(Origin::signed(1), 1, 1),
+            Error::<Test>::CannotTriggerVoteIfBaseBankDNE
+        );
+        assert_ok!(Bank::summon(Origin::signed(1), 1, 20, None),);
+        assert_noop!(
+            Bank::trigger_vote_on_spend_proposal(Origin::signed(1), 1, 1),
+            Error::<Test>::CannotTriggerVoteIfProposalDNE
+        );
+        assert_noop!(
+            Bank::trigger_vote_on_member_proposal(Origin::signed(1), 1, 1),
+            Error::<Test>::CannotTriggerVoteIfProposalDNE
+        );
+        assert_ok!(Bank::propose_spend(Origin::signed(1), 1, 10, 7),);
+        assert_noop!(
+            Bank::trigger_vote_on_spend_proposal(Origin::signed(7), 1, 1),
+            Error::<Test>::NotPermittedToTriggerVoteForBankAccount
+        );
+        assert_ok!(Bank::trigger_vote_on_spend_proposal(
+            Origin::signed(1),
+            1,
+            1
+        ));
+        let expected_event = RawEvent::VoteTriggeredOnSpendProposal(1, 1, 1, 1);
+        assert_eq!(expected_event, get_last_event());
+        assert_noop!(
+            Bank::trigger_vote_on_member_proposal(Origin::signed(1), 1, 1),
+            Error::<Test>::CannotTriggerVoteIfProposalDNE
+        );
+        assert_ok!(Bank::propose_member(Origin::signed(1), 1, 10, 5, 7),);
+        assert_noop!(
+            Bank::trigger_vote_on_member_proposal(Origin::signed(7), 1, 1),
+            Error::<Test>::NotPermittedToTriggerVoteForBankAccount
+        );
+        assert_ok!(Bank::trigger_vote_on_member_proposal(
+            Origin::signed(1),
+            1,
+            1
+        ));
+        let expected_event =
+            RawEvent::VoteTriggeredOnMemberProposal(1, 1, 1, 2);
+        assert_eq!(expected_event, get_last_event());
     });
 }

@@ -43,19 +43,16 @@ use sp_std::{
 };
 use util::{
     bank::{
-        BankSpend,
         BankState,
         SpendProposal,
         SpendState,
     },
     organization::OrgRep,
     traits::{
-        BankPermissions,
         GetVoteOutcome,
         GroupMembership,
         OpenBankAccount,
         OpenVote,
-        OrganizationSupervisorPermissions,
         SpendGovernance,
     },
     vote::{
@@ -64,10 +61,22 @@ use util::{
     },
 };
 
-/// The balances type for this module
+// type aliases
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<
     <T as frame_system::Trait>::AccountId,
 >>::Balance;
+type BankSt<T> = BankState<
+    <T as Trait>::BankId,
+    <T as frame_system::Trait>::AccountId,
+    <T as org::Trait>::OrgId,
+>;
+type SpendProp<T> = SpendProposal<
+    <T as Trait>::BankId,
+    <T as Trait>::SpendId,
+    BalanceOf<T>,
+    <T as frame_system::Trait>::AccountId,
+    SpendState<<T as vote::Trait>::VoteId>,
+>;
 
 pub trait Trait:
     frame_system::Trait + org::Trait + donate::Trait + vote::Trait
@@ -136,15 +145,16 @@ decl_event!(
 decl_error! {
     pub enum Error for Module<T: Trait> {
         CannotOpenBankAccountIfDepositIsBelowModuleMinimum,
+        InsufficientBalanceToFundBankOpen,
         CannotOpenBankAccountForOrgIfBankCountExceedsLimitPerOrg,
         CannotCloseBankThatDNE,
         NotPermittedToOpenBankAccountForOrg,
         NotPermittedToProposeSpendForBankAccount,
         NotPermittedToTriggerVoteForBankAccount,
-        NotPermittedToSudoApproveForBankAccount,
         NotPermittedToPollSpendProposalForBankAccount,
         CannotSpendIfBankDNE,
-        MustBeOrgSupervisorToCloseBankAccount,
+        OnlyControllerCanCloseBank,
+        OnlyControllerCanSudoApproveSpendProposals,
         // spend proposal stuff
         CannotProposeSpendIfBankDNE,
         BankMustExistToProposeSpendFrom,
@@ -180,19 +190,12 @@ decl_storage! {
         /// The store for organizational bank accounts
         /// -> keyset acts as canonical set for unique BankIds
         pub BankStores get(fn bank_stores): map
-            hasher(blake2_128_concat) T::BankId =>
-            Option<BankState<T::AccountId, T::OrgId>>;
+            hasher(blake2_128_concat) T::BankId => Option<BankSt<T>>;
 
         /// Proposals to make spends from the bank account
         pub SpendProposals get(fn spend_proposals): double_map
             hasher(blake2_128_concat) T::BankId,
-            hasher(blake2_128_concat) T::SpendId => Option<
-                SpendProposal<
-                    BalanceOf<T>,
-                    T::AccountId,
-                    SpendState<T::VoteId>
-                >
-            >;
+            hasher(blake2_128_concat) T::SpendId => Option<SpendProp<T>>;
     }
 }
 
@@ -202,73 +205,53 @@ decl_module! {
         fn deposit_event() = default;
 
         #[weight = 0]
-        fn open_org_bank_account(
+        fn open(
             origin,
             org: T::OrgId,
             deposit: BalanceOf<T>,
             controller: Option<T::AccountId>,
         ) -> DispatchResult {
             let opener = ensure_signed(origin)?;
-            let auth = Self::can_open_bank_account_for_org(org, &opener);
-            ensure!(auth, Error::<T>::NotPermittedToOpenBankAccountForOrg);
+            ensure!(
+                <org::Module<T>>::is_member_of_group(org, &opener),
+                Error::<T>::NotPermittedToOpenBankAccountForOrg
+            );
             let bank_id = Self::open_bank_account(opener.clone(), org, deposit, controller.clone())?;
             Self::deposit_event(RawEvent::BankAccountOpened(opener, bank_id, deposit, org, controller));
             Ok(())
         }
         #[weight = 0]
-        fn member_proposes_spend(
+        fn propose_spend(
             origin,
             bank_id: T::BankId,
             amount: BalanceOf<T>,
             dest: T::AccountId,
         ) -> DispatchResult {
             let caller = ensure_signed(origin)?;
-            let auth = Self::can_propose_spend(bank_id, &caller)?;
-            ensure!(auth, Error::<T>::NotPermittedToProposeSpendForBankAccount);
-            let new_spend_id = Self::propose_spend(bank_id, amount, dest.clone())?;
-            Self::deposit_event(RawEvent::SpendProposedByMember(caller, bank_id, new_spend_id.spend, amount, dest));
+            let new_spend_id = Self::_propose_spend(&caller, bank_id, amount, dest.clone())?;
+            Self::deposit_event(RawEvent::SpendProposedByMember(caller, bank_id, new_spend_id, amount, dest));
             Ok(())
         }
         #[weight = 0]
-        fn member_triggers_vote_on_spend_proposal(
+        fn trigger_vote_on_spend_proposal(
             origin,
             bank_id: T::BankId,
             spend_id: T::SpendId,
         ) -> DispatchResult {
             let caller = ensure_signed(origin)?;
-            let auth = Self::can_trigger_vote_on_spend_proposal(bank_id, &caller)?;
-            ensure!(auth, Error::<T>::NotPermittedToTriggerVoteForBankAccount);
-            let bank_spend_id = BankSpend::new(bank_id, spend_id);
-            let vote_id = Self::trigger_vote_on_spend_proposal(bank_spend_id)?;
+            let vote_id = Self::_trigger_vote_on_spend_proposal(&caller, bank_id, spend_id)?;
             Self::deposit_event(RawEvent::VoteTriggeredOnSpendProposal(caller, bank_id, spend_id, vote_id));
             Ok(())
         }
         #[weight = 0]
-        fn member_sudo_approves_spend_proposal(
+        fn sudo_approve_spend_proposal(
             origin,
             bank_id: T::BankId,
             spend_id: T::SpendId,
         ) -> DispatchResult {
             let caller = ensure_signed(origin)?;
-            let auth = Self::can_sudo_approve_spend_proposal(bank_id, &caller)?;
-            ensure!(auth, Error::<T>::NotPermittedToSudoApproveForBankAccount);
-            let bank_spend_id = BankSpend::new(bank_id, spend_id);
-            Self::sudo_approve_spend_proposal(bank_spend_id)?;
+            Self::_sudo_approve_spend_proposal(&caller, bank_id, spend_id)?;
             Self::deposit_event(RawEvent::SudoApprovedSpendProposal(caller, bank_id, spend_id));
-            Ok(())
-        }
-        #[weight = 0]
-        fn member_polls_spend_proposal(
-            origin,
-            bank_id: T::BankId,
-            spend_id: T::SpendId,
-        ) -> DispatchResult {
-            let caller = ensure_signed(origin)?;
-            let auth = Self::can_poll_spend_proposal(bank_id, &caller)?;
-            ensure!(auth, Error::<T>::NotPermittedToPollSpendProposalForBankAccount);
-            let bank_spend_id = BankSpend::new(bank_id, spend_id);
-            let state = Self::poll_spend_proposal(bank_spend_id)?;
-            Self::deposit_event(RawEvent::SpendProposalPolled(caller, bank_id, spend_id, state));
             Ok(())
         }
         #[weight = 0]
@@ -280,8 +263,8 @@ decl_module! {
             let bank = <BankStores<T>>::get(bank_id).ok_or(Error::<T>::CannotCloseBankThatDNE)?;
             // permissions for closing bank accounts is org supervisor status
             ensure!(
-                <org::Module<T>>::is_organization_supervisor(bank.org(), &closer),
-                Error::<T>::MustBeOrgSupervisorToCloseBankAccount
+                bank.is_controller(&closer),
+                Error::<T>::OnlyControllerCanCloseBank
             );
             let bank_account_id = Self::bank_account_id(bank_id);
             let remaining_funds = <T as donate::Trait>::Currency::total_balance(&bank_account_id);
@@ -297,6 +280,9 @@ decl_module! {
             <TotalBankCount>::mutate(|count| *count -= 1);
             Self::deposit_event(RawEvent::BankAccountClosed(closer, bank_id, bank.org()));
             Ok(())
+        }
+        fn on_finalize(_n: T::BlockNumber) {
+            todo!() // poll every spend poll frequency, add storage item
         }
     }
 }
@@ -346,58 +332,6 @@ impl<T: Trait> Module<T> {
     }
 }
 
-// adds a storage lookup /forall methods but this is just for local permissions anyway
-impl<T: Trait> BankPermissions<T::BankId, T::OrgId, T::AccountId>
-    for Module<T>
-{
-    fn can_open_bank_account_for_org(
-        org: T::OrgId,
-        who: &T::AccountId,
-    ) -> bool {
-        <org::Module<T>>::is_member_of_group(org, who)
-    }
-    fn can_propose_spend(
-        bank: T::BankId,
-        who: &T::AccountId,
-    ) -> Result<bool, DispatchError> {
-        let bank = <BankStores<T>>::get(bank)
-            .ok_or(Error::<T>::CannotProposeSpendIfBankDNE)?;
-        Ok(<org::Module<T>>::is_member_of_group(bank.org(), who))
-    }
-    fn can_trigger_vote_on_spend_proposal(
-        bank: T::BankId,
-        who: &T::AccountId,
-    ) -> Result<bool, DispatchError> {
-        let bank = <BankStores<T>>::get(bank)
-            .ok_or(Error::<T>::CannotTriggerVoteForSpendIfBaseBankDNE)?;
-        Ok(<org::Module<T>>::is_member_of_group(bank.org(), who))
-    }
-    fn can_sudo_approve_spend_proposal(
-        bank: T::BankId,
-        who: &T::AccountId,
-    ) -> Result<bool, DispatchError> {
-        let bank = <BankStores<T>>::get(bank)
-            .ok_or(Error::<T>::CannotSudoApproveSpendProposalIfBaseBankDNE)?;
-        Ok(bank.is_controller(who))
-    }
-    fn can_poll_spend_proposal(
-        bank: T::BankId,
-        who: &T::AccountId,
-    ) -> Result<bool, DispatchError> {
-        let bank = <BankStores<T>>::get(bank)
-            .ok_or(Error::<T>::CannotPollSpendProposalIfBaseBankDNE)?;
-        Ok(<org::Module<T>>::is_member_of_group(bank.org(), who))
-    }
-    fn can_spend(
-        bank: T::BankId,
-        who: &T::AccountId,
-    ) -> Result<bool, DispatchError> {
-        let bank = <BankStores<T>>::get(bank)
-            .ok_or(Error::<T>::CannotSpendIfBankDNE)?;
-        Ok(bank.is_controller(who))
-    }
-}
-
 impl<T: Trait> OpenBankAccount<T::OrgId, BalanceOf<T>, T::AccountId>
     for Module<T>
 {
@@ -412,62 +346,74 @@ impl<T: Trait> OpenBankAccount<T::OrgId, BalanceOf<T>, T::AccountId>
             deposit >= T::MinDeposit::get(),
             Error::<T>::CannotOpenBankAccountIfDepositIsBelowModuleMinimum
         );
-        let new_org_bank_count = <OrgTreasuryCount<T>>::get(org) + 1;
         ensure!(
-            new_org_bank_count <= T::MaxTreasuryPerOrg::get(),
+            <T as Trait>::Currency::free_balance(&opener) > deposit,
+            Error::<T>::InsufficientBalanceToFundBankOpen
+        );
+        let new_count = <OrgTreasuryCount<T>>::get(org) + 1;
+        ensure!(
+            new_count <= T::MaxTreasuryPerOrg::get(),
             Error::<T>::CannotOpenBankAccountForOrgIfBankCountExceedsLimitPerOrg
         );
         // generate new treasury identifier
-        let new_treasury_id = Self::generate_bank_uid();
+        let id = Self::generate_bank_uid();
         // create new bank object
-        let new_bank = BankState::new(org, controller);
+        let bank = BankState::new(id, org, controller);
         // perform fallible transfer
         <T as Trait>::Currency::transfer(
             &opener,
-            &Self::bank_account_id(new_treasury_id),
+            &Self::bank_account_id(id),
             deposit,
             ExistenceRequirement::KeepAlive,
         )?;
         // insert new bank object
-        <BankStores<T>>::insert(new_treasury_id, new_bank);
-        // iterate org treasury count
-        <OrgTreasuryCount<T>>::insert(org, new_org_bank_count);
+        <BankStores<T>>::insert(id, bank);
+        // put new org treasury count
+        <OrgTreasuryCount<T>>::insert(org, new_count);
         // iterate total bank count
         <TotalBankCount>::mutate(|count| *count += 1u32);
         // return new treasury identifier
-        Ok(new_treasury_id)
+        Ok(id)
     }
 }
 
-impl<T: Trait> SpendGovernance<T::BankId, BalanceOf<T>, T::AccountId>
+impl<T: Trait>
+    SpendGovernance<T::BankId, BalanceOf<T>, T::AccountId, SpendProp<T>>
     for Module<T>
 {
-    type SpendId = BankSpend<T::BankId, T::SpendId>;
+    type SpendId = T::SpendId;
     type VoteId = T::VoteId;
     type SpendState = SpendState<T::VoteId>;
-    fn propose_spend(
+    fn _propose_spend(
+        caller: &T::AccountId,
         bank_id: T::BankId,
         amount: BalanceOf<T>,
         dest: T::AccountId,
     ) -> Result<Self::SpendId, DispatchError> {
+        let bank = <BankStores<T>>::get(bank_id)
+            .ok_or(Error::<T>::BankMustExistToProposeSpendFrom)?;
         ensure!(
-            Self::is_bank(bank_id),
-            Error::<T>::BankMustExistToProposeSpendFrom
+            <org::Module<T>>::is_member_of_group(bank.org(), caller),
+            Error::<T>::NotPermittedToProposeSpendForBankAccount
         );
-        let spend_proposal = SpendProposal::new(amount, dest);
-        let new_spend_id = Self::generate_spend_uid(bank_id);
-        <SpendProposals<T>>::insert(bank_id, new_spend_id, spend_proposal);
-        Ok(BankSpend::new(bank_id, new_spend_id))
+        let id = Self::generate_spend_uid(bank_id);
+        let proposal = SpendProposal::new(bank_id, id, amount, dest);
+        <SpendProposals<T>>::insert(bank_id, id, proposal);
+        Ok(id)
     }
-    fn trigger_vote_on_spend_proposal(
+    fn _trigger_vote_on_spend_proposal(
+        caller: &T::AccountId,
+        bank_id: T::BankId,
         spend_id: Self::SpendId,
     ) -> Result<Self::VoteId, DispatchError> {
-        let bank = <BankStores<T>>::get(spend_id.bank)
+        let bank = <BankStores<T>>::get(bank_id)
             .ok_or(Error::<T>::CannotTriggerVoteForSpendIfBaseBankDNE)?;
-        let spend_proposal =
-            <SpendProposals<T>>::get(spend_id.bank, spend_id.spend).ok_or(
-                Error::<T>::CannotTriggerVoteForSpendIfSpendProposalDNE,
-            )?;
+        ensure!(
+            <org::Module<T>>::is_member_of_group(bank.org(), caller),
+            Error::<T>::NotPermittedToTriggerVoteForBankAccount
+        );
+        let spend_proposal = <SpendProposals<T>>::get(bank_id, spend_id)
+            .ok_or(Error::<T>::CannotTriggerVoteForSpendIfSpendProposalDNE)?;
         match spend_proposal.state() {
             SpendState::WaitingForApproval => {
                 // default unanimous passage \forall spend proposals
@@ -481,8 +427,8 @@ impl<T: Trait> SpendGovernance<T::BankId, BalanceOf<T>, T::AccountId>
                 let new_spend_proposal =
                     spend_proposal.set_state(SpendState::Voting(new_vote_id));
                 <SpendProposals<T>>::insert(
-                    spend_id.bank,
-                    spend_id.spend,
+                    bank_id,
+                    spend_id,
                     new_spend_proposal,
                 );
                 Ok(new_vote_id)
@@ -493,13 +439,19 @@ impl<T: Trait> SpendGovernance<T::BankId, BalanceOf<T>, T::AccountId>
             }
         }
     }
-    fn sudo_approve_spend_proposal(spend_id: Self::SpendId) -> DispatchResult {
+    fn _sudo_approve_spend_proposal(
+        caller: &T::AccountId,
+        bank_id: T::BankId,
+        spend_id: Self::SpendId,
+    ) -> DispatchResult {
+        let bank = <BankStores<T>>::get(bank_id)
+            .ok_or(Error::<T>::CannotSudoApproveSpendProposalIfBaseBankDNE)?;
         ensure!(
-            Self::is_bank(spend_id.bank),
-            Error::<T>::CannotSudoApproveSpendProposalIfBaseBankDNE
+            bank.is_controller(caller),
+            Error::<T>::OnlyControllerCanSudoApproveSpendProposals
         );
-        let spend_proposal =
-            <SpendProposals<T>>::get(spend_id.bank, spend_id.spend).ok_or(
+        let spend_proposal = <SpendProposals<T>>::get(bank_id, spend_id)
+            .ok_or(
                 Error::<T>::CannotSudoApproveSpendProposalIfSpendProposalDNE,
             )?;
         match spend_proposal.state() {
@@ -507,7 +459,7 @@ impl<T: Trait> SpendGovernance<T::BankId, BalanceOf<T>, T::AccountId>
                 // TODO: if Voting, remove the current live vote
                 let new_spend_proposal = if let Ok(()) =
                     <T as Trait>::Currency::transfer(
-                        &Self::bank_account_id(spend_id.bank),
+                        &Self::bank_account_id(bank_id),
                         &spend_proposal.dest(),
                         spend_proposal.amount(),
                         ExistenceRequirement::KeepAlive,
@@ -517,8 +469,8 @@ impl<T: Trait> SpendGovernance<T::BankId, BalanceOf<T>, T::AccountId>
                     spend_proposal.set_state(SpendState::ApprovedButNotExecuted)
                 };
                 <SpendProposals<T>>::insert(
-                    spend_id.bank,
-                    spend_id.spend,
+                    bank_id,
+                    spend_id,
                     new_spend_proposal,
                 );
                 Ok(())
@@ -530,16 +482,15 @@ impl<T: Trait> SpendGovernance<T::BankId, BalanceOf<T>, T::AccountId>
         }
     }
     fn poll_spend_proposal(
-        spend_id: Self::SpendId,
+        prop: SpendProp<T>,
     ) -> Result<Self::SpendState, DispatchError> {
         ensure!(
-            Self::is_bank(spend_id.bank),
+            Self::is_bank(prop.bank_id()),
             Error::<T>::CannotPollSpendProposalIfBaseBankDNE
         );
-        let spend_proposal =
-            <SpendProposals<T>>::get(spend_id.bank, spend_id.spend)
-                .ok_or(Error::<T>::CannotPollSpendProposalIfSpendProposalDNE)?;
-        match spend_proposal.state() {
+        let _ = <SpendProposals<T>>::get(prop.bank_id(), prop.spend_id())
+            .ok_or(Error::<T>::CannotPollSpendProposalIfSpendProposalDNE)?;
+        match prop.state() {
             SpendState::Voting(vote_id) => {
                 let vote_outcome =
                     <vote::Module<T>>::get_vote_outcome(vote_id)?;
@@ -547,29 +498,27 @@ impl<T: Trait> SpendGovernance<T::BankId, BalanceOf<T>, T::AccountId>
                     // approved so try to execute and if not, still approve
                     let new_spend_proposal = if let Ok(()) =
                         <T as Trait>::Currency::transfer(
-                            &Self::bank_account_id(spend_id.bank),
-                            &spend_proposal.dest(),
-                            spend_proposal.amount(),
+                            &Self::bank_account_id(prop.bank_id()),
+                            &prop.dest(),
+                            prop.amount(),
                             ExistenceRequirement::KeepAlive,
                         ) {
-                        spend_proposal
-                            .set_state(SpendState::ApprovedAndExecuted)
+                        prop.set_state(SpendState::ApprovedAndExecuted)
                     } else {
-                        spend_proposal
-                            .set_state(SpendState::ApprovedButNotExecuted)
+                        prop.set_state(SpendState::ApprovedButNotExecuted)
                     };
                     let ret_state = new_spend_proposal.state();
                     <SpendProposals<T>>::insert(
-                        spend_id.bank,
-                        spend_id.spend,
+                        prop.bank_id(),
+                        prop.spend_id(),
                         new_spend_proposal,
                     );
                     Ok(ret_state)
                 } else {
-                    Ok(spend_proposal.state())
+                    Ok(prop.state())
                 }
             }
-            _ => Ok(spend_proposal.state()),
+            _ => Ok(prop.state()),
         }
     }
 }

@@ -91,7 +91,7 @@ impl pallet_balances::Trait for Test {
 }
 impl org::Trait for Test {
     type Event = TestEvent;
-    type IpfsReference = u32;
+    type Cid = u32;
     type OrgId = u64;
     type Shares = u64;
 }

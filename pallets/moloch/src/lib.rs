@@ -182,31 +182,31 @@ decl_event!(
 decl_error! {
     pub enum Error for Module<T: Trait> {
         LimitOfOneMolochPerOrg,
+        InsufficientBalanceToFundBankOpen,
         CannotOpenBankAccountIfDepositIsBelowModuleMinimum,
         CannotOpenBankAccountForOrgIfBankCountExceedsLimitPerOrg,
         CannotCloseBankThatDNE,
         NotPermittedToOpenBankAccountForOrg,
-        NotPermittedToProposeSpendForBankAccount,
         NotPermittedToTriggerVoteForBankAccount,
         NotPermittedToSudoApproveForBankAccount,
         NotPermittedToPollProposalForBankAccount,
         CannotSpendIfBankDNE,
         MustBeOrgSupervisorToCloseBankAccount,
-        // spend proposal stuff
+        // shared proposal errs
         CannotProposeIfBankDNE,
         BankMustExistToProposeFrom,
         CannotTriggerVoteIfBaseBankDNE,
-        CannotTriggerVoteForSpendIfSpendProposalDNE,
+        CannotTriggerVoteIfProposalDNE,
+        MustBeMemberToSponsorProposal,
+        // spend proposal errs
         CannotTriggerVoteFromCurrentSpendProposalState,
         CannotSudoApproveSpendProposalIfBaseBankDNE,
         CannotSudoApproveSpendProposalIfSpendProposalDNE,
         CannotApproveAlreadyApprovedSpendProposal,
         CannotPollProposalIfBaseBankDNE,
         CannotPollProposalIfProposalDNE,
-        // moloch member proposal stuff
-        CannotTriggerVoteForMemberIfMemberProposalDNE,
+        // moloch member errs
         CannotTriggerVoteFromCurrentMemberProposalState,
-        MustBeMemberToSponsorMembershipProposal,
         CannotBurnSharesIfBaseBankDNE,
         // for getting banks for org
         NoBanksForOrg,
@@ -267,8 +267,10 @@ decl_module! {
         ) -> DispatchResult {
             ensure!(<OrgBankRegistrar<T>>::get(org).is_none(), Error::<T>::LimitOfOneMolochPerOrg);
             let opener = ensure_signed(origin)?;
-            let auth = <org::Module<T>>::is_member_of_group(org, &opener);
-            ensure!(auth, Error::<T>::NotPermittedToOpenBankAccountForOrg);
+            ensure!(
+                <org::Module<T>>::is_member_of_group(org, &opener),
+                Error::<T>::NotPermittedToOpenBankAccountForOrg
+            );
             let bank_id = Self::open_bank_account(opener.clone(), org, deposit, controller.clone())?;
             <OrgBankRegistrar<T>>::insert(org, ());
             Self::deposit_event(RawEvent::BankAccountOpened(opener, bank_id, deposit, org, controller));
@@ -484,10 +486,12 @@ impl<T: Trait> OpenBankAccount<T::OrgId, BalanceOf<T>, T::AccountId>
             deposit >= T::MinDeposit::get(),
             Error::<T>::CannotOpenBankAccountIfDepositIsBelowModuleMinimum
         );
+        ensure!(
+            <T as Trait>::Currency::free_balance(&opener) > deposit,
+            Error::<T>::InsufficientBalanceToFundBankOpen
+        );
         // generate new moloch bank identifier
         let id = Self::generate_bank_uid();
-        // create new bank object
-        let new_bank = BankState::new(id, org, controller);
         // perform fallible transfer
         <T as Trait>::Currency::transfer(
             &opener,
@@ -495,6 +499,8 @@ impl<T: Trait> OpenBankAccount<T::OrgId, BalanceOf<T>, T::AccountId>
             deposit,
             ExistenceRequirement::KeepAlive,
         )?;
+        // create new bank object
+        let new_bank = BankState::new(id, org, controller);
         // insert new bank object
         <BankStores<T>>::insert(id, new_bank);
         // iterate total bank count
@@ -519,8 +525,10 @@ impl<T: Trait>
     ) -> Result<Self::SpendId, DispatchError> {
         let bank = <BankStores<T>>::get(bank_id)
             .ok_or(Error::<T>::BankMustExistToProposeFrom)?;
-        let auth = <org::Module<T>>::is_member_of_group(bank.org(), caller);
-        ensure!(auth, Error::<T>::NotPermittedToProposeSpendForBankAccount);
+        ensure!(
+            <org::Module<T>>::is_member_of_group(bank.org(), &caller),
+            Error::<T>::MustBeMemberToSponsorProposal
+        );
         let new_spend_id = Self::generate_spend_uid(bank_id);
         let spend_proposal =
             SpendProp::<T>::new(bank_id, new_spend_id, amount, dest);
@@ -534,10 +542,12 @@ impl<T: Trait>
     ) -> Result<Self::VoteId, DispatchError> {
         let bank = <BankStores<T>>::get(bank_id)
             .ok_or(Error::<T>::CannotTriggerVoteIfBaseBankDNE)?;
-        let auth = <org::Module<T>>::is_member_of_group(bank.org(), caller);
-        ensure!(auth, Error::<T>::NotPermittedToTriggerVoteForBankAccount);
         let spend_proposal = <SpendProps<T>>::get(bank_id, spend_id)
-            .ok_or(Error::<T>::CannotTriggerVoteForSpendIfSpendProposalDNE)?;
+            .ok_or(Error::<T>::CannotTriggerVoteIfProposalDNE)?;
+        ensure!(
+            <org::Module<T>>::is_member_of_group(bank.org(), caller),
+            Error::<T>::NotPermittedToTriggerVoteForBankAccount
+        );
         match spend_proposal.state() {
             SpendState::WaitingForApproval => {
                 // TODO: configurable thresholds from vote::thresholds_storage()
@@ -658,7 +668,7 @@ impl<T: Trait>
             .ok_or(Error::<T>::BankMustExistToProposeFrom)?;
         ensure!(
             <org::Module<T>>::is_member_of_group(bank.org(), &caller),
-            Error::<T>::MustBeMemberToSponsorMembershipProposal
+            Error::<T>::MustBeMemberToSponsorProposal
         );
         let id = Self::generate_proposal_uid(bank_id);
         let member_proposal = MemberProp::<T>::new(
@@ -683,7 +693,7 @@ impl<T: Trait>
             Error::<T>::NotPermittedToTriggerVoteForBankAccount
         );
         let member_proposal = <MemberProps<T>>::get(bank_id, proposal_id)
-            .ok_or(Error::<T>::CannotTriggerVoteForMemberIfMemberProposalDNE)?;
+            .ok_or(Error::<T>::CannotTriggerVoteIfProposalDNE)?;
         match member_proposal.state() {
             ProposalState::WaitingForApproval => {
                 // TODO: configurable thresholds from vote::thresholds_storage()
