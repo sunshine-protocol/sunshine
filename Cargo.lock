@@ -6750,7 +6750,7 @@ dependencies = [
 [[package]]
 name = "substrate-subxt"
 version = "0.11.0"
-source = "git+https://github.com/dvc94ch/substrate-subxt?branch=different-assert#0323b5891996e373d3c17488b5e124011488c788"
+source = "git+https://github.com/paritytech/substrate-subxt/#eac2ce3b2a9d8a3a0e248229e77b00846e50647b"
 dependencies = [
  "frame-metadata",
  "frame-support",
@@ -6778,7 +6778,7 @@ dependencies = [
 [[package]]
 name = "substrate-subxt-client"
 version = "0.3.0"
-source = "git+https://github.com/dvc94ch/substrate-subxt?branch=different-assert#0323b5891996e373d3c17488b5e124011488c788"
+source = "git+https://github.com/paritytech/substrate-subxt/#eac2ce3b2a9d8a3a0e248229e77b00846e50647b"
 dependencies = [
  "async-std",
  "futures 0.1.29",
@@ -6795,7 +6795,7 @@ dependencies = [
 [[package]]
 name = "substrate-subxt-proc-macro"
 version = "0.11.0"
-source = "git+https://github.com/dvc94ch/substrate-subxt?branch=different-assert#0323b5891996e373d3c17488b5e124011488c788"
+source = "git+https://github.com/paritytech/substrate-subxt/#eac2ce3b2a9d8a3a0e248229e77b00846e50647b"
 dependencies = [
  "heck",
  "proc-macro-crate",
@@ -7183,6 +7183,26 @@ dependencies = [
  "sp-runtime",
  "sp-std",
  "sunshine-bounty-utils",
+]
+
+[[package]]
+name = "sunshine-moloch"
+version = "0.0.1"
+dependencies = [
+ "clear_on_drop",
+ "frame-support",
+ "frame-system",
+ "pallet-balances",
+ "parity-scale-codec",
+ "serde",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+ "sunshine-bounty-utils",
+ "sunshine-donate",
+ "sunshine-org",
+ "sunshine-vote",
 ]
 
 [[package]]
