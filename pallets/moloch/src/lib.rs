@@ -4,6 +4,9 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 //! Moloch impl
 
+#[cfg(test)]
+mod tests;
+
 use codec::Codec;
 use frame_support::{
     decl_error,
@@ -168,6 +171,10 @@ decl_event!(
         SudoApprovedSpendProposal(AccountId, BankId, SpendId),
         SpendProposalPolled(BankId, SpendId, SpendState<VoteId>),
         MemberProposalPolled(BankId, ProposalId, ProposalState<VoteId>),
+        // relevant org and number of shares burned
+        SharesBurned(OrgId, Shares),
+        // bank, amt withdrawn by burn, amt left in bank
+        WithdrawnPortion(BankId, Balance, Balance),
         BankAccountClosed(AccountId, BankId, OrgId),
     }
 );
@@ -196,10 +203,11 @@ decl_error! {
         CannotApproveAlreadyApprovedSpendProposal,
         CannotPollProposalIfBaseBankDNE,
         CannotPollProposalIfProposalDNE,
-        // member proposal stuff
+        // moloch member proposal stuff
         CannotTriggerVoteForMemberIfMemberProposalDNE,
         CannotTriggerVoteFromCurrentMemberProposalState,
         MustBeMemberToSponsorMembershipProposal,
+        CannotBurnSharesIfBaseBankDNE,
         // for getting banks for org
         NoBanksForOrg,
     }
@@ -251,7 +259,7 @@ decl_module! {
         fn deposit_event() = default;
 
         #[weight = 0]
-        fn summon_moloch(
+        fn summon(
             origin,
             org: T::OrgId,
             deposit: BalanceOf<T>,
@@ -267,41 +275,41 @@ decl_module! {
             Ok(())
         }
         #[weight = 0]
-        fn member_proposes_spend(
+        fn propose_spend(
             origin,
             bank_id: T::BankId,
             amount: BalanceOf<T>,
             dest: T::AccountId,
         ) -> DispatchResult {
             let caller = ensure_signed(origin)?;
-            let new_spend_id = Self::propose_spend(&caller, bank_id, amount, dest.clone())?;
+            let new_spend_id = Self::_propose_spend(&caller, bank_id, amount, dest.clone())?;
             Self::deposit_event(RawEvent::SpendProposedByMember(caller, bank_id, new_spend_id, amount, dest));
             Ok(())
         }
         #[weight = 0]
-        fn member_triggers_vote_on_spend_proposal(
+        fn trigger_vote_on_spend_proposal(
             origin,
             bank_id: T::BankId,
             spend_id: T::SpendId,
         ) -> DispatchResult {
             let caller = ensure_signed(origin)?;
-            let vote_id = Self::trigger_vote_on_spend_proposal(&caller, bank_id, spend_id)?;
+            let vote_id = Self::_trigger_vote_on_spend_proposal(&caller, bank_id, spend_id)?;
             Self::deposit_event(RawEvent::VoteTriggeredOnSpendProposal(caller, bank_id, spend_id, vote_id));
             Ok(())
         }
         #[weight = 0]
-        fn member_sudo_approves_spend_proposal(
+        fn sudo_approve_spend_proposal(
             origin,
             bank_id: T::BankId,
             spend_id: T::SpendId,
         ) -> DispatchResult {
             let caller = ensure_signed(origin)?;
-            Self::sudo_approve_spend_proposal(&caller, bank_id, spend_id)?;
+            Self::_sudo_approve_spend_proposal(&caller, bank_id, spend_id)?;
             Self::deposit_event(RawEvent::SudoApprovedSpendProposal(caller, bank_id, spend_id));
             Ok(())
         }
         #[weight = 0]
-        fn member_proposes_member(
+        fn propose_member(
             origin,
             bank_id: T::BankId,
             tribute: BalanceOf<T>,
@@ -309,19 +317,28 @@ decl_module! {
             applicant: T::AccountId,
         ) -> DispatchResult {
             let caller = ensure_signed(origin)?;
-            let proposal_id = Self::propose_membership(&caller, bank_id, tribute, shares_requested, applicant.clone())?;
+            let proposal_id = Self::_propose_member(&caller, bank_id, tribute, shares_requested, applicant.clone())?;
             Self::deposit_event(RawEvent::NewMemberProposal(caller, bank_id, proposal_id, tribute, shares_requested, applicant));
             Ok(())
         }
         #[weight = 0]
-        fn member_triggers_vote_on_member_proposal(
+        fn trigger_vote_on_member_proposal(
             origin,
             bank_id: T::BankId,
             proposal_id: T::ProposalId,
         ) -> DispatchResult {
             let caller = ensure_signed(origin)?;
-            let new_vote_id = Self::trigger_vote_on_member_proposal(&caller, bank_id, proposal_id)?;
+            let new_vote_id = Self::_trigger_vote_on_member_proposal(&caller, bank_id, proposal_id)?;
             Self::deposit_event(RawEvent::VoteTriggeredOnMemberProposal(caller, bank_id, proposal_id, new_vote_id));
+            Ok(())
+        }
+        #[weight = 0]
+        fn burn_shares(
+            origin,
+            bank_id: T::BankId,
+        ) -> DispatchResult {
+            let caller = ensure_signed(origin)?;
+            Self::_burn_shares(caller, bank_id)?;
             Ok(())
         }
         #[weight = 0]
@@ -352,20 +369,20 @@ decl_module! {
         }
         fn on_finalize(_n: T::BlockNumber) {
             if <frame_system::Module<T>>::block_number() % Self::spend_poll_frequency() == Zero::zero() {
-                <SpendProps<T>>::iter().map(|(bid, sid, _)| -> DispatchResult {
-                    // TODO: pass in prop instead of this to remove one storage lookup
-                    let state = Self::poll_spend_proposal(bid, sid)?;
-                    Self::deposit_event(RawEvent::SpendProposalPolled(bid, sid, state));
-                    Ok(())
-                }).collect::<DispatchResult>();
+                <SpendProps<T>>::iter().for_each(|(_, _, prop)| {
+                    let (bank_id, spend_id) = (prop.bank_id(), prop.spend_id());
+                    if let Ok(state) = Self::poll_spend_proposal(prop) {
+                        Self::deposit_event(RawEvent::SpendProposalPolled(bank_id, spend_id, state));
+                    }
+                });
             }
             if <frame_system::Module<T>>::block_number() % Self::member_poll_frequency() == Zero::zero() {
-                <MemberProps<T>>::iter().map(|(bid, mid, _)| -> DispatchResult {
-                    // TODO: pass in prop instead of this to remove one storage lookup
-                    let state = Self::poll_membership_proposal(bid, mid)?;
-                    Self::deposit_event(RawEvent::MemberProposalPolled(bid, mid, state));
-                    Ok(())
-                }).collect::<DispatchResult>();
+                <MemberProps<T>>::iter().for_each(|(_, _, prop)| {
+                    let (bank_id, prop_id) = (prop.bank_id(), prop.prop_id());
+                    if let Ok(state) = Self::poll_membership_proposal(prop) {
+                        Self::deposit_event(RawEvent::MemberProposalPolled(bank_id, prop_id, state));
+                    }
+                });
             }
         }
     }
@@ -482,18 +499,19 @@ impl<T: Trait> OpenBankAccount<T::OrgId, BalanceOf<T>, T::AccountId>
         <BankStores<T>>::insert(id, new_bank);
         // iterate total bank count
         <TotalBankCount>::mutate(|count| *count += 1u32);
-        // return new treasury identifier
+        // return new moloch bank identifier
         Ok(id)
     }
 }
 
-impl<T: Trait> SpendGovernance<T::BankId, BalanceOf<T>, T::AccountId>
+impl<T: Trait>
+    SpendGovernance<T::BankId, BalanceOf<T>, T::AccountId, SpendProp<T>>
     for Module<T>
 {
     type SpendId = T::SpendId;
     type VoteId = T::VoteId;
     type SpendState = SpendState<T::VoteId>;
-    fn propose_spend(
+    fn _propose_spend(
         caller: &T::AccountId,
         bank_id: T::BankId,
         amount: BalanceOf<T>,
@@ -509,7 +527,7 @@ impl<T: Trait> SpendGovernance<T::BankId, BalanceOf<T>, T::AccountId>
         <SpendProps<T>>::insert(bank_id, new_spend_id, spend_proposal);
         Ok(new_spend_id)
     }
-    fn trigger_vote_on_spend_proposal(
+    fn _trigger_vote_on_spend_proposal(
         caller: &T::AccountId,
         bank_id: T::BankId,
         spend_id: Self::SpendId,
@@ -540,7 +558,7 @@ impl<T: Trait> SpendGovernance<T::BankId, BalanceOf<T>, T::AccountId>
             }
         }
     }
-    fn sudo_approve_spend_proposal(
+    fn _sudo_approve_spend_proposal(
         caller: &T::AccountId,
         bank_id: T::BankId,
         spend_id: Self::SpendId,
@@ -578,14 +596,13 @@ impl<T: Trait> SpendGovernance<T::BankId, BalanceOf<T>, T::AccountId>
         }
     }
     fn poll_spend_proposal(
-        bank_id: T::BankId,
-        spend_id: Self::SpendId,
+        prop: SpendProp<T>,
     ) -> Result<Self::SpendState, DispatchError> {
-        let _ = <BankStores<T>>::get(bank_id)
+        let _ = <BankStores<T>>::get(prop.bank_id())
             .ok_or(Error::<T>::CannotPollProposalIfBaseBankDNE)?;
-        let spend_proposal = <SpendProps<T>>::get(bank_id, spend_id)
+        let _ = <SpendProps<T>>::get(prop.bank_id(), prop.spend_id())
             .ok_or(Error::<T>::CannotPollProposalIfProposalDNE)?;
-        match spend_proposal.state() {
+        match prop.state() {
             SpendState::Voting(vote_id) => {
                 let vote_outcome =
                     <vote::Module<T>>::get_vote_outcome(vote_id)?;
@@ -593,41 +610,44 @@ impl<T: Trait> SpendGovernance<T::BankId, BalanceOf<T>, T::AccountId>
                     // approved so try to execute and if not, still approve
                     let new_spend_proposal = if let Ok(()) =
                         <T as Trait>::Currency::transfer(
-                            &Self::bank_account_id(bank_id),
-                            &spend_proposal.dest(),
-                            spend_proposal.amount(),
+                            &Self::bank_account_id(prop.bank_id()),
+                            &prop.dest(),
+                            prop.amount(),
                             ExistenceRequirement::KeepAlive,
                         ) {
-                        spend_proposal
-                            .set_state(SpendState::ApprovedAndExecuted)
+                        prop.set_state(SpendState::ApprovedAndExecuted)
                     } else {
-                        spend_proposal
-                            .set_state(SpendState::ApprovedButNotExecuted)
+                        prop.set_state(SpendState::ApprovedButNotExecuted)
                     };
                     let ret_state = new_spend_proposal.state();
                     <SpendProps<T>>::insert(
-                        bank_id,
-                        spend_id,
+                        prop.bank_id(),
+                        prop.spend_id(),
                         new_spend_proposal,
                     );
                     Ok(ret_state)
                 } else {
-                    Ok(spend_proposal.state())
+                    Ok(prop.state())
                 }
             }
-            _ => Ok(spend_proposal.state()),
+            _ => Ok(prop.state()),
         }
     }
 }
 
 impl<T: Trait>
-    MolochMembership<T::AccountId, T::BankId, BalanceOf<T>, T::Shares>
-    for Module<T>
+    MolochMembership<
+        T::AccountId,
+        T::BankId,
+        BalanceOf<T>,
+        T::Shares,
+        MemberProp<T>,
+    > for Module<T>
 {
     type MemberPropId = T::ProposalId;
     type VoteId = T::VoteId;
     type PropState = ProposalState<T::VoteId>;
-    fn propose_membership(
+    fn _propose_member(
         caller: &T::AccountId,
         bank_id: T::BankId,
         tribute: BalanceOf<T>,
@@ -651,7 +671,7 @@ impl<T: Trait>
         <MemberProps<T>>::insert(bank_id, id, member_proposal);
         Ok(id)
     }
-    fn trigger_vote_on_member_proposal(
+    fn _trigger_vote_on_member_proposal(
         caller: &T::AccountId,
         bank_id: T::BankId,
         proposal_id: Self::MemberPropId,
@@ -689,14 +709,13 @@ impl<T: Trait>
         }
     }
     fn poll_membership_proposal(
-        bank_id: T::BankId,
-        proposal_id: Self::MemberPropId,
+        prop: MemberProp<T>,
     ) -> Result<Self::PropState, DispatchError> {
-        let bank = <BankStores<T>>::get(bank_id)
+        let bank = <BankStores<T>>::get(prop.bank_id())
             .ok_or(Error::<T>::CannotPollProposalIfBaseBankDNE)?;
-        let member_proposal = <MemberProps<T>>::get(bank_id, proposal_id)
+        let _ = <MemberProps<T>>::get(prop.bank_id(), prop.prop_id())
             .ok_or(Error::<T>::CannotPollProposalIfProposalDNE)?;
-        match member_proposal.state() {
+        match prop.state() {
             ProposalState::Voting(vote_id) => {
                 let vote_outcome =
                     <vote::Module<T>>::get_vote_outcome(vote_id)?;
@@ -705,28 +724,54 @@ impl<T: Trait>
                     let new_member_proposal = if let Ok(()) =
                         Self::execute_member_proposal(
                             bank,
-                            member_proposal.applicant(),
-                            member_proposal.tribute(),
-                            member_proposal.shares_requested(),
+                            prop.applicant(),
+                            prop.tribute(),
+                            prop.shares_requested(),
                         ) {
-                        member_proposal
-                            .set_state(ProposalState::ApprovedAndExecuted)
+                        prop.set_state(ProposalState::ApprovedAndExecuted)
                     } else {
-                        member_proposal
-                            .set_state(ProposalState::ApprovedButNotExecuted)
+                        prop.set_state(ProposalState::ApprovedButNotExecuted)
                     };
                     let ret_state = new_member_proposal.state();
                     <MemberProps<T>>::insert(
-                        bank_id,
-                        proposal_id,
+                        prop.bank_id(),
+                        prop.prop_id(),
                         new_member_proposal,
                     );
                     Ok(ret_state)
                 } else {
-                    Ok(member_proposal.state())
+                    Ok(prop.state())
                 }
             }
-            _ => Ok(member_proposal.state()),
+            _ => Ok(prop.state()),
         }
+    }
+    fn _burn_shares(
+        caller: T::AccountId,
+        bank_id: T::BankId,
+    ) -> DispatchResult {
+        let bank = <BankStores<T>>::get(bank_id)
+            .ok_or(Error::<T>::CannotBurnSharesIfBaseBankDNE)?;
+        let shares_burned =
+            <org::Module<T>>::burn(bank.org(), caller.clone(), None, false)?;
+        Self::deposit_event(RawEvent::SharesBurned(
+            bank.org(),
+            shares_burned.total(),
+        ));
+        let bank_account_id = Self::bank_account_id(bank_id);
+        let balance_in_bank =
+            <T as Trait>::Currency::total_balance(&bank_account_id);
+        let amt_due = shares_burned.portion().mul_floor(balance_in_bank);
+        <T as Trait>::Currency::transfer(
+            &bank_account_id,
+            &caller,
+            amt_due,
+            ExistenceRequirement::KeepAlive,
+        )?;
+        let amt_left = <T as Trait>::Currency::total_balance(&bank_account_id);
+        Self::deposit_event(RawEvent::WithdrawnPortion(
+            bank_id, amt_due, amt_left,
+        ));
+        Ok(())
     }
 }

@@ -75,6 +75,7 @@ pub trait ShareInformation<OrgId, AccountId, Shares> {
 pub trait ShareIssuance<OrgId, AccountId, Shares>:
     ShareInformation<OrgId, AccountId, Shares>
 {
+    type Proportion;
     fn issue(
         organization: OrgId,
         new_owner: AccountId,
@@ -86,7 +87,7 @@ pub trait ShareIssuance<OrgId, AccountId, Shares>:
         old_owner: AccountId,
         amount: Option<Shares>, // default None => burn all shares
         batch: bool,
-    ) -> DispatchResult;
+    ) -> Result<Self::Proportion>;
     fn batch_issue(
         organization: OrgId,
         genesis: Self::Genesis,
@@ -249,50 +250,45 @@ pub trait OpenBankAccount<OrgId, Currency, AccountId> {
     ) -> Result<Self::BankId>;
 }
 
-pub trait SpendGovernance<BankId, Currency, AccountId> {
+pub trait SpendGovernance<BankId, Currency, AccountId, SProp> {
     type SpendId;
     type VoteId;
     type SpendState;
-    fn propose_spend(
+    fn _propose_spend(
         caller: &AccountId,
         bank_id: BankId,
         amount: Currency,
         dest: AccountId,
     ) -> Result<Self::SpendId>;
-    fn trigger_vote_on_spend_proposal(
+    fn _trigger_vote_on_spend_proposal(
         caller: &AccountId,
         bank_id: BankId,
         spend_id: Self::SpendId,
     ) -> Result<Self::VoteId>;
-    fn sudo_approve_spend_proposal(
+    fn _sudo_approve_spend_proposal(
         caller: &AccountId,
         bank_id: BankId,
         spend_id: Self::SpendId,
     ) -> DispatchResult;
-    fn poll_spend_proposal(
-        bank_id: BankId,
-        spend_id: Self::SpendId,
-    ) -> Result<Self::SpendState>;
+    fn poll_spend_proposal(prop: SProp) -> Result<Self::SpendState>;
 }
 
-pub trait MolochMembership<AccountId, BankId, Currency, Shares> {
+pub trait MolochMembership<AccountId, BankId, Currency, Shares, MProp> {
     type MemberPropId;
     type VoteId;
     type PropState;
-    fn propose_membership(
+    fn _propose_member(
         caller: &AccountId,
         bank_id: BankId,
         tribute: Currency,
         shares_requested: Shares,
         applicant: AccountId,
     ) -> Result<Self::MemberPropId>;
-    fn trigger_vote_on_member_proposal(
+    fn _trigger_vote_on_member_proposal(
         caller: &AccountId,
         bank_id: BankId,
         proposal_id: Self::MemberPropId,
     ) -> Result<Self::VoteId>;
-    fn poll_membership_proposal(
-        bank_id: BankId,
-        proposal_id: Self::MemberPropId,
-    ) -> Result<Self::PropState>;
+    fn poll_membership_proposal(prop: MProp) -> Result<Self::PropState>;
+    fn _burn_shares(caller: AccountId, bank_id: BankId) -> DispatchResult;
 }

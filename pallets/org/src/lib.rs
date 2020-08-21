@@ -15,6 +15,7 @@ use util::{
     },
     share::{
         ProfileState,
+        SharePortion,
         ShareProfile,
         WeightedVector,
     },
@@ -61,6 +62,7 @@ use sp_runtime::{
     },
     DispatchError,
     DispatchResult,
+    Permill,
 };
 use sp_std::{
     fmt::Debug,
@@ -558,6 +560,7 @@ impl<T: Trait> ShareInformation<T::OrgId, T::AccountId, T::Shares>
     }
 }
 impl<T: Trait> ShareIssuance<T::OrgId, T::AccountId, T::Shares> for Module<T> {
+    type Proportion = SharePortion<T::Shares, Permill>;
     fn issue(
         organization: T::OrgId,
         new_owner: T::AccountId,
@@ -583,7 +586,7 @@ impl<T: Trait> ShareIssuance<T::OrgId, T::AccountId, T::Shares> for Module<T> {
         old_owner: T::AccountId,
         amount: Option<T::Shares>,
         batch: bool,
-    ) -> DispatchResult {
+    ) -> Result<Self::Proportion, DispatchError> {
         let old_profile = <Members<T>>::get(organization, &old_owner)
             .ok_or(Error::<T>::NotEnoughSharesToSatisfyBurnRequest)?;
         let old_issuance = <TotalIssuance<T>>::get(organization);
@@ -596,6 +599,8 @@ impl<T: Trait> ShareIssuance<T::OrgId, T::AccountId, T::Shares> for Module<T> {
         } else {
             old_profile.total()
         };
+        let portion =
+            Permill::from_rational_approximation(amt_to_burn, old_issuance);
         ensure!(
             old_issuance >= amt_to_burn,
             Error::<T>::CannotBurnMoreThanTotalIssuance
@@ -611,7 +616,7 @@ impl<T: Trait> ShareIssuance<T::OrgId, T::AccountId, T::Shares> for Module<T> {
         } else {
             <Members<T>>::insert(organization, old_owner, new_profile);
         }
-        Ok(())
+        Ok(SharePortion::new(amt_to_burn, portion))
     }
     fn batch_issue(
         organization: T::OrgId,
@@ -647,13 +652,17 @@ impl<T: Trait> ShareIssuance<T::OrgId, T::AccountId, T::Shares> for Module<T> {
         let new_issuance = old_issuance
             .checked_sub(&genesis.total())
             .ok_or(Error::<T>::IssuanceCannotGoNegative)?;
-        genesis
-            .vec()
-            .into_iter()
-            .map(|(member, shares)| -> DispatchResult {
-                Self::burn(organization, member, Some(shares), true)
-            })
-            .collect::<DispatchResult>()?;
+        genesis.vec().into_iter().for_each(|(member, shares)| {
+            if let Ok(portion) =
+                Self::burn(organization, member.clone(), Some(shares), true)
+            {
+                Self::deposit_event(RawEvent::SharesBurned(
+                    organization,
+                    member,
+                    portion.total(),
+                ));
+            }
+        });
         <TotalIssuance<T>>::insert(organization, new_issuance);
         Ok(())
     }

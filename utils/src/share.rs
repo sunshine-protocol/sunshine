@@ -14,6 +14,21 @@ use sp_runtime::{
 };
 use sp_std::prelude::*;
 
+#[derive(new, PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug)]
+pub struct SharePortion<Shares, FineArithmetic> {
+    total: Shares,
+    portion: FineArithmetic,
+}
+
+impl<Shares: Copy, FineArithmetic: Copy> SharePortion<Shares, FineArithmetic> {
+    pub fn total(&self) -> Shares {
+        self.total
+    }
+    pub fn portion(&self) -> FineArithmetic {
+        self.portion
+    }
+}
+
 #[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug)]
 pub enum ProfileState {
     Locked,
