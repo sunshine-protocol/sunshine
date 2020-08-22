@@ -437,50 +437,47 @@ decl_module! {
         fn on_finalize(_n: T::BlockNumber) {
             // poll applications under review and approve passed applications
             if Self::application_poll_frequency() % <frame_system::Module<T>>::block_number() == Zero::zero() {
-                let _ = <Applications<T>>::iter().filter(|(_, app)| app.under_review().is_some())
-                    .map(|(id, app)| -> DispatchResult  {
+                <Applications<T>>::iter().filter(|(_, app)| app.under_review().is_some())
+                    .for_each(|(id, app)|  {
                         if let Some(vid) = app.under_review() {
-                            let status = <vote::Module<T>>::get_vote_outcome(vid)?;
-                            match status {
-                                VoteOutcome::Approved => {
-                                    let new_app = app.set_state(ApplicationState::ApprovedAndLive);
-                                    <Applications<T>>::insert(id, new_app);
-                                    Self::deposit_event(RawEvent::ApplicationApproved(app.foundation_id(), id, app.submission_ref()));
-                                    Ok(())
-                                },
-                                VoteOutcome::Rejected => {
-                                    <Applications<T>>::remove(id);
-                                    Self::deposit_event(RawEvent::ApplicationRejected(app.foundation_id(), id));
-                                    Ok(())
-                                },
-                                _ => Ok(())
+                            if let Ok(status) = <vote::Module<T>>::get_vote_outcome(vid) {
+                                match status {
+                                    VoteOutcome::Approved => {
+                                        let new_app = app.set_state(ApplicationState::ApprovedAndLive);
+                                        <Applications<T>>::insert(id, new_app);
+                                        Self::deposit_event(RawEvent::ApplicationApproved(app.foundation_id(), id, app.submission_ref()));
+                                    },
+                                    VoteOutcome::Rejected => {
+                                        <Applications<T>>::remove(id);
+                                        Self::deposit_event(RawEvent::ApplicationRejected(app.foundation_id(), id));
+                                    },
+                                    _ => (),
+                                }
                             }
-                        } else { Ok(()) }
-                    }).collect::<DispatchResult>();
+                        }
+                    });
             }
             // poll milestones under review and approve passed milestones
             if Self::milestone_poll_frequency() % <frame_system::Module<T>>::block_number() == Zero::zero() {
-                let _ = <Milestones<T>>::iter().filter(|(_, _, mile)| mile.under_review().is_some())
-                    .map(|(aid, mid, mile)| -> DispatchResult  {
+                <Milestones<T>>::iter().filter(|(_, _, mile)| mile.under_review().is_some())
+                    .for_each(|(aid, mid, mile)| {
                         if let Some(vid) = mile.under_review() {
-                            let status = <vote::Module<T>>::get_vote_outcome(vid)?;
-                            match status {
-                                VoteOutcome::Approved => {
-                                    let new_mile = Self::approve_milestone_and_try_transfer(&mile);
-                                    <Milestones<T>>::insert(aid, mid, new_mile);
-                                    Self::deposit_event(RawEvent::MilestoneApproved(mile.base_foundation(), aid, mid, mile.submission()));
-                                    Ok(())
-                                },
-                                VoteOutcome::Rejected => {
-                                    <Milestones<T>>::remove(aid, mid);
-                                    Self::deposit_event(RawEvent::MilestoneRejected(mile.base_foundation(), aid, mid));
-                                    Ok(())
-                                },
-                                _ => Ok(())
+                            if let Ok(status) = <vote::Module<T>>::get_vote_outcome(vid) {
+                                match status {
+                                    VoteOutcome::Approved => {
+                                        let new_mile = Self::approve_milestone_and_try_transfer(&mile);
+                                        <Milestones<T>>::insert(aid, mid, new_mile);
+                                        Self::deposit_event(RawEvent::MilestoneApproved(mile.base_foundation(), aid, mid, mile.submission()));
+                                    },
+                                    VoteOutcome::Rejected => {
+                                        <Milestones<T>>::remove(aid, mid);
+                                        Self::deposit_event(RawEvent::MilestoneRejected(mile.base_foundation(), aid, mid));
+                                    },
+                                    _ => (),
+                                }
                             }
-                        } else { Ok(()) }
-                    }).collect::<DispatchResult>();
-                // TODO: poll approved but not transferred milestones and try to transfer them
+                        }
+                    });
             }
         }
     }

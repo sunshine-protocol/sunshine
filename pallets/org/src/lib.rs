@@ -143,6 +143,8 @@ decl_event!(
         SharesBatchIssued(OrgId, Shares),
         /// Organization ID, Total Shares Burned
         SharesBatchBurned(OrgId, Shares),
+        /// Organization ID Removed
+        OrganizationRemoved(OrgId),
     }
 );
 
@@ -504,6 +506,7 @@ impl<T: Trait> RemoveOrganization<T::OrgId> for Module<T> {
             })
             .collect::<DispatchResult>()?;
         Self::remove_organization(id)?;
+        Self::deposit_event(RawEvent::OrganizationRemoved(id));
         Ok(())
     }
 }
@@ -630,13 +633,17 @@ impl<T: Trait> ShareIssuance<T::OrgId, T::AccountId, T::Shares> for Module<T> {
         let new_issuance = old_issuance
             .checked_add(&genesis.total())
             .ok_or(Error::<T>::IssuanceWouldOverflowShares)?;
-        genesis
-            .vec()
-            .into_iter()
-            .map(|(member, shares)| -> DispatchResult {
-                Self::issue(organization, member, shares, true)
-            })
-            .collect::<DispatchResult>()?;
+        genesis.vec().into_iter().for_each(|(member, shares)| {
+            if let Ok(()) =
+                Self::issue(organization, member.clone(), shares, true)
+            {
+                Self::deposit_event(RawEvent::SharesIssued(
+                    organization,
+                    member,
+                    shares,
+                ));
+            }
+        });
         <TotalIssuance<T>>::insert(organization, new_issuance);
         Ok(())
     }
