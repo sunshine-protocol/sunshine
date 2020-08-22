@@ -24,7 +24,7 @@ use util::{
     traits::GroupMembership,
     vote::{
         Threshold,
-        ThresholdConfig,
+        ThresholdInput,
         VoterView,
         XorThreshold,
     },
@@ -204,7 +204,7 @@ fn opening_bank_account_works() {
     new_test_ext().execute_with(|| {
         let one = Origin::signed(1);
         let sixnine = Origin::signed(69);
-        let threshold = ThresholdConfig::new(
+        let threshold = ThresholdInput::new(
             OrgRep::Equal(1),
             XorThreshold::Percent(Threshold::new(Permill::one(), None)),
         );
@@ -216,7 +216,7 @@ fn opening_bank_account_works() {
             Bank::open(one.clone(), 1, 19, None, threshold.clone()),
             Error::<Test>::CannotOpenBankAccountIfDepositIsBelowModuleMinimum
         );
-        let false_threshold = ThresholdConfig::new(
+        let false_threshold = ThresholdInput::new(
             OrgRep::Equal(2),
             XorThreshold::Percent(Threshold::new(Permill::one(), None)),
         );
@@ -243,7 +243,7 @@ fn spend_governance_works() {
             Bank::propose_spend(Origin::signed(1), 1, 10, 3,),
             Error::<Test>::BankMustExistToProposeSpendFrom
         );
-        let threshold = ThresholdConfig::new(
+        let threshold = ThresholdInput::new(
             OrgRep::Equal(1),
             XorThreshold::Percent(Threshold::new(Permill::one(), None)),
         );

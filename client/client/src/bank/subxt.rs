@@ -48,7 +48,7 @@ use sunshine_bounty_utils::{
     },
     organization::OrgRep,
     vote::{
-        ThresholdConfig,
+        ThresholdInput,
         XorThreshold,
     },
 };
@@ -60,7 +60,7 @@ pub type BankSt<T> = BankState<
     <T as Org>::OrgId,
     <T as Vote>::ThresholdId,
 >;
-pub type Threshold<T> = ThresholdConfig<
+pub type Threshold<T> = ThresholdInput<
     OrgRep<<T as Org>::OrgId>,
     XorThreshold<<T as Vote>::Signal, <T as Vote>::Percent>,
 >;

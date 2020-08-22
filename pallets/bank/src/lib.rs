@@ -59,7 +59,7 @@ use util::{
         SpendGovernance,
     },
     vote::{
-        ThresholdConfig,
+        ThresholdInput,
         VoteOutcome,
         XorThreshold,
     },
@@ -75,7 +75,7 @@ type BankSt<T> = BankState<
     <T as org::Trait>::OrgId,
     <T as vote::Trait>::ThresholdId,
 >;
-type Threshold<T> = ThresholdConfig<
+type Threshold<T> = ThresholdInput<
     OrgRep<<T as org::Trait>::OrgId>,
     XorThreshold<<T as vote::Trait>::Signal, Permill>,
 >;

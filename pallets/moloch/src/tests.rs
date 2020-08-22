@@ -23,7 +23,7 @@ use util::{
     traits::GroupMembership,
     vote::{
         Threshold,
-        ThresholdConfig,
+        ThresholdInput,
         VoterView,
         XorThreshold,
     },
@@ -195,7 +195,7 @@ fn genesis_config_works() {
 #[test]
 fn summon_works() {
     new_test_ext().execute_with(|| {
-        let threshold = ThresholdConfig::new(
+        let threshold = ThresholdInput::new(
             OrgRep::Equal(1),
             XorThreshold::Percent(Threshold::new(Permill::one(), None)),
         );
@@ -211,7 +211,7 @@ fn summon_works() {
             Bank::summon(Origin::signed(70), 1, 21, None, threshold.clone()),
             Error::<Test>::NotPermittedToOpenBankAccountForOrg
         );
-        let false_threshold = ThresholdConfig::new(
+        let false_threshold = ThresholdInput::new(
             OrgRep::Equal(2),
             XorThreshold::Percent(Threshold::new(Permill::one(), None)),
         );
@@ -232,7 +232,7 @@ fn propose_works() {
             Bank::propose_spend(Origin::signed(1), 1, 19, 1),
             Error::<Test>::BankMustExistToProposeFrom
         );
-        let threshold = ThresholdConfig::new(
+        let threshold = ThresholdInput::new(
             OrgRep::Equal(1),
             XorThreshold::Percent(Threshold::new(Permill::one(), None)),
         );
@@ -265,7 +265,7 @@ fn trigger_vote_works() {
             Bank::trigger_vote_on_member_proposal(Origin::signed(1), 1, 1),
             Error::<Test>::CannotTriggerVoteIfBaseBankDNE
         );
-        let threshold = ThresholdConfig::new(
+        let threshold = ThresholdInput::new(
             OrgRep::Equal(1),
             XorThreshold::Percent(Threshold::new(Permill::one(), None)),
         );

@@ -79,14 +79,37 @@ impl<Signal: Copy, Hash: Clone> VoteVector<Signal, VoterView, Hash>
 #[derive(
     new, PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug,
 )]
-pub struct ThresholdConfig<OrgId, Threshold> {
+pub struct ThresholdInput<OrgId, Threshold> {
     org: OrgId,
     threshold: Threshold,
 }
 
 impl<OrgId: Copy, Signal: Copy, Percent: Copy>
-    ThresholdConfig<OrgId, XorThreshold<Signal, Percent>>
+    ThresholdInput<OrgId, XorThreshold<Signal, Percent>>
 {
+    pub fn org(&self) -> OrgId {
+        self.org
+    }
+    pub fn threshold(&self) -> XorThreshold<Signal, Percent> {
+        self.threshold.clone()
+    }
+}
+
+#[derive(
+    new, PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug,
+)]
+pub struct ThresholdConfig<Id, OrgId, Threshold> {
+    id: Id,
+    org: OrgId,
+    threshold: Threshold,
+}
+
+impl<Id: Copy, OrgId: Copy, Signal: Copy, Percent: Copy>
+    ThresholdConfig<Id, OrgId, XorThreshold<Signal, Percent>>
+{
+    pub fn id(&self) -> Id {
+        self.id
+    }
     pub fn org(&self) -> OrgId {
         self.org
     }

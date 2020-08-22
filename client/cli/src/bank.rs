@@ -27,7 +27,7 @@ use sunshine_bounty_utils::{
     organization::OrgRep,
     vote::{
         Threshold,
-        ThresholdConfig,
+        ThresholdInput,
         XorThreshold,
     },
 };
@@ -67,10 +67,10 @@ impl OpenCommand {
                 .into();
         let threshold: Threshold<<R as Vote>::Percent> =
             Threshold::new(support, None);
-        let threshold_config: ThresholdConfig<
+        let threshold_config: ThresholdInput<
             OrgRep<<R as Org>::OrgId>,
             XorThreshold<<R as Vote>::Signal, <R as Vote>::Percent>,
-        > = ThresholdConfig::new(
+        > = ThresholdInput::new(
             OrgRep::Equal(self.hosting_org.into()),
             XorThreshold::Percent(threshold),
         );

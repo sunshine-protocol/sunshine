@@ -62,6 +62,7 @@ use util::{
     vote::{
         Threshold,
         ThresholdConfig,
+        ThresholdInput,
         Vote,
         VoteOutcome,
         VoteState,
@@ -70,7 +71,12 @@ use util::{
     },
 };
 
+type ThreshInput<T> = ThresholdInput<
+    OrgRep<<T as org::Trait>::OrgId>,
+    XorThreshold<<T as Trait>::Signal, Permill>,
+>;
 type Thresh<T> = ThresholdConfig<
+    <T as Trait>::ThresholdId,
     OrgRep<<T as org::Trait>::OrgId>,
     XorThreshold<<T as Trait>::Signal, Permill>,
 >;
@@ -242,7 +248,7 @@ decl_module! {
         #[weight = 0]
         fn set_threshold_default(
             origin,
-            threshold: Thresh<T>,
+            threshold: ThreshInput<T>,
         ) -> DispatchResult {
             let setter = ensure_signed(origin)?;
             ensure!(
@@ -332,16 +338,17 @@ impl<T: Trait> GetVoteOutcome<T::VoteId> for Module<T> {
     }
 }
 
-impl<T: Trait> ConfigureThreshold<Thresh<T>, T::Cid, T::BlockNumber>
+impl<T: Trait> ConfigureThreshold<ThreshInput<T>, T::Cid, T::BlockNumber>
     for Module<T>
 {
     type ThresholdId = T::ThresholdId;
     type VoteId = T::VoteId;
     fn register_threshold(
-        t: Thresh<T>,
+        t: ThreshInput<T>,
     ) -> Result<T::ThresholdId, DispatchError> {
         let id = Self::generate_threshold_uid();
-        <VoteThresholds<T>>::insert(id, t);
+        let threshold = Thresh::<T>::new(id, t.org(), t.threshold());
+        <VoteThresholds<T>>::insert(id, threshold);
         Ok(id)
     }
     fn invoke_threshold(
