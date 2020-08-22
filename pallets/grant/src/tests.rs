@@ -103,7 +103,7 @@ impl pallet_balances::Trait for Test {
 }
 impl org::Trait for Test {
     type Event = TestEvent;
-    type IpfsReference = u32;
+    type Cid = u32;
     type OrgId = u64;
     type Shares = u64;
 }
@@ -184,8 +184,7 @@ fn genesis_config_works() {
     new_test_ext().execute_with(|| {
         assert_eq!(Org::organization_counter(), 1);
         let constitution = 1738;
-        let expected_organization =
-            Organization::new(Some(1), None, constitution);
+        let expected_organization = Organization::new(Some(1), 1, constitution);
         let org_in_storage = Org::organization_states(1u64).unwrap();
         assert_eq!(expected_organization, org_in_storage);
         for i in 1u64..7u64 {

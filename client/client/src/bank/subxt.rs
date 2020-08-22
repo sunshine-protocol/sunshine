@@ -42,12 +42,21 @@ use substrate_subxt::{
 };
 use sunshine_bounty_utils::bank::{
     BankState,
+    SpendProposal,
     SpendState,
 };
 
 pub type BalanceOf<T> = <T as Balances>::Balance;
+pub type BankSt<T> =
+    BankState<<T as Bank>::BankId, <T as System>::AccountId, <T as Org>::OrgId>;
+pub type SpendProp<T> = SpendProposal<
+    <T as Bank>::BankId,
+    <T as Bank>::SpendId,
+    BalanceOf<T>,
+    <T as System>::AccountId,
+    SpendState<<T as Vote>::VoteId>,
+>;
 
-/// The subset of the bank trait and its inherited traits that the client must inherit
 #[module]
 pub trait Bank: System + Balances + Org + Vote + Donate {
     type BankId: Parameter
@@ -74,38 +83,32 @@ pub trait Bank: System + Balances + Org + Vote + Donate {
         + Zero;
 }
 
-// ~~ Values (Constants) ~~
-
-#[derive(Clone, Debug, Eq, PartialEq, Encode)]
-pub struct MinimumInitialDepositStore<T: Bank> {
-    pub amount: BalanceOf<T>,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Encode)]
-pub struct MinimumTransferStore<T: Bank> {
-    pub amount: BalanceOf<T>,
-}
-
 // ~~ Maps ~~
 
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
-pub struct BankStoresStore<T: Bank> {
-    #[store(returns = BankState<<T as System>::AccountId, <T as Org>::OrgId>)]
+pub struct BanksStore<T: Bank> {
+    #[store(returns = BankSt<T>)]
     pub id: T::BankId,
-    phantom: std::marker::PhantomData<T>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
+pub struct SpendProposalsStore<T: Bank> {
+    #[store(returns = SpendProp<T>)]
+    pub bank_id: T::BankId,
+    pub spend_id: T::SpendId,
 }
 
 // ~~ (Calls, Events) ~~
 
 #[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
-pub struct OpenOrgBankAccountCall<T: Bank> {
+pub struct OpenCall<T: Bank> {
     pub seed: BalanceOf<T>,
     pub hosting_org: <T as Org>::OrgId,
     pub bank_operator: Option<<T as System>::AccountId>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
-pub struct OrgBankAccountOpenedEvent<T: Bank> {
+pub struct AccountOpenedEvent<T: Bank> {
     pub seeder: <T as System>::AccountId,
     pub new_bank_id: T::BankId,
     pub seed: BalanceOf<T>,
@@ -114,14 +117,14 @@ pub struct OrgBankAccountOpenedEvent<T: Bank> {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
-pub struct MemberProposesSpendCall<T: Bank> {
+pub struct ProposeSpendCall<T: Bank> {
     pub bank_id: T::BankId,
     pub amount: BalanceOf<T>,
     pub dest: <T as System>::AccountId,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
-pub struct SpendProposedByMemberEvent<T: Bank> {
+pub struct SpendProposedEvent<T: Bank> {
     pub caller: <T as System>::AccountId,
     pub bank_id: T::BankId,
     pub spend_id: T::SpendId,
@@ -130,13 +133,13 @@ pub struct SpendProposedByMemberEvent<T: Bank> {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
-pub struct MemberTriggersVoteOnSpendProposalCall<T: Bank> {
+pub struct TriggerVoteCall<T: Bank> {
     pub bank_id: T::BankId,
     pub spend_id: T::SpendId,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
-pub struct VoteTriggeredOnSpendProposalEvent<T: Bank> {
+pub struct VoteTriggeredEvent<T: Bank> {
     pub caller: <T as System>::AccountId,
     pub bank_id: T::BankId,
     pub spend_id: T::SpendId,
@@ -144,40 +147,32 @@ pub struct VoteTriggeredOnSpendProposalEvent<T: Bank> {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
-pub struct MemberSudoApprovesSpendProposalCall<T: Bank> {
+pub struct SudoApproveCall<T: Bank> {
     pub bank_id: T::BankId,
     pub spend_id: T::SpendId,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
-pub struct SudoApprovedSpendProposalEvent<T: Bank> {
+pub struct SudoApprovedEvent<T: Bank> {
     pub caller: <T as System>::AccountId,
-    pub bank_id: T::BankId,
-    pub spend_id: T::SpendId,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
-pub struct MemberPollsSpendProposalCall<T: Bank> {
     pub bank_id: T::BankId,
     pub spend_id: T::SpendId,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
-pub struct SpendProposalPolledEvent<T: Bank> {
-    pub caller: <T as System>::AccountId,
+pub struct ProposalPolledEvent<T: Bank> {
     pub bank_id: T::BankId,
     pub spend_id: T::SpendId,
     pub state: SpendState<<T as Vote>::VoteId>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
-pub struct CloseBankAccountCall<T: Bank> {
+pub struct CloseCall<T: Bank> {
     pub bank_id: T::BankId,
-    p: core::marker::PhantomData<T>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
-pub struct BankAccountClosedEvent<T: Bank> {
+pub struct AccountClosedEvent<T: Bank> {
     pub closer: <T as System>::AccountId,
     pub bank_id: T::BankId,
     pub org: <T as Org>::OrgId,

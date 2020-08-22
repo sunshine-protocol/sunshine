@@ -74,8 +74,11 @@ async fn main() -> Result<()> {
         }
         SubCommand::Bank(BankCommand { cmd }) => {
             match cmd {
-                BankSubCommand::OpenAccount(cmd) => cmd.exec(&client).await?,
-                BankSubCommand::OpenAccount2(cmd) => cmd.exec(&client).await?,
+                BankSubCommand::Open(cmd) => cmd.exec(&client).await?,
+                BankSubCommand::ProposeSpend(cmd) => cmd.exec(&client).await?,
+                BankSubCommand::TriggerVote(cmd) => cmd.exec(&client).await?,
+                BankSubCommand::SudoApprove(cmd) => cmd.exec(&client).await?,
+                BankSubCommand::Close(cmd) => cmd.exec(&client).await?,
             }
         }
         SubCommand::Bounty(BountyCommand { cmd }) => {

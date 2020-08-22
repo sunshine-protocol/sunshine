@@ -14,7 +14,10 @@ use frame_support::{
     decl_module,
     decl_storage,
     ensure,
-    storage::IterableStorageMap,
+    storage::{
+        IterableStorageDoubleMap,
+        IterableStorageMap,
+    },
     traits::{
         Currency,
         ExistenceRequirement,
@@ -117,9 +120,9 @@ pub trait Trait:
         + PartialEq
         + Zero;
 
+    /// Max number of bank accounts for one org
     type MaxTreasuryPerOrg: Get<u32>;
-
-    /// The minimum amount to open an organizational bank account and keep it open
+    /// Min to open bank account
     type MinDeposit: Get<BalanceOf<Self>>;
 }
 
@@ -133,12 +136,12 @@ decl_event!(
         <T as Trait>::SpendId,
         Balance = BalanceOf<T>,
     {
-        BankAccountOpened(AccountId, BankId, Balance, OrgId, Option<AccountId>),
-        SpendProposedByMember(AccountId, BankId, SpendId, Balance, AccountId),
-        VoteTriggeredOnSpendProposal(AccountId, BankId, SpendId, VoteId),
-        SudoApprovedSpendProposal(AccountId, BankId, SpendId),
-        SpendProposalPolled(AccountId, BankId, SpendId, SpendState<VoteId>),
-        BankAccountClosed(AccountId, BankId, OrgId),
+        AccountOpened(AccountId, BankId, Balance, OrgId, Option<AccountId>),
+        SpendProposed(AccountId, BankId, SpendId, Balance, AccountId),
+        VoteTriggered(AccountId, BankId, SpendId, VoteId),
+        SudoApproved(AccountId, BankId, SpendId),
+        ProposalPolled(BankId, SpendId, SpendState<VoteId>),
+        AccountClosed(AccountId, BankId, OrgId),
     }
 );
 
@@ -189,13 +192,15 @@ decl_storage! {
 
         /// The store for organizational bank accounts
         /// -> keyset acts as canonical set for unique BankIds
-        pub BankStores get(fn bank_stores): map
+        pub Banks get(fn banks): map
             hasher(blake2_128_concat) T::BankId => Option<BankSt<T>>;
 
         /// Proposals to make spends from the bank account
         pub SpendProposals get(fn spend_proposals): double_map
             hasher(blake2_128_concat) T::BankId,
             hasher(blake2_128_concat) T::SpendId => Option<SpendProp<T>>;
+        /// Frequency for which all spend proposals are polled and pushed along
+        SpendPollFrequency get(fn spend_poll_frequency) config(): T::BlockNumber;
     }
 }
 
@@ -217,7 +222,7 @@ decl_module! {
                 Error::<T>::NotPermittedToOpenBankAccountForOrg
             );
             let bank_id = Self::open_bank_account(opener.clone(), org, deposit, controller.clone())?;
-            Self::deposit_event(RawEvent::BankAccountOpened(opener, bank_id, deposit, org, controller));
+            Self::deposit_event(RawEvent::AccountOpened(opener, bank_id, deposit, org, controller));
             Ok(())
         }
         #[weight = 0]
@@ -229,38 +234,38 @@ decl_module! {
         ) -> DispatchResult {
             let caller = ensure_signed(origin)?;
             let new_spend_id = Self::_propose_spend(&caller, bank_id, amount, dest.clone())?;
-            Self::deposit_event(RawEvent::SpendProposedByMember(caller, bank_id, new_spend_id, amount, dest));
+            Self::deposit_event(RawEvent::SpendProposed(caller, bank_id, new_spend_id, amount, dest));
             Ok(())
         }
         #[weight = 0]
-        fn trigger_vote_on_spend_proposal(
+        fn trigger_vote(
             origin,
             bank_id: T::BankId,
             spend_id: T::SpendId,
         ) -> DispatchResult {
             let caller = ensure_signed(origin)?;
             let vote_id = Self::_trigger_vote_on_spend_proposal(&caller, bank_id, spend_id)?;
-            Self::deposit_event(RawEvent::VoteTriggeredOnSpendProposal(caller, bank_id, spend_id, vote_id));
+            Self::deposit_event(RawEvent::VoteTriggered(caller, bank_id, spend_id, vote_id));
             Ok(())
         }
         #[weight = 0]
-        fn sudo_approve_spend_proposal(
+        fn sudo_approve(
             origin,
             bank_id: T::BankId,
             spend_id: T::SpendId,
         ) -> DispatchResult {
             let caller = ensure_signed(origin)?;
             Self::_sudo_approve_spend_proposal(&caller, bank_id, spend_id)?;
-            Self::deposit_event(RawEvent::SudoApprovedSpendProposal(caller, bank_id, spend_id));
+            Self::deposit_event(RawEvent::SudoApproved(caller, bank_id, spend_id));
             Ok(())
         }
         #[weight = 0]
-        fn close_org_bank_account(
+        fn close(
             origin,
             bank_id: T::BankId,
         ) -> DispatchResult {
             let closer = ensure_signed(origin)?;
-            let bank = <BankStores<T>>::get(bank_id).ok_or(Error::<T>::CannotCloseBankThatDNE)?;
+            let bank = <Banks<T>>::get(bank_id).ok_or(Error::<T>::CannotCloseBankThatDNE)?;
             // permissions for closing bank accounts is org supervisor status
             ensure!(
                 bank.is_controller(&closer),
@@ -275,14 +280,21 @@ decl_module! {
                 &closer,
                 remaining_funds,
             )?;
-            <BankStores<T>>::remove(bank_id);
+            <Banks<T>>::remove(bank_id);
             <OrgTreasuryCount<T>>::mutate(bank.org(), |count| *count -= 1);
             <TotalBankCount>::mutate(|count| *count -= 1);
-            Self::deposit_event(RawEvent::BankAccountClosed(closer, bank_id, bank.org()));
+            Self::deposit_event(RawEvent::AccountClosed(closer, bank_id, bank.org()));
             Ok(())
         }
         fn on_finalize(_n: T::BlockNumber) {
-            todo!() // poll every spend poll frequency, add storage item
+            if <frame_system::Module<T>>::block_number() % Self::spend_poll_frequency() == Zero::zero() {
+                <SpendProposals<T>>::iter().for_each(|(_, _, prop)| {
+                    let (bank_id, spend_id) = (prop.bank_id(), prop.spend_id());
+                    if let Ok(state) = Self::poll_spend_proposal(prop) {
+                        Self::deposit_event(RawEvent::ProposalPolled(bank_id, spend_id, state));
+                    }
+                });
+            }
         }
     }
 }
@@ -296,7 +308,7 @@ impl<T: Trait> Module<T> {
         <T as Trait>::Currency::total_balance(&Self::bank_account_id(bank))
     }
     pub fn is_bank(id: T::BankId) -> bool {
-        <BankStores<T>>::get(id).is_some()
+        <Banks<T>>::get(id).is_some()
     }
     pub fn is_spend(bank: T::BankId, spend: T::SpendId) -> bool {
         <SpendProposals<T>>::get(bank, spend).is_some()
@@ -320,7 +332,7 @@ impl<T: Trait> Module<T> {
     pub fn get_banks_for_org(
         org: T::OrgId,
     ) -> Result<Vec<T::BankId>, DispatchError> {
-        let ret_vec = <BankStores<T>>::iter()
+        let ret_vec = <Banks<T>>::iter()
             .filter(|(_, bank_state)| bank_state.org() == org)
             .map(|(bank_id, _)| bank_id)
             .collect::<Vec<T::BankId>>();
@@ -367,7 +379,7 @@ impl<T: Trait> OpenBankAccount<T::OrgId, BalanceOf<T>, T::AccountId>
             ExistenceRequirement::KeepAlive,
         )?;
         // insert new bank object
-        <BankStores<T>>::insert(id, bank);
+        <Banks<T>>::insert(id, bank);
         // put new org treasury count
         <OrgTreasuryCount<T>>::insert(org, new_count);
         // iterate total bank count
@@ -390,7 +402,7 @@ impl<T: Trait>
         amount: BalanceOf<T>,
         dest: T::AccountId,
     ) -> Result<Self::SpendId, DispatchError> {
-        let bank = <BankStores<T>>::get(bank_id)
+        let bank = <Banks<T>>::get(bank_id)
             .ok_or(Error::<T>::BankMustExistToProposeSpendFrom)?;
         ensure!(
             <org::Module<T>>::is_member_of_group(bank.org(), caller),
@@ -406,7 +418,7 @@ impl<T: Trait>
         bank_id: T::BankId,
         spend_id: Self::SpendId,
     ) -> Result<Self::VoteId, DispatchError> {
-        let bank = <BankStores<T>>::get(bank_id)
+        let bank = <Banks<T>>::get(bank_id)
             .ok_or(Error::<T>::CannotTriggerVoteForSpendIfBaseBankDNE)?;
         ensure!(
             <org::Module<T>>::is_member_of_group(bank.org(), caller),
@@ -444,7 +456,7 @@ impl<T: Trait>
         bank_id: T::BankId,
         spend_id: Self::SpendId,
     ) -> DispatchResult {
-        let bank = <BankStores<T>>::get(bank_id)
+        let bank = <Banks<T>>::get(bank_id)
             .ok_or(Error::<T>::CannotSudoApproveSpendProposalIfBaseBankDNE)?;
         ensure!(
             bank.is_controller(caller),

@@ -110,8 +110,11 @@ pub struct BankCommand {
 
 #[derive(Clone, Debug, Clap)]
 pub enum BankSubCommand {
-    OpenAccount(bank::BankOpenOrgAccountCommand),
-    OpenAccount2(bank::BankOpenOrgAccountCommand),
+    Open(bank::OpenCommand),
+    ProposeSpend(bank::ProposeSpendCommand),
+    TriggerVote(bank::TriggerVoteCommand),
+    SudoApprove(bank::SudoApproveCommand),
+    Close(bank::CloseCommand),
 }
 
 #[derive(Clone, Debug, Clap)]
