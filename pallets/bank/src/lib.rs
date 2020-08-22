@@ -52,15 +52,16 @@ use util::{
     },
     organization::OrgRep,
     traits::{
+        ConfigureThreshold,
         GetVoteOutcome,
         GroupMembership,
         OpenBankAccount,
-        OpenVote,
         SpendGovernance,
     },
     vote::{
-        Threshold,
+        ThresholdConfig,
         VoteOutcome,
+        XorThreshold,
     },
 };
 
@@ -72,6 +73,11 @@ type BankSt<T> = BankState<
     <T as Trait>::BankId,
     <T as frame_system::Trait>::AccountId,
     <T as org::Trait>::OrgId,
+    <T as vote::Trait>::ThresholdId,
+>;
+type Threshold<T> = ThresholdConfig<
+    OrgRep<<T as org::Trait>::OrgId>,
+    XorThreshold<<T as vote::Trait>::Signal, Permill>,
 >;
 type SpendProp<T> = SpendProposal<
     <T as Trait>::BankId,
@@ -171,6 +177,7 @@ decl_error! {
         CannotPollSpendProposalIfSpendProposalDNE,
         // for getting banks for org
         NoBanksForOrg,
+        ThresholdCannotBeSetForOrg,
     }
 }
 
@@ -215,13 +222,14 @@ decl_module! {
             org: T::OrgId,
             deposit: BalanceOf<T>,
             controller: Option<T::AccountId>,
+            threshold: Threshold<T>,
         ) -> DispatchResult {
             let opener = ensure_signed(origin)?;
             ensure!(
                 <org::Module<T>>::is_member_of_group(org, &opener),
                 Error::<T>::NotPermittedToOpenBankAccountForOrg
             );
-            let bank_id = Self::open_bank_account(opener.clone(), org, deposit, controller.clone())?;
+            let bank_id = Self::open_bank_account(opener.clone(), org, deposit, controller.clone(), threshold)?;
             Self::deposit_event(RawEvent::AccountOpened(opener, bank_id, deposit, org, controller));
             Ok(())
         }
@@ -344,7 +352,8 @@ impl<T: Trait> Module<T> {
     }
 }
 
-impl<T: Trait> OpenBankAccount<T::OrgId, BalanceOf<T>, T::AccountId>
+impl<T: Trait>
+    OpenBankAccount<T::OrgId, BalanceOf<T>, T::AccountId, Threshold<T>>
     for Module<T>
 {
     type BankId = T::BankId;
@@ -353,6 +362,7 @@ impl<T: Trait> OpenBankAccount<T::OrgId, BalanceOf<T>, T::AccountId>
         org: T::OrgId,
         deposit: BalanceOf<T>,
         controller: Option<T::AccountId>,
+        threshold: Threshold<T>,
     ) -> Result<Self::BankId, DispatchError> {
         ensure!(
             deposit >= T::MinDeposit::get(),
@@ -367,10 +377,17 @@ impl<T: Trait> OpenBankAccount<T::OrgId, BalanceOf<T>, T::AccountId>
             new_count <= T::MaxTreasuryPerOrg::get(),
             Error::<T>::CannotOpenBankAccountForOrgIfBankCountExceedsLimitPerOrg
         );
+        // TODO: extract into separate method that might compare with min threshold set in this module contex
+        ensure!(
+            threshold.org().org() == org,
+            Error::<T>::ThresholdCannotBeSetForOrg
+        );
+        // register input threshold
+        let threshold_id = <vote::Module<T>>::register_threshold(threshold)?;
         // generate new treasury identifier
         let id = Self::generate_bank_uid();
         // create new bank object
-        let bank = BankState::new(id, org, controller);
+        let bank = BankState::new(id, org, controller, threshold_id);
         // perform fallible transfer
         <T as Trait>::Currency::transfer(
             &opener,
@@ -428,12 +445,10 @@ impl<T: Trait>
             .ok_or(Error::<T>::CannotTriggerVoteForSpendIfSpendProposalDNE)?;
         match spend_proposal.state() {
             SpendState::WaitingForApproval => {
-                // default unanimous passage \forall spend proposals
-                // TODO: add more nuanced defaults
-                let new_vote_id = <vote::Module<T>>::open_percent_vote(
-                    None,
-                    OrgRep::Equal(bank.org()),
-                    Threshold::new(Permill::one(), None),
+                // dispatch vote with bank's default threshold
+                let new_vote_id = <vote::Module<T>>::invoke_threshold(
+                    bank.threshold_id(),
+                    None, // TODO: use vote info ref here instead of None
                     None,
                 )?;
                 let new_spend_proposal =

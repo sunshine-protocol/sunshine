@@ -14,11 +14,20 @@ use sp_runtime::{
     testing::Header,
     traits::IdentityLookup,
     Perbill,
+    Permill,
 };
 use util::{
-    organization::Organization,
+    organization::{
+        OrgRep,
+        Organization,
+    },
     traits::GroupMembership,
-    vote::VoterView,
+    vote::{
+        Threshold,
+        ThresholdConfig,
+        VoterView,
+        XorThreshold,
+    },
 };
 
 // type aliases
@@ -100,6 +109,7 @@ impl vote::Trait for Test {
     type Event = TestEvent;
     type VoteId = u64;
     type Signal = u64;
+    type ThresholdId = u64;
 }
 impl donate::Trait for Test {
     type Event = TestEvent;
@@ -194,17 +204,29 @@ fn opening_bank_account_works() {
     new_test_ext().execute_with(|| {
         let one = Origin::signed(1);
         let sixnine = Origin::signed(69);
+        let threshold = ThresholdConfig::new(
+            OrgRep::Equal(1),
+            XorThreshold::Percent(Threshold::new(Permill::one(), None)),
+        );
         assert_noop!(
-            Bank::open(sixnine, 1, 10, None),
+            Bank::open(sixnine, 1, 10, None, threshold.clone()),
             Error::<Test>::NotPermittedToOpenBankAccountForOrg
         );
         assert_noop!(
-            Bank::open(one.clone(), 1, 19, None),
+            Bank::open(one.clone(), 1, 19, None, threshold.clone()),
             Error::<Test>::CannotOpenBankAccountIfDepositIsBelowModuleMinimum
+        );
+        let false_threshold = ThresholdConfig::new(
+            OrgRep::Equal(2),
+            XorThreshold::Percent(Threshold::new(Permill::one(), None)),
+        );
+        assert_noop!(
+            Bank::open(one.clone(), 1, 20, None, false_threshold),
+            Error::<Test>::ThresholdCannotBeSetForOrg
         );
         let total_bank_count = Bank::total_bank_count();
         assert_eq!(total_bank_count, 0u32);
-        assert_ok!(Bank::open(one.clone(), 1, 20, None));
+        assert_ok!(Bank::open(one.clone(), 1, 20, None, threshold));
         assert_eq!(
             get_last_event(),
             RawEvent::AccountOpened(1, 1, 20, 1, None),
@@ -221,7 +243,11 @@ fn spend_governance_works() {
             Bank::propose_spend(Origin::signed(1), 1, 10, 3,),
             Error::<Test>::BankMustExistToProposeSpendFrom
         );
-        assert_ok!(Bank::open(Origin::signed(1), 1, 20, Some(1)));
+        let threshold = ThresholdConfig::new(
+            OrgRep::Equal(1),
+            XorThreshold::Percent(Threshold::new(Permill::one(), None)),
+        );
+        assert_ok!(Bank::open(Origin::signed(1), 1, 20, Some(1), threshold));
         assert_ok!(Bank::propose_spend(Origin::signed(1), 1, 10, 3,));
         System::set_block_number(9);
         assert_ok!(Bank::trigger_vote(Origin::signed(2), 1, 1,));

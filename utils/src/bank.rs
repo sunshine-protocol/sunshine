@@ -13,19 +13,23 @@ pub struct BankState<
     BankId,
     AccountId,
     OrgId: Codec + PartialEq + Zero + From<u32> + Copy,
+    ThresholdId,
 > {
     id: BankId,
     // Registered organization identifier
     org: OrgId,
     // Layered sudo, selection should eventually be revocable by the group
     controller: Option<AccountId>,
+    // identifier for registered vote threshold
+    threshold_id: ThresholdId,
 }
 
 impl<
         BankId: Copy,
         AccountId: Clone + PartialEq,
         OrgId: Codec + PartialEq + Zero + From<u32> + Copy,
-    > BankState<BankId, AccountId, OrgId>
+        ThresholdId: Copy,
+    > BankState<BankId, AccountId, OrgId, ThresholdId>
 {
     pub fn id(&self) -> BankId {
         self.id
@@ -35,6 +39,9 @@ impl<
     }
     pub fn controller(&self) -> Option<AccountId> {
         self.controller.clone()
+    }
+    pub fn threshold_id(&self) -> ThresholdId {
+        self.threshold_id
     }
     pub fn is_org(&self, org: OrgId) -> bool {
         org == self.org()

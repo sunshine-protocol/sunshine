@@ -155,11 +155,26 @@ pub trait OpenVote<OrgId, Signal, Percent, BlockNumber, Hash> {
     ) -> Result<Self::VoteIdentifier>;
 }
 
-pub trait UpdateVoteTopic<VoteId, Hash> {
+pub trait ConfigureThreshold<Threshold, Hash, BlockNumber> {
+    type ThresholdId;
+    type VoteId; // TODO: make this same as OpenVote type by merging traits someday somehow
+    fn register_threshold(t: Threshold) -> Result<Self::ThresholdId>;
+    fn invoke_threshold(
+        id: Self::ThresholdId,
+        topic: Option<Hash>,
+        duration: Option<BlockNumber>,
+    ) -> Result<Self::VoteId>;
+}
+
+pub trait UpdateVote<VoteId, Hash, BlockNumber> {
     fn update_vote_topic(
         vote_id: VoteId,
         new_topic: Hash,
         clear_previous_vote_state: bool,
+    ) -> DispatchResult;
+    fn extend_vote_length(
+        vote_id: VoteId,
+        blocks_from_now: BlockNumber,
     ) -> DispatchResult;
 }
 
@@ -240,13 +255,14 @@ pub trait RegisterDisputeType<AccountId, Currency, VoteMetadata, BlockNumber> {
 
 // ~~~~~~~~ Bank Module ~~~~~~~~
 
-pub trait OpenBankAccount<OrgId, Currency, AccountId> {
+pub trait OpenBankAccount<OrgId, Currency, AccountId, Threshold> {
     type BankId;
     fn open_bank_account(
         opener: AccountId,
         org: OrgId,
         deposit: Currency,
         controller: Option<AccountId>,
+        threshold: Threshold,
     ) -> Result<Self::BankId>;
 }
 

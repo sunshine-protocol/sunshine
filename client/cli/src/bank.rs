@@ -1,3 +1,8 @@
+#![allow(clippy::type_complexity)]
+use crate::{
+    error::VotePercentThresholdInputBoundError,
+    vote::*,
+};
 use clap::Clap;
 use core::fmt::{
     Debug,
@@ -6,6 +11,7 @@ use core::fmt::{
 use substrate_subxt::{
     balances::Balances,
     sp_core::crypto::Ss58Codec,
+    sp_runtime::Permill,
     system::System,
     Runtime,
 };
@@ -17,6 +23,14 @@ use sunshine_bounty_client::{
     org::Org,
     vote::Vote,
 };
+use sunshine_bounty_utils::{
+    organization::OrgRep,
+    vote::{
+        Threshold,
+        ThresholdConfig,
+        XorThreshold,
+    },
+};
 use sunshine_client_utils::{
     crypto::ss58::Ss58,
     Result,
@@ -27,6 +41,7 @@ pub struct OpenCommand {
     pub seed: u128,
     pub hosting_org: u64,
     pub bank_operator: Option<String>,
+    pub percent_threshold: u8,
 }
 
 impl OpenCommand {
@@ -37,6 +52,7 @@ impl OpenCommand {
     where
         <R as System>::AccountId: Ss58Codec,
         <R as Org>::OrgId: From<u64> + Display,
+        <R as Vote>::Percent: From<Permill>,
         <R as Balances>::Balance: From<u128> + Display,
     {
         let bank_operator = if let Some(acc) = &self.bank_operator {
@@ -45,8 +61,26 @@ impl OpenCommand {
         } else {
             None
         };
+        let support: <R as Vote>::Percent =
+            u8_to_permill(self.percent_threshold)
+                .map_err(|_| VotePercentThresholdInputBoundError)?
+                .into();
+        let threshold: Threshold<<R as Vote>::Percent> =
+            Threshold::new(support, None);
+        let threshold_config: ThresholdConfig<
+            OrgRep<<R as Org>::OrgId>,
+            XorThreshold<<R as Vote>::Signal, <R as Vote>::Percent>,
+        > = ThresholdConfig::new(
+            OrgRep::Equal(self.hosting_org.into()),
+            XorThreshold::Percent(threshold),
+        );
         let event = client
-            .open(self.seed.into(), self.hosting_org.into(), bank_operator)
+            .open(
+                self.seed.into(),
+                self.hosting_org.into(),
+                bank_operator,
+                threshold_config,
+            )
             .await?;
         println!(
             "Account {} initialized new bank account {:?} with balance {} for Org {} with bank operator {:?}",

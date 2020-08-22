@@ -113,7 +113,7 @@ pub struct VoteCreatePercentThresholdCommand {
     pub duration: Option<u32>,
 }
 
-fn u8_to_permill(u: u8) -> Result<Permill> {
+pub fn u8_to_permill(u: u8) -> Result<Permill> {
     if u > 0u8 && u < 100u8 {
         Ok(Permill::from_percent(u.into()))
     } else {

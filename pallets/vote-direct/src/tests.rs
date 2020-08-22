@@ -58,7 +58,7 @@ impl frame_system::Trait for Test {
 }
 impl Trait for Test {
     type Event = TestEvent;
-    type IpfsReference = u32;
+    type Cid = u32;
     type VoteId = u64;
     type Signal = u64;
 }

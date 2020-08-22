@@ -40,15 +40,30 @@ use substrate_subxt::{
     Event,
     Store,
 };
-use sunshine_bounty_utils::bank::{
-    BankState,
-    SpendProposal,
-    SpendState,
+use sunshine_bounty_utils::{
+    bank::{
+        BankState,
+        SpendProposal,
+        SpendState,
+    },
+    organization::OrgRep,
+    vote::{
+        ThresholdConfig,
+        XorThreshold,
+    },
 };
 
 pub type BalanceOf<T> = <T as Balances>::Balance;
-pub type BankSt<T> =
-    BankState<<T as Bank>::BankId, <T as System>::AccountId, <T as Org>::OrgId>;
+pub type BankSt<T> = BankState<
+    <T as Bank>::BankId,
+    <T as System>::AccountId,
+    <T as Org>::OrgId,
+    <T as Vote>::ThresholdId,
+>;
+pub type Threshold<T> = ThresholdConfig<
+    OrgRep<<T as Org>::OrgId>,
+    XorThreshold<<T as Vote>::Signal, <T as Vote>::Percent>,
+>;
 pub type SpendProp<T> = SpendProposal<
     <T as Bank>::BankId,
     <T as Bank>::SpendId,
@@ -105,6 +120,7 @@ pub struct OpenCall<T: Bank> {
     pub seed: BalanceOf<T>,
     pub hosting_org: <T as Org>::OrgId,
     pub bank_operator: Option<<T as System>::AccountId>,
+    pub threshold: Threshold<T>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]

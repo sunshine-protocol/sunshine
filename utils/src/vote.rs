@@ -79,6 +79,31 @@ impl<Signal: Copy, Hash: Clone> VoteVector<Signal, VoterView, Hash>
 #[derive(
     new, PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug,
 )]
+pub struct ThresholdConfig<OrgId, Threshold> {
+    org: OrgId,
+    threshold: Threshold,
+}
+
+impl<OrgId: Copy, Signal: Copy, Percent: Copy>
+    ThresholdConfig<OrgId, XorThreshold<Signal, Percent>>
+{
+    pub fn org(&self) -> OrgId {
+        self.org
+    }
+    pub fn threshold(&self) -> XorThreshold<Signal, Percent> {
+        self.threshold.clone()
+    }
+}
+
+#[derive(PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug)]
+pub enum XorThreshold<S, P> {
+    Signal(Threshold<S>),
+    Percent(Threshold<P>),
+}
+
+#[derive(
+    new, PartialEq, Eq, Clone, Encode, Decode, sp_runtime::RuntimeDebug,
+)]
 pub struct Threshold<T> {
     in_favor: T,
     against: Option<T>,
@@ -114,7 +139,7 @@ pub struct VoteState<Signal, BlockNumber, Hash> {
     /// The time at which this vote state is initialized
     initialized: BlockNumber,
     /// The time at which this vote state expires
-    expires: Option<BlockNumber>,
+    ends: Option<BlockNumber>,
     /// The vote outcome
     outcome: VoteOutcome,
 }
@@ -136,7 +161,7 @@ impl<
         all_possible_turnout: Signal,
         threshold: Threshold<Signal>,
         initialized: BlockNumber,
-        expires: Option<BlockNumber>,
+        ends: Option<BlockNumber>,
     ) -> VoteState<Signal, BlockNumber, Hash> {
         VoteState {
             topic,
@@ -146,7 +171,7 @@ impl<
             all_possible_turnout,
             threshold,
             initialized,
-            expires,
+            ends,
             outcome: VoteOutcome::Voting,
         }
     }
@@ -154,7 +179,7 @@ impl<
         topic: Option<Hash>,
         all_possible_turnout: Signal,
         initialized: BlockNumber,
-        expires: Option<BlockNumber>,
+        ends: Option<BlockNumber>,
     ) -> VoteState<Signal, BlockNumber, Hash> {
         VoteState {
             topic,
@@ -164,7 +189,7 @@ impl<
             all_possible_turnout,
             threshold: Threshold::new(all_possible_turnout, None),
             initialized,
-            expires,
+            ends,
             outcome: VoteOutcome::Voting,
         }
     }
@@ -183,8 +208,14 @@ impl<
     pub fn all_possible_turnout(&self) -> Signal {
         self.all_possible_turnout
     }
-    pub fn expires(&self) -> Option<BlockNumber> {
-        self.expires
+    pub fn ends(&self) -> Option<BlockNumber> {
+        self.ends
+    }
+    pub fn set_ends(&self, e: BlockNumber) -> Self {
+        Self {
+            ends: Some(e),
+            ..self.clone()
+        }
     }
     pub fn threshold(&self) -> Threshold<Signal> {
         self.threshold.clone()

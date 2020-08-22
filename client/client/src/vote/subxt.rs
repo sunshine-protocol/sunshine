@@ -69,6 +69,17 @@ pub trait Vote: System + Org {
         + Debug
         + Zero;
 
+    /// The threshold identifier
+    type ThresholdId: Parameter
+        + Member
+        + AtLeast32Bit
+        + Codec
+        + Default
+        + Copy
+        + MaybeSerializeDeserialize
+        + Debug
+        + Zero;
+
     /// The type for percentage vote thresholds
     type Percent: 'static + PerThing + Codec + Send + Sync;
 

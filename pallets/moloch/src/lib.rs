@@ -56,17 +56,18 @@ use util::{
     },
     organization::OrgRep,
     traits::{
+        ConfigureThreshold,
         GetVoteOutcome,
         GroupMembership,
         MolochMembership,
         OpenBankAccount,
-        OpenVote,
         ShareIssuance,
         SpendGovernance,
     },
     vote::{
-        Threshold,
+        ThresholdConfig,
         VoteOutcome,
+        XorThreshold,
     },
 };
 
@@ -78,6 +79,11 @@ type BankSt<T> = BankState<
     <T as Trait>::BankId,
     <T as frame_system::Trait>::AccountId,
     <T as org::Trait>::OrgId,
+    <T as vote::Trait>::ThresholdId,
+>;
+type Threshold<T> = ThresholdConfig<
+    OrgRep<<T as org::Trait>::OrgId>,
+    XorThreshold<<T as vote::Trait>::Signal, Permill>,
 >;
 type SpendProp<T> = SpendProposal<
     <T as Trait>::BankId,
@@ -210,6 +216,7 @@ decl_error! {
         CannotBurnSharesIfBaseBankDNE,
         // for getting banks for org
         NoBanksForOrg,
+        ThresholdCannotBeSetForOrg,
     }
 }
 
@@ -264,6 +271,7 @@ decl_module! {
             org: T::OrgId,
             deposit: BalanceOf<T>,
             controller: Option<T::AccountId>,
+            threshold: Threshold<T>,
         ) -> DispatchResult {
             ensure!(<OrgBankRegistrar<T>>::get(org).is_none(), Error::<T>::LimitOfOneMolochPerOrg);
             let opener = ensure_signed(origin)?;
@@ -271,7 +279,7 @@ decl_module! {
                 <org::Module<T>>::is_member_of_group(org, &opener),
                 Error::<T>::NotPermittedToOpenBankAccountForOrg
             );
-            let bank_id = Self::open_bank_account(opener.clone(), org, deposit, controller.clone())?;
+            let bank_id = Self::open_bank_account(opener.clone(), org, deposit, controller.clone(), threshold)?;
             <OrgBankRegistrar<T>>::insert(org, ());
             Self::deposit_event(RawEvent::BankAccountOpened(opener, bank_id, deposit, org, controller));
             Ok(())
@@ -472,7 +480,8 @@ impl<T: Trait> Module<T> {
     }
 }
 
-impl<T: Trait> OpenBankAccount<T::OrgId, BalanceOf<T>, T::AccountId>
+impl<T: Trait>
+    OpenBankAccount<T::OrgId, BalanceOf<T>, T::AccountId, Threshold<T>>
     for Module<T>
 {
     type BankId = T::BankId;
@@ -481,6 +490,7 @@ impl<T: Trait> OpenBankAccount<T::OrgId, BalanceOf<T>, T::AccountId>
         org: T::OrgId,
         deposit: BalanceOf<T>,
         controller: Option<T::AccountId>,
+        threshold: Threshold<T>,
     ) -> Result<Self::BankId, DispatchError> {
         ensure!(
             deposit >= T::MinDeposit::get(),
@@ -490,6 +500,13 @@ impl<T: Trait> OpenBankAccount<T::OrgId, BalanceOf<T>, T::AccountId>
             <T as Trait>::Currency::free_balance(&opener) > deposit,
             Error::<T>::InsufficientBalanceToFundBankOpen
         );
+        // TODO: extract into separate method that might compare with min threshold(s) set in this module context
+        ensure!(
+            threshold.org().org() == org,
+            Error::<T>::ThresholdCannotBeSetForOrg
+        );
+        // register input threshold
+        let threshold_id = <vote::Module<T>>::register_threshold(threshold)?;
         // generate new moloch bank identifier
         let id = Self::generate_bank_uid();
         // perform fallible transfer
@@ -500,7 +517,7 @@ impl<T: Trait> OpenBankAccount<T::OrgId, BalanceOf<T>, T::AccountId>
             ExistenceRequirement::KeepAlive,
         )?;
         // create new bank object
-        let new_bank = BankState::new(id, org, controller);
+        let new_bank = BankState::new(id, org, controller, threshold_id);
         // insert new bank object
         <BankStores<T>>::insert(id, new_bank);
         // iterate total bank count
@@ -550,11 +567,10 @@ impl<T: Trait>
         );
         match spend_proposal.state() {
             SpendState::WaitingForApproval => {
-                // TODO: configurable thresholds from vote::thresholds_storage()
-                let new_vote_id = <vote::Module<T>>::open_percent_vote(
-                    None,
-                    OrgRep::Equal(bank.org()),
-                    Threshold::new(Permill::one(), None),
+                // dispatch vote with bank's default threshold
+                let new_vote_id = <vote::Module<T>>::invoke_threshold(
+                    bank.threshold_id(),
+                    None, // TODO: use vote info ref here instead of None
                     None,
                 )?;
                 let new_spend_proposal =
@@ -696,11 +712,10 @@ impl<T: Trait>
             .ok_or(Error::<T>::CannotTriggerVoteIfProposalDNE)?;
         match member_proposal.state() {
             ProposalState::WaitingForApproval => {
-                // TODO: configurable thresholds from vote::thresholds_storage()
-                let new_vote_id = <vote::Module<T>>::open_percent_vote(
-                    None,
-                    OrgRep::Equal(bank.org()),
-                    Threshold::new(Permill::one(), None),
+                // dispatch vote with bank's default threshold
+                let new_vote_id = <vote::Module<T>>::invoke_threshold(
+                    bank.threshold_id(),
+                    None, // TODO: use vote info ref here instead of None
                     None,
                 )?;
                 let new_member_proposal = member_proposal

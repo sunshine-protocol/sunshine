@@ -25,6 +25,7 @@ pub trait BankClient<T: Runtime + Bank>: Client<T> {
         seed: BalanceOf<T>,
         hosting_org: <T as Org>::OrgId,
         bank_operator: Option<<T as System>::AccountId>,
+        threshold: Threshold<T>,
     ) -> Result<AccountOpenedEvent<T>>;
     async fn propose_spend(
         &self,
@@ -71,10 +72,17 @@ where
         seed: BalanceOf<T>,
         hosting_org: <T as Org>::OrgId,
         bank_operator: Option<<T as System>::AccountId>,
+        threshold: Threshold<T>,
     ) -> Result<AccountOpenedEvent<T>> {
         let signer = self.chain_signer()?;
         self.chain_client()
-            .open_and_watch(&signer, seed, hosting_org, bank_operator)
+            .open_and_watch(
+                &signer,
+                seed,
+                hosting_org,
+                bank_operator,
+                threshold,
+            )
             .await?
             .account_opened()?
             .ok_or_else(|| Error::EventNotFound.into())

@@ -49,7 +49,7 @@ use util::{
         GetVoteOutcome,
         IDIsAvailable,
         OpenVote,
-        UpdateVoteTopic,
+        UpdateVote,
         VoteOnProposal,
         VoteVector,
     },
@@ -66,16 +66,16 @@ use util::{
 type VoteSt<T> = VoteState<
     <T as Trait>::Signal,
     <T as frame_system::Trait>::BlockNumber,
-    <T as Trait>::IpfsReference,
+    <T as Trait>::Cid,
 >;
-type VoteVec<T> = Vote<<T as Trait>::Signal, <T as Trait>::IpfsReference>;
+type VoteVec<T> = Vote<<T as Trait>::Signal, <T as Trait>::Cid>;
 
 pub trait Trait: frame_system::Trait {
     /// The overarching event type
     type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 
     /// Cid type
-    type IpfsReference: Parameter + Copy;
+    type Cid: Parameter + Copy;
 
     /// The vote identifier
     type VoteId: Parameter
@@ -122,7 +122,7 @@ decl_error! {
         NoVoteStateForOutcomeQuery,
         NoVoteStateForVoteRequest,
         OldVoteDirectionEqualsNewVoteDirectionSoNoChange,
-        CannotUpdateVoteTopicIfVoteStateDNE,
+        CannotUpdateVoteIfVoteStateDNE,
         // i.e. changing from any non-NoVote view to NoVote (some vote changes aren't allowed to simplify assumptions)
         VoteChangeNotSupported,
         InputThresholdExceedsBounds,
@@ -160,7 +160,7 @@ decl_module! {
         #[weight = 0]
         pub fn create_signal_vote(
             origin,
-            topic: Option<T::IpfsReference>,
+            topic: Option<T::Cid>,
             src: WeightedVector<T::AccountId, T::Signal>,
             threshold: Threshold<T::Signal>,
             duration: Option<T::BlockNumber>,
@@ -180,7 +180,7 @@ decl_module! {
         #[weight = 0]
         pub fn create_percent_vote(
             origin,
-            topic: Option<T::IpfsReference>,
+            topic: Option<T::Cid>,
             src: WeightedVector<T::AccountId, T::Signal>,
             threshold: Threshold<Permill>,
             duration: Option<T::BlockNumber>,
@@ -202,7 +202,7 @@ decl_module! {
             origin,
             vote_id: T::VoteId,
             direction: VoterView,
-            justification: Option<T::IpfsReference>,
+            justification: Option<T::Cid>,
         ) -> DispatchResult {
             let voter = ensure_signed(origin)?;
             Self::vote_on_proposal(vote_id, voter.clone(), direction, justification)?;
@@ -274,12 +274,12 @@ impl<T: Trait>
         Threshold<T::Signal>,
         Threshold<Permill>,
         T::BlockNumber,
-        T::IpfsReference,
+        T::Cid,
     > for Module<T>
 {
     type VoteIdentifier = T::VoteId;
     fn open_vote(
-        topic: Option<T::IpfsReference>,
+        topic: Option<T::Cid>,
         src: WeightedVector<T::AccountId, T::Signal>,
         threshold: Threshold<T::Signal>,
         duration: Option<T::BlockNumber>,
@@ -312,7 +312,7 @@ impl<T: Trait>
         Ok(vote_id)
     }
     fn open_percent_vote(
-        topic: Option<T::IpfsReference>,
+        topic: Option<T::Cid>,
         src: WeightedVector<T::AccountId, T::Signal>,
         threshold: Threshold<Permill>,
         duration: Option<T::BlockNumber>,
@@ -348,14 +348,14 @@ impl<T: Trait>
     }
 }
 
-impl<T: Trait> UpdateVoteTopic<T::VoteId, T::IpfsReference> for Module<T> {
+impl<T: Trait> UpdateVote<T::VoteId, T::Cid, T::BlockNumber> for Module<T> {
     fn update_vote_topic(
         vote_id: T::VoteId,
-        new_topic: T::IpfsReference,
+        new_topic: T::Cid,
         clear_previous_vote_state: bool,
     ) -> DispatchResult {
         let old_vote_state = <VoteStates<T>>::get(vote_id)
-            .ok_or(Error::<T>::CannotUpdateVoteTopicIfVoteStateDNE)?;
+            .ok_or(Error::<T>::CannotUpdateVoteIfVoteStateDNE)?;
         let new_vote_state = if clear_previous_vote_state {
             old_vote_state.update_topic_and_clear_state(new_topic)
         } else {
@@ -364,13 +364,29 @@ impl<T: Trait> UpdateVoteTopic<T::VoteId, T::IpfsReference> for Module<T> {
         <VoteStates<T>>::insert(vote_id, new_vote_state);
         Ok(())
     }
+    fn extend_vote_length(
+        vote_id: T::VoteId,
+        blocks_from_now: T::BlockNumber,
+    ) -> DispatchResult {
+        let now = <frame_system::Module<T>>::block_number();
+        let new_end_time = now + blocks_from_now;
+        let pvs = <VoteStates<T>>::get(vote_id)
+            .ok_or(Error::<T>::CannotUpdateVoteIfVoteStateDNE)?;
+        if let Some(e) = pvs.ends() {
+            if e < new_end_time {
+                let nvs = pvs.set_ends(new_end_time);
+                <VoteStates<T>>::insert(vote_id, nvs);
+            }
+        }
+        Ok(())
+    }
 }
 
-impl<T: Trait> ApplyVote<T::IpfsReference> for Module<T> {
+impl<T: Trait> ApplyVote<T::Cid> for Module<T> {
     type Signal = T::Signal;
     type Direction = VoterView;
-    type Vote = Vote<T::Signal, T::IpfsReference>;
-    type State = VoteState<T::Signal, T::BlockNumber, T::IpfsReference>;
+    type Vote = Vote<T::Signal, T::Cid>;
+    type State = VoteState<T::Signal, T::BlockNumber, T::Cid>;
 
     fn apply_vote(
         state: Self::State,
@@ -382,24 +398,22 @@ impl<T: Trait> ApplyVote<T::IpfsReference> for Module<T> {
     }
 }
 
-impl<T: Trait> CheckVoteStatus<T::IpfsReference, T::VoteId> for Module<T> {
+impl<T: Trait> CheckVoteStatus<T::Cid, T::VoteId> for Module<T> {
     fn check_vote_expired(state: &Self::State) -> bool {
         let now = system::Module::<T>::block_number();
-        if let Some(n) = state.expires() {
+        if let Some(n) = state.ends() {
             return n < now
         }
         false
     }
 }
 
-impl<T: Trait> VoteOnProposal<T::AccountId, T::VoteId, T::IpfsReference>
-    for Module<T>
-{
+impl<T: Trait> VoteOnProposal<T::AccountId, T::VoteId, T::Cid> for Module<T> {
     fn vote_on_proposal(
         vote_id: T::VoteId,
         voter: T::AccountId,
         direction: Self::Direction,
-        justification: Option<T::IpfsReference>,
+        justification: Option<T::Cid>,
     ) -> DispatchResult {
         // get the vote state
         let vote_state = <VoteStates<T>>::get(vote_id)

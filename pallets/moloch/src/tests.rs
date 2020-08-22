@@ -13,11 +13,20 @@ use sp_runtime::{
     testing::Header,
     traits::IdentityLookup,
     Perbill,
+    Permill,
 };
 use util::{
-    organization::Organization,
+    organization::{
+        OrgRep,
+        Organization,
+    },
     traits::GroupMembership,
-    vote::VoterView,
+    vote::{
+        Threshold,
+        ThresholdConfig,
+        VoterView,
+        XorThreshold,
+    },
 };
 
 // type aliases
@@ -99,6 +108,7 @@ impl vote::Trait for Test {
     type Event = TestEvent;
     type VoteId = u64;
     type Signal = u64;
+    type ThresholdId = u64;
 }
 impl donate::Trait for Test {
     type Event = TestEvent;
@@ -185,19 +195,31 @@ fn genesis_config_works() {
 #[test]
 fn summon_works() {
     new_test_ext().execute_with(|| {
+        let threshold = ThresholdConfig::new(
+            OrgRep::Equal(1),
+            XorThreshold::Percent(Threshold::new(Permill::one(), None)),
+        );
         assert_noop!(
-            Bank::summon(Origin::signed(1), 1, 19, None),
+            Bank::summon(Origin::signed(1), 1, 19, None, threshold.clone()),
             Error::<Test>::CannotOpenBankAccountIfDepositIsBelowModuleMinimum
         );
         assert_noop!(
-            Bank::summon(Origin::signed(5), 1, 21, None),
+            Bank::summon(Origin::signed(5), 1, 21, None, threshold.clone()),
             Error::<Test>::InsufficientBalanceToFundBankOpen
         );
         assert_noop!(
-            Bank::summon(Origin::signed(70), 1, 21, None),
+            Bank::summon(Origin::signed(70), 1, 21, None, threshold.clone()),
             Error::<Test>::NotPermittedToOpenBankAccountForOrg
         );
-        assert_ok!(Bank::summon(Origin::signed(1), 1, 20, None),);
+        let false_threshold = ThresholdConfig::new(
+            OrgRep::Equal(2),
+            XorThreshold::Percent(Threshold::new(Permill::one(), None)),
+        );
+        assert_noop!(
+            Bank::summon(Origin::signed(1), 1, 20, None, false_threshold),
+            Error::<Test>::ThresholdCannotBeSetForOrg
+        );
+        assert_ok!(Bank::summon(Origin::signed(1), 1, 20, None, threshold));
         let expected_event = RawEvent::BankAccountOpened(1, 1, 20, 1, None);
         assert_eq!(get_last_event(), expected_event);
     });
@@ -210,7 +232,11 @@ fn propose_works() {
             Bank::propose_spend(Origin::signed(1), 1, 19, 1),
             Error::<Test>::BankMustExistToProposeFrom
         );
-        assert_ok!(Bank::summon(Origin::signed(1), 1, 20, None),);
+        let threshold = ThresholdConfig::new(
+            OrgRep::Equal(1),
+            XorThreshold::Percent(Threshold::new(Permill::one(), None)),
+        );
+        assert_ok!(Bank::summon(Origin::signed(1), 1, 20, None, threshold),);
         assert_noop!(
             Bank::propose_spend(Origin::signed(7), 1, 10, 7),
             Error::<Test>::MustBeMemberToSponsorProposal
@@ -239,7 +265,11 @@ fn trigger_vote_works() {
             Bank::trigger_vote_on_member_proposal(Origin::signed(1), 1, 1),
             Error::<Test>::CannotTriggerVoteIfBaseBankDNE
         );
-        assert_ok!(Bank::summon(Origin::signed(1), 1, 20, None),);
+        let threshold = ThresholdConfig::new(
+            OrgRep::Equal(1),
+            XorThreshold::Percent(Threshold::new(Permill::one(), None)),
+        );
+        assert_ok!(Bank::summon(Origin::signed(1), 1, 20, None, threshold),);
         assert_noop!(
             Bank::trigger_vote_on_spend_proposal(Origin::signed(1), 1, 1),
             Error::<Test>::CannotTriggerVoteIfProposalDNE
