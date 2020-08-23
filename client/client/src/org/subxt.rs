@@ -31,7 +31,10 @@ use substrate_subxt::{
 };
 use sunshine_bounty_utils::{
     organization::Organization,
-    share::ShareProfile,
+    share::{
+        ProfileState,
+        ShareProfile,
+    },
 };
 
 /// The subset of the org trait and its inherited traits that the client must inherit
@@ -94,6 +97,13 @@ pub struct OrganizationStatesStore<T: Org> {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
+pub struct OrgHierarchyStore<T: Org> {
+    #[store(returns = ())]
+    pub parent: T::OrgId,
+    pub child: T::OrgId,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
 pub struct TotalIssuanceStore<T: Org> {
     #[store(returns = T::Shares)]
     pub org: T::OrgId,
@@ -101,7 +111,7 @@ pub struct TotalIssuanceStore<T: Org> {
 
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
 pub struct MembersStore<'a, T: Org> {
-    #[store(returns = ShareProfile<T::Shares>)]
+    #[store(returns = ShareProfile<T::Shares, ProfileState>)]
     pub org: T::OrgId,
     pub who: &'a <T as System>::AccountId,
 }
@@ -196,54 +206,4 @@ pub struct BatchBurnSharesCall<'a, T: Org> {
 pub struct SharesBatchBurnedEvent<T: Org> {
     pub organization: T::OrgId,
     pub total_new_shares_burned: T::Shares,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
-pub struct LockSharesCall<'a, T: Org> {
-    pub organization: T::OrgId,
-    pub who: &'a <T as System>::AccountId,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
-pub struct SharesLockedEvent<T: Org> {
-    pub organization: T::OrgId,
-    pub who: <T as System>::AccountId,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
-pub struct UnlockSharesCall<'a, T: Org> {
-    pub organization: T::OrgId,
-    pub who: &'a <T as System>::AccountId,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
-pub struct SharesUnlockedEvent<T: Org> {
-    pub organization: T::OrgId,
-    pub who: <T as System>::AccountId,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
-pub struct ReserveSharesCall<'a, T: Org> {
-    pub organization: T::OrgId,
-    pub who: &'a <T as System>::AccountId,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
-pub struct SharesReservedEvent<T: Org> {
-    pub organization: T::OrgId,
-    pub who: <T as System>::AccountId,
-    pub amount_reserved: T::Shares,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
-pub struct UnreserveSharesCall<'a, T: Org> {
-    pub organization: T::OrgId,
-    pub who: &'a <T as System>::AccountId,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
-pub struct SharesUnReservedEvent<T: Org> {
-    pub organization: T::OrgId,
-    pub who: <T as System>::AccountId,
-    pub amount_unreserved: T::Shares,
 }

@@ -5,6 +5,7 @@ use frame_support::{
     impl_outer_event,
     impl_outer_origin,
     parameter_types,
+    traits::OnFinalize,
     weights::Weight,
 };
 use frame_system::{self as system,};
@@ -13,11 +14,20 @@ use sp_runtime::{
     testing::Header,
     traits::IdentityLookup,
     Perbill,
+    Permill,
 };
 use util::{
-    organization::Organization,
+    organization::{
+        OrgRep,
+        Organization,
+    },
     traits::GroupMembership,
-    vote::VoterView,
+    vote::{
+        Threshold,
+        ThresholdInput,
+        VoterView,
+        XorThreshold,
+    },
 };
 
 // type aliases
@@ -91,7 +101,7 @@ impl pallet_balances::Trait for Test {
 }
 impl org::Trait for Test {
     type Event = TestEvent;
-    type IpfsReference = u32;
+    type Cid = u32;
     type OrgId = u64;
     type Shares = u64;
 }
@@ -99,6 +109,7 @@ impl vote::Trait for Test {
     type Event = TestEvent;
     type VoteId = u64;
     type Signal = u64;
+    type ThresholdId = u64;
 }
 impl donate::Trait for Test {
     type Event = TestEvent;
@@ -139,6 +150,14 @@ fn get_last_event() -> RawEvent<u64, u64, u64, u64, u64, u64> {
         .unwrap()
 }
 
+/// Auxiliary method for simulating block time passing
+fn run_to_block(n: u64) {
+    while System::block_number() < n {
+        Bank::on_finalize(System::block_number());
+        System::set_block_number(System::block_number() + 1);
+    }
+}
+
 fn new_test_ext() -> sp_io::TestExternalities {
     let mut t = frame_system::GenesisConfig::default()
         .build_storage::<Test>()
@@ -155,6 +174,11 @@ fn new_test_ext() -> sp_io::TestExternalities {
     }
     .assimilate_storage(&mut t)
     .unwrap();
+    GenesisConfig::<Test> {
+        spend_poll_frequency: 10,
+    }
+    .assimilate_storage(&mut t)
+    .unwrap();
     let mut ext: sp_io::TestExternalities = t.into();
     ext.execute_with(|| System::set_block_number(1));
     ext
@@ -165,8 +189,7 @@ fn genesis_config_works() {
     new_test_ext().execute_with(|| {
         assert_eq!(Org::organization_counter(), 1);
         let constitution = 1738;
-        let expected_organization =
-            Organization::new(Some(1), None, constitution);
+        let expected_organization = Organization::new(Some(1), 1, constitution);
         let org_in_storage = Org::organization_states(1u64).unwrap();
         assert_eq!(expected_organization, org_in_storage);
         for i in 1u64..7u64 {
@@ -181,20 +204,32 @@ fn opening_bank_account_works() {
     new_test_ext().execute_with(|| {
         let one = Origin::signed(1);
         let sixnine = Origin::signed(69);
+        let threshold = ThresholdInput::new(
+            OrgRep::Equal(1),
+            XorThreshold::Percent(Threshold::new(Permill::one(), None)),
+        );
         assert_noop!(
-            Bank::open_org_bank_account(sixnine, 1, 10, None),
+            Bank::open(sixnine, 1, 10, None, threshold.clone()),
             Error::<Test>::NotPermittedToOpenBankAccountForOrg
         );
         assert_noop!(
-            Bank::open_org_bank_account(one.clone(), 1, 19, None),
+            Bank::open(one.clone(), 1, 19, None, threshold.clone()),
             Error::<Test>::CannotOpenBankAccountIfDepositIsBelowModuleMinimum
+        );
+        let false_threshold = ThresholdInput::new(
+            OrgRep::Equal(2),
+            XorThreshold::Percent(Threshold::new(Permill::one(), None)),
+        );
+        assert_noop!(
+            Bank::open(one.clone(), 1, 20, None, false_threshold),
+            Error::<Test>::ThresholdCannotBeSetForOrg
         );
         let total_bank_count = Bank::total_bank_count();
         assert_eq!(total_bank_count, 0u32);
-        assert_ok!(Bank::open_org_bank_account(one.clone(), 1, 20, None));
+        assert_ok!(Bank::open(one.clone(), 1, 20, None, threshold));
         assert_eq!(
             get_last_event(),
-            RawEvent::BankAccountOpened(1, 1, 20, 1, None),
+            RawEvent::AccountOpened(1, 1, 20, 1, None),
         );
         let total_bank_count = Bank::total_bank_count();
         assert_eq!(total_bank_count, 1u32);
@@ -204,17 +239,18 @@ fn opening_bank_account_works() {
 #[test]
 fn spend_governance_works() {
     new_test_ext().execute_with(|| {
-        let one = Origin::signed(1);
-        assert_ok!(Bank::open_org_bank_account(one.clone(), 1, 20, None));
         assert_noop!(
-            Bank::propose_spend(2, 10, 3,),
+            Bank::propose_spend(Origin::signed(1), 1, 10, 3,),
             Error::<Test>::BankMustExistToProposeSpendFrom
         );
-        assert_ok!(Bank::propose_spend(1, 10, 3,));
-        let first_spend_proposal = BankSpend::new(1, 1);
-        assert_ok!(Bank::trigger_vote_on_spend_proposal(
-            first_spend_proposal.clone()
-        ));
+        let threshold = ThresholdInput::new(
+            OrgRep::Equal(1),
+            XorThreshold::Percent(Threshold::new(Permill::one(), None)),
+        );
+        assert_ok!(Bank::open(Origin::signed(1), 1, 20, Some(1), threshold));
+        assert_ok!(Bank::propose_spend(Origin::signed(1), 1, 10, 3,));
+        System::set_block_number(9);
+        assert_ok!(Bank::trigger_vote(Origin::signed(2), 1, 1,));
         for i in 1u64..7u64 {
             let i_origin = Origin::signed(i);
             assert_ok!(Vote::submit_vote(
@@ -225,13 +261,12 @@ fn spend_governance_works() {
             ));
         }
         assert_eq!(Balances::total_balance(&3), 200);
-        assert_ok!(Bank::poll_spend_proposal(first_spend_proposal.clone()));
+        run_to_block(21);
         // spend executed
         assert_eq!(Balances::total_balance(&3), 210);
-        assert_ok!(Bank::propose_spend(1, 5, 4,));
-        let second_spend_proposal = BankSpend::new(1, 2);
+        assert_ok!(Bank::propose_spend(Origin::signed(1), 1, 5, 4,));
         assert_eq!(Balances::total_balance(&4), 75);
-        assert_ok!(Bank::sudo_approve_spend_proposal(second_spend_proposal));
+        assert_ok!(Bank::sudo_approve(Origin::signed(1), 1, 2));
         assert_eq!(Balances::total_balance(&4), 80);
     });
 }

@@ -58,7 +58,7 @@ impl frame_system::Trait for Test {
 }
 impl Trait for Test {
     type Event = TestEvent;
-    type IpfsReference = u32;
+    type Cid = u32;
     type VoteId = u64;
     type Signal = u64;
 }
@@ -104,8 +104,7 @@ fn new_test_ext() -> sp_io::TestExternalities {
 #[test]
 fn vote_creation_works() {
     new_test_ext().execute_with(|| {
-        let vote_set: SimpleShareGenesis<u64, u64> =
-            vec![(1, 10), (2, 20)].into();
+        let vote_set: WeightedVector<u64, u64> = vec![(1, 10), (2, 20)].into();
         assert_noop!(
             Vote::create_signal_vote(
                 Origin::signed(22),
@@ -130,7 +129,7 @@ fn vote_creation_works() {
 #[test]
 fn vote_signal_threshold_works() {
     new_test_ext().execute_with(|| {
-        let vote_set: SimpleShareGenesis<u64, u64> =
+        let vote_set: WeightedVector<u64, u64> =
             vec![(1, 1), (2, 1), (3, 1), (4, 1), (5, 1), (6, 1)].into();
         // unanimous consent
         assert_ok!(Vote::create_signal_vote(
@@ -164,7 +163,7 @@ fn vote_signal_threshold_works() {
 #[test]
 fn vote_pct_threshold_works() {
     new_test_ext().execute_with(|| {
-        let vote_set: SimpleShareGenesis<u64, u64> =
+        let vote_set: WeightedVector<u64, u64> =
             vec![(1, 1), (2, 1), (3, 1), (4, 1), (5, 1), (6, 1)].into();
         // 34% passage requirement => 3 people at least
         assert_ok!(Vote::create_percent_vote(
@@ -213,7 +212,7 @@ fn changing_votes_upholds_invariants() {
             Vote::submit_vote(Origin::signed(1), 1, VoterView::Against, None),
             Error::<Test>::NoVoteStateForVoteRequest
         );
-        let vote_set: SimpleShareGenesis<u64, u64> =
+        let vote_set: WeightedVector<u64, u64> =
             vec![(1, 1), (2, 1), (3, 1), (4, 1), (5, 1), (6, 1)].into();
         // unanimous consent threshold
         assert_ok!(Vote::create_signal_vote(

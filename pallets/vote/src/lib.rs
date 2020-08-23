@@ -46,6 +46,7 @@ use util::{
         Apply,
         ApplyVote,
         CheckVoteStatus,
+        ConfigureThreshold,
         GenerateUniqueID,
         GetGroup,
         GetVoteOutcome,
@@ -54,18 +55,37 @@ use util::{
         OpenVote,
         OrganizationSupervisorPermissions,
         ShareInformation,
-        UpdateVoteTopic,
+        UpdateVote,
         VoteOnProposal,
         VoteVector,
     },
     vote::{
         Threshold,
+        ThresholdConfig,
+        ThresholdInput,
         Vote,
         VoteOutcome,
         VoteState,
         VoterView,
+        XorThreshold,
     },
 };
+
+type ThreshInput<T> = ThresholdInput<
+    OrgRep<<T as org::Trait>::OrgId>,
+    XorThreshold<<T as Trait>::Signal, Permill>,
+>;
+type Thresh<T> = ThresholdConfig<
+    <T as Trait>::ThresholdId,
+    OrgRep<<T as org::Trait>::OrgId>,
+    XorThreshold<<T as Trait>::Signal, Permill>,
+>;
+type VoteSt<T> = VoteState<
+    <T as Trait>::Signal,
+    <T as frame_system::Trait>::BlockNumber,
+    <T as org::Trait>::Cid,
+>;
+type VoteVec<T> = Vote<<T as Trait>::Signal, <T as org::Trait>::Cid>;
 
 pub trait Trait: frame_system::Trait + org::Trait {
     /// The overarching event type
@@ -97,6 +117,19 @@ pub trait Trait: frame_system::Trait + org::Trait {
         + CheckedSub
         + Zero
         + From<Self::Shares>;
+
+    /// Vote threshold identifier (for configurable threshold defaults)
+    type ThresholdId: Parameter
+        + Member
+        + AtLeast32BitUnsigned
+        + Codec
+        + Default
+        + Copy
+        + MaybeSerializeDeserialize
+        + Debug
+        + PartialOrd
+        + PartialEq
+        + Zero;
 }
 
 decl_event!(
@@ -104,7 +137,9 @@ decl_event!(
     where
         <T as frame_system::Trait>::AccountId,
         <T as Trait>::VoteId,
+        <T as Trait>::ThresholdId,
     {
+        ThresholdSet(ThresholdId),
         NewVoteStarted(AccountId, VoteId),
         Voted(VoteId, AccountId, VoterView),
     }
@@ -120,10 +155,12 @@ decl_error! {
         CannotMintSignalBecauseGroupMembershipDNE,
         CannotMintSignalBecauseMembershipShapeDNE,
         OldVoteDirectionEqualsNewVoteDirectionSoNoChange,
-        CannotUpdateVoteTopicIfVoteStateDNE,
+        CannotUpdateVoteIfVoteStateDNE,
         // i.e. changing from any non-NoVote view to NoVote (some vote changes aren't allowed to simplify assumptions)
         VoteChangeNotSupported,
         InputThresholdExceedsBounds,
+        OnlySupervisorCanSetGenericThresholds,
+        CannotInvokeThresholdThatDNE,
     }
 }
 
@@ -132,21 +169,28 @@ decl_storage! {
         /// The nonce for unique vote id generation
         VoteIdCounter get(fn vote_id_counter): T::VoteId;
 
+        /// The nonce for unique threshold id generation
+        ThresholdIdCounter get(fn threshold_id_counter): T::ThresholdId;
+
         /// The number of open votes
         pub OpenVoteCounter get(fn open_vote_counter): u32;
 
         /// The state of a vote
         pub VoteStates get(fn vote_states): map
-            hasher(opaque_blake2_256) T::VoteId => Option<VoteState<T::Signal, T::BlockNumber, T::IpfsReference>>;
+            hasher(blake2_128_concat) T::VoteId => Option<VoteSt<T>>;
+
+        /// The set of configured thresholds for direct dispatch
+        pub VoteThresholds get(fn vote_thresholds): map
+            hasher(blake2_128_concat) T::ThresholdId => Option<Thresh<T>>;
 
         /// Total signal minted for the vote; sum of all participant signal for the vote
         pub TotalSignalIssuance get(fn total_signal_issuance): map
-            hasher(opaque_blake2_256) T::VoteId => Option<T::Signal>;
+            hasher(blake2_128_concat) T::VoteId => Option<T::Signal>;
 
         /// Tracks all votes and signal for each participating account
         pub VoteLogger get(fn vote_logger): double_map
-            hasher(opaque_blake2_256) T::VoteId,
-            hasher(opaque_blake2_256) T::AccountId  => Option<Vote<T::Signal, T::IpfsReference>>;
+            hasher(blake2_128_concat) T::VoteId,
+            hasher(blake2_128_concat) T::AccountId  => Option<VoteVec<T>>;
     }
 }
 
@@ -158,7 +202,7 @@ decl_module! {
         #[weight = 0]
         pub fn create_signal_vote(
             origin,
-            topic: Option<T::IpfsReference>,
+            topic: Option<T::Cid>,
             organization: OrgRep<T::OrgId>,
             threshold: Threshold<T::Signal>,
             duration: Option<T::BlockNumber>,
@@ -181,7 +225,7 @@ decl_module! {
         #[weight = 0]
         pub fn create_percent_vote(
             origin,
-            topic: Option<T::IpfsReference>,
+            topic: Option<T::Cid>,
             organization: OrgRep<T::OrgId>,
             threshold: Threshold<Permill>,
             duration: Option<T::BlockNumber>,
@@ -202,11 +246,25 @@ decl_module! {
             Ok(())
         }
         #[weight = 0]
+        fn set_threshold_default(
+            origin,
+            threshold: ThreshInput<T>,
+        ) -> DispatchResult {
+            let setter = ensure_signed(origin)?;
+            ensure!(
+                <org::Module<T>>::is_organization_supervisor(threshold.org().org(), &setter),
+                Error::<T>::OnlySupervisorCanSetGenericThresholds
+            );
+            let id = Self::register_threshold(threshold)?;
+            Self::deposit_event(RawEvent::ThresholdSet(id));
+            Ok(())
+        }
+        #[weight = 0]
         pub fn submit_vote(
             origin,
             vote_id: T::VoteId,
             direction: VoterView,
-            justification: Option<T::IpfsReference>,
+            justification: Option<T::Cid>,
         ) -> DispatchResult {
             let voter = ensure_signed(origin)?;
             Self::vote_on_proposal(vote_id, voter.clone(), direction, justification)?;
@@ -242,6 +300,14 @@ impl<T: Trait> Module<T> {
         };
         Threshold::new(in_favor_t, against_t)
     }
+    fn generate_threshold_uid() -> T::ThresholdId {
+        let mut thresh_counter = <ThresholdIdCounter<T>>::get() + 1u32.into();
+        while <VoteThresholds<T>>::get(thresh_counter).is_some() {
+            thresh_counter += 1u32.into();
+        }
+        <ThresholdIdCounter<T>>::put(thresh_counter);
+        thresh_counter
+    }
 }
 
 impl<T: Trait> IDIsAvailable<T::VoteId> for Module<T> {
@@ -272,18 +338,49 @@ impl<T: Trait> GetVoteOutcome<T::VoteId> for Module<T> {
     }
 }
 
+impl<T: Trait> ConfigureThreshold<ThreshInput<T>, T::Cid, T::BlockNumber>
+    for Module<T>
+{
+    type ThresholdId = T::ThresholdId;
+    type VoteId = T::VoteId;
+    fn register_threshold(
+        t: ThreshInput<T>,
+    ) -> Result<T::ThresholdId, DispatchError> {
+        let id = Self::generate_threshold_uid();
+        let threshold = Thresh::<T>::new(id, t.org(), t.threshold());
+        <VoteThresholds<T>>::insert(id, threshold);
+        Ok(id)
+    }
+    fn invoke_threshold(
+        id: T::ThresholdId,
+        topic: Option<T::Cid>,
+        duration: Option<T::BlockNumber>,
+    ) -> Result<T::VoteId, DispatchError> {
+        let config = <VoteThresholds<T>>::get(id)
+            .ok_or(Error::<T>::CannotInvokeThresholdThatDNE)?;
+        match config.threshold() {
+            XorThreshold::Signal(t) => {
+                Self::open_vote(topic, config.org(), t, duration)
+            }
+            XorThreshold::Percent(t) => {
+                Self::open_percent_vote(topic, config.org(), t, duration)
+            }
+        }
+    }
+}
+
 impl<T: Trait>
     OpenVote<
         OrgRep<T::OrgId>,
         Threshold<T::Signal>,
         Threshold<Permill>,
         T::BlockNumber,
-        T::IpfsReference,
+        T::Cid,
     > for Module<T>
 {
     type VoteIdentifier = T::VoteId;
     fn open_vote(
-        topic: Option<T::IpfsReference>,
+        topic: Option<T::Cid>,
         organization: OrgRep<T::OrgId>,
         threshold: Threshold<T::Signal>,
         duration: Option<T::BlockNumber>,
@@ -321,7 +418,7 @@ impl<T: Trait>
         Ok(new_vote_id)
     }
     fn open_percent_vote(
-        topic: Option<T::IpfsReference>,
+        topic: Option<T::Cid>,
         organization: OrgRep<T::OrgId>,
         threshold: Threshold<Permill>,
         duration: Option<T::BlockNumber>,
@@ -370,20 +467,36 @@ impl<T: Trait>
     }
 }
 
-impl<T: Trait> UpdateVoteTopic<T::VoteId, T::IpfsReference> for Module<T> {
+impl<T: Trait> UpdateVote<T::VoteId, T::Cid, T::BlockNumber> for Module<T> {
     fn update_vote_topic(
         vote_id: T::VoteId,
-        new_topic: T::IpfsReference,
+        new_topic: T::Cid,
         clear_previous_vote_state: bool,
     ) -> DispatchResult {
         let old_vote_state = <VoteStates<T>>::get(vote_id)
-            .ok_or(Error::<T>::CannotUpdateVoteTopicIfVoteStateDNE)?;
+            .ok_or(Error::<T>::CannotUpdateVoteIfVoteStateDNE)?;
         let new_vote_state = if clear_previous_vote_state {
             old_vote_state.update_topic_and_clear_state(new_topic)
         } else {
             old_vote_state.update_topic_without_clearing_state(new_topic)
         };
         <VoteStates<T>>::insert(vote_id, new_vote_state);
+        Ok(())
+    }
+    fn extend_vote_length(
+        vote_id: T::VoteId,
+        blocks_from_now: T::BlockNumber,
+    ) -> DispatchResult {
+        let now = <frame_system::Module<T>>::block_number();
+        let new_end_time = now + blocks_from_now;
+        let pvs = <VoteStates<T>>::get(vote_id)
+            .ok_or(Error::<T>::CannotUpdateVoteIfVoteStateDNE)?;
+        if let Some(e) = pvs.ends() {
+            if e < new_end_time {
+                let nvs = pvs.set_ends(new_end_time);
+                <VoteStates<T>>::insert(vote_id, nvs);
+            }
+        }
         Ok(())
     }
 }
@@ -420,24 +533,22 @@ impl<T: Trait> MintableSignal<T::AccountId, T::OrgId, T::VoteId, T::Signal>
                 .ok_or(Error::<T>::CannotMintSignalBecauseMembershipShapeDNE)?;
         // total issuance
         let total_minted: T::Signal = new_vote_group.total().into();
-        new_vote_group.account_ownership().into_iter().for_each(
-            |(who, shares)| {
-                let minted_signal: T::Signal = shares.into();
-                let new_vote =
-                    Vote::new(minted_signal, VoterView::Uninitialized, None);
-                <VoteLogger<T>>::insert(vote_id, who, new_vote);
-            },
-        );
+        new_vote_group.vec().into_iter().for_each(|(who, shares)| {
+            let minted_signal: T::Signal = shares.into();
+            let new_vote =
+                Vote::new(minted_signal, VoterView::Uninitialized, None);
+            <VoteLogger<T>>::insert(vote_id, who, new_vote);
+        });
         <TotalSignalIssuance<T>>::insert(vote_id, total_minted);
         Ok(total_minted)
     }
 }
 
-impl<T: Trait> ApplyVote<T::IpfsReference> for Module<T> {
+impl<T: Trait> ApplyVote<T::Cid> for Module<T> {
     type Signal = T::Signal;
     type Direction = VoterView;
-    type Vote = Vote<T::Signal, T::IpfsReference>;
-    type State = VoteState<T::Signal, T::BlockNumber, T::IpfsReference>;
+    type Vote = Vote<T::Signal, T::Cid>;
+    type State = VoteState<T::Signal, T::BlockNumber, T::Cid>;
 
     fn apply_vote(
         state: Self::State,
@@ -449,24 +560,22 @@ impl<T: Trait> ApplyVote<T::IpfsReference> for Module<T> {
     }
 }
 
-impl<T: Trait> CheckVoteStatus<T::IpfsReference, T::VoteId> for Module<T> {
+impl<T: Trait> CheckVoteStatus<T::Cid, T::VoteId> for Module<T> {
     fn check_vote_expired(state: &Self::State) -> bool {
         let now = system::Module::<T>::block_number();
-        if let Some(n) = state.expires() {
+        if let Some(n) = state.ends() {
             return n < now
         }
         false
     }
 }
 
-impl<T: Trait> VoteOnProposal<T::AccountId, T::VoteId, T::IpfsReference>
-    for Module<T>
-{
+impl<T: Trait> VoteOnProposal<T::AccountId, T::VoteId, T::Cid> for Module<T> {
     fn vote_on_proposal(
         vote_id: T::VoteId,
         voter: T::AccountId,
         direction: Self::Direction,
-        justification: Option<T::IpfsReference>,
+        justification: Option<T::Cid>,
     ) -> DispatchResult {
         // get the vote state
         let vote_state = <VoteStates<T>>::get(vote_id)

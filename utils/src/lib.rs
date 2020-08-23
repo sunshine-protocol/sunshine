@@ -15,6 +15,7 @@ pub mod drip;
 pub mod grant;
 pub mod kickback;
 pub mod meta;
+pub mod moloch;
 pub mod organization;
 pub mod share;
 pub mod traits;

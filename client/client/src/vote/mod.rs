@@ -44,6 +44,10 @@ pub trait VoteClient<T: Runtime + Vote>: Client<T> {
         direction: <T as Vote>::VoterView,
         justification: Option<<T as Vote>::VoteJustification>,
     ) -> Result<VotedEvent<T>>;
+    async fn vote_threshold(
+        &self,
+        threshold_id: <T as Vote>::ThresholdId,
+    ) -> Result<ThreshConfig<T>>;
 }
 
 #[async_trait]
@@ -135,5 +139,14 @@ where
             .await?
             .voted()?
             .ok_or_else(|| Error::EventNotFound.into())
+    }
+    async fn vote_threshold(
+        &self,
+        threshold_id: <T as Vote>::ThresholdId,
+    ) -> Result<ThreshConfig<T>> {
+        Ok(self
+            .chain_client()
+            .vote_thresholds(threshold_id, None)
+            .await?)
     }
 }

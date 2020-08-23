@@ -40,10 +40,18 @@ use sunshine_bounty_utils::{
     organization::OrgRep,
     vote::{
         Threshold,
+        ThresholdConfig,
         Vote as VoteVector,
         VoteState,
+        XorThreshold,
     },
 };
+
+pub type ThreshConfig<T> = ThresholdConfig<
+    <T as Vote>::ThresholdId,
+    OrgRep<<T as Org>::OrgId>,
+    XorThreshold<<T as Vote>::Signal, <T as Vote>::Percent>,
+>;
 
 /// The subset of the `vote::Trait` that a client must implement.
 #[module]
@@ -60,6 +68,17 @@ pub trait Vote: System + Org {
 
     /// The native type for vote strength
     type Signal: Parameter
+        + Member
+        + AtLeast32Bit
+        + Codec
+        + Default
+        + Copy
+        + MaybeSerializeDeserialize
+        + Debug
+        + Zero;
+
+    /// The threshold identifier
+    type ThresholdId: Parameter
         + Member
         + AtLeast32Bit
         + Codec
@@ -129,6 +148,12 @@ pub struct VoteLoggerStore<T: Vote> {
     #[store(returns = VoteVector<T::Signal, <T as Org>::IpfsReference>)]
     pub vote: T::VoteId,
     pub who: <T as System>::AccountId,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
+pub struct VoteThresholdsStore<T: Vote> {
+    #[store(returns = ThreshConfig<T>)]
+    pub threshold: T::ThresholdId,
 }
 
 // ~~ Calls ~~

@@ -50,16 +50,16 @@ pub trait VerifyShape {
 }
 pub trait AccessGenesis<AccountId, Shares> {
     fn total(&self) -> Shares;
-    fn account_ownership(&self) -> Vec<(AccountId, Shares)>;
+    fn vec(&self) -> Vec<(AccountId, Shares)>;
 }
 pub trait AccessProfile<Shares> {
     fn total(&self) -> Shares;
 }
-use crate::share::SimpleShareGenesis;
+use crate::share::WeightedVector;
 pub trait ShareInformation<OrgId, AccountId, Shares> {
     type Profile: AccessProfile<Shares>;
     type Genesis: From<Vec<(AccountId, Shares)>>
-        + Into<SimpleShareGenesis<AccountId, Shares>>
+        + Into<WeightedVector<AccountId, Shares>>
         + VerifyShape
         + AccessGenesis<AccountId, Shares>;
     /// Gets the total number of shares issued for an organization's share identifier
@@ -75,6 +75,7 @@ pub trait ShareInformation<OrgId, AccountId, Shares> {
 pub trait ShareIssuance<OrgId, AccountId, Shares>:
     ShareInformation<OrgId, AccountId, Shares>
 {
+    type Proportion;
     fn issue(
         organization: OrgId,
         new_owner: AccountId,
@@ -86,7 +87,7 @@ pub trait ShareIssuance<OrgId, AccountId, Shares>:
         old_owner: AccountId,
         amount: Option<Shares>, // default None => burn all shares
         batch: bool,
-    ) -> DispatchResult;
+    ) -> Result<Self::Proportion>;
     fn batch_issue(
         organization: OrgId,
         genesis: Self::Genesis,
@@ -95,20 +96,6 @@ pub trait ShareIssuance<OrgId, AccountId, Shares>:
         organization: OrgId,
         genesis: Self::Genesis,
     ) -> DispatchResult;
-}
-pub trait ReserveProfile<OrgId, AccountId, Shares>:
-    ShareIssuance<OrgId, AccountId, Shares>
-{
-    fn reserve(
-        organization: OrgId,
-        who: &AccountId,
-        amount: Option<Shares>,
-    ) -> Result<Shares>;
-    fn unreserve(
-        organization: OrgId,
-        who: &AccountId,
-        amount: Option<Shares>,
-    ) -> Result<Shares>;
 }
 pub trait LockProfile<OrgId, AccountId> {
     fn lock_profile(organization: OrgId, who: &AccountId) -> DispatchResult;
@@ -121,7 +108,6 @@ pub trait RegisterOrganization<OrgId, AccountId, Hash> {
     fn organization_from_src(
         src: Self::OrgSrc,
         org_id: OrgId,
-        parent_id: Option<OrgId>,
         supervisor: Option<AccountId>,
         value_constitution: Hash,
     ) -> Result<Self::OrganizationState>;
@@ -169,11 +155,26 @@ pub trait OpenVote<OrgId, Signal, Percent, BlockNumber, Hash> {
     ) -> Result<Self::VoteIdentifier>;
 }
 
-pub trait UpdateVoteTopic<VoteId, Hash> {
+pub trait ConfigureThreshold<Threshold, Hash, BlockNumber> {
+    type ThresholdId;
+    type VoteId; // TODO: make this same as OpenVote type by merging traits someday somehow
+    fn register_threshold(t: Threshold) -> Result<Self::ThresholdId>;
+    fn invoke_threshold(
+        id: Self::ThresholdId,
+        topic: Option<Hash>,
+        duration: Option<BlockNumber>,
+    ) -> Result<Self::VoteId>;
+}
+
+pub trait UpdateVote<VoteId, Hash, BlockNumber> {
     fn update_vote_topic(
         vote_id: VoteId,
         new_topic: Hash,
         clear_previous_vote_state: bool,
+    ) -> DispatchResult;
+    fn extend_vote_length(
+        vote_id: VoteId,
+        blocks_from_now: BlockNumber,
     ) -> DispatchResult;
 }
 
@@ -254,44 +255,56 @@ pub trait RegisterDisputeType<AccountId, Currency, VoteMetadata, BlockNumber> {
 
 // ~~~~~~~~ Bank Module ~~~~~~~~
 
-pub trait BankPermissions<BankId, OrgId, AccountId> {
-    fn can_open_bank_account_for_org(org: OrgId, who: &AccountId) -> bool;
-    fn can_propose_spend(bank: BankId, who: &AccountId) -> Result<bool>;
-    fn can_trigger_vote_on_spend_proposal(
-        bank: BankId,
-        who: &AccountId,
-    ) -> Result<bool>;
-    fn can_sudo_approve_spend_proposal(
-        bank: BankId,
-        who: &AccountId,
-    ) -> Result<bool>;
-    fn can_poll_spend_proposal(bank: BankId, who: &AccountId) -> Result<bool>;
-    fn can_spend(bank: BankId, who: &AccountId) -> Result<bool>;
-}
-
-pub trait OpenBankAccount<OrgId, Currency, AccountId> {
+pub trait OpenBankAccount<OrgId, Currency, AccountId, Threshold> {
     type BankId;
     fn open_bank_account(
         opener: AccountId,
         org: OrgId,
         deposit: Currency,
         controller: Option<AccountId>,
+        threshold: Threshold,
     ) -> Result<Self::BankId>;
 }
 
-pub trait SpendGovernance<BankId, Currency, AccountId> {
+pub trait SpendGovernance<BankId, Currency, AccountId, SProp> {
     type SpendId;
     type VoteId;
     type SpendState;
-    fn propose_spend(
+    fn _propose_spend(
+        caller: &AccountId,
         bank_id: BankId,
         amount: Currency,
         dest: AccountId,
     ) -> Result<Self::SpendId>;
-    fn trigger_vote_on_spend_proposal(
+    fn _trigger_vote_on_spend_proposal(
+        caller: &AccountId,
+        bank_id: BankId,
         spend_id: Self::SpendId,
     ) -> Result<Self::VoteId>;
-    fn sudo_approve_spend_proposal(spend_id: Self::SpendId) -> DispatchResult;
-    fn poll_spend_proposal(spend_id: Self::SpendId)
-        -> Result<Self::SpendState>;
+    fn _sudo_approve_spend_proposal(
+        caller: &AccountId,
+        bank_id: BankId,
+        spend_id: Self::SpendId,
+    ) -> DispatchResult;
+    fn poll_spend_proposal(prop: SProp) -> Result<Self::SpendState>;
+}
+
+pub trait MolochMembership<AccountId, BankId, Currency, Shares, MProp> {
+    type MemberPropId;
+    type VoteId;
+    type PropState;
+    fn _propose_member(
+        caller: &AccountId,
+        bank_id: BankId,
+        tribute: Currency,
+        shares_requested: Shares,
+        applicant: AccountId,
+    ) -> Result<Self::MemberPropId>;
+    fn _trigger_vote_on_member_proposal(
+        caller: &AccountId,
+        bank_id: BankId,
+        proposal_id: Self::MemberPropId,
+    ) -> Result<Self::VoteId>;
+    fn poll_membership_proposal(prop: MProp) -> Result<Self::PropState>;
+    fn _burn_shares(caller: AccountId, bank_id: BankId) -> DispatchResult;
 }

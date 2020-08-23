@@ -51,7 +51,7 @@ use util::{
         SubmissionState2,
     },
     grant::ChallengeNorms,
-    share::SimpleShareGenesis,
+    share::WeightedVector,
     traits::{
         AccessGenesis,
         GetVoteOutcome,
@@ -64,7 +64,7 @@ type BalanceOf<T> = <<T as Trait>::Currency as Currency<
     <T as frame_system::Trait>::AccountId,
 >>::Balance;
 type Bounty<T> = BountyInfo2<
-    <T as vote::Trait>::IpfsReference,
+    <T as vote::Trait>::Cid,
     ChallengeNorms<<T as frame_system::Trait>::AccountId, Permill>,
     BalanceOf<T>,
     BountyState<<T as vote::Trait>::VoteId>,
@@ -72,7 +72,7 @@ type Bounty<T> = BountyInfo2<
 type BountySub<T> = BountySubmission<
     <T as Trait>::BountyId,
     <T as Trait>::SubmissionId,
-    <T as vote::Trait>::IpfsReference,
+    <T as vote::Trait>::Cid,
     <T as frame_system::Trait>::AccountId,
     BalanceOf<T>,
     SubmissionState2<
@@ -138,21 +138,21 @@ decl_event!(
     pub enum Event<T>
     where
         <T as frame_system::Trait>::AccountId,
-        <T as vote::Trait>::IpfsReference,
+        <T as vote::Trait>::Cid,
         <T as vote::Trait>::VoteId,
         <T as Trait>::BountyId,
         <T as Trait>::SubmissionId,
         Balance = BalanceOf<T>,
     {
         /// Poster, Initial Amount, Identifier, Bounty Metadata (i.e. github issue reference)
-        BountyPosted(AccountId, Balance, BountyId, IpfsReference),
+        BountyPosted(AccountId, Balance, BountyId, Cid),
         /// Contributor, This Contribution Amount, Identifier, Full Amount After Contribution, Bounty Metadata
-        BountyRaiseContribution(AccountId, Balance, BountyId, Balance, IpfsReference),
+        BountyRaiseContribution(AccountId, Balance, BountyId, Balance, Cid),
         /// Contributors challenged and achieved threshold support to execute a refund for all contributions
         /// -> bounty identifier, amt to contributors, amt to depositer (as de facto remainder_recipient)
         BountyRefunded(BountyId, Balance, Balance),
         /// Submitter, Bounty Identifier, Amount Requested, Submission Identifier, Bounty Metadata, Submission Metadata
-        BountySubmissionPosted(AccountId, BountyId, Balance, SubmissionId, IpfsReference, IpfsReference),
+        BountySubmissionPosted(AccountId, BountyId, Balance, SubmissionId, Cid, Cid),
         /// Submission Identifier, Bounty Identifier, Requested Amount
         SubmissionApprovedButPaymentFailed(SubmissionId, BountyId, Balance),
         /// Submission Identifier, Bounty Identifier, Requested Amount
@@ -160,7 +160,7 @@ decl_event!(
         /// Vote identifier for Challenge Results, Bounty Identifier, Amount Posted
         BountyRefundChallengeRejected(VoteId, BountyId, Balance),
         /// Bounty Identifier, Full Amount Left After Payment, Submission Identifier, Amount Requested, Bounty Metadata, Submission Metadata
-        BountyPaymentExecuted(BountyId, Balance, SubmissionId, Balance, AccountId, IpfsReference, IpfsReference),
+        BountyPaymentExecuted(BountyId, Balance, SubmissionId, Balance, AccountId, Cid, Cid),
     }
 );
 
@@ -214,7 +214,7 @@ decl_module! {
         #[weight = 0]
         fn post_bounty(
             origin,
-            info: T::IpfsReference,
+            info: T::Cid,
             amount: BalanceOf<T>,
             veto_threshold: Permill,
             refund_threshold: Permill,
@@ -266,7 +266,7 @@ decl_module! {
         fn submit_for_bounty(
             origin,
             bounty_id: T::BountyId,
-            submission_ref: T::IpfsReference,
+            submission_ref: T::Cid,
             amount: BalanceOf<T>,
         ) -> DispatchResult {
             let submitter = ensure_signed(origin)?;
@@ -443,18 +443,17 @@ impl<T: Trait> Module<T> {
     ) -> Result<(BalanceOf<T>, BalanceOf<T>), DispatchError> {
         let from = Self::bounty_account_id(id);
         let total = T::Currency::total_balance(&from);
-        let contributors: SimpleShareGenesis<T::AccountId, BalanceOf<T>> =
+        let contributors: WeightedVector<T::AccountId, BalanceOf<T>> =
             <BountyTips<T>>::iter()
                 .filter(|(i, _, _)| i == &id)
                 .map(|(_, ac, amt)| (ac, amt))
                 .collect::<Vec<(T::AccountId, BalanceOf<T>)>>()
                 .into();
-        let num_of_accounts: u32 =
-            contributors.account_ownership().len() as u32;
+        let num_of_accounts: u32 = contributors.vec().len() as u32;
         if num_of_accounts == 1 {
             T::Currency::transfer(
                 &from,
-                &contributors.account_ownership()[0].0,
+                &contributors.vec()[0].0,
                 total,
                 ExistenceRequirement::AllowDeath,
             )?;
@@ -464,7 +463,7 @@ impl<T: Trait> Module<T> {
             todo!()
             // let mut total_to_contributors = BalanceOf::<T>::zero();
             // let den: T::Signal = contributors.total();
-            // for (acc, nom) in contributors.account_ownership().iter() {
+            // for (acc, nom) in contributors.vec().iter() {
             //     let due_proportion =
             //         Permill::from_rational_approximation(nom, &den);
             //     let due_amount: BalanceOf<T> = due_proportion * total;

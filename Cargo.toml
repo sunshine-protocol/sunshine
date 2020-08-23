@@ -19,6 +19,7 @@ members = [
     "pallets/drip",
     "pallets/grant",
     "pallets/kickback",
+    "pallets/moloch",
     "pallets/org",
     "pallets/treasury",
     "pallets/vote",
@@ -27,4 +28,4 @@ members = [
 ]
 
 [patch.crates-io]
-substrate-subxt = { git = "https://github.com/dvc94ch/substrate-subxt", branch = "different-assert" }
+substrate-subxt = { git = "https://github.com/paritytech/substrate-subxt/" }

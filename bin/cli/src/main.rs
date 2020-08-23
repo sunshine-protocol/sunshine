@@ -47,12 +47,6 @@ async fn main() -> Result<()> {
                 OrgSubCommand::BatchBurnShares(cmd) => {
                     cmd.exec(&client).await?
                 }
-                OrgSubCommand::ReserveShares(cmd) => cmd.exec(&client).await?,
-                OrgSubCommand::UnreserveShares(cmd) => {
-                    cmd.exec(&client).await?
-                }
-                OrgSubCommand::LockShares(cmd) => cmd.exec(&client).await?,
-                OrgSubCommand::UnlockShares(cmd) => cmd.exec(&client).await?,
                 OrgSubCommand::RegisterFlatOrg(cmd) => {
                     cmd.exec(&client).await?
                 }
@@ -80,8 +74,11 @@ async fn main() -> Result<()> {
         }
         SubCommand::Bank(BankCommand { cmd }) => {
             match cmd {
-                BankSubCommand::OpenAccount(cmd) => cmd.exec(&client).await?,
-                BankSubCommand::OpenAccount2(cmd) => cmd.exec(&client).await?,
+                BankSubCommand::Open(cmd) => cmd.exec(&client).await?,
+                BankSubCommand::ProposeSpend(cmd) => cmd.exec(&client).await?,
+                BankSubCommand::TriggerVote(cmd) => cmd.exec(&client).await?,
+                BankSubCommand::SudoApprove(cmd) => cmd.exec(&client).await?,
+                BankSubCommand::Close(cmd) => cmd.exec(&client).await?,
             }
         }
         SubCommand::Bounty(BountyCommand { cmd }) => {

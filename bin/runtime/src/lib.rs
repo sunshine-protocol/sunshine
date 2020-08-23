@@ -303,7 +303,7 @@ impl pallet_transaction_payment::Trait for Runtime {
 }
 impl org::Trait for Runtime {
     type Event = Event;
-    type IpfsReference = CidBytes;
+    type Cid = CidBytes;
     type OrgId = u64;
     type Shares = u64;
 }
@@ -311,6 +311,7 @@ impl vote::Trait for Runtime {
     type Event = Event;
     type VoteId = u64;
     type Signal = u64;
+    type ThresholdId = u64;
 }
 parameter_types! {
     pub const MinimumDisputeAmount: u128 = 10;

@@ -72,10 +72,6 @@ pub enum OrgSubCommand {
     BurnShares(shares::SharesBurnCommand),
     BatchIssueShares(shares::SharesBatchIssueCommand),
     BatchBurnShares(shares::SharesBatchBurnCommand),
-    ReserveShares(shares::SharesReserveCommand),
-    UnreserveShares(shares::SharesUnReserveCommand),
-    LockShares(shares::SharesLockCommand),
-    UnlockShares(shares::SharesUnLockCommand),
     // full org stuff
     RegisterFlatOrg(org::OrgRegisterFlatCommand),
     RegisterWeightedOrg(org::OrgRegisterWeightedCommand),
@@ -114,8 +110,11 @@ pub struct BankCommand {
 
 #[derive(Clone, Debug, Clap)]
 pub enum BankSubCommand {
-    OpenAccount(bank::BankOpenOrgAccountCommand),
-    OpenAccount2(bank::BankOpenOrgAccountCommand),
+    Open(bank::OpenCommand),
+    ProposeSpend(bank::ProposeSpendCommand),
+    TriggerVote(bank::TriggerVoteCommand),
+    SudoApprove(bank::SudoApproveCommand),
+    Close(bank::CloseCommand),
 }
 
 #[derive(Clone, Debug, Clap)]

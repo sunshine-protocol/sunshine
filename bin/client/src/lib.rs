@@ -83,6 +83,7 @@ impl Org for Runtime {
 impl Vote for Runtime {
     type VoteId = u64;
     type Signal = u64;
+    type ThresholdId = u64;
     type Percent = sp_runtime::Permill;
     type VoteTopic = TextBlock;
     type VoterView = utils::vote::VoterView;

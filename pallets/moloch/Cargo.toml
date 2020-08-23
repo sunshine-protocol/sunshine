@@ -1,12 +1,12 @@
 [package]
-name = "sunshine-bank"
-version = "0.2.0"
+name = "sunshine-moloch"
+version = "0.0.1"
 authors = ["Amar Singh <asinghchrony@protonmail.com>"]
 edition = "2018"
 
 license = "GPL-3.0"
 repository = "https://github.com/sunshine-protocol/sunshine-bounty"
-description = "bank accounts for orgs (n treasury limit per org)"
+description = "Moloch DAO implementation using sunshine org and vote "
 keywords = ["sunshine", "substrate"]
 
 [dependencies]
