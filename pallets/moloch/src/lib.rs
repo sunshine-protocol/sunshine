@@ -94,7 +94,7 @@ type SpendProp<T> = SpendProposal<
 >;
 type MemberProp<T> = MembershipProposal<
     <T as Trait>::BankId,
-    <T as Trait>::ProposalId,
+    <T as Trait>::MemId,
     BalanceOf<T>,
     <T as org::Trait>::Shares,
     <T as frame_system::Trait>::AccountId,
@@ -141,7 +141,7 @@ pub trait Trait:
         + Zero;
 
     /// Identifier for membership proposals
-    type ProposalId: Parameter
+    type MemId: Parameter
         + Member
         + AtLeast32Bit
         + Codec
@@ -166,22 +166,22 @@ decl_event!(
         <T as vote::Trait>::VoteId,
         <T as Trait>::BankId,
         <T as Trait>::SpendId,
-        <T as Trait>::ProposalId,
+        <T as Trait>::MemId,
         Balance = BalanceOf<T>,
     {
-        BankAccountOpened(AccountId, BankId, Balance, OrgId, Option<AccountId>),
-        NewMemberProposal(AccountId, BankId, ProposalId, Balance, Shares, AccountId),
-        VoteTriggeredOnMemberProposal(AccountId, BankId, ProposalId, VoteId),
-        SpendProposedByMember(AccountId, BankId, SpendId, Balance, AccountId),
-        VoteTriggeredOnSpendProposal(AccountId, BankId, SpendId, VoteId),
-        SudoApprovedSpendProposal(AccountId, BankId, SpendId),
+        AccountOpened(AccountId, BankId, Balance, OrgId, Option<AccountId>),
+        MemberProposed(AccountId, BankId, MemId, Balance, Shares, AccountId),
+        SpendProposed(AccountId, BankId, SpendId, Balance, AccountId),
+        MemberVoteTriggered(AccountId, BankId, MemId, VoteId),
+        SpendVoteTriggered(AccountId, BankId, SpendId, VoteId),
+        SpendSudoApproved(AccountId, BankId, SpendId),
         SpendProposalPolled(BankId, SpendId, SpendState<VoteId>),
-        MemberProposalPolled(BankId, ProposalId, ProposalState<VoteId>),
+        MemberProposalPolled(BankId, MemId, ProposalState<VoteId>),
         // relevant org and number of shares burned
         SharesBurned(OrgId, Shares),
         // bank, amt withdrawn by burn, amt left in bank
         WithdrawnPortion(BankId, Balance, Balance),
-        BankAccountClosed(AccountId, BankId, OrgId),
+        AccountClosed(AccountId, BankId, OrgId),
     }
 );
 
@@ -231,7 +231,7 @@ decl_storage! {
 
         /// Counter for generating unique membership proposal identifiers
         ProposalNonceMap get(fn proposal_nonce_map): map
-            hasher(blake2_128_concat) T::BankId => T::ProposalId;
+            hasher(blake2_128_concat) T::BankId => T::MemId;
 
         /// Total number of banks registered in this module
         pub TotalBankCount get(fn total_bank_count): u32;
@@ -251,7 +251,7 @@ decl_storage! {
         /// Proposals to join the membership of the bank
         pub MemberProps get(fn member_props): double_map
             hasher(blake2_128_concat) T::BankId,
-            hasher(blake2_128_concat) T::ProposalId => Option<MemberProp<T>>;
+            hasher(blake2_128_concat) T::MemId => Option<MemberProp<T>>;
 
         /// Frequency for which all spend proposals are polled and pushed along
         SpendPollFrequency get(fn spend_poll_frequency) config(): T::BlockNumber;
@@ -281,7 +281,7 @@ decl_module! {
             );
             let bank_id = Self::open_bank_account(opener.clone(), org, deposit, controller.clone(), threshold)?;
             <OrgBankRegistrar<T>>::insert(org, ());
-            Self::deposit_event(RawEvent::BankAccountOpened(opener, bank_id, deposit, org, controller));
+            Self::deposit_event(RawEvent::AccountOpened(opener, bank_id, deposit, org, controller));
             Ok(())
         }
         #[weight = 0]
@@ -293,29 +293,7 @@ decl_module! {
         ) -> DispatchResult {
             let caller = ensure_signed(origin)?;
             let new_spend_id = Self::_propose_spend(&caller, bank_id, amount, dest.clone())?;
-            Self::deposit_event(RawEvent::SpendProposedByMember(caller, bank_id, new_spend_id, amount, dest));
-            Ok(())
-        }
-        #[weight = 0]
-        fn trigger_vote_on_spend_proposal(
-            origin,
-            bank_id: T::BankId,
-            spend_id: T::SpendId,
-        ) -> DispatchResult {
-            let caller = ensure_signed(origin)?;
-            let vote_id = Self::_trigger_vote_on_spend_proposal(&caller, bank_id, spend_id)?;
-            Self::deposit_event(RawEvent::VoteTriggeredOnSpendProposal(caller, bank_id, spend_id, vote_id));
-            Ok(())
-        }
-        #[weight = 0]
-        fn sudo_approve_spend_proposal(
-            origin,
-            bank_id: T::BankId,
-            spend_id: T::SpendId,
-        ) -> DispatchResult {
-            let caller = ensure_signed(origin)?;
-            Self::_sudo_approve_spend_proposal(&caller, bank_id, spend_id)?;
-            Self::deposit_event(RawEvent::SudoApprovedSpendProposal(caller, bank_id, spend_id));
+            Self::deposit_event(RawEvent::SpendProposed(caller, bank_id, new_spend_id, amount, dest));
             Ok(())
         }
         #[weight = 0]
@@ -328,18 +306,40 @@ decl_module! {
         ) -> DispatchResult {
             let caller = ensure_signed(origin)?;
             let proposal_id = Self::_propose_member(&caller, bank_id, tribute, shares_requested, applicant.clone())?;
-            Self::deposit_event(RawEvent::NewMemberProposal(caller, bank_id, proposal_id, tribute, shares_requested, applicant));
+            Self::deposit_event(RawEvent::MemberProposed(caller, bank_id, proposal_id, tribute, shares_requested, applicant));
             Ok(())
         }
         #[weight = 0]
-        fn trigger_vote_on_member_proposal(
+        fn spend_trigger_vote(
             origin,
             bank_id: T::BankId,
-            proposal_id: T::ProposalId,
+            spend_id: T::SpendId,
+        ) -> DispatchResult {
+            let caller = ensure_signed(origin)?;
+            let vote_id = Self::_trigger_vote_on_spend_proposal(&caller, bank_id, spend_id)?;
+            Self::deposit_event(RawEvent::SpendVoteTriggered(caller, bank_id, spend_id, vote_id));
+            Ok(())
+        }
+        #[weight = 0]
+        fn member_trigger_vote(
+            origin,
+            bank_id: T::BankId,
+            proposal_id: T::MemId,
         ) -> DispatchResult {
             let caller = ensure_signed(origin)?;
             let new_vote_id = Self::_trigger_vote_on_member_proposal(&caller, bank_id, proposal_id)?;
-            Self::deposit_event(RawEvent::VoteTriggeredOnMemberProposal(caller, bank_id, proposal_id, new_vote_id));
+            Self::deposit_event(RawEvent::MemberVoteTriggered(caller, bank_id, proposal_id, new_vote_id));
+            Ok(())
+        }
+        #[weight = 0]
+        fn sudo_approve_spend_proposal(
+            origin,
+            bank_id: T::BankId,
+            spend_id: T::SpendId,
+        ) -> DispatchResult {
+            let caller = ensure_signed(origin)?;
+            Self::_sudo_approve_spend_proposal(&caller, bank_id, spend_id)?;
+            Self::deposit_event(RawEvent::SpendSudoApproved(caller, bank_id, spend_id));
             Ok(())
         }
         #[weight = 0]
@@ -374,7 +374,7 @@ decl_module! {
             <BankStores<T>>::remove(bank_id);
             <TotalBankCount>::mutate(|count| *count -= 1);
             <OrgBankRegistrar<T>>::remove(bank.org());
-            Self::deposit_event(RawEvent::BankAccountClosed(closer, bank_id, bank.org()));
+            Self::deposit_event(RawEvent::AccountClosed(closer, bank_id, bank.org()));
             Ok(())
         }
         fn on_finalize(_n: T::BlockNumber) {
@@ -412,7 +412,7 @@ impl<T: Trait> Module<T> {
     pub fn is_spend(bank: T::BankId, spend: T::SpendId) -> bool {
         <SpendProps<T>>::get(bank, spend).is_some()
     }
-    pub fn is_proposal(bank: T::BankId, proposal: T::ProposalId) -> bool {
+    pub fn is_proposal(bank: T::BankId, proposal: T::MemId) -> bool {
         <MemberProps<T>>::get(bank, proposal).is_some()
     }
     fn generate_bank_uid() -> T::BankId {
@@ -431,7 +431,7 @@ impl<T: Trait> Module<T> {
         <SpendNonceMap<T>>::insert(seed, id_nonce);
         id_nonce
     }
-    fn generate_proposal_uid(seed: T::BankId) -> T::ProposalId {
+    fn generate_proposal_uid(seed: T::BankId) -> T::MemId {
         let mut id_nonce = <ProposalNonceMap<T>>::get(seed) + 1u32.into();
         while Self::is_proposal(seed, id_nonce) {
             id_nonce += 1u32.into();
@@ -670,7 +670,7 @@ impl<T: Trait>
         MemberProp<T>,
     > for Module<T>
 {
-    type MemberPropId = T::ProposalId;
+    type MemberPropId = T::MemId;
     type VoteId = T::VoteId;
     type PropState = ProposalState<T::VoteId>;
     fn _propose_member(

@@ -263,7 +263,6 @@ decl_module! {
             Self::deposit_event(RawEvent::NewWeightedOrganizationRegistered(caller, new_id, constitution, wm_cpy.total()));
             Ok(())
         }
-        /// Share Issuance Runtime Methods
         #[weight = 0]
         fn issue_shares(origin, organization: T::OrgId, who: T::AccountId, shares: T::Shares) -> DispatchResult {
             let issuer = ensure_signed(origin)?;
