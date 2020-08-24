@@ -5,7 +5,10 @@ use codec::{
 use orml_utilities::OrderedSet;
 use sp_runtime::RuntimeDebug;
 use sp_std::{
-    cmp::{Eq, Ordering},
+    cmp::{
+        Eq,
+        Ordering,
+    },
     prelude::*,
 };
 
@@ -35,12 +38,12 @@ pub struct Commit<RoundId, Hash, PreImage> {
     reveal: Option<PreImage>,
 }
 
-impl<RoundId: Copy + PartialOrd, Hash: Clone, PreImage: Clone> Eq
+impl<RoundId: Copy + Eq + Ord, Hash: Clone + Eq, PreImage: Clone + Eq> Eq
     for Commit<RoundId, Hash, PreImage>
 {
 }
 
-impl<RoundId: Copy + PartialOrd, Hash: Clone, PreImage: Clone>
+impl<RoundId: Copy + Eq + Ord, Hash: Clone + Eq, PreImage: Clone + Eq>
     Commit<RoundId, Hash, PreImage>
 {
     pub fn round_id(&self) -> RoundId {
@@ -54,26 +57,23 @@ impl<RoundId: Copy + PartialOrd, Hash: Clone, PreImage: Clone>
     }
 }
 
-impl<
-        RoundId: Copy + PartialOrd + Eq,
-        Hash: Clone + Eq,
-        PreImage: Clone + Eq,
-    > Ord for Commit<RoundId, Hash, PreImage>
+impl<RoundId: Copy + Eq + Ord, Hash: Clone + Eq, PreImage: Clone + Eq> Ord
+    for Commit<RoundId, Hash, PreImage>
 {
     fn cmp(&self, other: &Self) -> Ordering {
         self.round_id.cmp(&other.round_id)
     }
 }
 
-impl<RoundId: Copy + PartialOrd, Hash: Clone, PreImage: Clone> PartialOrd
-    for Commit<RoundId, Hash, PreImage>
+impl<RoundId: Copy + Eq + Ord, Hash: Clone + Eq, PreImage: Clone + Eq>
+    PartialOrd for Commit<RoundId, Hash, PreImage>
 {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl<RoundId: Copy + PartialOrd, Hash: Clone, PreImage: Clone> PartialEq
+impl<RoundId: Copy + Eq + Ord, Hash: Clone + Eq, PreImage: Clone + Eq> PartialEq
     for Commit<RoundId, Hash, PreImage>
 {
     fn eq(&self, other: &Self) -> bool {
