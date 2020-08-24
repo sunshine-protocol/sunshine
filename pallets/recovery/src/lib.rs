@@ -2,6 +2,9 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 //! Password recovery pallet
 
+#[cfg(test)]
+mod tests;
+
 use frame_support::{
     decl_error,
     decl_event,
@@ -27,6 +30,7 @@ use sp_runtime::{
         AccountIdConversion,
         AtLeast32BitUnsigned,
         CheckedSub,
+        Hash,
         MaybeSerializeDeserialize,
         Member,
         Zero,
@@ -111,16 +115,18 @@ decl_event!(
     {
         /// Poster, Secret ID
         SecretGroupInitialized(AccountId, SecretId),
-        /// Secret ID, Revoked Secret Keeper
-        RevokeInvitation(SecretId, AccountId),
-        /// Keeper Commitment to Hash of Secret Share
-        CommitSecretHash(AccountId, SecretId, RoundId, Hash),
-        /// Poster requests recovery of Secret
-        RequestRecovery(AccountId, SecretId, RoundId),
-        /// Keeper Reveals Preimage of Hash to Claim Funds
-        RevealPreimage(AccountId, SecretId, RoundId, SecretShare),
-        /// New Round Starts
-        NewRound(SecretId, RoundId),
+        /// User revoked Secret ID, Revoked Secret Keeper
+        RevokedInvitation(SecretId, AccountId),
+        /// User started new round
+        NewRoundStarted(SecretId, RoundId),
+        /// User requested recovery of Secret
+        RecoveryRequested(AccountId, SecretId, RoundId),
+        /// User reported recovery of Secret
+        RecoveryReported(AccountId, SecretId, RoundId),
+        /// Keeper committed Hash of Secret Share
+        CommittedSecretHash(AccountId, SecretId, RoundId, Hash),
+        /// Keeper revealed Preimage of Hash
+        RevealedPreimage(AccountId, SecretId, RoundId, SecretShare),
     }
 );
 
@@ -129,8 +135,14 @@ decl_error! {
         SecretDNE,
         UserCannotAffordRequest,
         NotAuthorizedForSecret,
-        CommitAlreadyMadeForMostRecentRound,
-        BranchShouldNeverReach,
+        CommitAlreadyMadeForRound,
+        MustHashBeforePreimage,
+        MustCommitHashInSameRound,
+        PreimageHashDNEHash,
+        PreimageAlreadyCommitted,
+        RecoveryRequestPending,
+        MustRequestRecoveryBeforeRecoveryReport,
+        CannotIncrementRoundFromSecretState,
     }
 }
 
@@ -190,7 +202,7 @@ decl_module! {
             let secret = <Secrets<T>>::get(secret_id).ok_or(Error::<T>::SecretDNE)?;
             ensure!(secret.user() == caller, Error::<T>::NotAuthorizedForSecret);
             <Commits<T>>::remove(secret_id, account.clone());
-            Self::deposit_event(RawEvent::RevokeInvitation(secret_id, account));
+            Self::deposit_event(RawEvent::RevokedInvitation(secret_id, account));
             Ok(())
         }
         #[weight = 0]
@@ -201,31 +213,92 @@ decl_module! {
             let caller = ensure_signed(origin)?;
             let secret = <Secrets<T>>::get(secret_id).ok_or(Error::<T>::SecretDNE)?;
             ensure!(secret.user() == caller, Error::<T>::NotAuthorizedForSecret);
-            let new_secret = secret.inc_round();
+            ensure!(secret.state() != SSSState::UsedWithoutSuccess, Error::<T>::CannotIncrementRoundFromSecretState);
+            let new_secret = if secret.state() == SSSState::UsedWithSuccess {
+                // increment is reset if success is reported
+                secret.set_state(SSSState::Unused)
+            } else {
+                secret
+            }.inc_round();
             let round = new_secret.round();
             <Secrets<T>>::insert(secret_id, new_secret);
-            Self::deposit_event(RawEvent::NewRound(secret_id, round));
+            Self::deposit_event(RawEvent::NewRoundStarted(secret_id, round));
             Ok(())
         }
         #[weight = 0]
-        pub fn commit_secret_hash(
+        pub fn request_recovery(
+            origin,
+            secret_id: T::SecretId,
+        ) -> DispatchResult {
+            let caller = ensure_signed(origin)?;
+            let secret = <Secrets<T>>::get(secret_id).ok_or(Error::<T>::SecretDNE)?;
+            ensure!(secret.user() == caller, Error::<T>::NotAuthorizedForSecret);
+            ensure!(secret.state() == SSSState::Unused, Error::<T>::RecoveryRequestPending);
+            <Secrets<T>>::insert(secret_id, secret.set_state(SSSState::UsedWithoutSuccess));
+            Self::deposit_event(RawEvent::RecoveryRequested(caller, secret_id, secret.round()));
+            Ok(())
+        }
+        #[weight = 0]
+        pub fn report_recovery(
+            origin,
+            secret_id: T::SecretId,
+        ) -> DispatchResult {
+            let caller = ensure_signed(origin)?;
+            let secret = <Secrets<T>>::get(secret_id).ok_or(Error::<T>::SecretDNE)?;
+            ensure!(secret.user() == caller, Error::<T>::NotAuthorizedForSecret);
+            ensure!(secret.state() == SSSState::UsedWithoutSuccess, Error::<T>::MustRequestRecoveryBeforeRecoveryReport);
+            <Secrets<T>>::insert(secret_id, secret.set_state(SSSState::UsedWithSuccess));
+            // TODO: pay keepers from the secret pool? 0 < x < 1 * pool_capital
+            Self::deposit_event(RawEvent::RecoveryReported(caller, secret_id, secret.round()));
+            Ok(())
+        }
+        #[weight = 0]
+        pub fn commit_hash(
             origin,
             secret_id: T::SecretId,
             hash: T::Hash,
         ) -> DispatchResult {
             let participant = ensure_signed(origin)?;
             let secret = <Secrets<T>>::get(secret_id).ok_or(Error::<T>::SecretDNE)?;
-            // TODO
-            Self::deposit_event(RawEvent::CommitSecretHash(participant, secret_id, secret.round(), hash));
+            let commit_st = <Commits<T>>::get(secret_id, &participant).ok_or(Error::<T>::NotAuthorizedForSecret)?;
+            let commit_st = if !commit_st.reserved() {
+                T::Currency::reserve(
+                    &participant,
+                    secret.reserve_req()
+                )?;
+                commit_st.set_reserved()
+            } else { commit_st };
+            let mut history = commit_st.history.0.clone();
+            if let Some(last_commit) = history.pop()  {
+                ensure!(last_commit.round_id() < secret.round(), Error::<T>::CommitAlreadyMadeForRound);
+                // push back the popped off commit
+                history.push(last_commit);
+            }
+            history.push(Commit::<T::RoundId, T::Hash, SecretShare>::new(secret.round(), hash, None));
+            let new_commit_st = commit_st.set_history(history);
+            <Commits<T>>::insert(secret_id, &participant, new_commit_st);
+            Self::deposit_event(RawEvent::CommittedSecretHash(participant, secret_id, secret.round(), hash));
             Ok(())
         }
         #[weight = 0]
-        pub fn reveal_secret_preimage(
+        pub fn reveal_preimage(
             origin,
             secret_id: T::SecretId,
             preimage: SecretShare,
         ) -> DispatchResult {
-            todo!()
+            let participant = ensure_signed(origin)?;
+            let secret = <Secrets<T>>::get(secret_id).ok_or(Error::<T>::SecretDNE)?;
+            let commit_st = <Commits<T>>::get(secret_id, &participant).ok_or(Error::<T>::NotAuthorizedForSecret)?;
+            let mut history = commit_st.history.0.clone();
+            ensure!(history.len() > 0, Error::<T>::MustHashBeforePreimage);
+            let last_commit = history.pop().expect("just checked len over 0 => can raw pop; qed");
+            ensure!(last_commit.round_id() == secret.round(), Error::<T>::MustCommitHashInSameRound);
+            ensure!(<T as System>::Hashing::hash(&preimage) == last_commit.hash(), Error::<T>::PreimageHashDNEHash);
+            let new_last_commit = last_commit.reveal(preimage.clone()).ok_or(Error::<T>::PreimageAlreadyCommitted)?;
+            history.push(new_last_commit);
+            <Commits<T>>::insert(secret_id, &participant, commit_st.set_history(history));
+            Self::deposit_event(RawEvent::RevealedPreimage(participant, secret_id, secret.round(), preimage));
+            Ok(())
         }
     }
 }

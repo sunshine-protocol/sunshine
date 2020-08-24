@@ -31,11 +31,28 @@ pub struct Relation<Key, Round, State> {
     pub state: State,
 }
 
-#[derive(Clone, Encode, Decode, RuntimeDebug)]
+impl<Key, Round: Ord> Relation<Key, Round, RelationState> {
+    pub fn reserved(&self) -> bool {
+        self.state == RelationState::ReservedCollateral
+    }
+    pub fn set_reserved(self) -> Self {
+        Self {
+            state: RelationState::ReservedCollateral,
+            ..self
+        }
+    }
+    // assumes input is sorted vec
+    pub fn set_history(self, vec: Vec<Round>) -> Self {
+        let history: OrderedSet<Round> = OrderedSet::from_sorted_set(vec);
+        Self { history, ..self }
+    }
+}
+
+#[derive(new, Clone, Encode, Decode, RuntimeDebug)]
 pub struct Commit<RoundId, Hash, PreImage> {
     round_id: RoundId,
     hash: Hash,
-    reveal: Option<PreImage>,
+    preimage: Option<PreImage>,
 }
 
 impl<RoundId: Copy + Eq + Ord, Hash: Clone + Eq, PreImage: Clone + Eq> Eq
@@ -52,8 +69,18 @@ impl<RoundId: Copy + Eq + Ord, Hash: Clone + Eq, PreImage: Clone + Eq>
     pub fn hash(&self) -> Hash {
         self.hash.clone()
     }
-    pub fn reveal(&self) -> Option<PreImage> {
-        self.reveal.clone()
+    pub fn preimage(&self) -> Option<PreImage> {
+        self.preimage.clone()
+    }
+    pub fn reveal(&self, p: PreImage) -> Option<Self> {
+        if self.preimage.is_none() {
+            Some(Self {
+                preimage: Some(p),
+                ..self.clone()
+            })
+        } else {
+            None
+        }
     }
 }
 
@@ -126,5 +153,11 @@ impl<
     }
     pub fn state(&self) -> State {
         self.state
+    }
+    pub fn set_state(&self, s: State) -> Self {
+        Self {
+            state: s,
+            ..self.clone()
+        }
     }
 }

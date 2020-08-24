@@ -15,6 +15,7 @@ sp-std = { version = "2.0.0-rc5", default-features = false }
 util = { package = "sunshine-bounty-utils", path = "../../utils", default-features=false}
 
 [dev-dependencies]
+pallet-balances = { version = "2.0.0-rc5", default-features = false }
 sp-io = { version = "2.0.0-rc5", default-features = false }
 sunshine-client-utils = { version = "0.1.0", git = "https://github.com/sunshine-protocol/sunshine-core" }
 sunshine-pallet-utils = { version = "0.1.0", git = "https://github.com/sunshine-protocol/sunshine-core" }
@@ -25,6 +26,7 @@ std = [
     "frame-support/std",
     "frame-system/std",
     "orml-utilities/std",
+    "pallet-balances/std",
     "parity-scale-codec/std",
     "sp-core/std",
     "sp-runtime/std",
