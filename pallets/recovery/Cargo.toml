@@ -1,5 +1,5 @@
 [package]
-name = "sunshine-recovery-pallet"
+name = "sunshine-recovery"
 version = "0.0.1"
 authors = ["Amar Singh <asinghchrony@protonmail.com>, David Craven <david@craven.ch>"]
 edition = "2018"
