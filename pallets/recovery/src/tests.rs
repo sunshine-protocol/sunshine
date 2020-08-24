@@ -2,6 +2,7 @@
 
 use super::*;
 use frame_support::{
+    assert_noop,
     assert_ok,
     impl_outer_event,
     impl_outer_origin,
@@ -11,7 +12,10 @@ use frame_support::{
 use sp_core::H256;
 use sp_runtime::{
     testing::Header,
-    traits::IdentityLookup,
+    traits::{
+        BlakeTwo256,
+        IdentityLookup,
+    },
     Perbill,
 };
 
@@ -48,7 +52,7 @@ impl frame_system::Trait for TestRuntime {
     type BlockNumber = BlockNumber;
     type Call = ();
     type Hash = H256;
-    type Hashing = ::sp_runtime::traits::BlakeTwo256;
+    type Hashing = BlakeTwo256;
     type AccountId = AccountId;
     type Lookup = IdentityLookup<Self::AccountId>;
     type Header = Header;
@@ -127,5 +131,126 @@ fn new_test_ext() -> sp_io::TestExternalities {
 fn genesis_config_works() {
     new_test_ext().execute_with(|| {
         assert!(System::events().is_empty());
+    });
+}
+
+#[test]
+fn invite_group_works() {
+    new_test_ext().execute_with(|| {
+        assert_noop!(
+            Recovery::invite_group(
+                Origin::signed(1),
+                101,
+                5,
+                vec![1, 2, 3, 4, 5, 6]
+            ),
+            Error::<TestRuntime>::UserCannotAffordRequest
+        );
+        assert_eq!(Balances::total_balance(&1), 100);
+        let secret_account = Recovery::secret_account_id(1);
+        assert_eq!(Balances::total_balance(&secret_account), 0);
+        assert_ok!(Recovery::invite_group(
+            Origin::signed(1),
+            20,
+            5,
+            vec![1, 2, 3, 4, 5, 6]
+        ));
+        assert_eq!(Balances::total_balance(&1), 80);
+        assert_eq!(Balances::total_balance(&secret_account), 20);
+        let expected_event = RawEvent::SecretGroupInitialized(1, 1);
+        assert_eq!(get_last_event(), expected_event);
+    });
+}
+
+#[test]
+fn revoke_invitation_works() {
+    new_test_ext().execute_with(|| {
+        assert_noop!(
+            Recovery::revoke_invitation(Origin::signed(1), 1, 1),
+            Error::<TestRuntime>::SecretDNE
+        );
+        assert_ok!(Recovery::invite_group(
+            Origin::signed(1),
+            20,
+            5,
+            vec![1, 2, 3, 4, 5, 6]
+        ));
+        assert_noop!(
+            Recovery::revoke_invitation(Origin::signed(2), 1, 3),
+            Error::<TestRuntime>::NotAuthorizedForSecret
+        );
+        assert_ok!(Recovery::revoke_invitation(Origin::signed(1), 1, 3));
+        let expected_event = RawEvent::RevokedInvitation(1, 3);
+        assert_eq!(get_last_event(), expected_event);
+    });
+}
+
+#[test]
+fn commit_reveal_works() {
+    new_test_ext().execute_with(|| {
+        assert_noop!(
+            Recovery::commit_hash(Origin::signed(2), 1, H256::random()),
+            Error::<TestRuntime>::SecretDNE
+        );
+        assert_noop!(
+            Recovery::reveal_preimage(
+                Origin::signed(1),
+                1,
+                "good code never dies".as_bytes().to_vec()
+            ),
+            Error::<TestRuntime>::SecretDNE
+        );
+        assert_ok!(Recovery::invite_group(
+            Origin::signed(1),
+            20,
+            5,
+            vec![1, 2, 3, 4, 5, 6]
+        ));
+        assert_noop!(
+            Recovery::reveal_preimage(
+                Origin::signed(1),
+                1,
+                "good code never dies".as_bytes().to_vec()
+            ),
+            Error::<TestRuntime>::MustHashBeforePreimage
+        );
+        let hash: H256 = BlakeTwo256::hash("good code never dies".as_bytes());
+        assert_noop!(
+            Recovery::commit_hash(Origin::signed(7), 1, H256::random()),
+            Error::<TestRuntime>::NotAuthorizedForSecret
+        );
+        assert_eq!(Balances::free_balance(&2), 98);
+        assert_ok!(Recovery::commit_hash(Origin::signed(2), 1, hash.clone()),);
+        assert_eq!(Balances::free_balance(&2), 93);
+        let expected_event = RawEvent::CommittedSecretHash(2, 1, 0, hash);
+        assert_eq!(get_last_event(), expected_event);
+        assert_noop!(
+            Recovery::reveal_preimage(
+                Origin::signed(10),
+                1,
+                "good code never dies".as_bytes().to_vec()
+            ),
+            Error::<TestRuntime>::NotAuthorizedForSecret
+        );
+        assert_noop!(
+            Recovery::reveal_preimage(
+                Origin::signed(2),
+                1,
+                "expect the unexpected".as_bytes().to_vec()
+            ),
+            Error::<TestRuntime>::PreimageHashDNEHash
+        );
+        assert_ok!(Recovery::reveal_preimage(
+            Origin::signed(2),
+            1,
+            "good code never dies".as_bytes().to_vec()
+        ),);
+        let expected_event = RawEvent::RevealedPreimage(
+            2,
+            1,
+            0,
+            "good code never dies".as_bytes().to_vec(),
+        );
+        assert_eq!(get_last_event(), expected_event);
     });
 }
