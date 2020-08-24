@@ -18,5 +18,6 @@ pub mod meta;
 pub mod moloch;
 pub mod organization;
 pub mod share;
+pub mod sss;
 pub mod traits;
 pub mod vote;

@@ -21,6 +21,7 @@ members = [
     "pallets/kickback",
     "pallets/moloch",
     "pallets/org",
+    "pallets/recovery",
     "pallets/treasury",
     "pallets/vote",
     "pallets/vote-direct",
