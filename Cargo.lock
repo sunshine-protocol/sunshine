@@ -7259,7 +7259,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "sunshine-recovery-pallet"
+name = "sunshine-recovery"
 version = "0.0.1"
 dependencies = [
  "frame-support",

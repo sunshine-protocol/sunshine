@@ -29,16 +29,13 @@ use sp_runtime::{
     traits::{
         AccountIdConversion,
         AtLeast32BitUnsigned,
-        CheckedSub,
         Hash,
         MaybeSerializeDeserialize,
         Member,
         Zero,
     },
-    DispatchError,
     DispatchResult,
     ModuleId,
-    Permill,
 };
 use sp_std::{
     fmt::Debug,
@@ -185,7 +182,7 @@ decl_module! {
             )?;
             potential_secret_holders.0.into_iter().for_each(|a: T::AccountId| {
                 let c_history = History::<T>::new((id, a.clone()), OrderedSet::new(), RelationState::Unreserved);
-                <Commits<T>>::insert(id, a.clone(), c_history);
+                <Commits<T>>::insert(id, a, c_history);
             });
             let secret_st = SecretSt::<T>::new(id, user.clone(), Zero::zero(), reserve_req, SSSState::Unused);
             <Secrets<T>>::insert(id, secret_st);
@@ -290,7 +287,7 @@ decl_module! {
             let secret = <Secrets<T>>::get(secret_id).ok_or(Error::<T>::SecretDNE)?;
             let commit_st = <Commits<T>>::get(secret_id, &participant).ok_or(Error::<T>::NotAuthorizedForSecret)?;
             let mut history = commit_st.history.0.clone();
-            ensure!(history.len() > 0, Error::<T>::MustHashBeforePreimage);
+            ensure!(!history.is_empty(), Error::<T>::MustHashBeforePreimage);
             let last_commit = history.pop().expect("just checked len over 0 => can raw pop; qed");
             ensure!(last_commit.round_id() == secret.round(), Error::<T>::MustCommitHashInSameRound);
             ensure!(<T as System>::Hashing::hash(&preimage) == last_commit.hash(), Error::<T>::PreimageHashDNEHash);
