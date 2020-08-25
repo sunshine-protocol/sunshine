@@ -14,6 +14,7 @@ members = [
     "pallets/bank",
     "pallets/bounty",
     "pallets/bounty2",
+    "pallets/borda",
     "pallets/court",
     "pallets/donate",
     "pallets/drip",

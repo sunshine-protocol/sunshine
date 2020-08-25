@@ -120,6 +120,8 @@ decl_event!(
         RecoveryRequested(AccountId, SecretId, RoundId),
         /// User reported recovery of Secret
         RecoveryReported(AccountId, SecretId, RoundId),
+        /// User closed group after no recovery of Secret
+        SecretGroupClosed(AccountId, SecretId, RoundId),
         /// Keeper committed Hash of Secret Share
         CommittedSecretHash(AccountId, SecretId, RoundId, Hash),
         /// Keeper revealed Preimage of Hash
@@ -138,8 +140,10 @@ decl_error! {
         PreimageHashDNEHash,
         PreimageAlreadyCommitted,
         RecoveryRequestPending,
-        MustRequestRecoveryBeforeRecoveryReport,
+        MustRequestRecoveryBefore,
         CannotIncrementRoundFromSecretState,
+        MustCommitHashBeforeRecoveryRequested,
+        OnlyRevealPreimageIfRecoveryRequested,
     }
 }
 
@@ -243,10 +247,26 @@ decl_module! {
             let caller = ensure_signed(origin)?;
             let secret = <Secrets<T>>::get(secret_id).ok_or(Error::<T>::SecretDNE)?;
             ensure!(secret.user() == caller, Error::<T>::NotAuthorizedForSecret);
-            ensure!(secret.state() == SSSState::UsedWithoutSuccess, Error::<T>::MustRequestRecoveryBeforeRecoveryReport);
+            ensure!(secret.state() == SSSState::UsedWithoutSuccess, Error::<T>::MustRequestRecoveryBefore);
             <Secrets<T>>::insert(secret_id, secret.set_state(SSSState::UsedWithSuccess));
             // TODO: pay keepers from the secret pool? 0 < x < 1 * pool_capital
             Self::deposit_event(RawEvent::RecoveryReported(caller, secret_id, secret.round()));
+            Ok(())
+        }
+        #[weight = 0]
+        pub fn report_failure_and_close(
+            origin,
+            secret_id: T::SecretId,
+        ) -> DispatchResult {
+            let caller = ensure_signed(origin)?;
+            let secret = <Secrets<T>>::get(secret_id).ok_or(Error::<T>::SecretDNE)?;
+            ensure!(secret.user() == caller, Error::<T>::NotAuthorizedForSecret);
+            ensure!(secret.state() == SSSState::UsedWithoutSuccess, Error::<T>::MustRequestRecoveryBefore);
+            // TODO: distribute some of pool funds to the participants that revealed valid commits?
+            // && return reservations made by participants
+            <Secrets<T>>::remove(secret_id);
+            <Commits<T>>::remove_prefix(secret_id);
+            Self::deposit_event(RawEvent::SecretGroupClosed(caller, secret_id, secret.round()));
             Ok(())
         }
         #[weight = 0]
@@ -257,6 +277,7 @@ decl_module! {
         ) -> DispatchResult {
             let participant = ensure_signed(origin)?;
             let secret = <Secrets<T>>::get(secret_id).ok_or(Error::<T>::SecretDNE)?;
+            ensure!(secret.state() == SSSState::Unused, Error::<T>::MustCommitHashBeforeRecoveryRequested);
             let commit_st = <Commits<T>>::get(secret_id, &participant).ok_or(Error::<T>::NotAuthorizedForSecret)?;
             let commit_st = if !commit_st.reserved() {
                 T::Currency::reserve(
@@ -285,6 +306,7 @@ decl_module! {
         ) -> DispatchResult {
             let participant = ensure_signed(origin)?;
             let secret = <Secrets<T>>::get(secret_id).ok_or(Error::<T>::SecretDNE)?;
+            ensure!(secret.state() == SSSState::UsedWithoutSuccess, Error::<T>::OnlyRevealPreimageIfRecoveryRequested);
             let commit_st = <Commits<T>>::get(secret_id, &participant).ok_or(Error::<T>::NotAuthorizedForSecret)?;
             let mut history = commit_st.history.0.clone();
             ensure!(!history.is_empty(), Error::<T>::MustHashBeforePreimage);

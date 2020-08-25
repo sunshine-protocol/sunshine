@@ -208,11 +208,11 @@ fn commit_reveal_works() {
         ));
         assert_noop!(
             Recovery::reveal_preimage(
-                Origin::signed(1),
+                Origin::signed(2),
                 1,
                 "good code never dies".as_bytes().to_vec()
             ),
-            Error::<TestRuntime>::MustHashBeforePreimage
+            Error::<TestRuntime>::OnlyRevealPreimageIfRecoveryRequested
         );
         let hash: H256 = BlakeTwo256::hash("good code never dies".as_bytes());
         assert_noop!(
@@ -224,6 +224,7 @@ fn commit_reveal_works() {
         assert_eq!(Balances::free_balance(&2), 93);
         let expected_event = RawEvent::CommittedSecretHash(2, 1, 0, hash);
         assert_eq!(get_last_event(), expected_event);
+        assert_ok!(Recovery::request_recovery(Origin::signed(1), 1));
         assert_noop!(
             Recovery::reveal_preimage(
                 Origin::signed(10),

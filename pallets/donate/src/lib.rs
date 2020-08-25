@@ -124,6 +124,7 @@ impl<T: Trait> Module<T> {
         amt: BalanceOf<T>,
     ) -> Result<(BalanceOf<T>, BalanceOf<T>), DispatchError> {
         let free = T::Currency::free_balance(sender);
+        // TODO: add buffer for expected transaction fee? depends on shape of tx
         let _ = free
             .checked_sub(&amt)
             .ok_or(Error::<T>::NotEnoughFundsInFreeToMakeTransfer)?;
