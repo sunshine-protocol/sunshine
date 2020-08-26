@@ -55,6 +55,11 @@ pub trait OrgClient<T: Runtime + Org>: Client<T> {
         org: <T as Org>::OrgId,
         old_accounts: &[(<T as System>::AccountId, <T as Org>::Shares)],
     ) -> Result<SharesBatchBurnedEvent<T>>;
+    async fn is_org_parent(
+        &self,
+        parent: <T as Org>::OrgId,
+        child: <T as Org>::OrgId,
+    ) -> bool;
     async fn org(&self, org: <T as Org>::OrgId) -> Result<OrgState<T>>;
     async fn share_profile(
         &self,
@@ -176,6 +181,16 @@ where
             .shares_batch_burned()?
             .ok_or_else(|| Error::EventNotFound.into())
     }
+    async fn is_org_parent(
+        &self,
+        parent: <T as Org>::OrgId,
+        child: <T as Org>::OrgId,
+    ) -> bool {
+        self.chain_client()
+            .org_tree(parent, child, None)
+            .await
+            .is_ok()
+    }
     async fn org(&self, org: <T as Org>::OrgId) -> Result<OrgState<T>> {
         Ok(self.chain_client().orgs(org, None).await?)
     }
@@ -270,7 +285,7 @@ mod tests {
     }
 
     #[async_std::test]
-    async fn register_flat_org_test() {
+    async fn new_flat_org_test() {
         let (node, _node_tmp) = test_node();
         let client = Client::mock(&node, AccountKeyring::Alice).await;
         let alice_account_id = AccountKeyring::Alice.to_account_id();
@@ -289,7 +304,7 @@ mod tests {
         let members =
             vec![alice_account_id.clone(), two, three, four, five, six, seven];
         let event = client
-            .register_flat_org(
+            .new_flat_org(
                 Some(alice_account_id.clone()),
                 None,
                 raw_const,
