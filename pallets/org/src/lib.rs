@@ -18,33 +18,6 @@
 #[cfg(test)]
 mod tests;
 
-use util::{
-    organization::{
-        Organization,
-        OrganizationSource,
-    },
-    share::{
-        ProfileState,
-        SharePortion,
-        ShareProfile,
-        WeightedVector,
-    },
-    traits::{
-        AccessGenesis,
-        GenerateUniqueID,
-        GetGroup,
-        GroupMembership,
-        IDIsAvailable,
-        LockProfile,
-        OrganizationSupervisorPermissions,
-        RegisterOrganization,
-        RemoveOrganization,
-        ShareInformation,
-        ShareIssuance,
-        VerifyShape,
-    },
-};
-
 use codec::Codec;
 use frame_support::{
     decl_error,
@@ -77,6 +50,33 @@ use sp_runtime::{
 use sp_std::{
     fmt::Debug,
     prelude::*,
+};
+use util::{
+    organization::{
+        Organization,
+        OrganizationSource,
+        Relation,
+    },
+    share::{
+        ProfileState,
+        SharePortion,
+        ShareProfile,
+        WeightedVector,
+    },
+    traits::{
+        AccessGenesis,
+        GenerateUniqueID,
+        GetGroup,
+        GroupMembership,
+        IDIsAvailable,
+        LockProfile,
+        OrganizationSupervisorPermissions,
+        RegisterOrganization,
+        RemoveOrganization,
+        ShareInformation,
+        ShareIssuance,
+        VerifyShape,
+    },
 };
 
 type Org<T> = Organization<
@@ -208,7 +208,7 @@ decl_storage! {
         /// Hierarchical relationships between orgs
         pub OrgTree get(fn org_tree): double_map
             hasher(blake2_128_concat) T::OrgId,
-            hasher(blake2_128_concat) T::OrgId => Option<()>;
+            hasher(blake2_128_concat) T::OrgId => Option<Relation<T::OrgId>>;
 
         /// The map to track organizational membership
         pub Members get(fn members): double_map
@@ -500,7 +500,11 @@ impl<T: Trait> RegisterOrganization<T::OrgId, T::AccountId, T::Cid>
             supervisor,
             value_constitution,
         )?;
-        <OrgTree<T>>::insert(parent_id, new_org_id, ());
+        <OrgTree<T>>::insert(
+            parent_id,
+            new_org_id,
+            Relation::new(parent_id, new_org_id),
+        );
         <Orgs<T>>::insert(new_org_id, new_organization);
         let new_org_count = <OrgCounter>::get() + 1u32;
         <OrgCounter>::put(new_org_count);

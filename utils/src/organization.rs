@@ -6,6 +6,12 @@ use sp_runtime::RuntimeDebug;
 use sp_std::prelude::*;
 
 #[derive(new, PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug)]
+pub struct Relation<OrgId> {
+    pub parent: OrgId,
+    pub child: OrgId,
+}
+
+#[derive(new, PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug)]
 /// Used in `vote` and `donate` to distinguish between configurations that acknowledge ownership and don't
 pub enum OrgRep<OrgId> {
     // weighted by ownership

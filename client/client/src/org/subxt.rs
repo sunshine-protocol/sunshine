@@ -30,7 +30,10 @@ use substrate_subxt::{
     Store,
 };
 use sunshine_bounty_utils::{
-    organization::Organization,
+    organization::{
+        Organization,
+        Relation,
+    },
     share::{
         ProfileState,
         ShareProfile,
@@ -87,6 +90,7 @@ pub type Prof<T> = ShareProfile<
     <T as Org>::Shares,
     ProfileState,
 >;
+pub type Relacion<T> = Relation<<T as Org>::OrgId>;
 // ~~ Storage ~~
 
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
@@ -97,7 +101,7 @@ pub struct OrgsStore<T: Org> {
 
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
 pub struct OrgTreeStore<T: Org> {
-    #[store(returns = ())]
+    #[store(returns = Relacion<T>)]
     pub parent: T::OrgId,
     pub child: T::OrgId,
 }

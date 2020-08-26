@@ -55,7 +55,7 @@ pub trait OrgClient<T: Runtime + Org>: Client<T> {
         org: <T as Org>::OrgId,
         old_accounts: &[(<T as System>::AccountId, <T as Org>::Shares)],
     ) -> Result<SharesBatchBurnedEvent<T>>;
-    async fn is_org_parent(
+    async fn org_parent_child(
         &self,
         parent: <T as Org>::OrgId,
         child: <T as Org>::OrgId,
@@ -66,6 +66,7 @@ pub trait OrgClient<T: Runtime + Org>: Client<T> {
         org: <T as Org>::OrgId,
         account: <T as System>::AccountId,
     ) -> Result<Prof<T>>;
+    async fn org_relations(&self) -> Result<Vec<Relacion<T>>>;
     async fn org_members(
         &self,
         org: <T as Org>::OrgId,
@@ -181,7 +182,7 @@ where
             .shares_batch_burned()?
             .ok_or_else(|| Error::EventNotFound.into())
     }
-    async fn is_org_parent(
+    async fn org_parent_child(
         &self,
         parent: <T as Org>::OrgId,
         child: <T as Org>::OrgId,
@@ -200,6 +201,14 @@ where
         account: <T as System>::AccountId,
     ) -> Result<Prof<T>> {
         Ok(self.chain_client().members(org, &account, None).await?)
+    }
+    async fn org_relations(&self) -> Result<Vec<Relacion<T>>> {
+        let mut relations = self.chain_client().org_tree_iter(None).await?;
+        let mut org_relations = Vec::<Relacion<T>>::new();
+        while let Some((_, r)) = relations.next().await? {
+            org_relations.push(r)
+        }
+        Ok(org_relations)
     }
     async fn org_members(
         &self,
