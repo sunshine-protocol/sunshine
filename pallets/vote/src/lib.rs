@@ -1,11 +1,20 @@
 #![recursion_limit = "256"]
-#![allow(clippy::string_lit_as_bytes)]
-#![allow(clippy::redundant_closure_call)]
-#![allow(clippy::type_complexity)]
-#![allow(clippy::too_many_arguments)]
-#![cfg_attr(not(feature = "std"), no_std)]
-//! Voting module for collecting signatures from organizations for simple and weighted
+//! # Vote Module
+//! This module collects signatures from org members and checks against simple and weighted
 //! thresholds for on-chain decision making.
+//!
+//! - [`vote::Trait`](./trait.Trait.html)
+//! - [`Call`](./enum.Call.html)
+//!
+//! ## Overview
+//!
+//! This pallet handles organization voting. Each
+//! member (`AccountId`) has some quantity of `Signal` in proportion
+//! to their relative `Shares` ownership in the `org` module.
+//!
+//! [`Call`]: ./enum.Call.html
+//! [`Trait`]: ./trait.Trait.html
+#![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(test)]
 mod tests;
@@ -20,9 +29,10 @@ use frame_support::{
     Parameter,
 };
 use frame_system::{
-    self as system,
     ensure_signed,
+    Trait as System,
 };
+use org::Trait as Org;
 use sp_runtime::{
     traits::{
         AtLeast32BitUnsigned,
@@ -72,24 +82,24 @@ use util::{
 };
 
 type ThreshInput<T> = ThresholdInput<
-    OrgRep<<T as org::Trait>::OrgId>,
+    OrgRep<<T as Org>::OrgId>,
     XorThreshold<<T as Trait>::Signal, Permill>,
 >;
 type Thresh<T> = ThresholdConfig<
     <T as Trait>::ThresholdId,
-    OrgRep<<T as org::Trait>::OrgId>,
+    OrgRep<<T as Org>::OrgId>,
     XorThreshold<<T as Trait>::Signal, Permill>,
 >;
 type VoteSt<T> = VoteState<
     <T as Trait>::Signal,
-    <T as frame_system::Trait>::BlockNumber,
-    <T as org::Trait>::Cid,
+    <T as System>::BlockNumber,
+    <T as Org>::Cid,
 >;
-type VoteVec<T> = Vote<<T as Trait>::Signal, <T as org::Trait>::Cid>;
+type VoteVec<T> = Vote<<T as Trait>::Signal, <T as Org>::Cid>;
 
-pub trait Trait: frame_system::Trait + org::Trait {
+pub trait Trait: System + Org {
     /// The overarching event type
-    type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
+    type Event: From<Event<Self>> + Into<<Self as System>::Event>;
 
     /// The vote identifier
     type VoteId: Parameter
@@ -135,7 +145,7 @@ pub trait Trait: frame_system::Trait + org::Trait {
 decl_event!(
     pub enum Event<T>
     where
-        <T as frame_system::Trait>::AccountId,
+        <T as System>::AccountId,
         <T as Trait>::VoteId,
         <T as Trait>::ThresholdId,
     {
@@ -386,7 +396,7 @@ impl<T: Trait>
         duration: Option<T::BlockNumber>,
     ) -> Result<Self::VoteIdentifier, DispatchError> {
         // calculate `initialized` and `expires` fields for vote state
-        let now = system::Module::<T>::block_number();
+        let now = frame_system::Module::<T>::block_number();
         let ends: Option<T::BlockNumber> = if let Some(time_to_add) = duration {
             Some(now + time_to_add)
         } else {
@@ -424,7 +434,7 @@ impl<T: Trait>
         duration: Option<T::BlockNumber>,
     ) -> Result<Self::VoteIdentifier, DispatchError> {
         // calculate `initialized` and `expires` fields for vote state
-        let now = system::Module::<T>::block_number();
+        let now = frame_system::Module::<T>::block_number();
         let ends: Option<T::BlockNumber> = if let Some(time_to_add) = duration {
             Some(now + time_to_add)
         } else {
@@ -562,7 +572,7 @@ impl<T: Trait> ApplyVote<T::Cid> for Module<T> {
 
 impl<T: Trait> CheckVoteStatus<T::Cid, T::VoteId> for Module<T> {
     fn check_vote_expired(state: &Self::State) -> bool {
-        let now = system::Module::<T>::block_number();
+        let now = frame_system::Module::<T>::block_number();
         if let Some(n) = state.ends() {
             return n < now
         }

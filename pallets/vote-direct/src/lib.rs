@@ -1,10 +1,21 @@
 #![recursion_limit = "256"]
-#![allow(clippy::string_lit_as_bytes)]
-#![allow(clippy::redundant_closure_call)]
-#![allow(clippy::type_complexity)]
-#![allow(clippy::too_many_arguments)]
+//! # Vote-Direct Module
+//! This module collects signatures from accounts and checks against simple and weighted
+//! thresholds for on-chain decision making. Voter set initialization uses a set of weighted
+//! accounts directly instead of an `OrgId` (like in `vote`).
+//!
+//! - [`vote_direct::Trait`](./trait.Trait.html)
+//! - [`Call`](./enum.Call.html)
+//!
+//! ## Overview
+//!
+//! This pallet handles organization voting. Each
+//! voter (`AccountId`) has some quantity of `Signal` in proportion
+//! to their relative voting power.
+//!
+//! [`Call`]: ./enum.Call.html
+//! [`Trait`]: ./trait.Trait.html
 #![cfg_attr(not(feature = "std"), no_std)]
-//! Voting from sets of weighted accounts
 
 #[cfg(test)]
 mod tests;
@@ -19,8 +30,8 @@ use frame_support::{
     Parameter,
 };
 use frame_system::{
-    self as system,
     ensure_signed,
+    Trait as System,
 };
 use sp_runtime::{
     traits::{
@@ -65,14 +76,14 @@ use util::{
 // type aliases
 type VoteSt<T> = VoteState<
     <T as Trait>::Signal,
-    <T as frame_system::Trait>::BlockNumber,
+    <T as System>::BlockNumber,
     <T as Trait>::Cid,
 >;
 type VoteVec<T> = Vote<<T as Trait>::Signal, <T as Trait>::Cid>;
 
-pub trait Trait: frame_system::Trait {
+pub trait Trait: System {
     /// The overarching event type
-    type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
+    type Event: From<Event<Self>> + Into<<Self as System>::Event>;
 
     /// Cid type
     type Cid: Parameter + Copy;
@@ -107,7 +118,7 @@ pub trait Trait: frame_system::Trait {
 decl_event!(
     pub enum Event<T>
     where
-        <T as frame_system::Trait>::AccountId,
+        <T as System>::AccountId,
         <T as Trait>::VoteId,
     {
         NewVoteStarted(AccountId, VoteId),
@@ -296,7 +307,7 @@ impl<T: Trait>
             <VoteLogger<T>>::insert(vote_id, who, new_vote);
         });
         <TotalSignalIssuance<T>>::insert(vote_id, src.total());
-        let now = system::Module::<T>::block_number();
+        let now = frame_system::Module::<T>::block_number();
         let ends: Option<T::BlockNumber> = if let Some(time_to_add) = duration {
             Some(now + time_to_add)
         } else {
@@ -331,7 +342,7 @@ impl<T: Trait>
             <VoteLogger<T>>::insert(vote_id, who, new_vote);
         });
         <TotalSignalIssuance<T>>::insert(vote_id, src.total());
-        let now = system::Module::<T>::block_number();
+        let now = frame_system::Module::<T>::block_number();
         let ends: Option<T::BlockNumber> = if let Some(time_to_add) = duration {
             Some(now + time_to_add)
         } else {
@@ -400,7 +411,7 @@ impl<T: Trait> ApplyVote<T::Cid> for Module<T> {
 
 impl<T: Trait> CheckVoteStatus<T::Cid, T::VoteId> for Module<T> {
     fn check_vote_expired(state: &Self::State) -> bool {
-        let now = system::Module::<T>::block_number();
+        let now = frame_system::Module::<T>::block_number();
         if let Some(n) = state.ends() {
             return n < now
         }

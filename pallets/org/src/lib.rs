@@ -1,8 +1,4 @@
 #![recursion_limit = "256"]
-#![allow(clippy::string_lit_as_bytes)]
-#![allow(clippy::redundant_closure_call)]
-#![allow(clippy::type_complexity)]
-#![cfg_attr(not(feature = "std"), no_std)]
 //! # Org Module
 //! This module expresses a framework for configurable group governance
 //!
@@ -13,10 +9,11 @@
 //!
 //! This pallet handles organization membership and governance.  Each
 //! member (`AccountId`) in an org has some quantity of `Shares` in proportion
-//! to their relative ownership and voting power.
+//! to their relative ownership.
 //!
 //! [`Call`]: ./enum.Call.html
 //! [`Trait`]: ./trait.Trait.html
+#![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(test)]
 mod tests;

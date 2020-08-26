@@ -75,12 +75,12 @@ mod vote {
 
 impl_outer_event! {
     pub enum TestEvent for Test {
-        system<T>,
+        frame_system<T>,
         org<T>,
         vote<T>,
     }
 }
-pub type System = system::Module<Test>;
+pub type System = frame_system::Module<Test>;
 pub type Vote = Module<Test>;
 
 fn get_last_event() -> RawEvent<u64, u64, u64> {
