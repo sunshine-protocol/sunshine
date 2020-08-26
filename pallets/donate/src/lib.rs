@@ -199,7 +199,9 @@ impl<T: Trait> Module<T> {
         account: T::AccountId,
         group: T::OrgId,
     ) -> Result<BalanceOf<T>, DispatchError> {
-        let issuance = <org::Module<T>>::total_issuance(group);
+        let issuance = <org::Module<T>>::orgs(group)
+            .ok_or(Error::<T>::CannotDonateToOrgThatDNE)?
+            .total_shares();
         let acc_ownership = <org::Module<T>>::members(group, &account)
             .ok_or(Error::<T>::AccountHasNoOwnershipInOrg)?;
         let ownership = Permill::from_rational_approximation(

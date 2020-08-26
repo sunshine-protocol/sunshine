@@ -73,8 +73,8 @@ pub enum OrgSubCommand {
     BatchIssueShares(shares::SharesBatchIssueCommand),
     BatchBurnShares(shares::SharesBatchBurnCommand),
     // full org stuff
-    RegisterFlatOrg(org::OrgRegisterFlatCommand),
-    RegisterWeightedOrg(org::OrgRegisterWeightedCommand),
+    RegisterFlatOrg(org::NewFlatOrgCommand),
+    RegisterWeightedOrg(org::NewWeightedOrgCommand),
 }
 
 #[derive(Clone, Debug, Clap)]

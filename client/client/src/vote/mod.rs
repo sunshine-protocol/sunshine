@@ -56,7 +56,7 @@ where
     T: Runtime + Vote,
     <<T::Extra as SignedExtra<T>>::Extra as SignedExtension>::AdditionalSigned:
         Send + Sync,
-    <T as Org>::IpfsReference: From<libipld::cid::Cid>,
+    <T as Org>::Cid: From<libipld::cid::Cid>,
     C: Client<T>,
     C::OffchainClient: ipld_block_builder::Cache<
             ipld_block_builder::Codec,
@@ -75,8 +75,7 @@ where
     ) -> Result<NewVoteStartedEvent<T>> {
         let signer = self.chain_signer()?;
         let topic = if let Some(t) = topic {
-            let iref: <T as Org>::IpfsReference =
-                crate::post(self, t).await?.into();
+            let iref: <T as Org>::Cid = crate::post(self, t).await?.into();
             Some(iref)
         } else {
             None
@@ -102,8 +101,7 @@ where
     ) -> Result<NewVoteStartedEvent<T>> {
         let signer = self.chain_signer()?;
         let topic = if let Some(t) = topic {
-            let iref: <T as Org>::IpfsReference =
-                crate::post(self, t).await?.into();
+            let iref: <T as Org>::Cid = crate::post(self, t).await?.into();
             Some(iref)
         } else {
             None
@@ -128,8 +126,7 @@ where
     ) -> Result<VotedEvent<T>> {
         let signer = self.chain_signer()?;
         let justification = if let Some(j) = justification {
-            let iref: <T as Org>::IpfsReference =
-                crate::post(self, j).await?.into();
+            let iref: <T as Org>::Cid = crate::post(self, j).await?.into();
             Some(iref)
         } else {
             None

@@ -91,7 +91,7 @@ pub trait ShareIssuance<OrgId, AccountId, Shares>:
     fn batch_issue(
         organization: OrgId,
         genesis: Self::Genesis,
-    ) -> DispatchResult;
+    ) -> Result<Shares>;
     fn batch_burn(
         organization: OrgId,
         genesis: Self::Genesis,

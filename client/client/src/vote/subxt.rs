@@ -139,13 +139,13 @@ pub struct OpenVoteCounterStore {
 
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
 pub struct VoteStateStore<T: Vote> {
-    #[store(returns = VoteState<T::Signal, <T as System>::BlockNumber, <T as Org>::IpfsReference>)]
+    #[store(returns = VoteState<T::Signal, <T as System>::BlockNumber, <T as Org>::Cid>)]
     pub vote: T::VoteId,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Store, Encode)]
 pub struct VoteLoggerStore<T: Vote> {
-    #[store(returns = VoteVector<T::Signal, <T as Org>::IpfsReference>)]
+    #[store(returns = VoteVector<T::Signal, <T as Org>::Cid>)]
     pub vote: T::VoteId,
     pub who: <T as System>::AccountId,
 }
@@ -160,7 +160,7 @@ pub struct VoteThresholdsStore<T: Vote> {
 
 #[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
 pub struct CreateSignalVoteCall<T: Vote> {
-    pub topic: Option<<T as Org>::IpfsReference>,
+    pub topic: Option<<T as Org>::Cid>,
     pub organization: OrgRep<T::OrgId>,
     pub threshold: Threshold<T::Signal>,
     pub duration: Option<<T as System>::BlockNumber>,
@@ -168,7 +168,7 @@ pub struct CreateSignalVoteCall<T: Vote> {
 
 #[derive(Clone, Debug, Eq, PartialEq, Call, Encode)]
 pub struct CreatePercentVoteCall<T: Vote> {
-    pub topic: Option<<T as Org>::IpfsReference>,
+    pub topic: Option<<T as Org>::Cid>,
     pub organization: OrgRep<T::OrgId>,
     pub threshold: Threshold<T::Percent>,
     pub duration: Option<<T as System>::BlockNumber>,
@@ -178,7 +178,7 @@ pub struct CreatePercentVoteCall<T: Vote> {
 pub struct SubmitVoteCall<T: Vote> {
     pub vote_id: T::VoteId,
     pub direction: <T as Vote>::VoterView,
-    pub justification: Option<<T as Org>::IpfsReference>,
+    pub justification: Option<<T as Org>::Cid>,
 }
 
 // ~~ Events ~~

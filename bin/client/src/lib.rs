@@ -74,7 +74,7 @@ impl Balances for Runtime {
 }
 
 impl Org for Runtime {
-    type IpfsReference = CidBytes;
+    type Cid = CidBytes;
     type OrgId = u64;
     type Shares = u64;
     type Constitution = TextBlock;

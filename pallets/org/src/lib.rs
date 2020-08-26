@@ -56,8 +56,8 @@ use frame_support::{
     Parameter,
 };
 use frame_system::{
-    self as system,
     ensure_signed,
+    Trait as System,
 };
 use orml_utilities::OrderedSet;
 use sp_runtime::{
@@ -80,15 +80,20 @@ use sp_std::{
 };
 
 type Org<T> = Organization<
-    <T as frame_system::Trait>::AccountId,
+    <T as System>::AccountId,
     <T as Trait>::OrgId,
+    <T as Trait>::Shares,
     <T as Trait>::Cid,
 >;
-type Profile<T> = ShareProfile<<T as Trait>::Shares, ProfileState>;
+type Profile<T> = ShareProfile<
+    (<T as Trait>::OrgId, <T as System>::AccountId),
+    <T as Trait>::Shares,
+    ProfileState,
+>;
 
-pub trait Trait: system::Trait {
+pub trait Trait: System {
     /// Overarching event type
-    type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
+    type Event: From<Event<Self>> + Into<<Self as System>::Event>;
 
     /// Cid type
     type Cid: Parameter + Member + Default;
@@ -124,23 +129,23 @@ pub trait Trait: system::Trait {
 decl_event!(
     pub enum Event<T>
     where
-        <T as frame_system::Trait>::AccountId,
+        <T as System>::AccountId,
         OrgId = <T as Trait>::OrgId,
         <T as Trait>::Shares,
         <T as Trait>::Cid,
     {
         /// No shares issued but an organization was registered with flat membership with the last `u32` as the number of members
-        NewFlatOrganizationRegistered(AccountId, OrgId, Cid, u32),
+        NewFlatOrg(AccountId, OrgId, Cid, u32),
         /// Shares issued for a weighted ownership org s.t. the last element `Shares` is total issuance
-        NewWeightedOrganizationRegistered(AccountId, OrgId, Cid, Shares),
+        NewWeightedOrg(AccountId, OrgId, Cid, Shares),
         /// Organization ID, New Member Account ID, Amount Issued
-        NewMemberAddedToOrg(OrgId, AccountId, Shares),
+        AddedOrgMember(OrgId, AccountId, Shares),
         /// Organization ID, Old Member Account Id, Amount Burned
-        OldMemberRemovedFromOrg(OrgId, AccountId, Shares),
+        RemovedOrgMember(OrgId, AccountId, Shares),
         /// Batch Addition by the Account ID, _,  total shares added
-        BatchMemberAdditionForOrg(AccountId, OrgId, Shares),
+        AddedOrgMembers(AccountId, OrgId, Shares),
         /// Batch Removal by the Account ID, _, total shares burned
-        BatchMemberRemovalForOrg(AccountId, OrgId, Shares),
+        RemoveOrgMembers(AccountId, OrgId, Shares),
         /// Organization ID, Account Id
         SharesLocked(OrgId, AccountId),
         /// Organization ID, Account Id
@@ -149,12 +154,12 @@ decl_event!(
         SharesIssued(OrgId, AccountId, Shares),
         /// Organization ID, Burned AccountId, Burned Amount
         SharesBurned(OrgId, AccountId, Shares),
-        /// Organization ID, Total Shares Minted
-        SharesBatchIssued(OrgId, Shares),
+        /// Organization ID, Total Shares Minted, Total Shares for Org
+        SharesBatchIssued(OrgId, Shares, Shares),
         /// Organization ID, Total Shares Burned
         SharesBatchBurned(OrgId, Shares),
         /// Organization ID Removed
-        OrganizationRemoved(OrgId),
+        OrgRemoved(OrgId),
     }
 );
 
@@ -165,7 +170,7 @@ decl_error! {
         NoExistingSudoKey,
         OrganizationMustExistToClearSupervisor,
         OrganizationMustExistToPutSupervisor,
-        CannotBurnMoreThanTotalIssuance,
+        CannotBurnMoreThanTotalShares,
         NotEnoughSharesToSatisfyBurnRequest,
         IssuanceCannotGoNegative,
         GenesisTotalMustEqualSumToUseBatchOps,
@@ -191,17 +196,17 @@ decl_error! {
 decl_storage! {
     trait Store for Module<T: Trait> as Org {
         /// Identity nonce for registering organizations
-        OrgIdNonce get(fn org_id_counter): T::OrgId;
+        OrgIdNonce get(fn org_id_nonce): T::OrgId;
 
         /// The total number of organizations registered at any given time
-        pub OrganizationCounter get(fn organization_counter): u32;
+        pub OrgCounter get(fn org_counter): u32;
 
         /// The main storage item for Organization registration
-        pub OrganizationStates get(fn organization_states): map
+        pub Orgs get(fn orgs): map
             hasher(blake2_128_concat) T::OrgId => Option<Org<T>>;
 
         /// Hierarchical relationships between orgs
-        pub OrgHierarchy get(fn org_hierarchy): double_map
+        pub OrgTree get(fn org_tree): double_map
             hasher(blake2_128_concat) T::OrgId,
             hasher(blake2_128_concat) T::OrgId => Option<()>;
 
@@ -209,10 +214,6 @@ decl_storage! {
         pub Members get(fn members): double_map
             hasher(blake2_128_concat) T::OrgId,
             hasher(blake2_128_concat) T::AccountId => Option<Profile<T>>;
-
-        /// Total number of outstanding shares that express relative ownership in group
-        pub TotalIssuance get(fn total_issuance): map
-            hasher(opaque_blake2_256) T::OrgId => T::Shares;
     }
     add_extra_genesis {
         config(first_organization_supervisor): T::AccountId;
@@ -220,7 +221,7 @@ decl_storage! {
         config(first_organization_flat_membership): Vec<T::AccountId>;
 
         build(|config: &GenesisConfig<T>| {
-            <Module<T>>::register_flat_org(
+            <Module<T>>::new_flat_org(
                 T::Origin::from(Some(config.first_organization_supervisor.clone()).into()),
                 Some(config.first_organization_supervisor.clone()),
                 None,
@@ -237,7 +238,7 @@ decl_module! {
         fn deposit_event() = default;
 
         #[weight = 0]
-        fn register_flat_org(
+        fn new_flat_org(
             origin,
             sudo: Option<T::AccountId>,
             parent_org: Option<T::OrgId>,
@@ -251,11 +252,11 @@ decl_module! {
             } else {
                 Self::register_organization(OrganizationSource::Accounts(members), sudo, constitution.clone())?
             };
-            Self::deposit_event(RawEvent::NewFlatOrganizationRegistered(caller, new_id, constitution, total));
+            Self::deposit_event(RawEvent::NewFlatOrg(caller, new_id, constitution, total));
             Ok(())
         }
         #[weight = 0]
-        fn register_weighted_org(
+        fn new_weighted_org(
             origin,
             sudo: Option<T::AccountId>,
             parent_org: Option<T::OrgId>,
@@ -270,7 +271,7 @@ decl_module! {
             } else {
                 Self::register_organization(OrganizationSource::AccountsWeighted(weighted_members), sudo, constitution.clone())?
             };
-            Self::deposit_event(RawEvent::NewWeightedOrganizationRegistered(caller, new_id, constitution, wm_cpy.total()));
+            Self::deposit_event(RawEvent::NewWeightedOrg(caller, new_id, constitution, wm_cpy.total()));
             Ok(())
         }
         #[weight = 0]
@@ -303,14 +304,15 @@ decl_module! {
         fn batch_issue_shares(origin, organization: T::OrgId, new_accounts: Vec<(T::AccountId, T::Shares)>) -> DispatchResult {
             let issuer = ensure_signed(origin)?;
             // first check is that the organization exists
-            ensure!(!Self::id_is_available(organization), Error::<T>::OrganizationMustBeRegisteredToIssueShares);
+            let org = <Orgs<T>>::get(organization).ok_or(Error::<T>::OrganizationMustBeRegisteredToIssueShares)?;
             // second check is that this is an authorized party for issuance
             let authentication: bool = Self::is_organization_supervisor(organization, &issuer);
             ensure!(authentication, Error::<T>::NotAuthorizedToIssueShares);
             let genesis: WeightedVector<T::AccountId, T::Shares> = new_accounts.into();
             let total_new_shares_minted = genesis.total();
-            Self::batch_issue(organization, genesis)?;
-            Self::deposit_event(RawEvent::SharesBatchIssued(organization, total_new_shares_minted));
+            let total = Self::batch_issue(organization, genesis)?;
+            <Orgs<T>>::insert(organization, org.set_shares(total));
+            Self::deposit_event(RawEvent::SharesBatchIssued(organization, total_new_shares_minted, total));
             Ok(())
         }
         #[weight = 0]
@@ -360,10 +362,10 @@ decl_module! {
 
 impl<T: Trait> Module<T> {
     pub fn is_immediate_child(parent: T::OrgId, child: T::OrgId) -> bool {
-        <OrgHierarchy<T>>::get(parent, child).is_some()
+        <OrgTree<T>>::get(parent, child).is_some()
     }
     pub fn get_immediate_children(parent: T::OrgId) -> Option<Vec<T::OrgId>> {
-        let ret = <OrgHierarchy<T>>::iter_prefix(parent)
+        let ret = <OrgTree<T>>::iter_prefix(parent)
             .map(|(id, _)| id)
             .collect::<Vec<T::OrgId>>();
         if ret.is_empty() {
@@ -382,14 +384,14 @@ impl<T: Trait> GroupMembership<T::OrgId, T::AccountId> for Module<T> {
 
 impl<T: Trait> IDIsAvailable<T::OrgId> for Module<T> {
     fn id_is_available(id: T::OrgId) -> bool {
-        <OrganizationStates<T>>::get(id).is_none()
+        <Orgs<T>>::get(id).is_none()
     }
 }
 
 impl<T: Trait> GenerateUniqueID<T::OrgId> for Module<T> {
     fn generate_unique_id() -> T::OrgId {
         let mut id_counter = <OrgIdNonce<T>>::get() + 1u32.into();
-        while <OrganizationStates<T>>::get(id_counter).is_some() {
+        while <Orgs<T>>::get(id_counter).is_some() {
             // add overflow check here? not really necessary
             id_counter += 1u32.into();
         }
@@ -402,17 +404,17 @@ impl<T: Trait> OrganizationSupervisorPermissions<T::OrgId, T::AccountId>
     for Module<T>
 {
     fn is_organization_supervisor(org: T::OrgId, who: &T::AccountId) -> bool {
-        if let Some(state) = <OrganizationStates<T>>::get(org) {
+        if let Some(state) = <Orgs<T>>::get(org) {
             return state.is_sudo(who)
         }
         false
     }
     /// Removes any existing sudo and places None
     fn clear_organization_supervisor(org: T::OrgId) -> DispatchResult {
-        let old_org = <OrganizationStates<T>>::get(org)
+        let old_org = <Orgs<T>>::get(org)
             .ok_or(Error::<T>::OrganizationMustExistToClearSupervisor)?;
         let new_org = old_org.clear_sudo();
-        <OrganizationStates<T>>::insert(org, new_org);
+        <Orgs<T>>::insert(org, new_org);
         Ok(())
     }
     /// Removes any existing sudo and places `who`
@@ -420,10 +422,10 @@ impl<T: Trait> OrganizationSupervisorPermissions<T::OrgId, T::AccountId>
         org: T::OrgId,
         who: T::AccountId,
     ) -> DispatchResult {
-        let old_org = <OrganizationStates<T>>::get(org)
+        let old_org = <Orgs<T>>::get(org)
             .ok_or(Error::<T>::OrganizationMustExistToPutSupervisor)?;
         let new_org = old_org.put_sudo(who);
-        <OrganizationStates<T>>::insert(org, new_org);
+        <Orgs<T>>::insert(org, new_org);
         Ok(())
     }
 }
@@ -432,7 +434,8 @@ impl<T: Trait> RegisterOrganization<T::OrgId, T::AccountId, T::Cid>
     for Module<T>
 {
     type OrgSrc = OrganizationSource<T::AccountId, T::Shares>;
-    type OrganizationState = Organization<T::AccountId, T::OrgId, T::Cid>;
+    type OrganizationState =
+        Organization<T::AccountId, T::OrgId, T::Shares, T::Cid>;
     fn organization_from_src(
         src: Self::OrgSrc,
         org_id: T::OrgId,
@@ -446,13 +449,24 @@ impl<T: Trait> RegisterOrganization<T::OrgId, T::AccountId, T::Cid>
                     .into_iter()
                     .map(|acc| (acc, 1u32.into()))
                     .collect::<Vec<(T::AccountId, T::Shares)>>();
-                Self::batch_issue(org_id, weighted_acc.into())?;
-                Ok(Organization::new(supervisor, org_id, value_constitution))
+                let total = Self::batch_issue(org_id, weighted_acc.into())?;
+                Ok(Organization::new(
+                    supervisor,
+                    org_id,
+                    total,
+                    value_constitution,
+                ))
             }
             OrganizationSource::AccountsWeighted(weighted_accounts) => {
                 // batch_issue (share weighted membership group)
-                Self::batch_issue(org_id, weighted_accounts.into())?;
-                Ok(Organization::new(supervisor, org_id, value_constitution))
+                let total =
+                    Self::batch_issue(org_id, weighted_accounts.into())?;
+                Ok(Organization::new(
+                    supervisor,
+                    org_id,
+                    total,
+                    value_constitution,
+                ))
             }
         }
     }
@@ -468,9 +482,9 @@ impl<T: Trait> RegisterOrganization<T::OrgId, T::AccountId, T::Cid>
             supervisor,
             value_constitution,
         )?;
-        let new_org_count = <OrganizationCounter>::get() + 1u32;
-        <OrganizationStates<T>>::insert(new_org_id, new_organization);
-        <OrganizationCounter>::put(new_org_count);
+        let new_org_count = <OrgCounter>::get() + 1u32;
+        <Orgs<T>>::insert(new_org_id, new_organization);
+        <OrgCounter>::put(new_org_count);
         Ok(new_org_id)
     }
     fn register_sub_organization(
@@ -486,10 +500,10 @@ impl<T: Trait> RegisterOrganization<T::OrgId, T::AccountId, T::Cid>
             supervisor,
             value_constitution,
         )?;
-        <OrgHierarchy<T>>::insert(parent_id, new_org_id, ());
-        <OrganizationStates<T>>::insert(new_org_id, new_organization);
-        let new_org_count = <OrganizationCounter>::get() + 1u32;
-        <OrganizationCounter>::put(new_org_count);
+        <OrgTree<T>>::insert(parent_id, new_org_id, ());
+        <Orgs<T>>::insert(new_org_id, new_organization);
+        let new_org_count = <OrgCounter>::get() + 1u32;
+        <OrgCounter>::put(new_org_count);
         Ok(new_org_id)
     }
 }
@@ -499,9 +513,9 @@ impl<T: Trait> RemoveOrganization<T::OrgId> for Module<T> {
             !Self::id_is_available(id),
             Error::<T>::OrganizationCannotBeRemovedIfInputIdIsAvailable
         );
-        <OrganizationStates<T>>::remove(id);
-        let new_org_count = <OrganizationCounter>::get().saturating_sub(1u32);
-        <OrganizationCounter>::put(new_org_count);
+        <Orgs<T>>::remove(id);
+        let new_org_count = <OrgCounter>::get().saturating_sub(1u32);
+        <OrgCounter>::put(new_org_count);
         Ok(())
     }
     fn recursive_remove_organization(id: T::OrgId) -> DispatchResult {
@@ -509,13 +523,13 @@ impl<T: Trait> RemoveOrganization<T::OrgId> for Module<T> {
             !Self::id_is_available(id),
             Error::<T>::OrganizationCannotBeRemovedIfInputIdIsAvailable
         );
-        <OrgHierarchy<T>>::iter_prefix(id)
+        <OrgTree<T>>::iter_prefix(id)
             .map(|(child, _)| -> DispatchResult {
                 Self::recursive_remove_organization(child)
             })
             .collect::<DispatchResult>()?;
         Self::remove_organization(id)?;
-        Self::deposit_event(RawEvent::OrganizationRemoved(id));
+        Self::deposit_event(RawEvent::OrgRemoved(id));
         Ok(())
     }
 }
@@ -540,11 +554,15 @@ impl<T: Trait> GetGroup<T::OrgId, T::AccountId> for Module<T> {
 impl<T: Trait> ShareInformation<T::OrgId, T::AccountId, T::Shares>
     for Module<T>
 {
-    type Profile = ShareProfile<T::Shares, ProfileState>;
+    type Profile = Profile<T>;
     type Genesis = WeightedVector<T::AccountId, T::Shares>;
     /// Gets the total number of shares issued for an organization's share identifier
     fn outstanding_shares(organization: T::OrgId) -> T::Shares {
-        <TotalIssuance<T>>::get(organization)
+        if let Some(o) = <Orgs<T>>::get(organization) {
+            o.total_shares()
+        } else {
+            Zero::zero()
+        }
     }
     /// Get input's share profile if it exists
     fn get_share_profile(
@@ -559,7 +577,6 @@ impl<T: Trait> ShareInformation<T::OrgId, T::AccountId, T::Shares>
     ) -> Option<Self::Genesis> {
         if !Self::id_is_available(organization) {
             Some(
-                // is this the same performance as a get() with Key=Vec<AccountId>
                 <Members<T>>::iter()
                     .filter(|(org, _, _)| *org == organization)
                     .map(|(_, account, profile)| (account, profile.total()))
@@ -584,11 +601,11 @@ impl<T: Trait> ShareIssuance<T::OrgId, T::AccountId, T::Shares> for Module<T> {
         {
             existing_profile.add_shares(amount)
         } else {
-            ShareProfile::new_shares(amount)
+            ShareProfile::new_shares((organization, new_owner.clone()), amount)
         };
         if !batch {
-            let new_issuance = <TotalIssuance<T>>::get(organization) + amount;
-            <TotalIssuance<T>>::insert(organization, new_issuance);
+            let org = <Orgs<T>>::get(organization).ok_or(Error::<T>::OrgDNE)?;
+            <Orgs<T>>::insert(organization, org.add_shares(amount));
         }
         <Members<T>>::insert(organization, new_owner, new_profile);
         Ok(())
@@ -599,9 +616,9 @@ impl<T: Trait> ShareIssuance<T::OrgId, T::AccountId, T::Shares> for Module<T> {
         amount: Option<T::Shares>,
         batch: bool,
     ) -> Result<Self::Proportion, DispatchError> {
+        let org = <Orgs<T>>::get(organization).ok_or(Error::<T>::OrgDNE)?;
         let old_profile = <Members<T>>::get(organization, &old_owner)
             .ok_or(Error::<T>::NotEnoughSharesToSatisfyBurnRequest)?;
-        let old_issuance = <TotalIssuance<T>>::get(organization);
         let amt_to_burn = if let Some(specific_amt) = amount {
             ensure!(
                 old_profile.total() >= specific_amt,
@@ -611,15 +628,16 @@ impl<T: Trait> ShareIssuance<T::OrgId, T::AccountId, T::Shares> for Module<T> {
         } else {
             old_profile.total()
         };
-        let portion =
-            Permill::from_rational_approximation(amt_to_burn, old_issuance);
+        let portion = Permill::from_rational_approximation(
+            amt_to_burn,
+            org.total_shares(),
+        );
         ensure!(
-            old_issuance >= amt_to_burn,
-            Error::<T>::CannotBurnMoreThanTotalIssuance
+            org.total_shares() >= amt_to_burn,
+            Error::<T>::CannotBurnMoreThanTotalShares
         );
         if !batch {
-            let new_issuance = old_issuance - amt_to_burn;
-            <TotalIssuance<T>>::insert(organization, new_issuance);
+            <Orgs<T>>::insert(organization, org.subtract_shares(amt_to_burn));
         }
         let new_profile = old_profile.subtract_shares(amt_to_burn);
         if new_profile.is_zero() {
@@ -633,13 +651,14 @@ impl<T: Trait> ShareIssuance<T::OrgId, T::AccountId, T::Shares> for Module<T> {
     fn batch_issue(
         organization: T::OrgId,
         genesis: Self::Genesis,
-    ) -> DispatchResult {
+    ) -> Result<T::Shares, DispatchError> {
         ensure!(
             genesis.verify_shape(),
             Error::<T>::GenesisTotalMustEqualSumToUseBatchOps
         );
-        let old_issuance = <TotalIssuance<T>>::get(organization);
-        let new_issuance = old_issuance
+        let total_shares: T::Shares = <Orgs<T>>::get(organization)
+            .map_or_else(Zero::zero, |o| o.total_shares());
+        let new_issuance = total_shares
             .checked_add(&genesis.total())
             .ok_or(Error::<T>::IssuanceWouldOverflowShares)?;
         genesis.vec().into_iter().for_each(|(member, shares)| {
@@ -653,8 +672,7 @@ impl<T: Trait> ShareIssuance<T::OrgId, T::AccountId, T::Shares> for Module<T> {
                 ));
             }
         });
-        <TotalIssuance<T>>::insert(organization, new_issuance);
-        Ok(())
+        Ok(new_issuance)
     }
     fn batch_burn(
         organization: T::OrgId,
@@ -664,8 +682,9 @@ impl<T: Trait> ShareIssuance<T::OrgId, T::AccountId, T::Shares> for Module<T> {
             genesis.verify_shape(),
             Error::<T>::GenesisTotalMustEqualSumToUseBatchOps
         );
-        let old_issuance = <TotalIssuance<T>>::get(organization);
-        let new_issuance = old_issuance
+        let org = <Orgs<T>>::get(organization).ok_or(Error::<T>::OrgDNE)?;
+        let new_issuance = org
+            .total_shares()
             .checked_sub(&genesis.total())
             .ok_or(Error::<T>::IssuanceCannotGoNegative)?;
         genesis.vec().into_iter().for_each(|(member, shares)| {
@@ -679,7 +698,7 @@ impl<T: Trait> ShareIssuance<T::OrgId, T::AccountId, T::Shares> for Module<T> {
                 ));
             }
         });
-        <TotalIssuance<T>>::insert(organization, new_issuance);
+        <Orgs<T>>::insert(organization, org.set_shares(new_issuance));
         Ok(())
     }
 }
