@@ -1,13 +1,12 @@
 ## Pallets
-> `./pallets/*`
 
-Runtime logic is expressed in Rust libraries, colloquially referred to as Pallets. While the most important design criterion is readability, developers are encouraged to minimize on-chain storage and computation.
+Runtime logic is expressed in Rust libraries, colloquially referred to as Pallets. While the most important design criterion is readability, developers are generally encouraged to minimize on-chain storage and computation.
+
+All objects and relationships are in [`./utils`](https://github.com/sunshine-protocol/sunshine-bounty/tree/master/utils). Module implementations that conform to the Substrate pallet rules are in [`./pallets/*`](https://github.com/sunshine-protocol/sunshine-bounty/tree/master/pallets).
 
 ### Org
 
 Every organization encodes membership with ownership expressed as `Vec<(AccountId, Shares)>`. Each org has an `OrgId`, which is used to establish ownership of state associated with the group.
-
-Every group has a sudo `Option<AccountId>`. The intention is that this position will be a representative selected by the group to _keep things moving_, but their selection will be easily revocable.
 
 ### Vote
 

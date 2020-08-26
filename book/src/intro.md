@@ -5,7 +5,7 @@
 
 ## Sunshine Recipes
 
-Welcome! We're building voting infrastructure for FOSS ecosystem governance. Our goal is to use modern cryptography to enforce capital decisions for individuals and groups. 
+Welcome! We're building voting infrastructure for FOSS ecosystem governance. More broadly, we're using cryptography to express governance and enforce capital allocation decisions for individuals and groups. 
 
 Sunshine's first product is a bounty platform for developers to form teams, request/apply for opportunities, and receive payment from on-chain foundations.
 

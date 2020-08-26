@@ -6845,24 +6845,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sunshine-borda"
-version = "0.0.1"
-dependencies = [
- "clear_on_drop",
- "frame-support",
- "frame-system",
- "orml-utilities",
- "pallet-balances",
- "parity-scale-codec",
- "serde",
- "sp-core",
- "sp-io",
- "sp-runtime",
- "sp-std",
- "sunshine-bounty-utils",
-]
-
-[[package]]
 name = "sunshine-bounty"
 version = "0.2.1"
 dependencies = [
@@ -7274,6 +7256,24 @@ dependencies = [
  "parity-scale-codec",
  "serde",
  "sp-core",
+]
+
+[[package]]
+name = "sunshine-rank"
+version = "0.0.1"
+dependencies = [
+ "clear_on_drop",
+ "frame-support",
+ "frame-system",
+ "orml-utilities",
+ "pallet-balances",
+ "parity-scale-codec",
+ "serde",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+ "sunshine-bounty-utils",
 ]
 
 [[package]]

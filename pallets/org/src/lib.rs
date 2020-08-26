@@ -3,7 +3,20 @@
 #![allow(clippy::redundant_closure_call)]
 #![allow(clippy::type_complexity)]
 #![cfg_attr(not(feature = "std"), no_std)]
+//! # Org Module
 //! This module expresses a framework for configurable group governance
+//!
+//! - [`org::Trait`](./trait.Trait.html)
+//! - [`Call`](./enum.Call.html)
+//!
+//! ## Overview
+//!
+//! This pallet handles organization membership and governance.  Each
+//! member (`AccountId`) in an org has some quantity of `Shares` in proportion
+//! to their relative ownership and voting power.
+//!
+//! [`Call`]: ./enum.Call.html
+//! [`Trait`]: ./trait.Trait.html
 
 #[cfg(test)]
 mod tests;
