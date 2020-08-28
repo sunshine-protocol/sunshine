@@ -426,7 +426,7 @@ impl<T: Trait> DocGovernance<T::CommitteeId, T::Cid, T::AccountId, Proposal<T>>
                 if vote_outcome == VoteOutcome::Approved {
                     let cid = prop.doc();
                     let (doc_id, new_committee) = committee
-                        .add_doc(cid.clone())
+                        .add_doc(cid)
                         .ok_or(Error::<T>::DocInsertionFailed)?;
                     let new_prop =
                         prop.set_state(DocState::ApprovedAndAdded(doc_id));

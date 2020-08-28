@@ -165,7 +165,7 @@ impl<
         self.threshold_id
     }
     pub fn add_doc(mut self, c: Cid) -> Option<(Id, Self)> {
-        if let Some(last_added_id) = self.passed.0.clone().iter().rev().next() {
+        if let Some(last_added_id) = self.passed.0.iter().rev().next() {
             let id = last_added_id.id + 1u32.into();
             if self.passed.insert(DocRef::new(id, c)) {
                 Some((id, self))
