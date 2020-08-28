@@ -1,6 +1,6 @@
 #![recursion_limit = "256"]
 #![cfg_attr(not(feature = "std"), no_std)]
-//! Borda Count Vote Module
+//! Rank Vote Module
 
 use codec::Codec;
 use frame_support::{
@@ -30,7 +30,7 @@ use sp_std::{
     fmt::Debug,
     prelude::*,
 };
-use util::borda::{
+use util::rank::{
     Ballot,
     BallotState,
     VoteBoard,
@@ -108,7 +108,7 @@ decl_error! {
 }
 
 decl_storage! {
-    trait Store for Module<T: Trait> as Borda {
+    trait Store for Module<T: Trait> as Rank {
         /// The nonce for unique vote id generation
         VoteIdCounter get(fn vote_id_counter): T::VoteId;
 

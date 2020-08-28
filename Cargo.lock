@@ -7295,6 +7295,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "sunshine-rfp"
+version = "0.0.1"
+dependencies = [
+ "clear_on_drop",
+ "frame-support",
+ "frame-system",
+ "orml-utilities",
+ "pallet-balances",
+ "parity-scale-codec",
+ "serde",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+ "sunshine-bounty-utils",
+ "sunshine-org",
+ "sunshine-vote",
+]
+
+[[package]]
 name = "sunshine-treasury"
 version = "0.0.1"
 dependencies = [

@@ -22,6 +22,7 @@ members = [
     "pallets/moloch",
     "pallets/org",
     "pallets/rank",
+    "pallets/rfp",
     "pallets/recovery",
     "pallets/treasury",
     "pallets/vote",

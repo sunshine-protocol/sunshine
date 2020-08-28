@@ -142,10 +142,6 @@ decl_event!(
         AddedOrgMember(OrgId, AccountId, Shares),
         /// Organization ID, Old Member Account Id, Amount Burned
         RemovedOrgMember(OrgId, AccountId, Shares),
-        /// Batch Addition by the Account ID, _,  total shares added
-        AddedOrgMembers(AccountId, OrgId, Shares),
-        /// Batch Removal by the Account ID, _, total shares burned
-        RemoveOrgMembers(AccountId, OrgId, Shares),
         /// Organization ID, Account Id
         SharesLocked(OrgId, AccountId),
         /// Organization ID, Account Id
@@ -166,10 +162,8 @@ decl_event!(
 decl_error! {
     pub enum Error for Module<T: Trait> {
         OrgDNE,
-        UnAuthorizedSwapSudoRequest,
-        NoExistingSudoKey,
-        OrganizationMustExistToClearSupervisor,
-        OrganizationMustExistToPutSupervisor,
+        ProfileDNE,
+        NotAuthorizedForAccount,
         CannotBurnMoreThanTotalShares,
         NotEnoughSharesToSatisfyBurnRequest,
         IssuanceCannotGoNegative,
@@ -178,16 +172,6 @@ decl_error! {
         IssuanceGoesNegativeWhileRemovingMember,
         CannotLockIfAlreadyLocked,
         CannotUnLockIfAlreadyUnLocked,
-        CannotUnLockProfileThatDNE,
-        CannotLockProfileThatDNE,
-        OrganizationMustBeRegisteredToIssueShares,
-        OrganizationMustBeRegisteredToBurnShares,
-        OrganizationMustBeRegisteredToLockShares,
-        OrganizationMustBeRegisteredToUnLockShares,
-        NotAuthorizedToLockShares,
-        NotAuthorizedToUnLockShares,
-        NotAuthorizedToIssueShares,
-        NotAuthorizedToBurnShares,
         OrganizationCannotBeRemovedIfInputIdIsAvailable,
         AccountHasNoOwnershipInOrg,
     }
@@ -246,6 +230,7 @@ decl_module! {
             members: Vec<T::AccountId>,
         ) -> DispatchResult {
             let caller = ensure_signed(origin)?;
+            // TODO: dedup members vector, and same with `weight_members`
             let total: u32 = members.len() as u32;
             let new_id = if let Some(parent_id) = parent_org {
                 Self::register_sub_organization(parent_id, OrganizationSource::Accounts(members), sudo, constitution.clone())?
@@ -278,10 +263,10 @@ decl_module! {
         fn issue_shares(origin, organization: T::OrgId, who: T::AccountId, shares: T::Shares) -> DispatchResult {
             let issuer = ensure_signed(origin)?;
             // first check is that the organization exists
-            ensure!(!Self::id_is_available(organization), Error::<T>::OrganizationMustBeRegisteredToIssueShares);
+            ensure!(!Self::id_is_available(organization), Error::<T>::OrgDNE);
             // second check is that this is an authorized party for issuance (the supervisor or the module's sudo account)
             let authentication: bool = Self::is_organization_supervisor(organization, &issuer);
-            ensure!(authentication, Error::<T>::NotAuthorizedToIssueShares);
+            ensure!(authentication, Error::<T>::NotAuthorizedForAccount);
 
             Self::issue(organization, who.clone(), shares, false)?;
             Self::deposit_event(RawEvent::SharesIssued(organization, who, shares));
@@ -291,10 +276,10 @@ decl_module! {
         fn burn_shares(origin, organization: T::OrgId, who: T::AccountId, shares: T::Shares) -> DispatchResult {
             let burner = ensure_signed(origin)?;
             // first check is that the organization exists
-            ensure!(!Self::id_is_available(organization), Error::<T>::OrganizationMustBeRegisteredToBurnShares);
+            ensure!(!Self::id_is_available(organization), Error::<T>::OrgDNE);
             // second check is that this is an authorized party for burning
             let authentication: bool = Self::is_organization_supervisor(organization, &burner);
-            ensure!(authentication, Error::<T>::NotAuthorizedToBurnShares);
+            ensure!(authentication, Error::<T>::NotAuthorizedForAccount);
 
             Self::burn(organization, who.clone(), Some(shares), false)?;
             Self::deposit_event(RawEvent::SharesBurned(organization, who, shares));
@@ -304,10 +289,10 @@ decl_module! {
         fn batch_issue_shares(origin, organization: T::OrgId, new_accounts: Vec<(T::AccountId, T::Shares)>) -> DispatchResult {
             let issuer = ensure_signed(origin)?;
             // first check is that the organization exists
-            let org = <Orgs<T>>::get(organization).ok_or(Error::<T>::OrganizationMustBeRegisteredToIssueShares)?;
+            let org = <Orgs<T>>::get(organization).ok_or(Error::<T>::OrgDNE)?;
             // second check is that this is an authorized party for issuance
             let authentication: bool = Self::is_organization_supervisor(organization, &issuer);
-            ensure!(authentication, Error::<T>::NotAuthorizedToIssueShares);
+            ensure!(authentication, Error::<T>::NotAuthorizedForAccount);
             let genesis: WeightedVector<T::AccountId, T::Shares> = new_accounts.into();
             let total_new_shares_minted = genesis.total();
             let total = Self::batch_issue(organization, genesis)?;
@@ -319,10 +304,10 @@ decl_module! {
         fn batch_burn_shares(origin, organization: T::OrgId, old_accounts: Vec<(T::AccountId, T::Shares)>) -> DispatchResult {
             let issuer = ensure_signed(origin)?;
             // first check is that the organization exists
-            ensure!(!Self::id_is_available(organization), Error::<T>::OrganizationMustBeRegisteredToIssueShares);
+            ensure!(!Self::id_is_available(organization), Error::<T>::OrgDNE);
             // second check is that this is an authorized party for burning
             let authentication: bool = Self::is_organization_supervisor(organization, &issuer);
-            ensure!(authentication, Error::<T>::NotAuthorizedToBurnShares);
+            ensure!(authentication, Error::<T>::NotAuthorizedForAccount);
             let genesis: WeightedVector<T::AccountId, T::Shares> = old_accounts.into();
             let total_new_shares_burned = genesis.total();
             Self::batch_burn(organization, genesis)?;
@@ -333,11 +318,11 @@ decl_module! {
         fn lock_shares(origin, organization: T::OrgId, who: T::AccountId) -> DispatchResult {
             let locker = ensure_signed(origin)?;
             // first check is that the organization exists
-            ensure!(!Self::id_is_available(organization), Error::<T>::OrganizationMustBeRegisteredToLockShares);
+            ensure!(!Self::id_is_available(organization), Error::<T>::OrgDNE);
             // second check is that this is an authorized party for locking shares
             let authentication: bool = Self::is_organization_supervisor(organization, &locker)
                                     || locker == who;
-            ensure!(authentication, Error::<T>::NotAuthorizedToLockShares);
+            ensure!(authentication, Error::<T>::NotAuthorizedForAccount);
 
             Self::lock_profile(organization, &who)?;
             Self::deposit_event(RawEvent::SharesLocked(organization, who));
@@ -347,11 +332,11 @@ decl_module! {
         fn unlock_shares(origin, organization: T::OrgId, who: T::AccountId) -> DispatchResult {
             let unlocker = ensure_signed(origin)?;
             // first check is that the organization exists
-            ensure!(!Self::id_is_available(organization), Error::<T>::OrganizationMustBeRegisteredToUnLockShares);
+            ensure!(!Self::id_is_available(organization), Error::<T>::OrgDNE);
             // second check is that this is an authorized party for unlocking shares
             let authentication: bool = Self::is_organization_supervisor(organization, &unlocker)
                                     || unlocker == who;
-            ensure!(authentication, Error::<T>::NotAuthorizedToUnLockShares);
+            ensure!(authentication, Error::<T>::NotAuthorizedForAccount);
 
             Self::unlock_profile(organization, &who)?;
             Self::deposit_event(RawEvent::SharesUnlocked(organization, who));
@@ -411,8 +396,7 @@ impl<T: Trait> OrganizationSupervisorPermissions<T::OrgId, T::AccountId>
     }
     /// Removes any existing sudo and places None
     fn clear_organization_supervisor(org: T::OrgId) -> DispatchResult {
-        let old_org = <Orgs<T>>::get(org)
-            .ok_or(Error::<T>::OrganizationMustExistToClearSupervisor)?;
+        let old_org = <Orgs<T>>::get(org).ok_or(Error::<T>::OrgDNE)?;
         let new_org = old_org.clear_sudo();
         <Orgs<T>>::insert(org, new_org);
         Ok(())
@@ -422,8 +406,7 @@ impl<T: Trait> OrganizationSupervisorPermissions<T::OrgId, T::AccountId>
         org: T::OrgId,
         who: T::AccountId,
     ) -> DispatchResult {
-        let old_org = <Orgs<T>>::get(org)
-            .ok_or(Error::<T>::OrganizationMustExistToPutSupervisor)?;
+        let old_org = <Orgs<T>>::get(org).ok_or(Error::<T>::OrgDNE)?;
         let new_org = old_org.put_sudo(who);
         <Orgs<T>>::insert(org, new_org);
         Ok(())
@@ -600,18 +583,27 @@ impl<T: Trait> ShareIssuance<T::OrgId, T::AccountId, T::Shares> for Module<T> {
         amount: T::Shares,
         batch: bool,
     ) -> DispatchResult {
+        let mut new_member = false;
         let new_profile = if let Some(existing_profile) =
             <Members<T>>::get(organization, &new_owner)
         {
             existing_profile.add_shares(amount)
         } else {
+            new_member = true;
             ShareProfile::new_shares((organization, new_owner.clone()), amount)
         };
         if !batch {
             let org = <Orgs<T>>::get(organization).ok_or(Error::<T>::OrgDNE)?;
             <Orgs<T>>::insert(organization, org.add_shares(amount));
         }
-        <Members<T>>::insert(organization, new_owner, new_profile);
+        <Members<T>>::insert(organization, new_owner.clone(), new_profile);
+        if new_member {
+            Self::deposit_event(RawEvent::AddedOrgMember(
+                organization,
+                new_owner,
+                amount,
+            ));
+        }
         Ok(())
     }
     fn burn(
@@ -646,7 +638,12 @@ impl<T: Trait> ShareIssuance<T::OrgId, T::AccountId, T::Shares> for Module<T> {
         let new_profile = old_profile.subtract_shares(amt_to_burn);
         if new_profile.is_zero() {
             // leave the group
-            <Members<T>>::remove(organization, old_owner);
+            <Members<T>>::remove(organization, old_owner.clone());
+            Self::deposit_event(RawEvent::RemovedOrgMember(
+                organization,
+                old_owner,
+                amt_to_burn,
+            ));
         } else {
             <Members<T>>::insert(organization, old_owner, new_profile);
         }
@@ -712,7 +709,7 @@ impl<T: Trait> LockProfile<T::OrgId, T::AccountId> for Module<T> {
         who: &T::AccountId,
     ) -> DispatchResult {
         let old_profile = <Members<T>>::get(organization, who)
-            .ok_or(Error::<T>::CannotLockProfileThatDNE)?;
+            .ok_or(Error::<T>::ProfileDNE)?;
         ensure!(
             old_profile.is_unlocked(),
             Error::<T>::CannotLockIfAlreadyLocked
@@ -726,7 +723,7 @@ impl<T: Trait> LockProfile<T::OrgId, T::AccountId> for Module<T> {
         who: &T::AccountId,
     ) -> DispatchResult {
         let old_profile = <Members<T>>::get(organization, who)
-            .ok_or(Error::<T>::CannotUnLockProfileThatDNE)?;
+            .ok_or(Error::<T>::ProfileDNE)?;
         ensure!(
             !old_profile.is_unlocked(),
             Error::<T>::CannotUnLockIfAlreadyUnLocked

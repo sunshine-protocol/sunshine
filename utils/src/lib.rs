@@ -9,7 +9,6 @@
 extern crate derive_new;
 
 pub mod bank;
-pub mod borda;
 pub mod bounty;
 pub mod court;
 pub mod drip;
@@ -18,6 +17,8 @@ pub mod kickback;
 pub mod meta;
 pub mod moloch;
 pub mod organization;
+pub mod rank;
+pub mod rfp;
 pub mod share;
 pub mod sss;
 pub mod traits;

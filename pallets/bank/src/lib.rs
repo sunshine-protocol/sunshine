@@ -155,7 +155,7 @@ decl_error! {
     pub enum Error for Module<T: Trait> {
         CannotOpenBankAccountIfDepositIsBelowModuleMinimum,
         InsufficientBalanceToFundBankOpen,
-        CannotOpenBankAccountForOrgIfBankCountExceedsLimitPerOrg,
+        CommitteeCountExceedsLimitPerOrg,
         CannotCloseBankThatDNE,
         NotPermittedToOpenBankAccountForOrg,
         NotPermittedToProposeSpendForBankAccount,
@@ -172,7 +172,7 @@ decl_error! {
         CannotTriggerVoteFromCurrentSpendProposalState,
         CannotSudoApproveSpendProposalIfBaseBankDNE,
         CannotSudoApproveSpendProposalIfSpendProposalDNE,
-        CannotApproveAlreadyApprovedSpendProposal,
+        CannotSudoApproveFromCurrentState,
         CannotPollSpendProposalIfBaseBankDNE,
         CannotPollSpendProposalIfSpendProposalDNE,
         // for getting banks for org
@@ -375,7 +375,7 @@ impl<T: Trait>
         let new_count = <OrgTreasuryCount<T>>::get(org) + 1;
         ensure!(
             new_count <= T::MaxTreasuryPerOrg::get(),
-            Error::<T>::CannotOpenBankAccountForOrgIfBankCountExceedsLimitPerOrg
+            Error::<T>::CommitteeCountExceedsLimitPerOrg
         );
         // TODO: extract into separate method that might compare with min threshold set in this module contex
         ensure!(
@@ -482,7 +482,7 @@ impl<T: Trait>
                 Error::<T>::CannotSudoApproveSpendProposalIfSpendProposalDNE,
             )?;
         match spend_proposal.state() {
-            SpendState::WaitingForApproval | SpendState::Voting(_) => {
+            SpendState::WaitingForApproval => {
                 // TODO: if Voting, remove the current live vote
                 let new_spend_proposal = if let Ok(()) =
                     <T as Trait>::Currency::transfer(
@@ -502,10 +502,7 @@ impl<T: Trait>
                 );
                 Ok(())
             }
-            _ => {
-                Err(Error::<T>::CannotApproveAlreadyApprovedSpendProposal
-                    .into())
-            }
+            _ => Err(Error::<T>::CannotSudoApproveFromCurrentState.into()),
         }
     }
     fn poll_spend_proposal(
