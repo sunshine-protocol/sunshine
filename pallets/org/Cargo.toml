@@ -10,25 +10,23 @@ description = "sunshine organization registration and governance"
 keywords = ["sunshine", "substrate", "blockchain"]
 
 [dependencies]
-serde = { version = "1.0.115", optional = true }
-codec = { package = "parity-scale-codec", version = "1.3.0", default-features = false, features = ["derive"] }
-sp-std = { version = "2.0.0-rc5", default-features = false }
-sp-runtime = { version = "2.0.0-rc5", default-features = false }
-frame-support = { version = "2.0.0-rc5", default-features = false }
-frame-system = { version = "2.0.0-rc5", default-features = false }
+codec = { package = "parity-scale-codec", version = "1.3.4", default-features = false, features = ["derive"] }
+sp-std = { version = "2.0.0-rc6", default-features = false }
+sp-runtime = { version = "2.0.0-rc6", default-features = false }
+frame-support = { version = "2.0.0-rc6", default-features = false }
+frame-system = { version = "2.0.0-rc6", default-features = false }
 util = { package = "sunshine-bounty-utils", path = "../../utils", default-features=false}
 orml-utilities = { version = "0.1.1", default-features = false }
 clear_on_drop = { version = "0.2.4", features = ["no_cc"] }	# https://github.com/paritytech/substrate/issues/4179
 
 [dev-dependencies]
-sp-io = { version = "2.0.0-rc5", default-features = false }
-sp-core = { version = "2.0.0-rc5", default-features = false }
-pallet-balances = { version = "2.0.0-rc5", default-features = false }
+sp-io = { version = "2.0.0-rc6", default-features = false }
+sp-core = { version = "2.0.0-rc6", default-features = false }
+pallet-balances = { version = "2.0.0-rc6", default-features = false }
 
 [features]
 default = ["std"]
 std = [
-	"serde",
 	"codec/std",
 	"sp-std/std",
 	"sp-runtime/std",

@@ -150,15 +150,12 @@ impl<
         genesis: Vec<(AccountId, Shares)>,
     ) -> WeightedVector<AccountId, Shares> {
         let mut total: Shares = Shares::zero();
-        let mut dedup_genesis = genesis;
-        dedup_genesis.dedup(); // deduplicated
-        for account_shares in dedup_genesis.clone() {
+        let mut dg = genesis;
+        dg.dedup();
+        for account_shares in dg.clone() {
             total += account_shares.1;
         }
-        WeightedVector {
-            total,
-            vec: dedup_genesis,
-        }
+        WeightedVector { total, vec: dg }
     }
 }
 

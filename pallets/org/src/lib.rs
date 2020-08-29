@@ -199,21 +199,6 @@ decl_storage! {
             hasher(blake2_128_concat) T::OrgId,
             hasher(blake2_128_concat) T::AccountId => Option<Profile<T>>;
     }
-    add_extra_genesis {
-        config(first_organization_supervisor): T::AccountId;
-        config(first_organization_value_constitution): T::Cid;
-        config(first_organization_flat_membership): Vec<T::AccountId>;
-
-        build(|config: &GenesisConfig<T>| {
-            <Module<T>>::new_flat_org(
-                T::Origin::from(Some(config.first_organization_supervisor.clone()).into()),
-                Some(config.first_organization_supervisor.clone()),
-                None,
-                config.first_organization_value_constitution.clone(),
-                config.first_organization_flat_membership.clone(),
-            ).expect("first organization config set up failed");
-        })
-    }
 }
 
 decl_module! {
@@ -230,12 +215,13 @@ decl_module! {
             members: Vec<T::AccountId>,
         ) -> DispatchResult {
             let caller = ensure_signed(origin)?;
-            // TODO: dedup members vector, and same with `weight_members`
-            let total: u32 = members.len() as u32;
+            let mut m = members;
+            m.dedup();
+            let total: u32 = m.len() as u32;
             let new_id = if let Some(parent_id) = parent_org {
-                Self::register_sub_organization(parent_id, OrganizationSource::Accounts(members), sudo, constitution.clone())?
+                Self::register_sub_organization(parent_id, OrganizationSource::Accounts(m), sudo, constitution.clone())?
             } else {
-                Self::register_organization(OrganizationSource::Accounts(members), sudo, constitution.clone())?
+                Self::register_organization(OrganizationSource::Accounts(m), sudo, constitution.clone())?
             };
             Self::deposit_event(RawEvent::NewFlatOrg(caller, new_id, constitution, total));
             Ok(())

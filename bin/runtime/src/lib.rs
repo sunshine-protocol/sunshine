@@ -39,7 +39,6 @@ use sp_std::prelude::*;
 #[cfg(feature = "std")]
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
-use sunshine_pallet_utils::cid::CidBytes;
 
 // A few exports that help ease life for downstream crates.
 pub use frame_support::{
@@ -303,7 +302,7 @@ impl pallet_transaction_payment::Trait for Runtime {
 }
 impl org::Trait for Runtime {
     type Event = Event;
-    type Cid = CidBytes;
+    type Cid = sunshine_codec::Cid;
     type OrgId = u64;
     type Shares = u64;
 }
@@ -360,7 +359,7 @@ parameter_types! {
 }
 impl bounty::Trait for Runtime {
     type Event = Event;
-    type IpfsReference = CidBytes;
+    type IpfsReference = sunshine_codec::Cid;
     type Currency = Balances;
     type BountyId = u64;
     type SubmissionId = u64;

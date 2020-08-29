@@ -8,8 +8,8 @@ use sc_cli::{
 use sc_service::{
     ChainSpec,
     DatabaseConfig,
+    PartialComponents,
     Role,
-    ServiceParams,
 };
 use structopt::StructOpt;
 
@@ -78,13 +78,13 @@ fn main() -> sc_cli::Result<()> {
             let mut runner = cli.create_runner(subcommand)?;
             force_parity_db(&mut runner);
             runner.run_subcommand(subcommand, |config| {
-                let ServiceParams {
+                let PartialComponents {
                     client,
                     backend,
                     task_manager,
                     import_queue,
                     ..
-                } = test_node::new_full_params(config)?.0;
+                } = test_node::new_partial(config)?;
                 Ok((client, backend, import_queue, task_manager))
             })
         }
