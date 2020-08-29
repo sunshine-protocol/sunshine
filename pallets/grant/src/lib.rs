@@ -27,7 +27,11 @@ use frame_support::{
     },
     Parameter,
 };
-use frame_system::ensure_signed;
+use frame_system::{
+    ensure_signed,
+    Trait as System,
+};
+use org::Trait as Org;
 use sp_runtime::{
     traits::{
         AccountIdConversion,
@@ -65,47 +69,44 @@ use util::{
     },
     vote::VoteOutcome,
 };
+use vote::Trait as Vote;
 
 // type aliases
 type BalanceOf<T> = <<T as donate::Trait>::Currency as Currency<
-    <T as frame_system::Trait>::AccountId,
+    <T as System>::AccountId,
 >>::Balance;
 type GovernanceOf<T> = ResolutionMetadata<
-    <T as frame_system::Trait>::AccountId,
+    <T as System>::AccountId,
     VoteMetadata<
-        OrgRep<<T as org::Trait>::OrgId>,
-        <T as vote::Trait>::Signal,
+        OrgRep<<T as Org>::OrgId>,
+        <T as Vote>::Signal,
         Permill,
-        <T as frame_system::Trait>::BlockNumber,
+        <T as System>::BlockNumber,
     >,
 >;
 type FoundationOf<T> =
-    Foundation<<T as org::Trait>::Cid, BalanceOf<T>, GovernanceOf<T>>;
-type RecipientOf<T> = Recipient<
-    <T as frame_system::Trait>::AccountId,
-    OrgRep<<T as org::Trait>::OrgId>,
->;
+    Foundation<<T as Org>::Cid, BalanceOf<T>, GovernanceOf<T>>;
+type RecipientOf<T> =
+    Recipient<<T as System>::AccountId, OrgRep<<T as Org>::OrgId>>;
 type GrantApp<T> = GrantApplication<
     <T as Trait>::FoundationId,
-    <T as org::Trait>::Cid,
+    <T as Org>::Cid,
     RecipientOf<T>,
     BalanceOf<T>,
-    ApplicationState<<T as vote::Trait>::VoteId>,
+    ApplicationState<<T as Vote>::VoteId>,
 >;
 type Milestone<T> = MilestoneSubmission<
     <T as Trait>::FoundationId,
     <T as Trait>::ApplicationId,
-    <T as org::Trait>::Cid,
+    <T as Org>::Cid,
     RecipientOf<T>,
     BalanceOf<T>,
-    MilestoneStatus<<T as vote::Trait>::VoteId>,
+    MilestoneStatus<<T as Vote>::VoteId>,
 >;
 
-pub trait Trait:
-    frame_system::Trait + org::Trait + vote::Trait + donate::Trait
-{
+pub trait Trait: System + Org + Vote + donate::Trait {
     /// The overarching event type
-    type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
+    type Event: From<Event<Self>> + Into<<Self as System>::Event>;
 
     /// The foundation identifier
     type FoundationId: Parameter
@@ -159,9 +160,9 @@ pub trait Trait:
 decl_event!(
     pub enum Event<T>
     where
-        <T as frame_system::Trait>::AccountId,
-        <T as org::Trait>::Cid,
-        <T as vote::Trait>::VoteId,
+        <T as System>::AccountId,
+        <T as Org>::Cid,
+        <T as Vote>::VoteId,
         <T as Trait>::FoundationId,
         <T as Trait>::ApplicationId,
         <T as Trait>::MilestoneId,

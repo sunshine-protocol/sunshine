@@ -1,8 +1,18 @@
-#![allow(clippy::string_lit_as_bytes)]
-#![allow(clippy::redundant_closure_call)]
-#![allow(clippy::type_complexity)]
+#![recursion_limit = "256"]
+//! # Bank Module
+//! This module expresses a joint bank account with democratic escrow rules
+//! via governance by org vote
+//!
+//! - [`bank::Trait`](./trait.Trait.html)
+//! - [`Call`](./enum.Call.html)
+//!
+//! ## Overview
+//!
+//! This pallet allows orgs to govern a pool of capital.
+//!
+//! [`Call`]: ./enum.Call.html
+//! [`Trait`]: ./trait.Trait.html
 #![cfg_attr(not(feature = "std"), no_std)]
-//! Bank account for orgs w/ democratic escrow rules
 
 #[cfg(test)]
 mod tests;

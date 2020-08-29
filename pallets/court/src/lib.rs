@@ -1,9 +1,20 @@
-#![allow(clippy::string_lit_as_bytes)]
-#![allow(clippy::redundant_closure_call)]
-#![allow(clippy::type_complexity)]
+#![recursion_limit = "256"]
+//! # Court Module
+//! This module expresses a framework for dispute resolution. It stores vote metadata
+//! to schedule and dispatch votes to resolve disputes when they arise.
+//!
+//! - [`court::Trait`](./trait.Trait.html)
+//! - [`Call`](./enum.Call.html)
+//!
+//! ## Overview
+//!
+//! This pallet introduces the notion of counterparty insurance, with accountability
+//! enforced by the outcome of an org vote, dispatched when/if the dispute
+//! arises.
+//!
+//! [`Call`]: ./enum.Call.html
+//! [`Trait`]: ./trait.Trait.html
 #![cfg_attr(not(feature = "std"), no_std)]
-//! This court module is for dispute resolution
-//! - stores vote metadata to schedule and dispatch votes to resolve disputes
 
 #[cfg(test)]
 mod tests;
@@ -23,7 +34,11 @@ use frame_support::{
     },
     Parameter,
 };
-use frame_system::ensure_signed;
+use frame_system::{
+    ensure_signed,
+    Trait as System,
+};
+use org::Trait as Org;
 use sp_runtime::{
     traits::{
         AtLeast32Bit,
@@ -55,21 +70,27 @@ use util::{
     },
     vote::VoteOutcome,
 };
+use vote::Trait as Vote;
 
 /// The balances type for this module
-type BalanceOf<T> = <<T as Trait>::Currency as Currency<
-    <T as frame_system::Trait>::AccountId,
->>::Balance;
+type BalanceOf<T> =
+    <<T as Trait>::Currency as Currency<<T as System>::AccountId>>::Balance;
 type GovernanceOf<T> = VoteMetadata<
-    OrgRep<<T as org::Trait>::OrgId>,
-    <T as vote::Trait>::Signal,
+    OrgRep<<T as Org>::OrgId>,
+    <T as Vote>::Signal,
     Permill,
-    <T as frame_system::Trait>::BlockNumber,
+    <T as System>::BlockNumber,
 >;
-
-pub trait Trait: frame_system::Trait + org::Trait + vote::Trait {
+type DisputeOf<T> = Dispute<
+    <T as System>::AccountId,
+    BalanceOf<T>,
+    <T as System>::BlockNumber,
+    GovernanceOf<T>,
+    DisputeState<<T as Vote>::VoteId>,
+>;
+pub trait Trait: System + Org + Vote {
     /// The overarching event type
-    type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
+    type Event: From<Event<Self>> + Into<<Self as System>::Event>;
 
     /// The currency type
     type Currency: Currency<Self::AccountId>
@@ -95,9 +116,9 @@ pub trait Trait: frame_system::Trait + org::Trait + vote::Trait {
 decl_event!(
     pub enum Event<T>
     where
-        <T as frame_system::Trait>::AccountId,
-        <T as org::Trait>::OrgId,
-        <T as vote::Trait>::VoteId,
+        <T as System>::AccountId,
+        <T as Org>::OrgId,
+        <T as Vote>::VoteId,
         <T as Trait>::DisputeId,
         Balance = BalanceOf<T>,
 
@@ -132,15 +153,7 @@ decl_storage! {
 
         /// The state of disputes
         pub DisputeStates get(fn dispute_states): map
-            hasher(blake2_128_concat) T::DisputeId => Option<
-                    Dispute<
-                        T::AccountId,
-                        BalanceOf<T>,
-                        T::BlockNumber,
-                        GovernanceOf<T>,
-                        DisputeState<T::VoteId>,
-                    >
-                >;
+            hasher(blake2_128_concat) T::DisputeId => Option<DisputeOf<T>>;
     }
 }
 

@@ -46,7 +46,7 @@ mod grant {
 
 impl_outer_event! {
     pub enum TestEvent for Test {
-        system<T>,
+        frame_system<T>,
         pallet_balances<T>,
         org<T>,
         vote<T>,
@@ -111,6 +111,7 @@ impl vote::Trait for Test {
     type Event = TestEvent;
     type VoteId = u64;
     type Signal = u64;
+    type ThresholdId = u64;
 }
 impl donate::Trait for Test {
     type Event = TestEvent;
@@ -130,7 +131,7 @@ impl Trait for Test {
     type MinDeposit = MinDeposit;
     type MinContribution = MinContribution;
 }
-pub type System = system::Module<Test>;
+pub type System = frame_system::Module<Test>;
 pub type Balances = pallet_balances::Module<Test>;
 pub type Org = org::Module<Test>;
 pub type Vote = vote::Module<Test>;
@@ -182,10 +183,11 @@ fn new_test_ext() -> sp_io::TestExternalities {
 #[test]
 fn genesis_config_works() {
     new_test_ext().execute_with(|| {
-        assert_eq!(Org::organization_counter(), 1);
+        assert_eq!(Org::org_counter(), 1);
         let constitution = 1738;
-        let expected_organization = Organization::new(Some(1), 1, constitution);
-        let org_in_storage = Org::organization_states(1u64).unwrap();
+        let expected_organization =
+            Organization::new(Some(1), 1, 6, constitution);
+        let org_in_storage = Org::orgs(1u64).unwrap();
         assert_eq!(expected_organization, org_in_storage);
         for i in 1u64..7u64 {
             assert!(Org::is_member_of_group(1u64, &i));

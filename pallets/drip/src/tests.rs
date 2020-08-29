@@ -29,7 +29,7 @@ mod drip {
 
 impl_outer_event! {
     pub enum TestEvent for Test {
-        system<T>,
+        frame_system<T>,
         pallet_balances<T>,
         drip<T>,
     }
@@ -86,7 +86,7 @@ impl Trait for Test {
     type DripId = u64;
     type Currency = Balances;
 }
-pub type System = system::Module<Test>;
+pub type System = frame_system::Module<Test>;
 pub type Balances = pallet_balances::Module<Test>;
 pub type Drip = Module<Test>;
 

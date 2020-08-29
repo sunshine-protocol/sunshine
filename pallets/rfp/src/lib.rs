@@ -14,6 +14,9 @@
 //! [`Trait`]: ./trait.Trait.html
 #![cfg_attr(not(feature = "std"), no_std)]
 
+#[cfg(test)]
+mod tests;
+
 use codec::Codec;
 use frame_support::{
     decl_error,

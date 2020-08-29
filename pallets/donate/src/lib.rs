@@ -1,3 +1,24 @@
+#![recursion_limit = "256"]
+//! # Donate Module
+//! This module expresses logic for transferring funds to a set of `AccountId`s
+//! in proportion to their `Shares` ownership in the Org. It allows for donating
+//! 1. in proportion to `Shares` ownership in the org
+//! 2. an equal amount for each account in the org
+//!
+//! There is no perfect way to deal with remainders so the caller must
+//! include an `AccountId` to which the remainder will go.
+//!
+//! - [`donate::Trait`](./trait.Trait.html)
+//! - [`Call`](./enum.Call.html)
+//!
+//! ## Overview
+//!
+//! This pallet enables transfers to Orgs as a weighted set of accounts. It demonstrates
+//! a batch transfer with each recipient receiving an amount in proportion to
+//! their relative `Shares` ownership.
+//!
+//! [`Call`]: ./enum.Call.html
+//! [`Trait`]: ./trait.Trait.html
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(test)]

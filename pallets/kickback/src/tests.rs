@@ -7,7 +7,6 @@ use frame_support::{
     parameter_types,
     weights::Weight,
 };
-use frame_system::{self as system,};
 use sp_core::H256;
 use sp_runtime::{
     testing::Header,
@@ -29,7 +28,7 @@ mod kickback {
 
 impl_outer_event! {
     pub enum TestEvent for Test {
-        system<T>,
+        frame_system<T>,
         pallet_balances<T>,
         kickback<T>,
     }
@@ -95,7 +94,7 @@ impl Trait for Test {
     type MinReservationReq = MinReservationReq;
     type MaxAttendance = MaxAttendance;
 }
-pub type System = system::Module<Test>;
+pub type System = frame_system::Module<Test>;
 pub type Balances = pallet_balances::Module<Test>;
 pub type Kickback = Module<Test>;
 

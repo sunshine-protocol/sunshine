@@ -263,7 +263,7 @@ mod tests {
             Client,
         },
         org::{
-            NewFlatOrganizationRegisteredEvent,
+            NewFlatOrgEvent,
             OrgClient,
         },
         TextBlock,
@@ -321,7 +321,7 @@ mod tests {
             )
             .await
             .unwrap();
-        let expected_event = NewFlatOrganizationRegisteredEvent {
+        let expected_event = NewFlatOrgEvent {
             caller: alice_account_id,
             new_id: 2,
             constitution: event.constitution.clone(),

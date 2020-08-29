@@ -22,7 +22,10 @@ use frame_support::{
     },
     Parameter,
 };
-use frame_system::ensure_signed;
+use frame_system::{
+    ensure_signed,
+    Trait as System,
+};
 use sp_runtime::{
     traits::{
         AccountIdConversion,
@@ -43,18 +46,17 @@ use sp_std::{
 use util::kickback::KickbackEvent;
 
 // type aliases
-type BalanceOf<T> = <<T as Trait>::Currency as Currency<
-    <T as frame_system::Trait>::AccountId,
->>::Balance;
+type BalanceOf<T> =
+    <<T as Trait>::Currency as Currency<<T as System>::AccountId>>::Balance;
 type KickbackEventFor<T> = KickbackEvent<
     <T as Trait>::IpfsReference,
-    <T as frame_system::Trait>::AccountId,
+    <T as System>::AccountId,
     BalanceOf<T>,
 >;
 
-pub trait Trait: frame_system::Trait {
+pub trait Trait: System {
     /// The overarching event type
-    type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
+    type Event: From<Event<Self>> + Into<<Self as System>::Event>;
 
     /// Cid type
     type IpfsReference: Parameter + Member + Default;
@@ -88,7 +90,7 @@ pub trait Trait: frame_system::Trait {
 decl_event!(
     pub enum Event<T>
     where
-        <T as frame_system::Trait>::AccountId,
+        <T as System>::AccountId,
         <T as Trait>::IpfsReference,
         <T as Trait>::KickbackEventId,
         Balance = BalanceOf<T>,
