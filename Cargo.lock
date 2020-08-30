@@ -7873,6 +7873,7 @@ dependencies = [
  "orml-utilities",
  "pallet-balances",
  "parity-scale-codec",
+ "serde",
  "sp-core",
  "sp-io",
  "sp-runtime",
@@ -8084,6 +8085,7 @@ dependencies = [
  "sp-runtime",
  "structopt",
  "substrate-build-script-utils",
+ "sunshine-codec",
  "sunshine-node-utils",
  "test-runtime",
 ]

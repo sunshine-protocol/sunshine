@@ -1,8 +1,19 @@
-#![allow(clippy::string_lit_as_bytes)]
-#![allow(clippy::redundant_closure_call)]
-#![allow(clippy::type_complexity)]
+#![recursion_limit = "256"]
+//! # Grant Module
+//! This module expresses medium to long-term developer contracts.
+//!
+//! - [`grant::Trait`](./trait.Trait.html)
+//! - [`Call`](./enum.Call.html)
+//!
+//! ## Overview
+//!
+//! This pallet expresses the logic for posting employment opportunities,
+//! approving on-chain applications, and periodically transferring payment
+//! for services rendered.
+//!
+//! [`Call`]: ./enum.Call.html
+//! [`Trait`]: ./trait.Trait.html
 #![cfg_attr(not(feature = "std"), no_std)]
-//! Grants module for short to long-term developer contracts
 
 #[cfg(test)]
 mod tests;

@@ -199,6 +199,21 @@ decl_storage! {
             hasher(blake2_128_concat) T::OrgId,
             hasher(blake2_128_concat) T::AccountId => Option<Profile<T>>;
     }
+    add_extra_genesis {
+        config(sudo): T::AccountId;
+        config(doc): T::Cid;
+        config(mems): Vec<T::AccountId>;
+
+        build(|config: &GenesisConfig<T>| {
+            <Module<T>>::new_flat_org(
+                T::Origin::from(Some(config.sudo.clone()).into()),
+                Some(config.sudo.clone()),
+                None,
+                config.doc.clone(),
+                config.mems.clone(),
+            ).expect("first organization config set up failed");
+        })
+    }
 }
 
 decl_module! {

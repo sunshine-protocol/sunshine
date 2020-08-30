@@ -125,9 +125,9 @@ fn new_test_ext() -> sp_io::TestExternalities {
     .assimilate_storage(&mut t)
     .unwrap();
     org::GenesisConfig::<Test> {
-        first_organization_supervisor: 1,
-        first_organization_value_constitution: 1738,
-        first_organization_flat_membership: vec![1, 2, 3, 4, 5, 6],
+        sudo: 1,
+        doc: 1738,
+        mems: vec![1, 2, 3, 4, 5, 6],
     }
     .assimilate_storage(&mut t)
     .unwrap();

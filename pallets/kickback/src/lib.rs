@@ -1,8 +1,22 @@
-#![allow(clippy::string_lit_as_bytes)]
-#![allow(clippy::redundant_closure_call)]
-#![allow(clippy::type_complexity)]
+#![recursion_limit = "256"]
+//! # Kickback Module
+//! This module implements the Kickback protocol for event management
+//! via an incentives game.
+//!
+//! - [`grant::Trait`](./trait.Trait.html)
+//! - [`Call`](./enum.Call.html)
+//!
+//! ## Overview
+//!
+//! To reserve a seat at an event, an account must stake the reservation requirement
+//! set for the event. When attendance is logged on-chain by the event supervisor, accounts
+//! logged as present (that reserved a seat) receive their reservation + the capital staked
+//! by the absent accounts that had reserved...It's an attendance game that redistributes
+//! ticket revenue from absent attendees to present attendees.
+//!
+//! [`Call`]: ./enum.Call.html
+//! [`Trait`]: ./trait.Trait.html
 #![cfg_attr(not(feature = "std"), no_std)]
-//! Kickback pallet for event management with incentives
 
 #[cfg(test)]
 mod tests;

@@ -1,8 +1,18 @@
-#![allow(clippy::string_lit_as_bytes)]
-#![allow(clippy::redundant_closure_call)]
-#![allow(clippy::type_complexity)]
+#![recursion_limit = "256"]
+//! # Bounty2 Module
+//! This module expresses logic for posting and crowdfunding bounties
+//! with contributor participation in governance.
+//!
+//! - [`bounty2::Trait`](./trait.Trait.html)
+//! - [`Call`](./enum.Call.html)
+//!
+//! ## Overview
+//!
+//! This pallet adds contributor governance functionality to `Bounty`.
+//!
+//! [`Call`]: ./enum.Call.html
+//! [`Trait`]: ./trait.Trait.html
 #![cfg_attr(not(feature = "std"), no_std)]
-//! Bounty pallet with refundable contributions and more contributor voting rights
 
 use codec::Codec;
 use frame_support::{

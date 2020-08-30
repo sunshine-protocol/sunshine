@@ -10,7 +10,6 @@ use sp_runtime::traits::{
     Verify,
 };
 use sunshine_node_utils::node_service;
-use sunshine_pallet_utils::cid::CidBytes;
 use test_runtime::{
     AccountId,
     AuraConfig,
@@ -93,7 +92,7 @@ pub fn development_config() -> ChainSpec {
                     get_account_id_from_seed::<sr25519::Public>("Bob//stash"),
                 ],
                 // first org value constitution
-                CidBytes::default(),
+                sunshine_codec::Cid::default(),
                 // flat share membership
                 vec![
                     get_account_id_from_seed::<sr25519::Public>("Alice"),
@@ -145,7 +144,7 @@ pub fn local_testnet_config() -> ChainSpec {
                     ),
                 ],
                 // first org value constitution
-                CidBytes::default(),
+                sunshine_codec::Cid::default(),
                 // first org flat membership
                 vec![
                     get_account_id_from_seed::<sr25519::Public>("Alice"),
@@ -171,7 +170,7 @@ pub fn testnet_genesis(
     initial_authorities: Vec<(AuraId, GrandpaId)>,
     root_key: AccountId,
     endowed_accounts: Vec<AccountId>,
-    first_org_value_constitution: CidBytes,
+    first_org_value_constitution: sunshine_codec::Cid,
     first_org_flat_membership: Vec<AccountId>,
     treasury_mint_rate: (BlockNumber, Balance),
     _enable_println: bool,
