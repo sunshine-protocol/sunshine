@@ -6,6 +6,10 @@ use crate::{
     error::Error,
     org::Org,
 };
+use libipld::{
+    cbor::DagCborCodec,
+    store::ReadonlyStore,
+};
 use substrate_subxt::{
     system::System,
     Runtime,
@@ -19,6 +23,7 @@ use sunshine_bounty_utils::{
 use sunshine_client_utils::{
     async_trait,
     Client,
+    OffchainClient,
     Result,
 };
 
@@ -58,13 +63,17 @@ where
         Send + Sync,
     <T as Org>::Cid: From<libipld::cid::Cid>,
     C: Client<T>,
-    C::OffchainClient: ipld_block_builder::Cache<
-            ipld_block_builder::Codec,
+    C::OffchainClient: libipld::cache::Cache<
+            <C::OffchainClient as OffchainClient>::Store,
+            DagCborCodec,
             <T as Vote>::VoteTopic,
-        > + ipld_block_builder::Cache<
-            ipld_block_builder::Codec,
+        > + libipld::cache::Cache<
+            <C::OffchainClient as OffchainClient>::Store,
+            DagCborCodec,
             <T as Vote>::VoteJustification,
         >,
+    <<C::OffchainClient as OffchainClient>::Store as ReadonlyStore>::Codec:
+        From<DagCborCodec> + Into<DagCborCodec>,
 {
     async fn create_signal_vote(
         &self,

@@ -5,6 +5,10 @@ pub use subxt::*;
 pub use utils::AccountShare;
 
 use crate::error::Error;
+use libipld::{
+    cbor::DagCborCodec,
+    store::ReadonlyStore,
+};
 use substrate_subxt::{
     system::System,
     Runtime,
@@ -14,6 +18,7 @@ use substrate_subxt::{
 use sunshine_client_utils::{
     async_trait,
     Client,
+    OffchainClient,
     Result,
 };
 
@@ -85,10 +90,13 @@ where
         Send + Sync,
     <T as Org>::Cid: From<libipld::cid::Cid>,
     C: Client<T>,
-    C::OffchainClient: ipld_block_builder::Cache<
-        ipld_block_builder::Codec,
+    C::OffchainClient: libipld::cache::Cache<
+        <C::OffchainClient as OffchainClient>::Store,
+        DagCborCodec,
         <T as Org>::Constitution,
     >,
+    <<C::OffchainClient as OffchainClient>::Store as ReadonlyStore>::Codec:
+        From<DagCborCodec> + Into<DagCborCodec>,
 {
     async fn new_flat_org(
         &self,

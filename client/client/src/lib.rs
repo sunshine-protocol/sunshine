@@ -3,16 +3,11 @@ mod error;
 pub use error::Error;
 pub mod bank;
 pub mod bounty;
-pub mod court;
 pub mod donate;
 pub mod org;
 pub mod vote;
 pub use sunshine_bounty_utils as utils;
 
-use codec::{
-    Decode,
-    Encode,
-};
 use libipld::{
     cache::Cache,
     cbor::DagCborCodec,
@@ -20,7 +15,12 @@ use libipld::{
         Decode as DagDecode,
         Encode as DagEncode,
     },
+    store::ReadonlyStore,
     DagCbor,
+};
+use parity_scale_codec::{
+    Decode,
+    Encode,
 };
 use substrate_subxt::{
     sp_runtime::traits::SignedExtension,
@@ -29,6 +29,7 @@ use substrate_subxt::{
 };
 use sunshine_client_utils::{
     Client,
+    OffchainClient,
     Result,
 };
 
@@ -53,7 +54,10 @@ where
     <<R::Extra as SignedExtra<R>>::Extra as SignedExtension>::AdditionalSigned:
         Send + Sync,
     C: Client<R>,
-    C::OffchainClient: Cache<Codec, V>,
+    C::OffchainClient:
+        Cache<<C::OffchainClient as OffchainClient>::Store, DagCborCodec, V>,
+    <<C::OffchainClient as OffchainClient>::Store as ReadonlyStore>::Codec:
+        From<DagCborCodec> + Into<DagCborCodec>,
     V: Clone + DagEncode<DagCborCodec> + DagDecode<DagCborCodec> + Send + Sync,
 {
     let cid = client.offchain_client().insert(value).await?;

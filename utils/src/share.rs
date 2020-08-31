@@ -3,11 +3,11 @@ use crate::traits::{
     AccessProfile,
     VerifyShape,
 };
-use codec::{
+use frame_support::Parameter;
+use parity_scale_codec::{
     Decode,
     Encode,
 };
-use frame_support::Parameter;
 use sp_runtime::{
     traits::Zero,
     RuntimeDebug,

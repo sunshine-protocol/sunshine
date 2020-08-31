@@ -10,8 +10,8 @@ description = "Submit extrinsics (transactions) to the sunshine node via RPC"
 keywords = ["sunshine", "substrate", "blockchain"]
 
 [dependencies]
-async-std = { version = "1.6.2", features = ["unstable"] }
-codec = { version = "1.3.4", package = "parity-scale-codec" }
+async-std = { version = "1.6.3", features = ["unstable"] }
+parity-scale-codec = { version = "1.3.4" }
 frame-support = "2.0.0-rc6"
 libipld = { version = "0.4.0", features = ["dag-json"] }
 serde = { version = "1.0.115", features = ["derive"] }

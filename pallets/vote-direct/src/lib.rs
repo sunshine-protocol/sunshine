@@ -20,7 +20,6 @@
 #[cfg(test)]
 mod tests;
 
-use codec::Codec;
 use frame_support::{
     decl_error,
     decl_event,
@@ -33,6 +32,7 @@ use frame_system::{
     ensure_signed,
     Trait as System,
 };
+use parity_scale_codec::Codec;
 use sp_runtime::{
     traits::{
         AtLeast32BitUnsigned,

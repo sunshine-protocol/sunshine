@@ -2,7 +2,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 //! Rank Vote Module
 
-use codec::Codec;
 use frame_support::{
     decl_error,
     decl_event,
@@ -16,6 +15,7 @@ use frame_system::{
     Trait as System,
 };
 use orml_utilities::OrderedSet;
+use parity_scale_codec::Codec;
 use sp_runtime::{
     traits::{
         AtLeast32BitUnsigned,

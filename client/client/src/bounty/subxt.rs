@@ -1,8 +1,3 @@
-use codec::{
-    Codec,
-    Decode,
-    Encode,
-};
 use frame_support::Parameter;
 use libipld::{
     cbor::DagCborCodec,
@@ -10,6 +5,11 @@ use libipld::{
         Decode as DagEncode,
         Encode as DagDecode,
     },
+};
+use parity_scale_codec::{
+    Codec,
+    Decode,
+    Encode,
 };
 use sp_runtime::traits::{
     AtLeast32Bit,

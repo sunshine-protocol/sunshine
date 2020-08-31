@@ -1,8 +1,8 @@
-use codec::{
+use orml_utilities::OrderedSet;
+use parity_scale_codec::{
     Decode,
     Encode,
 };
-use orml_utilities::OrderedSet;
 use sp_runtime::RuntimeDebug;
 use sp_std::prelude::*;
 

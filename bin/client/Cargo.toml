@@ -10,9 +10,9 @@ mock = [
 ]
 
 [dependencies]
-async-trait = "0.1.36"
+async-trait = "0.1.40"
 libipld = { version = "0.4.0", default-features = false }
-substrate-subxt = "0.10.1"
+substrate-subxt = "0.11.0"
 sunshine-bounty-client = { path = "../../client/client" }
 sunshine-bounty-utils =  { path = "../../utils" }
 sunshine-codec = { default-features=false, git = "https://github.com/sunshine-protocol/sunshine-core" }

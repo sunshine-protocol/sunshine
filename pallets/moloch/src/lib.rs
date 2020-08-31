@@ -7,7 +7,6 @@
 #[cfg(test)]
 mod tests;
 
-use codec::Codec;
 use frame_support::{
     decl_error,
     decl_event,
@@ -31,6 +30,7 @@ use frame_system::{
     Trait as System,
 };
 use org::Trait as Org;
+use parity_scale_codec::Codec;
 use sp_runtime::{
     traits::{
         AccountIdConversion,
