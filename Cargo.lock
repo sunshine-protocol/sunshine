@@ -159,9 +159,12 @@ dependencies = [
 
 [[package]]
 name = "allo-isolate"
-version = "0.1.6"
+version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eea2c1a4b084f8eb5c41d89b498cb67f300d065870773bdadf5fa45fef4e97dd"
+checksum = "ff09da612ca86c794c3c8f70613a3e6652b5f1313b938937b32cae80df28fdb1"
+dependencies = [
+ "pin-project",
+]
 
 [[package]]
 name = "ansi_term"
@@ -2328,12 +2331,11 @@ dependencies = [
 
 [[package]]
 name = "ipld-block-builder"
-version = "0.4.1"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e50bfca47d8dc7564000b7b0ba9c78e4c5f9dfa2d2cd6c97bf4ff3695e98139f"
+checksum = "e7bcc5d297e6bad03888889aab3661cb9860a5203a0d7303a0bf13e81a135d00"
 dependencies = [
  "async-std",
- "async-trait",
  "cached 0.12.0",
  "libipld 0.3.1",
 ]
@@ -2624,7 +2626,6 @@ dependencies = [
  "libipld-cbor 0.3.0",
  "libipld-cbor-derive 0.3.0",
  "libipld-core 0.3.1",
- "libipld-json 0.3.0",
  "libipld-macro 0.3.0",
  "thiserror",
 ]
@@ -2641,7 +2642,7 @@ dependencies = [
  "libipld-cbor 0.4.0",
  "libipld-cbor-derive 0.4.0",
  "libipld-core 0.4.0",
- "libipld-json 0.4.0",
+ "libipld-json",
  "libipld-macro 0.4.0",
  "libipld-pb",
  "thiserror",
@@ -2716,18 +2717,6 @@ dependencies = [
  "thiserror",
  "tiny-cid",
  "tiny-multihash",
-]
-
-[[package]]
-name = "libipld-json"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "00e431b859578ecbfc64f4d13bf349ad305ac81cc3db51a5528245498b2311dc"
-dependencies = [
- "base64 0.12.3",
- "libipld-core 0.3.1",
- "serde",
- "serde_json",
 ]
 
 [[package]]
@@ -4006,9 +3995,9 @@ checksum = "1ab52be62400ca80aa00285d25253d7f7c437b7375c4de678f5405d3afe82ca5"
 
 [[package]]
 name = "octocrab"
-version = "0.6.1"
+version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9efd64492493fae216eb46d48144732b60fdd6a4987f311d75c553ea6718841e"
+checksum = "eb674867931e3169c73e145a47be548a565649757c762a75045d148d67a0b8b5"
 dependencies = [
  "arc-swap",
  "async-trait",
@@ -4320,9 +4309,9 @@ dependencies = [
 
 [[package]]
 name = "parity-multiaddr"
-version = "0.9.1"
+version = "0.9.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cc20af3143a62c16e7c9e92ea5c6ae49f7d271d97d4d8fe73afc28f0514a3d0f"
+checksum = "2165a93382a93de55868dcbfa11e4a8f99676a9164eee6a2b4a9479ad319c257"
 dependencies = [
  "arrayref",
  "bs58",
@@ -7376,6 +7365,34 @@ dependencies = [
 
 [[package]]
 name = "substrate-subxt"
+version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a725c18649a16df5eb566b6217216d8dd8f2737b7b181fdac2649b252d6af720"
+dependencies = [
+ "frame-metadata",
+ "frame-support",
+ "futures 0.3.5",
+ "hex",
+ "jsonrpsee",
+ "log",
+ "num-traits",
+ "pallet-indices",
+ "parity-scale-codec",
+ "sc-rpc-api",
+ "serde",
+ "serde_json",
+ "sp-core",
+ "sp-rpc",
+ "sp-runtime",
+ "sp-transaction-pool",
+ "sp-version",
+ "substrate-subxt-proc-macro 0.9.0",
+ "thiserror",
+ "url 2.1.1",
+]
+
+[[package]]
+name = "substrate-subxt"
 version = "0.11.0"
 source = "git+https://github.com/paritytech/substrate-subxt/#3ea9d3b8bbeb8c7ab9c2f7b382c39a54ba2bcb6a"
 dependencies = [
@@ -7397,7 +7414,7 @@ dependencies = [
  "sp-transaction-pool",
  "sp-version",
  "substrate-subxt-client",
- "substrate-subxt-proc-macro",
+ "substrate-subxt-proc-macro 0.11.0",
  "thiserror",
  "url 2.1.1",
 ]
@@ -7417,6 +7434,21 @@ dependencies = [
  "serde_json",
  "sp-keyring",
  "thiserror",
+]
+
+[[package]]
+name = "substrate-subxt-proc-macro"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4866e68aa6eafb2d37c57552f18d205ccad5d77b7d71c8fbe63c9c58eee2f5fd"
+dependencies = [
+ "heck",
+ "proc-macro-crate",
+ "proc-macro-error 1.0.4",
+ "proc-macro2",
+ "quote",
+ "syn",
+ "synstructure",
 ]
 
 [[package]]
@@ -7498,7 +7530,7 @@ dependencies = [
  "libipld 0.3.1",
  "parity-scale-codec",
  "regex",
- "substrate-subxt",
+ "substrate-subxt 0.10.1",
  "sunshine-bounty-client",
  "sunshine-bounty-utils",
  "sunshine-client-utils",
@@ -7512,13 +7544,12 @@ dependencies = [
  "async-std",
  "env_logger",
  "frame-support",
- "ipld-block-builder",
- "libipld 0.3.1",
+ "libipld 0.4.0",
  "parity-scale-codec",
  "rand 0.7.3",
  "serde",
  "serde_json",
- "substrate-subxt",
+ "substrate-subxt 0.11.0",
  "sunshine-bounty-utils",
  "sunshine-client-utils",
  "sunshine-codec",
@@ -7536,7 +7567,7 @@ dependencies = [
  "ipld-block-builder",
  "serde",
  "serde_json",
- "substrate-subxt",
+ "substrate-subxt 0.10.1",
  "sunshine-bounty-client",
  "sunshine-client-utils",
  "sunshine-codec",
@@ -7592,12 +7623,12 @@ dependencies = [
 [[package]]
 name = "sunshine-cli-utils"
 version = "0.1.0"
-source = "git+https://github.com/sunshine-protocol/sunshine-core#2d2913273045931ca89d5b41f132eae02d91ca62"
+source = "git+https://github.com/sunshine-protocol/sunshine-core#c6aa06cb2fa5a84105f2a7ded0e662b49d3f1261"
 dependencies = [
  "async-std",
  "clap 3.0.0-beta.1",
  "rpassword 5.0.0",
- "substrate-subxt",
+ "substrate-subxt 0.11.0",
  "sunshine-client-utils",
  "thiserror",
 ]
@@ -7605,7 +7636,7 @@ dependencies = [
 [[package]]
 name = "sunshine-client-utils"
 version = "0.1.0"
-source = "git+https://github.com/sunshine-protocol/sunshine-core#2d2913273045931ca89d5b41f132eae02d91ca62"
+source = "git+https://github.com/sunshine-protocol/sunshine-core#c6aa06cb2fa5a84105f2a7ded0e662b49d3f1261"
 dependencies = [
  "anyhow",
  "async-std",
@@ -7618,7 +7649,7 @@ dependencies = [
  "sled",
  "sp-database",
  "sp-keyring",
- "substrate-subxt",
+ "substrate-subxt 0.11.0",
  "sunshine-codec",
  "sunshine-crypto",
  "sunshine-keystore",
@@ -7629,7 +7660,7 @@ dependencies = [
 [[package]]
 name = "sunshine-codec"
 version = "0.1.0"
-source = "git+https://github.com/sunshine-protocol/sunshine-core#2d2913273045931ca89d5b41f132eae02d91ca62"
+source = "git+https://github.com/sunshine-protocol/sunshine-core#c6aa06cb2fa5a84105f2a7ded0e662b49d3f1261"
 dependencies = [
  "anyhow",
  "generic-array 0.14.4",
@@ -7665,7 +7696,7 @@ dependencies = [
 [[package]]
 name = "sunshine-crypto"
 version = "0.1.0"
-source = "git+https://github.com/sunshine-protocol/sunshine-core#2d2913273045931ca89d5b41f132eae02d91ca62"
+source = "git+https://github.com/sunshine-protocol/sunshine-core#c6aa06cb2fa5a84105f2a7ded0e662b49d3f1261"
 dependencies = [
  "aead 0.2.0",
  "anyhow",
@@ -7686,10 +7717,10 @@ dependencies = [
  "sp-core",
  "sp-keyring",
  "strobe-rs",
- "substrate-subxt",
+ "substrate-subxt 0.11.0",
  "subtle 2.2.3",
  "thiserror",
- "x25519-dalek 1.0.1",
+ "x25519-dalek 1.1.0",
  "zeroize",
 ]
 
@@ -7729,10 +7760,10 @@ dependencies = [
 [[package]]
 name = "sunshine-faucet-client"
 version = "0.2.0"
-source = "git+https://github.com/sunshine-protocol/sunshine-identity#87603e55a526c1b2e98fd5a7171016bc836443f8"
+source = "git+https://github.com/sunshine-protocol/sunshine-identity#2b5ede65f38f047571a9a64d2d7900d18664c078"
 dependencies = [
  "parity-scale-codec",
- "substrate-subxt",
+ "substrate-subxt 0.11.0",
  "sunshine-client-utils",
  "sunshine-identity-client",
 ]
@@ -7740,7 +7771,7 @@ dependencies = [
 [[package]]
 name = "sunshine-ffi-utils"
 version = "0.1.0"
-source = "git+https://github.com/sunshine-protocol/sunshine-core#2d2913273045931ca89d5b41f132eae02d91ca62"
+source = "git+https://github.com/sunshine-protocol/sunshine-core#c6aa06cb2fa5a84105f2a7ded0e662b49d3f1261"
 dependencies = [
  "allo-isolate",
  "async-std",
@@ -7771,7 +7802,7 @@ dependencies = [
 [[package]]
 name = "sunshine-identity-client"
 version = "0.2.3"
-source = "git+https://github.com/sunshine-protocol/sunshine-identity#87603e55a526c1b2e98fd5a7171016bc836443f8"
+source = "git+https://github.com/sunshine-protocol/sunshine-identity#2b5ede65f38f047571a9a64d2d7900d18664c078"
 dependencies = [
  "async-std",
  "frame-support",
@@ -7780,7 +7811,7 @@ dependencies = [
  "parity-scale-codec",
  "serde",
  "serde_json",
- "substrate-subxt",
+ "substrate-subxt 0.11.0",
  "sunshine-client-utils",
  "thiserror",
  "ureq",
@@ -7789,7 +7820,7 @@ dependencies = [
 [[package]]
 name = "sunshine-keystore"
 version = "0.1.0"
-source = "git+https://github.com/sunshine-protocol/sunshine-core#2d2913273045931ca89d5b41f132eae02d91ca62"
+source = "git+https://github.com/sunshine-protocol/sunshine-core#c6aa06cb2fa5a84105f2a7ded0e662b49d3f1261"
 dependencies = [
  "anyhow",
  "async-std",
@@ -7841,7 +7872,7 @@ dependencies = [
 [[package]]
 name = "sunshine-node-utils"
 version = "0.1.0"
-source = "git+https://github.com/sunshine-protocol/sunshine-core#2d2913273045931ca89d5b41f132eae02d91ca62"
+source = "git+https://github.com/sunshine-protocol/sunshine-core#c6aa06cb2fa5a84105f2a7ded0e662b49d3f1261"
 dependencies = [
  "sc-basic-authorship",
  "sc-client-api",
@@ -8058,9 +8089,8 @@ name = "test-client"
 version = "0.1.0"
 dependencies = [
  "async-trait",
- "ipld-block-builder",
- "libipld 0.3.1",
- "substrate-subxt",
+ "libipld 0.4.0",
+ "substrate-subxt 0.10.1",
  "sunshine-bounty-client",
  "sunshine-bounty-utils",
  "sunshine-client-utils",
@@ -8420,9 +8450,9 @@ dependencies = [
 
 [[package]]
 name = "tokio-rustls"
-version = "0.14.0"
+version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "228139ddd4fea3fa345a29233009635235833e52807af7ea6448ead03890d6a9"
+checksum = "e12831b255bcfa39dc0436b01e19fea231a37db570686c06ee72c423479f889a"
 dependencies = [
  "futures-core",
  "rustls 0.18.1",
@@ -9183,9 +9213,9 @@ dependencies = [
 
 [[package]]
 name = "x25519-dalek"
-version = "1.0.1"
+version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "00ffb05621d7d051df0f020edf3e5db20797a4e522bf1f9c5dfa20603f1c85f6"
+checksum = "bc614d95359fd7afc321b66d2107ede58b246b844cf5d8a0adcca413e439f088"
 dependencies = [
  "curve25519-dalek 3.0.0",
  "rand_core 0.5.1",

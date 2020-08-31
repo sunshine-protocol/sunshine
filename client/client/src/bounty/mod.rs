@@ -72,11 +72,9 @@ where
         Send + Sync,
     <T as Bounty>::IpfsReference: From<libipld::cid::Cid>,
     C: Client<T>,
-    C::OffchainClient: ipld_block_builder::Cache<
-            ipld_block_builder::Codec,
-            <T as Bounty>::BountyPost,
-        > + ipld_block_builder::Cache<
-            ipld_block_builder::Codec,
+    C::OffchainClient: libipld::cache::Cache<libipld::cache::Codec, <T as Bounty>::BountyPost>
+        + libipld::cache::Cache<
+            libipld::cache::Codec,
             <T as Bounty>::BountySubmission,
         >,
 {

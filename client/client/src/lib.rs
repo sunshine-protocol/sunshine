@@ -13,11 +13,8 @@ use codec::{
     Decode,
     Encode,
 };
-use ipld_block_builder::{
-    Cache,
-    Codec,
-};
 use libipld::{
+    cache::Cache,
     cbor::DagCborCodec,
     codec::{
         Decode as DagDecode,
