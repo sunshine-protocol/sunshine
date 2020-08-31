@@ -50,7 +50,7 @@ pub struct GithubIssue {
 pub(crate) async fn post<R, C, V>(
     client: &C,
     value: V,
-) -> Result<libipld::cid::Cid>
+) -> Result<sunshine_codec::Cid>
 where
     R: Runtime,
     <<R::Extra as SignedExtra<R>>::Extra as SignedExtension>::AdditionalSigned:

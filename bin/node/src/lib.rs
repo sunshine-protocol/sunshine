@@ -92,7 +92,7 @@ pub fn development_config() -> ChainSpec {
                     get_account_id_from_seed::<sr25519::Public>("Bob//stash"),
                 ],
                 // first org value constitution
-                sunshine_codec::Cid::default(),
+                10u32,
                 // flat share membership
                 vec![
                     get_account_id_from_seed::<sr25519::Public>("Alice"),
@@ -144,7 +144,7 @@ pub fn local_testnet_config() -> ChainSpec {
                     ),
                 ],
                 // first org value constitution
-                sunshine_codec::Cid::default(),
+                10u32,
                 // first org flat membership
                 vec![
                     get_account_id_from_seed::<sr25519::Public>("Alice"),
@@ -170,7 +170,7 @@ pub fn testnet_genesis(
     initial_authorities: Vec<(AuraId, GrandpaId)>,
     root_key: AccountId,
     endowed_accounts: Vec<AccountId>,
-    first_org_value_constitution: sunshine_codec::Cid,
+    first_org_value_constitution: u32,
     first_org_flat_membership: Vec<AccountId>,
     treasury_mint_rate: (BlockNumber, Balance),
     _enable_println: bool,
@@ -185,9 +185,9 @@ pub fn testnet_genesis(
             milestone_poll_frequency: 10,
         }),
         org: Some(OrgConfig {
-            first_organization_supervisor: root_key,
-            first_organization_value_constitution: first_org_value_constitution,
-            first_organization_flat_membership: first_org_flat_membership,
+            sudo: root_key,
+            doc: first_org_value_constitution,
+            mems: first_org_flat_membership,
         }),
         pallet_balances: Some(BalancesConfig {
             balances: endowed_accounts

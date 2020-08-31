@@ -4,7 +4,6 @@ use ipld_block_builder::{
     IpldCache,
 };
 use libipld::store::Store;
-use std::sync::Arc;
 use substrate_subxt::{
     balances::{
         AccountData,
@@ -27,7 +26,6 @@ use sunshine_bounty_client::{
     vote::Vote,
 };
 use sunshine_client_utils::{
-    cid::CidBytes,
     client::{
         GenericClient,
         KeystoreImpl,
@@ -74,7 +72,7 @@ impl Balances for Runtime {
 }
 
 impl Org for Runtime {
-    type Cid = CidBytes;
+    type Cid = u32;
     type OrgId = u64;
     type Shares = u64;
     type Constitution = TextBlock;
@@ -98,7 +96,7 @@ impl Bank for Runtime {
 }
 
 impl Bounty for Runtime {
-    type IpfsReference = CidBytes;
+    type IpfsReference = u32;
     type BountyId = u64;
     type BountyPost = GithubIssue;
     type SubmissionId = u64;
@@ -107,7 +105,7 @@ impl Bounty for Runtime {
 
 impl sunshine_identity_client::Identity for Runtime {
     type Uid = u8;
-    type Cid = CidBytes;
+    type Cid = sunshine_codec::Cid;
     type Mask = u8;
     type Gen = u16;
     type IdAccountData = ();
@@ -177,13 +175,13 @@ impl NodeConfig for Node {
 
     fn new_light(
         config: Configuration,
-    ) -> Result<(TaskManager, Arc<RpcHandlers>), ScServiceError> {
+    ) -> Result<(TaskManager, RpcHandlers), ScServiceError> {
         Ok(test_node::new_light(config)?)
     }
 
     fn new_full(
         config: Configuration,
-    ) -> Result<(TaskManager, Arc<RpcHandlers>), ScServiceError> {
+    ) -> Result<(TaskManager, RpcHandlers), ScServiceError> {
         Ok(test_node::new_full(config)?)
     }
 }

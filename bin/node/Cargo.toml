@@ -9,7 +9,6 @@ publish = false
 sc-executor = "0.8.0-rc6"
 sp-core = "2.0.0-rc6"
 sp-runtime = "2.0.0-rc6"
-sunshine-codec = { default-features = false, git = "https://github.com/sunshine-protocol/sunshine-core" }
 sunshine-node-utils = { git = "https://github.com/sunshine-protocol/sunshine-core" }
 test-runtime = { path = "../runtime" }
 # cli deps

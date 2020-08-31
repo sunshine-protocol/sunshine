@@ -302,7 +302,7 @@ impl pallet_transaction_payment::Trait for Runtime {
 }
 impl org::Trait for Runtime {
     type Event = Event;
-    type Cid = sunshine_codec::Cid;
+    type Cid = u32;
     type OrgId = u64;
     type Shares = u64;
 }
@@ -359,7 +359,7 @@ parameter_types! {
 }
 impl bounty::Trait for Runtime {
     type Event = Event;
-    type IpfsReference = sunshine_codec::Cid;
+    type IpfsReference = u32;
     type Currency = Balances;
     type BountyId = u64;
     type SubmissionId = u64;

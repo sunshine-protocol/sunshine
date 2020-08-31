@@ -84,7 +84,7 @@ fn main() -> sc_cli::Result<()> {
                     task_manager,
                     import_queue,
                     ..
-                } = test_node::new_partial(config)?;
+                } = test_node::new_partial(&config)?;
                 Ok((client, backend, import_queue, task_manager))
             })
         }
