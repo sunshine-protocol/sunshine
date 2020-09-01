@@ -302,7 +302,7 @@ impl pallet_transaction_payment::Trait for Runtime {
 }
 impl org::Trait for Runtime {
     type Event = Event;
-    type Cid = sunshine_codec::Cid;
+    type Cid = sunshine_codec::Cid; // Serialize and Deserialize
     type OrgId = u64;
     type Shares = u64;
 }

@@ -37,6 +37,7 @@ std = [
     'org/std',
     'treasury/std',
     'grant/std',
+    'tiny-cid',
     'sunshine-codec/std',
 ]
 
@@ -68,7 +69,8 @@ sp-std = { version = "2.0.0-rc6", default-features = false }
 sp-transaction-pool = { version = "2.0.0-rc6", default-features = false }
 sp-version = { version = "2.0.0-rc6", default-features = false }
 
-sunshine-codec = { default-features=false, git = "https://github.com/sunshine-protocol/sunshine-core", branch = "flag" }
+sunshine-codec = { default-features = false, git = "https://github.com/sunshine-protocol/sunshine-core" }
+tiny-cid = { version = "0.2.5", features = ["serde-codec"], optional = true }
 
 util = { package = "sunshine-bounty-utils", path = "../../utils", default-features=false}
 org = {package = "sunshine-org", path = "../../pallets/org", default-features=false }

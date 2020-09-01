@@ -76,7 +76,7 @@ impl Balances for Runtime {
 }
 
 impl Org for Runtime {
-    type Cid = u32;
+    type Cid = sunshine_codec::Cid;
     type OrgId = u64;
     type Shares = u64;
     type Constitution = TextBlock;
@@ -100,7 +100,7 @@ impl Bank for Runtime {
 }
 
 impl Bounty for Runtime {
-    type IpfsReference = u32;
+    type IpfsReference = sunshine_codec::Cid;
     type BountyId = u64;
     type BountyPost = GithubIssue;
     type SubmissionId = u64;

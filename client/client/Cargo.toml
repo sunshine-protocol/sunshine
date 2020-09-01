@@ -16,7 +16,7 @@ frame-support = "2.0.0-rc6"
 libipld = { version = "0.4.0", features = ["dag-json"] }
 serde = { version = "1.0.115", features = ["derive"] }
 serde_json = "1.0.57"
-substrate-subxt = "0.11.0"
+substrate-subxt = "0.12.0"
 sunshine-bounty-utils = { path = "../../utils" }
 sunshine-codec = { default-features=false, git = "https://github.com/sunshine-protocol/sunshine-core" }
 sunshine-client-utils = { git = "https://github.com/sunshine-protocol/sunshine-core" }
