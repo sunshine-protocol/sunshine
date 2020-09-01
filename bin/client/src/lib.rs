@@ -1,9 +1,9 @@
 use libipld::{
     cache::{
-        Cache,
+        CacheConfig,
         IpldCache,
     },
-    codec::Codec,
+    cbor::DagCborCodec,
     derive_cache,
     store::Store,
 };
@@ -34,6 +34,7 @@ use sunshine_client_utils::{
         KeystoreImpl,
         OffchainStoreImpl,
     },
+    codec::hasher::BLAKE2B_256,
     crypto::{
         keychain::KeyType,
         sr25519,
@@ -122,21 +123,29 @@ impl substrate_subxt::Runtime for Runtime {
 }
 
 pub struct OffchainClient<S> {
-    bounties: IpldCache<S, Codec, GithubIssue>,
-    constitutions: IpldCache<S, Codec, TextBlock>,
+    bounties: IpldCache<S, DagCborCodec, GithubIssue>,
+    constitutions: IpldCache<S, DagCborCodec, TextBlock>,
 }
 
 impl<S: Store> OffchainClient<S> {
     pub fn new(store: S) -> Self {
+        let (mut config, mut config2) = (
+            CacheConfig::new(store.clone(), DagCborCodec),
+            CacheConfig::new(store, DagCborCodec),
+        );
+        config.size = 64;
+        config2.size = 64;
+        config.hash = BLAKE2B_256;
+        config2.hash = BLAKE2B_256;
         Self {
-            bounties: IpldCache::new(store.clone(), Codec::new(), 64),
-            constitutions: IpldCache::new(store, Codec::new(), 64),
+            bounties: IpldCache::new(config),
+            constitutions: IpldCache::new(config2),
         }
     }
 }
 
-derive_cache!(OffchainClient, bounties, Codec, GithubIssue);
-derive_cache!(OffchainClient, constitutions, Codec, TextBlock);
+derive_cache!(OffchainClient, bounties, DagCborCodec, GithubIssue);
+derive_cache!(OffchainClient, constitutions, DagCborCodec, TextBlock);
 
 impl<S: Store> From<S> for OffchainClient<S> {
     fn from(store: S) -> Self {
