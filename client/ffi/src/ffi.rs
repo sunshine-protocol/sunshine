@@ -14,10 +14,13 @@ use anyhow::{
     anyhow,
     bail,
 };
-use ipld_block_builder::{
-    Cache,
-    Codec,
-    ReadonlyCache,
+use libipld::{
+    cache::{
+        Cache,
+        ReadonlyCache,
+    },
+    cbor::DagCborCodec,
+    store::ReadonlyStore,
 };
 use std::{
     fmt::{
@@ -62,6 +65,7 @@ use sunshine_client_utils::{
         ss58::Ss58,
     },
     Keystore,
+    OffchainClient,
     Result,
 };
 use sunshine_ffi_utils::async_std::sync::RwLock;
@@ -196,7 +200,13 @@ where
     C: BountyClient<R> + Send + Sync,
     R: Runtime + BountyTrait + Debug,
     R: BountyTrait<IpfsReference = sunshine_codec::Cid>,
-    C::OffchainClient: Cache<Codec, GithubIssue>,
+    C::OffchainClient: Cache<
+        <C::OffchainClient as OffchainClient>::Store,
+        DagCborCodec,
+        GithubIssue,
+    >,
+    <<C::OffchainClient as OffchainClient>::Store as ReadonlyStore>::Codec:
+        From<DagCborCodec> + Into<DagCborCodec>,
     <R as System>::AccountId: Ss58Codec + Into<<R as System>::Address>,
     <R as BountyTrait>::BountyId: From<u64> + Into<u64> + Display,
     <R as BountyTrait>::SubmissionId: From<u64> + Into<u64> + Display,
