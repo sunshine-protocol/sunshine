@@ -123,6 +123,7 @@ impl substrate_subxt::Runtime for Runtime {
 }
 
 pub struct OffchainClient<S> {
+    store: S,
     bounties: IpldCache<S, DagCborCodec, GithubIssue>,
     constitutions: IpldCache<S, DagCborCodec, TextBlock>,
 }
@@ -131,13 +132,14 @@ impl<S: Store> OffchainClient<S> {
     pub fn new(store: S) -> Self {
         let (mut config, mut config2) = (
             CacheConfig::new(store.clone(), DagCborCodec),
-            CacheConfig::new(store, DagCborCodec),
+            CacheConfig::new(store.clone(), DagCborCodec),
         );
         config.size = 64;
         config2.size = 64;
         config.hash = BLAKE2B_256;
         config2.hash = BLAKE2B_256;
         Self {
+            store,
             bounties: IpldCache::new(config),
             constitutions: IpldCache::new(config2),
         }
@@ -146,6 +148,14 @@ impl<S: Store> OffchainClient<S> {
 
 derive_cache!(OffchainClient, bounties, DagCborCodec, GithubIssue);
 derive_cache!(OffchainClient, constitutions, DagCborCodec, TextBlock);
+
+impl<S: Store> sunshine_client_utils::OffchainClient for OffchainClient<S> {
+    type Store = S;
+
+    fn store(&self) -> &S {
+        &self.store
+    }
+}
 
 impl<S: Store> From<S> for OffchainClient<S> {
     fn from(store: S) -> Self {

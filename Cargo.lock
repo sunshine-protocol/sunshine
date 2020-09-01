@@ -2247,9 +2247,9 @@ dependencies = [
 
 [[package]]
 name = "indexmap"
-version = "1.5.1"
+version = "1.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "86b45e59b16c76b11bf9738fd5d38879d3bd28ad292d7b313608becb17ae2df9"
+checksum = "4e47a3566dd4fd4eec714ae6ceabdee0caec795be835c223d92c2d40f1e8cf1c"
 dependencies = [
  "autocfg 1.0.1",
  "hashbrown 0.8.2",
@@ -7276,35 +7276,6 @@ dependencies = [
 
 [[package]]
 name = "substrate-subxt"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "94cc064acf915e8411b74261e6cd6d28b56709a5bbbb7f5fdf5dd55c650210d1"
-dependencies = [
- "frame-metadata",
- "frame-support",
- "futures 0.3.5",
- "hex",
- "jsonrpsee",
- "log",
- "num-traits",
- "pallet-indices",
- "parity-scale-codec",
- "sc-rpc-api",
- "serde",
- "serde_json",
- "sp-core",
- "sp-rpc",
- "sp-runtime",
- "sp-transaction-pool",
- "sp-version",
- "substrate-subxt-client",
- "substrate-subxt-proc-macro 0.11.0",
- "thiserror",
- "url 2.1.1",
-]
-
-[[package]]
-name = "substrate-subxt"
 version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "31fb7e8027a8445851f2a45fa82c30d2b005b9e6eb3be9db8669904d6d8ed5ab"
@@ -7326,16 +7297,17 @@ dependencies = [
  "sp-runtime",
  "sp-transaction-pool",
  "sp-version",
- "substrate-subxt-proc-macro 0.12.0",
+ "substrate-subxt-client",
+ "substrate-subxt-proc-macro",
  "thiserror",
  "url 2.1.1",
 ]
 
 [[package]]
 name = "substrate-subxt-client"
-version = "0.3.0"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4d205ba200ff1b62e1c9d94a47f71f737947e682d5c0f5a085f6ae6dc016fb5c"
+checksum = "41f3218c00b2f05683c7536214334668dba790baaf0dbedaf837d7007090187a"
 dependencies = [
  "async-std",
  "futures 0.1.29",
@@ -7347,21 +7319,6 @@ dependencies = [
  "serde_json",
  "sp-keyring",
  "thiserror",
-]
-
-[[package]]
-name = "substrate-subxt-proc-macro"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fd823af41d4d29069613987caf17c52610e505058788fa1c434821528c191db8"
-dependencies = [
- "heck",
- "proc-macro-crate",
- "proc-macro-error 1.0.4",
- "proc-macro2",
- "quote",
- "syn",
- "synstructure",
 ]
 
 [[package]]
@@ -7443,7 +7400,7 @@ dependencies = [
  "libipld",
  "parity-scale-codec",
  "regex",
- "substrate-subxt 0.12.0",
+ "substrate-subxt",
  "sunshine-bounty-client",
  "sunshine-bounty-utils",
  "sunshine-client-utils",
@@ -7463,7 +7420,7 @@ dependencies = [
  "rand 0.7.3",
  "serde",
  "serde_json",
- "substrate-subxt 0.12.0",
+ "substrate-subxt",
  "sunshine-bounty-utils",
  "sunshine-client-utils",
  "sunshine-codec",
@@ -7481,7 +7438,7 @@ dependencies = [
  "libipld",
  "serde",
  "serde_json",
- "substrate-subxt 0.12.0",
+ "substrate-subxt",
  "sunshine-bounty-client",
  "sunshine-client-utils",
  "sunshine-codec",
@@ -7537,12 +7494,12 @@ dependencies = [
 [[package]]
 name = "sunshine-cli-utils"
 version = "0.1.0"
-source = "git+https://github.com/sunshine-protocol/sunshine-core#fafa3194f87b00a66767c2badef6f2d2ace673fa"
+source = "git+https://github.com/sunshine-protocol/sunshine-core#793d59c6bd21527c0399d85c354ea72b5fbf4ef9"
 dependencies = [
  "async-std",
  "clap 3.0.0-beta.1",
  "rpassword 5.0.0",
- "substrate-subxt 0.11.0",
+ "substrate-subxt",
  "sunshine-client-utils",
  "thiserror",
 ]
@@ -7550,7 +7507,7 @@ dependencies = [
 [[package]]
 name = "sunshine-client-utils"
 version = "0.1.0"
-source = "git+https://github.com/sunshine-protocol/sunshine-core#fafa3194f87b00a66767c2badef6f2d2ace673fa"
+source = "git+https://github.com/sunshine-protocol/sunshine-core#793d59c6bd21527c0399d85c354ea72b5fbf4ef9"
 dependencies = [
  "anyhow",
  "async-std",
@@ -7563,7 +7520,7 @@ dependencies = [
  "sled",
  "sp-database",
  "sp-keyring",
- "substrate-subxt 0.11.0",
+ "substrate-subxt",
  "sunshine-codec",
  "sunshine-crypto",
  "sunshine-keystore",
@@ -7574,7 +7531,7 @@ dependencies = [
 [[package]]
 name = "sunshine-codec"
 version = "0.1.0"
-source = "git+https://github.com/sunshine-protocol/sunshine-core#fafa3194f87b00a66767c2badef6f2d2ace673fa"
+source = "git+https://github.com/sunshine-protocol/sunshine-core#793d59c6bd21527c0399d85c354ea72b5fbf4ef9"
 dependencies = [
  "anyhow",
  "generic-array 0.14.4",
@@ -7610,7 +7567,7 @@ dependencies = [
 [[package]]
 name = "sunshine-crypto"
 version = "0.1.0"
-source = "git+https://github.com/sunshine-protocol/sunshine-core#fafa3194f87b00a66767c2badef6f2d2ace673fa"
+source = "git+https://github.com/sunshine-protocol/sunshine-core#793d59c6bd21527c0399d85c354ea72b5fbf4ef9"
 dependencies = [
  "aead 0.2.0",
  "anyhow",
@@ -7631,7 +7588,7 @@ dependencies = [
  "sp-core",
  "sp-keyring",
  "strobe-rs",
- "substrate-subxt 0.11.0",
+ "substrate-subxt",
  "subtle 2.2.3",
  "thiserror",
  "x25519-dalek 1.1.0",
@@ -7674,10 +7631,10 @@ dependencies = [
 [[package]]
 name = "sunshine-faucet-client"
 version = "0.2.0"
-source = "git+https://github.com/sunshine-protocol/sunshine-identity#2b5ede65f38f047571a9a64d2d7900d18664c078"
+source = "git+https://github.com/sunshine-protocol/sunshine-identity#37b8a70f48f29f7c9c4ec6dc4973f665ffc2b1e4"
 dependencies = [
  "parity-scale-codec",
- "substrate-subxt 0.11.0",
+ "substrate-subxt",
  "sunshine-client-utils",
  "sunshine-identity-client",
 ]
@@ -7685,7 +7642,7 @@ dependencies = [
 [[package]]
 name = "sunshine-ffi-utils"
 version = "0.1.0"
-source = "git+https://github.com/sunshine-protocol/sunshine-core#fafa3194f87b00a66767c2badef6f2d2ace673fa"
+source = "git+https://github.com/sunshine-protocol/sunshine-core#793d59c6bd21527c0399d85c354ea72b5fbf4ef9"
 dependencies = [
  "allo-isolate",
  "async-std",
@@ -7716,7 +7673,7 @@ dependencies = [
 [[package]]
 name = "sunshine-identity-client"
 version = "0.2.3"
-source = "git+https://github.com/sunshine-protocol/sunshine-identity#2b5ede65f38f047571a9a64d2d7900d18664c078"
+source = "git+https://github.com/sunshine-protocol/sunshine-identity#37b8a70f48f29f7c9c4ec6dc4973f665ffc2b1e4"
 dependencies = [
  "async-std",
  "frame-support",
@@ -7725,7 +7682,7 @@ dependencies = [
  "parity-scale-codec",
  "serde",
  "serde_json",
- "substrate-subxt 0.11.0",
+ "substrate-subxt",
  "sunshine-client-utils",
  "thiserror",
  "ureq",
@@ -7753,7 +7710,7 @@ dependencies = [
 [[package]]
 name = "sunshine-keystore"
 version = "0.1.0"
-source = "git+https://github.com/sunshine-protocol/sunshine-core#fafa3194f87b00a66767c2badef6f2d2ace673fa"
+source = "git+https://github.com/sunshine-protocol/sunshine-core#793d59c6bd21527c0399d85c354ea72b5fbf4ef9"
 dependencies = [
  "anyhow",
  "async-std",
@@ -7805,7 +7762,7 @@ dependencies = [
 [[package]]
 name = "sunshine-node-utils"
 version = "0.1.0"
-source = "git+https://github.com/sunshine-protocol/sunshine-core#fafa3194f87b00a66767c2badef6f2d2ace673fa"
+source = "git+https://github.com/sunshine-protocol/sunshine-core#793d59c6bd21527c0399d85c354ea72b5fbf4ef9"
 dependencies = [
  "sc-basic-authorship",
  "sc-client-api",
@@ -8023,7 +7980,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "libipld",
- "substrate-subxt 0.12.0",
+ "substrate-subxt",
  "sunshine-bounty-client",
  "sunshine-bounty-utils",
  "sunshine-client-utils",

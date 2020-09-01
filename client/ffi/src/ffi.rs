@@ -504,7 +504,7 @@ where
         state: BountyState<R>,
     ) -> Result<BountyInformation> {
         info!("Get bounty info of id: {}", id);
-        let event_cid = sunshine_codec::Cid::from(state.info());
+        let event_cid = state.info();
         let bounty_body: GithubIssue = self
             .client
             .read()
@@ -530,7 +530,7 @@ where
         state: SubState<R>,
     ) -> Result<BountySubmissionInformation> {
         info!("Get submission info of id: {}", id);
-        let event_cid = sunshine_codec::Cid::from(state.submission());
+        let event_cid = state.submission();
         let submission_body: GithubIssue = self
             .client
             .read()
