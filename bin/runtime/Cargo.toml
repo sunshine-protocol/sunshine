@@ -41,7 +41,7 @@ std = [
 ]
 
 [build-dependencies]
-wasm-builder-runner = { version = "1.0.6", package = "substrate-wasm-builder-runner" }
+substrate-wasm-builder-runner = { version = "1.0.6" }
 
 [dependencies]
 serde = { version = "1.0.115", features = ["derive"], optional = true }
@@ -68,7 +68,7 @@ sp-std = { version = "2.0.0-rc6", default-features = false }
 sp-transaction-pool = { version = "2.0.0-rc6", default-features = false }
 sp-version = { version = "2.0.0-rc6", default-features = false }
 
-sunshine-codec = { default-features=false, git = "https://github.com/sunshine-protocol/sunshine-core" }
+sunshine-codec = { default-features=false, git = "https://github.com/sunshine-protocol/sunshine-core", branch = "flag" }
 
 util = { package = "sunshine-bounty-utils", path = "../../utils", default-features=false}
 org = {package = "sunshine-org", path = "../../pallets/org", default-features=false }

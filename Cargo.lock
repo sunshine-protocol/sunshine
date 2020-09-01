@@ -7401,7 +7401,7 @@ dependencies = [
  "sunshine-bounty-client",
  "sunshine-bounty-utils",
  "sunshine-client-utils",
- "sunshine-codec",
+ "sunshine-codec 0.1.0 (git+https://github.com/sunshine-protocol/sunshine-core)",
  "thiserror",
 ]
 
@@ -7420,7 +7420,7 @@ dependencies = [
  "substrate-subxt",
  "sunshine-bounty-utils",
  "sunshine-client-utils",
- "sunshine-codec",
+ "sunshine-codec 0.1.0 (git+https://github.com/sunshine-protocol/sunshine-core)",
  "sunshine-faucet-client",
  "sunshine-identity-client",
  "test-client",
@@ -7438,7 +7438,7 @@ dependencies = [
  "substrate-subxt",
  "sunshine-bounty-client",
  "sunshine-client-utils",
- "sunshine-codec",
+ "sunshine-codec 0.1.0 (git+https://github.com/sunshine-protocol/sunshine-core)",
  "sunshine-ffi-utils",
  "test-client",
 ]
@@ -7518,11 +7518,28 @@ dependencies = [
  "sp-database",
  "sp-keyring",
  "substrate-subxt",
- "sunshine-codec",
+ "sunshine-codec 0.1.0 (git+https://github.com/sunshine-protocol/sunshine-core)",
  "sunshine-crypto",
  "sunshine-keystore",
  "tempdir",
  "thiserror",
+]
+
+[[package]]
+name = "sunshine-codec"
+version = "0.1.0"
+source = "git+https://github.com/sunshine-protocol/sunshine-core?branch=flag#848a6896432d1b93714cd40a6081c6c3284bc519"
+dependencies = [
+ "anyhow",
+ "generic-array 0.14.4",
+ "hash-db",
+ "hash256-std-hasher",
+ "libipld",
+ "parity-scale-codec",
+ "sp-trie",
+ "thiserror",
+ "tiny-cid",
+ "tiny-multihash",
 ]
 
 [[package]]
@@ -7981,7 +7998,7 @@ dependencies = [
  "sunshine-bounty-client",
  "sunshine-bounty-utils",
  "sunshine-client-utils",
- "sunshine-codec",
+ "sunshine-codec 0.1.0 (git+https://github.com/sunshine-protocol/sunshine-core)",
  "sunshine-faucet-client",
  "sunshine-identity-client",
  "test-node",
@@ -8033,7 +8050,7 @@ dependencies = [
  "sunshine-bank",
  "sunshine-bounty",
  "sunshine-bounty-utils",
- "sunshine-codec",
+ "sunshine-codec 0.1.0 (git+https://github.com/sunshine-protocol/sunshine-core?branch=flag)",
  "sunshine-donate",
  "sunshine-drip",
  "sunshine-grant",
@@ -8123,6 +8140,7 @@ checksum = "1b635d214a0d951465523fd67ad11faf8838ad927b5a85f021142d4349d89f00"
 dependencies = [
  "multibase",
  "parity-scale-codec",
+ "serde",
  "tiny-multihash",
  "unsigned-varint 0.5.0",
 ]
