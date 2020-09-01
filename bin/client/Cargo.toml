@@ -10,12 +10,13 @@ mock = [
 ]
 
 [dependencies]
-async-trait = "0.1.36"
-ipld-block-builder = "0.4.1"
-libipld = { version = "0.3.1", default-features = false }
-substrate-subxt = "0.11.0"
+async-trait = "0.1.40"
+libipld = { version = "0.4.0", default-features = false }
+substrate-subxt = "0.12.0"
 sunshine-bounty-client = { path = "../../client/client" }
 sunshine-bounty-utils =  { path = "../../utils" }
+sunshine-codec = { default-features=false, git = "https://github.com/sunshine-protocol/sunshine-core" }
+tiny-cid = { version = "0.2.5", features = ["serde-codec"] }
 sunshine-client-utils = { git = "https://github.com/sunshine-protocol/sunshine-core" }
 test-node = { path = "../node" }
 

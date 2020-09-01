@@ -1,14 +1,24 @@
 #![recursion_limit = "256"]
-#![allow(clippy::string_lit_as_bytes)]
-#![allow(clippy::redundant_closure_call)]
-#![allow(clippy::type_complexity)]
+//! # Drip Module
+//! This module expresses logic for scheduling a stream of transfers from a sender
+//! to a recipient. It treats the transfer as continuous rather than discrete with
+//! an flow rate of X Balance every N Blocks.
+//!
+//! - [`drip::Trait`](./trait.Trait.html)
+//! - [`Call`](./enum.Call.html)
+//!
+//! ## Overview
+//!
+//! This pallet enables scheduling recurring payments at a specified rate of
+//! dripping from the sender to recipient.
+//!
+//! [`Call`]: ./enum.Call.html
+//! [`Trait`]: ./trait.Trait.html
 #![cfg_attr(not(feature = "std"), no_std)]
-//! Drip fund stream
 
 #[cfg(test)]
 mod tests;
 
-use codec::Codec;
 use frame_support::{
     decl_error,
     decl_event,
@@ -23,9 +33,10 @@ use frame_support::{
     Parameter,
 };
 use frame_system::{
-    self as system,
     ensure_signed,
+    Trait as System,
 };
+use parity_scale_codec::Codec;
 use sp_runtime::{
     traits::{
         AtLeast32Bit,
@@ -51,13 +62,15 @@ use util::{
     },
 };
 
-type BalanceOf<T> = <<T as Trait>::Currency as Currency<
-    <T as system::Trait>::AccountId,
->>::Balance;
-
-pub trait Trait: system::Trait {
+type BalanceOf<T> =
+    <<T as Trait>::Currency as Currency<<T as System>::AccountId>>::Balance;
+type DripOf<T> = Drip<
+    <T as System>::AccountId,
+    DripRate<<T as System>::BlockNumber, BalanceOf<T>>,
+>;
+pub trait Trait: System {
     /// Overarching event type
-    type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
+    type Event: From<Event<Self>> + Into<<Self as System>::Event>;
 
     /// The identifier for drips
     type DripId: Parameter
@@ -80,8 +93,8 @@ decl_event!(
     pub enum Event<T>
     where
         <T as Trait>::DripId,
-        <T as frame_system::Trait>::AccountId,
-        <T as frame_system::Trait>::BlockNumber,
+        <T as System>::AccountId,
+        <T as System>::BlockNumber,
         Balance = BalanceOf<T>,
     {
         /// Drip identifier, First payment block, Source, Destination, Amount Per Period, Period Length
@@ -113,15 +126,7 @@ decl_storage! {
 
         /// The state of drips
         pub Drips get(fn drips): map
-            hasher(blake2_128_concat) T::DripId => Option<
-                    Drip<
-                        T::AccountId,
-                        DripRate<
-                            T::BlockNumber,
-                            BalanceOf<T>,
-                        >,
-                    >
-                >;
+            hasher(blake2_128_concat) T::DripId => Option<DripOf<T>>;
     }
 }
 
@@ -168,7 +173,7 @@ decl_module! {
             ensure!(drip.source() == caller, Error::<T>::NotAuthorizedToCancelDrip);
             <Drips<T>>::remove(id);
             OpenDripCounter::mutate(|n| *n -= 1u32);
-            let now = <system::Module<T>>::block_number();
+            let now = <frame_system::Module<T>>::block_number();
             Self::deposit_event(
                 RawEvent::DripCancelled(
                     id,
@@ -183,7 +188,7 @@ decl_module! {
         }
 
         fn on_finalize(_n: T::BlockNumber) {
-           let current_block = <system::Module<T>>::block_number();
+           let current_block = <frame_system::Module<T>>::block_number();
            // TODO: sweep periodically instead of scanning after every block (which is what it does now)
             <Drips<T>>::iter()
                 .filter(|(_, drip)| current_block % drip.rate().period_length() == 0u32.into())
@@ -196,7 +201,7 @@ impl<T: Trait> Module<T> {
     fn first_next_block_mod_period_is_zero(
         period_length: T::BlockNumber,
     ) -> Option<T::BlockNumber> {
-        let now = <system::Module<T>>::block_number();
+        let now = <frame_system::Module<T>>::block_number();
         if let Some(div) = now.checked_div(&period_length) {
             let a = div * period_length;
             if a > now {

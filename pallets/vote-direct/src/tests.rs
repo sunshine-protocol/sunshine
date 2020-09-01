@@ -69,11 +69,11 @@ mod vote {
 
 impl_outer_event! {
     pub enum TestEvent for Test {
-        system<T>,
+        frame_system<T>,
         vote<T>,
     }
 }
-pub type System = system::Module<Test>;
+pub type System = frame_system::Module<Test>;
 // pub type Organization = org::Module<Test>;
 pub type Vote = Module<Test>;
 

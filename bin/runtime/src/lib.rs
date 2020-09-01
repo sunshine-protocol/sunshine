@@ -39,7 +39,6 @@ use sp_std::prelude::*;
 #[cfg(feature = "std")]
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
-use sunshine_pallet_utils::cid::CidBytes;
 
 // A few exports that help ease life for downstream crates.
 pub use frame_support::{
@@ -303,7 +302,7 @@ impl pallet_transaction_payment::Trait for Runtime {
 }
 impl org::Trait for Runtime {
     type Event = Event;
-    type Cid = CidBytes;
+    type Cid = sunshine_codec::Cid; // Serialize and Deserialize
     type OrgId = u64;
     type Shares = u64;
 }
@@ -312,15 +311,6 @@ impl vote::Trait for Runtime {
     type VoteId = u64;
     type Signal = u64;
     type ThresholdId = u64;
-}
-parameter_types! {
-    pub const MinimumDisputeAmount: u128 = 10;
-}
-impl court::Trait for Runtime {
-    type Event = Event;
-    type Currency = Balances;
-    type DisputeId = u64;
-    type MinimumDisputeAmount = MinimumDisputeAmount;
 }
 impl drip::Trait for Runtime {
     type Event = Event;
@@ -360,7 +350,7 @@ parameter_types! {
 }
 impl bounty::Trait for Runtime {
     type Event = Event;
-    type IpfsReference = CidBytes;
+    type IpfsReference = sunshine_codec::Cid;
     type Currency = Balances;
     type BountyId = u64;
     type SubmissionId = u64;
@@ -399,7 +389,6 @@ construct_runtime!(
         // sunshine-bounty modules
         Org: org::{Module, Call, Config<T>, Storage, Event<T>},
         Vote: vote::{Module, Call, Storage, Event<T>},
-        Court: court::{Module, Call, Storage, Event<T>},
         Drip: drip::{Module, Call, Storage, Event<T>},
         Treasury: treasury::{Module, Call, Config<T>, Storage, Event<T>},
         Donate: donate::{Module, Call, Event<T>},

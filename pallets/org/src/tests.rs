@@ -28,7 +28,7 @@ mod org {
 
 impl_outer_event! {
     pub enum TestEvent for TestRuntime {
-        system<T>,
+        frame_system<T>,
         org<T>,
     }
 }
@@ -74,7 +74,7 @@ impl Trait for TestRuntime {
     type OrgId = u64;
     type Shares = u64;
 }
-pub type System = system::Module<TestRuntime>;
+pub type System = frame_system::Module<TestRuntime>;
 pub type Org = Module<TestRuntime>;
 
 fn get_last_event() -> RawEvent<u64, u64, u64, u32> {
@@ -97,9 +97,9 @@ fn new_test_ext() -> sp_io::TestExternalities {
         .build_storage::<TestRuntime>()
         .unwrap();
     GenesisConfig::<TestRuntime> {
-        first_organization_supervisor: 1,
-        first_organization_value_constitution: 1738,
-        first_organization_flat_membership: vec![1, 2, 3, 4, 5, 6],
+        sudo: 1,
+        doc: 1738,
+        mems: vec![1, 2, 3, 4, 5, 6],
     }
     .assimilate_storage(&mut t)
     .unwrap();
@@ -111,10 +111,11 @@ fn new_test_ext() -> sp_io::TestExternalities {
 #[test]
 fn genesis_config_works() {
     new_test_ext().execute_with(|| {
-        assert_eq!(Org::organization_counter(), 1);
+        assert_eq!(Org::org_counter(), 1);
         let constitution = 1738;
-        let expected_organization = Organization::new(Some(1), 1, constitution);
-        let org_in_storage = Org::organization_states(1u64).unwrap();
+        let expected_organization =
+            Organization::new(Some(1), 1, 6, constitution);
+        let org_in_storage = Org::orgs(1u64).unwrap();
         assert_eq!(expected_organization, org_in_storage);
         for i in 1u64..7u64 {
             assert!(Org::is_member_of_group(1u64, &i));
@@ -129,37 +130,32 @@ fn organization_registration() {
         let one = Origin::signed(1);
         let accounts = vec![1, 2, 3, 9, 10];
         let constitution = 1110011;
-        assert_ok!(Org::register_flat_org(
+        assert_ok!(Org::new_flat_org(
             one.clone(),
             Some(1),
             None,
             constitution,
             accounts,
         ));
-        assert_eq!(Org::organization_counter(), 2);
+        assert_eq!(Org::org_counter(), 2);
         assert_eq!(
             get_last_event(),
-            RawEvent::NewFlatOrganizationRegistered(1, 2, constitution, 5),
+            RawEvent::NewFlatOrg(1, 2, constitution, 5),
         );
         let third_org_accounts =
             vec![(1, 10), (2, 10), (3, 10), (9, 10), (10, 10)];
         let third_org_constitution = 9669;
-        assert_ok!(Org::register_weighted_org(
+        assert_ok!(Org::new_weighted_org(
             one.clone(),
             Some(1),
             None,
             third_org_constitution,
             third_org_accounts,
         ));
-        assert_eq!(Org::organization_counter(), 3);
+        assert_eq!(Org::org_counter(), 3);
         assert_eq!(
             get_last_event(),
-            RawEvent::NewWeightedOrganizationRegistered(
-                1,
-                3,
-                third_org_constitution,
-                50,
-            ),
+            RawEvent::NewWeightedOrg(1, 3, third_org_constitution, 50,),
         );
     });
 }

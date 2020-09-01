@@ -7,7 +7,6 @@
 #[cfg(test)]
 mod tests;
 
-use codec::Codec;
 use frame_support::{
     decl_error,
     decl_event,
@@ -26,7 +25,12 @@ use frame_support::{
     },
     Parameter,
 };
-use frame_system::ensure_signed;
+use frame_system::{
+    ensure_signed,
+    Trait as System,
+};
+use org::Trait as Org;
+use parity_scale_codec::Codec;
 use sp_runtime::{
     traits::{
         AccountIdConversion,
@@ -70,42 +74,40 @@ use util::{
         XorThreshold,
     },
 };
+use vote::Trait as Vote;
 
 // type aliases
-type BalanceOf<T> = <<T as Trait>::Currency as Currency<
-    <T as frame_system::Trait>::AccountId,
->>::Balance;
+type BalanceOf<T> =
+    <<T as Trait>::Currency as Currency<<T as System>::AccountId>>::Balance;
 type BankSt<T> = BankState<
     <T as Trait>::BankId,
-    <T as frame_system::Trait>::AccountId,
-    <T as org::Trait>::OrgId,
-    <T as vote::Trait>::ThresholdId,
+    <T as System>::AccountId,
+    <T as Org>::OrgId,
+    <T as Vote>::ThresholdId,
 >;
 type Threshold<T> = ThresholdInput<
-    OrgRep<<T as org::Trait>::OrgId>,
-    XorThreshold<<T as vote::Trait>::Signal, Permill>,
+    OrgRep<<T as Org>::OrgId>,
+    XorThreshold<<T as Vote>::Signal, Permill>,
 >;
 type SpendProp<T> = SpendProposal<
     <T as Trait>::BankId,
     <T as Trait>::SpendId,
     BalanceOf<T>,
-    <T as frame_system::Trait>::AccountId,
-    SpendState<<T as vote::Trait>::VoteId>,
+    <T as System>::AccountId,
+    SpendState<<T as Vote>::VoteId>,
 >;
 type MemberProp<T> = MembershipProposal<
     <T as Trait>::BankId,
     <T as Trait>::MemId,
     BalanceOf<T>,
-    <T as org::Trait>::Shares,
-    <T as frame_system::Trait>::AccountId,
-    ProposalState<<T as vote::Trait>::VoteId>,
+    <T as Org>::Shares,
+    <T as System>::AccountId,
+    ProposalState<<T as Vote>::VoteId>,
 >;
 
-pub trait Trait:
-    frame_system::Trait + org::Trait + donate::Trait + vote::Trait
-{
+pub trait Trait: System + Org + donate::Trait + Vote {
     /// The overarching event types
-    type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
+    type Event: From<Event<Self>> + Into<<Self as System>::Event>;
 
     /// The currency type for on-chain transactions
     type Currency: Currency<Self::AccountId>
@@ -160,10 +162,10 @@ pub trait Trait:
 decl_event!(
     pub enum Event<T>
     where
-        <T as frame_system::Trait>::AccountId,
-        <T as org::Trait>::OrgId,
-        <T as org::Trait>::Shares,
-        <T as vote::Trait>::VoteId,
+        <T as System>::AccountId,
+        <T as Org>::OrgId,
+        <T as Org>::Shares,
+        <T as Vote>::VoteId,
         <T as Trait>::BankId,
         <T as Trait>::SpendId,
         <T as Trait>::MemId,

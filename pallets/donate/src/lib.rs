@@ -1,3 +1,24 @@
+#![recursion_limit = "256"]
+//! # Donate Module
+//! This module expresses logic for transferring funds to a set of `AccountId`s
+//! in proportion to their `Shares` ownership in the Org. It allows for donating
+//! 1. in proportion to `Shares` ownership in the org
+//! 2. an equal amount for each account in the org
+//!
+//! There is no perfect way to deal with remainders so the caller must
+//! include an `AccountId` to which the remainder will go.
+//!
+//! - [`donate::Trait`](./trait.Trait.html)
+//! - [`Call`](./enum.Call.html)
+//!
+//! ## Overview
+//!
+//! This pallet enables transfers to Orgs as a weighted set of accounts. It demonstrates
+//! a batch transfer with each recipient receiving an amount in proportion to
+//! their relative `Shares` ownership.
+//!
+//! [`Call`]: ./enum.Call.html
+//! [`Trait`]: ./trait.Trait.html
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(test)]
@@ -124,6 +145,7 @@ impl<T: Trait> Module<T> {
         amt: BalanceOf<T>,
     ) -> Result<(BalanceOf<T>, BalanceOf<T>), DispatchError> {
         let free = T::Currency::free_balance(sender);
+        // TODO: add buffer for expected transaction fee? depends on shape of tx
         let _ = free
             .checked_sub(&amt)
             .ok_or(Error::<T>::NotEnoughFundsInFreeToMakeTransfer)?;
@@ -198,7 +220,9 @@ impl<T: Trait> Module<T> {
         account: T::AccountId,
         group: T::OrgId,
     ) -> Result<BalanceOf<T>, DispatchError> {
-        let issuance = <org::Module<T>>::total_issuance(group);
+        let issuance = <org::Module<T>>::orgs(group)
+            .ok_or(Error::<T>::CannotDonateToOrgThatDNE)?
+            .total_shares();
         let acc_ownership = <org::Module<T>>::members(group, &account)
             .ok_or(Error::<T>::AccountHasNoOwnershipInOrg)?;
         let ownership = Permill::from_rational_approximation(

@@ -1,13 +1,22 @@
-#![allow(clippy::string_lit_as_bytes)]
-#![allow(clippy::redundant_closure_call)]
-#![allow(clippy::type_complexity)]
+#![recursion_limit = "256"]
+//! # Bank Module
+//! This module expresses a joint bank account with democratic escrow rules
+//! via governance by org vote
+//!
+//! - [`bank::Trait`](./trait.Trait.html)
+//! - [`Call`](./enum.Call.html)
+//!
+//! ## Overview
+//!
+//! This pallet allows orgs to govern a pool of capital.
+//!
+//! [`Call`]: ./enum.Call.html
+//! [`Trait`]: ./trait.Trait.html
 #![cfg_attr(not(feature = "std"), no_std)]
-//! Bank account for orgs w/ democratic escrow rules
 
 #[cfg(test)]
 mod tests;
 
-use codec::Codec;
 use frame_support::{
     decl_error,
     decl_event,
@@ -27,6 +36,7 @@ use frame_support::{
     Parameter,
 };
 use frame_system::ensure_signed;
+use parity_scale_codec::Codec;
 use sp_runtime::{
     traits::{
         AccountIdConversion,
@@ -155,7 +165,7 @@ decl_error! {
     pub enum Error for Module<T: Trait> {
         CannotOpenBankAccountIfDepositIsBelowModuleMinimum,
         InsufficientBalanceToFundBankOpen,
-        CannotOpenBankAccountForOrgIfBankCountExceedsLimitPerOrg,
+        CommitteeCountExceedsLimitPerOrg,
         CannotCloseBankThatDNE,
         NotPermittedToOpenBankAccountForOrg,
         NotPermittedToProposeSpendForBankAccount,
@@ -172,7 +182,7 @@ decl_error! {
         CannotTriggerVoteFromCurrentSpendProposalState,
         CannotSudoApproveSpendProposalIfBaseBankDNE,
         CannotSudoApproveSpendProposalIfSpendProposalDNE,
-        CannotApproveAlreadyApprovedSpendProposal,
+        CannotSudoApproveFromCurrentState,
         CannotPollSpendProposalIfBaseBankDNE,
         CannotPollSpendProposalIfSpendProposalDNE,
         // for getting banks for org
@@ -375,7 +385,7 @@ impl<T: Trait>
         let new_count = <OrgTreasuryCount<T>>::get(org) + 1;
         ensure!(
             new_count <= T::MaxTreasuryPerOrg::get(),
-            Error::<T>::CannotOpenBankAccountForOrgIfBankCountExceedsLimitPerOrg
+            Error::<T>::CommitteeCountExceedsLimitPerOrg
         );
         // TODO: extract into separate method that might compare with min threshold set in this module contex
         ensure!(
@@ -482,7 +492,7 @@ impl<T: Trait>
                 Error::<T>::CannotSudoApproveSpendProposalIfSpendProposalDNE,
             )?;
         match spend_proposal.state() {
-            SpendState::WaitingForApproval | SpendState::Voting(_) => {
+            SpendState::WaitingForApproval => {
                 // TODO: if Voting, remove the current live vote
                 let new_spend_proposal = if let Ok(()) =
                     <T as Trait>::Currency::transfer(
@@ -502,10 +512,7 @@ impl<T: Trait>
                 );
                 Ok(())
             }
-            _ => {
-                Err(Error::<T>::CannotApproveAlreadyApprovedSpendProposal
-                    .into())
-            }
+            _ => Err(Error::<T>::CannotSudoApproveFromCurrentState.into()),
         }
     }
     fn poll_spend_proposal(

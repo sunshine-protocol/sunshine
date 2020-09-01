@@ -1,9 +1,15 @@
-use codec::{
+use parity_scale_codec::{
     Decode,
     Encode,
 };
 use sp_runtime::RuntimeDebug;
 use sp_std::prelude::*;
+
+#[derive(new, PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug)]
+pub struct Relation<OrgId> {
+    pub parent: OrgId,
+    pub child: OrgId,
+}
 
 #[derive(new, PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug)]
 /// Used in `vote` and `donate` to distinguish between configurations that acknowledge ownership and don't
@@ -25,23 +31,52 @@ impl<OrgId: Copy> OrgRep<OrgId> {
 
 #[derive(new, PartialEq, Eq, Default, Clone, Encode, Decode, RuntimeDebug)]
 /// Tracks main organization state
-pub struct Organization<AccountId, OrgId, IpfsRef> {
+pub struct Organization<AccountId, OrgId, Shares, IpfsRef> {
     /// Optional sudo, encouraged to be None
     sudo: Option<AccountId>,
     /// Organization identifier
     id: OrgId,
+    /// Total number of Shares
+    shares: Shares,
     /// The constitution
     constitution: IpfsRef,
 }
 
-impl<AccountId: Clone + PartialEq, OrgId: Copy, IpfsRef: Clone>
-    Organization<AccountId, OrgId, IpfsRef>
+impl<
+        AccountId: Clone + PartialEq,
+        OrgId: Copy,
+        Shares: Copy
+            + sp_std::ops::Add<Output = Shares>
+            + sp_std::ops::Sub<Output = Shares>,
+        IpfsRef: Clone,
+    > Organization<AccountId, OrgId, Shares, IpfsRef>
 {
     pub fn id(&self) -> OrgId {
         self.id
     }
     pub fn constitution(&self) -> IpfsRef {
         self.constitution.clone()
+    }
+    pub fn total_shares(&self) -> Shares {
+        self.shares
+    }
+    pub fn set_shares(&self, a: Shares) -> Self {
+        Self {
+            shares: a,
+            ..self.clone()
+        }
+    }
+    pub fn add_shares(&self, a: Shares) -> Self {
+        Self {
+            shares: self.shares + a,
+            ..self.clone()
+        }
+    }
+    pub fn subtract_shares(&self, a: Shares) -> Self {
+        Self {
+            shares: self.shares - a,
+            ..self.clone()
+        }
     }
     pub fn is_sudo(&self, cmp: &AccountId) -> bool {
         if let Some(unwrapped_sudo) = &self.sudo {

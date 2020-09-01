@@ -18,14 +18,15 @@ members = [
     "pallets/donate",
     "pallets/drip",
     "pallets/grant",
+    "pallets/insurance",
     "pallets/kickback",
     "pallets/moloch",
     "pallets/org",
+    "pallets/rank",
+    "pallets/rfp",
+    "pallets/recovery",
     "pallets/treasury",
     "pallets/vote",
     "pallets/vote-direct",
     "utils",
 ]
-
-[patch.crates-io]
-substrate-subxt = { git = "https://github.com/paritytech/substrate-subxt/" }

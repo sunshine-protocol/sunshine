@@ -14,10 +14,13 @@ use anyhow::{
     anyhow,
     bail,
 };
-use ipld_block_builder::{
-    Cache,
-    Codec,
-    ReadonlyCache,
+use libipld::{
+    cache::{
+        Cache,
+        ReadonlyCache,
+    },
+    cbor::DagCborCodec,
+    store::ReadonlyStore,
 };
 use std::{
     fmt::{
@@ -52,7 +55,6 @@ use sunshine_bounty_client::{
     GithubIssue,
 };
 use sunshine_client_utils::{
-    cid::CidBytes,
     crypto::{
         bip39::Mnemonic,
         keychain::TypedPair,
@@ -63,6 +65,7 @@ use sunshine_client_utils::{
         ss58::Ss58,
     },
     Keystore,
+    OffchainClient,
     Result,
 };
 use sunshine_ffi_utils::async_std::sync::RwLock;
@@ -196,8 +199,14 @@ impl<'a, C, R> Bounty<'a, C, R>
 where
     C: BountyClient<R> + Send + Sync,
     R: Runtime + BountyTrait + Debug,
-    R: BountyTrait<IpfsReference = CidBytes>,
-    C::OffchainClient: Cache<Codec, GithubIssue>,
+    R: BountyTrait<IpfsReference = sunshine_codec::Cid>,
+    C::OffchainClient: Cache<
+        <C::OffchainClient as OffchainClient>::Store,
+        DagCborCodec,
+        GithubIssue,
+    >,
+    <<C::OffchainClient as OffchainClient>::Store as ReadonlyStore>::Codec:
+        From<DagCborCodec> + Into<DagCborCodec>,
     <R as System>::AccountId: Ss58Codec + Into<<R as System>::Address>,
     <R as BountyTrait>::BountyId: From<u64> + Into<u64> + Display,
     <R as BountyTrait>::SubmissionId: From<u64> + Into<u64> + Display,
@@ -495,7 +504,7 @@ where
         state: BountyState<R>,
     ) -> Result<BountyInformation> {
         info!("Get bounty info of id: {}", id);
-        let event_cid = state.info().to_cid()?;
+        let event_cid = state.info();
         let bounty_body: GithubIssue = self
             .client
             .read()
@@ -521,8 +530,7 @@ where
         state: SubState<R>,
     ) -> Result<BountySubmissionInformation> {
         info!("Get submission info of id: {}", id);
-        let event_cid = state.submission().to_cid()?;
-
+        let event_cid = state.submission();
         let submission_body: GithubIssue = self
             .client
             .read()

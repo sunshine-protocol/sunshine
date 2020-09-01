@@ -1,6 +1,6 @@
 //! Structured call data for `vote`
 use crate::vote::Threshold;
-use codec::{
+use parity_scale_codec::{
     Decode,
     Encode,
 };

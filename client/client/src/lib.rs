@@ -3,27 +3,24 @@ mod error;
 pub use error::Error;
 pub mod bank;
 pub mod bounty;
-pub mod court;
 pub mod donate;
 pub mod org;
 pub mod vote;
 pub use sunshine_bounty_utils as utils;
 
-use codec::{
-    Decode,
-    Encode,
-};
-use ipld_block_builder::{
-    Cache,
-    Codec,
-};
 use libipld::{
+    cache::Cache,
     cbor::DagCborCodec,
     codec::{
         Decode as DagDecode,
         Encode as DagEncode,
     },
+    store::ReadonlyStore,
     DagCbor,
+};
+use parity_scale_codec::{
+    Decode,
+    Encode,
 };
 use substrate_subxt::{
     sp_runtime::traits::SignedExtension,
@@ -32,6 +29,7 @@ use substrate_subxt::{
 };
 use sunshine_client_utils::{
     Client,
+    OffchainClient,
     Result,
 };
 
@@ -50,13 +48,16 @@ pub struct GithubIssue {
 pub(crate) async fn post<R, C, V>(
     client: &C,
     value: V,
-) -> Result<libipld::cid::Cid>
+) -> Result<sunshine_codec::Cid>
 where
     R: Runtime,
     <<R::Extra as SignedExtra<R>>::Extra as SignedExtension>::AdditionalSigned:
         Send + Sync,
     C: Client<R>,
-    C::OffchainClient: Cache<Codec, V>,
+    C::OffchainClient:
+        Cache<<C::OffchainClient as OffchainClient>::Store, DagCborCodec, V>,
+    <<C::OffchainClient as OffchainClient>::Store as ReadonlyStore>::Codec:
+        From<DagCborCodec> + Into<DagCborCodec>,
     V: Clone + DagEncode<DagCborCodec> + DagDecode<DagCborCodec> + Send + Sync,
 {
     let cid = client.offchain_client().insert(value).await?;

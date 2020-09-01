@@ -1,0 +1,33 @@
+[package]
+name = "sunshine-recovery"
+version = "0.0.1"
+authors = ["Amar Singh <asinghchrony@protonmail.com>"]
+edition = "2018"
+
+[dependencies]
+frame-support = { version = "2.0.0-rc6", default-features = false }
+frame-system = { version = "2.0.0-rc6", default-features = false }
+orml-utilities = { version = "0.1.1", default-features = false }
+parity-scale-codec = { version = "1.3.4", default-features = false }
+sp-core = { version = "2.0.0-rc6", default-features = false }
+sp-runtime = { version = "2.0.0-rc6", default-features = false }
+sp-std = { version = "2.0.0-rc6", default-features = false }
+util = { package = "sunshine-bounty-utils", path = "../../utils", default-features=false}
+
+[dev-dependencies]
+pallet-balances = { version = "2.0.0-rc6", default-features = false }
+sp-io = { version = "2.0.0-rc6", default-features = false }
+sunshine-client-utils = { version = "0.1.0", git = "https://github.com/sunshine-protocol/sunshine-core" }
+
+[features]
+default = ["std"]
+std = [
+    "frame-support/std",
+    "frame-system/std",
+    "orml-utilities/std",
+    "pallet-balances/std",
+    "parity-scale-codec/std",
+    "sp-core/std",
+    "sp-runtime/std",
+    "sp-std/std",
+]

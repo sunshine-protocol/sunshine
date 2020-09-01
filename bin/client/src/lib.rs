@@ -1,10 +1,12 @@
-use ipld_block_builder::{
+use libipld::{
+    cache::{
+        CacheConfig,
+        IpldCache,
+    },
+    cbor::DagCborCodec,
     derive_cache,
-    Codec,
-    IpldCache,
+    store::Store,
 };
-use libipld::store::Store;
-use std::sync::Arc;
 use substrate_subxt::{
     balances::{
         AccountData,
@@ -27,12 +29,12 @@ use sunshine_bounty_client::{
     vote::Vote,
 };
 use sunshine_client_utils::{
-    cid::CidBytes,
     client::{
         GenericClient,
         KeystoreImpl,
         OffchainStoreImpl,
     },
+    codec::hasher::BLAKE2B_256,
     crypto::{
         keychain::KeyType,
         sr25519,
@@ -74,7 +76,7 @@ impl Balances for Runtime {
 }
 
 impl Org for Runtime {
-    type IpfsReference = CidBytes;
+    type Cid = sunshine_codec::Cid;
     type OrgId = u64;
     type Shares = u64;
     type Constitution = TextBlock;
@@ -98,7 +100,7 @@ impl Bank for Runtime {
 }
 
 impl Bounty for Runtime {
-    type IpfsReference = CidBytes;
+    type IpfsReference = sunshine_codec::Cid;
     type BountyId = u64;
     type BountyPost = GithubIssue;
     type SubmissionId = u64;
@@ -107,7 +109,7 @@ impl Bounty for Runtime {
 
 impl sunshine_identity_client::Identity for Runtime {
     type Uid = u8;
-    type Cid = CidBytes;
+    type Cid = sunshine_codec::Cid;
     type Mask = u8;
     type Gen = u16;
     type IdAccountData = ();
@@ -121,21 +123,39 @@ impl substrate_subxt::Runtime for Runtime {
 }
 
 pub struct OffchainClient<S> {
-    bounties: IpldCache<S, Codec, GithubIssue>,
-    constitutions: IpldCache<S, Codec, TextBlock>,
+    store: S,
+    bounties: IpldCache<S, DagCborCodec, GithubIssue>,
+    constitutions: IpldCache<S, DagCborCodec, TextBlock>,
 }
 
 impl<S: Store> OffchainClient<S> {
     pub fn new(store: S) -> Self {
+        let (mut config, mut config2) = (
+            CacheConfig::new(store.clone(), DagCborCodec),
+            CacheConfig::new(store.clone(), DagCborCodec),
+        );
+        config.size = 64;
+        config2.size = 64;
+        config.hash = BLAKE2B_256;
+        config2.hash = BLAKE2B_256;
         Self {
-            bounties: IpldCache::new(store.clone(), Codec::new(), 64),
-            constitutions: IpldCache::new(store, Codec::new(), 64),
+            store,
+            bounties: IpldCache::new(config),
+            constitutions: IpldCache::new(config2),
         }
     }
 }
 
-derive_cache!(OffchainClient, bounties, Codec, GithubIssue);
-derive_cache!(OffchainClient, constitutions, Codec, TextBlock);
+derive_cache!(OffchainClient, bounties, DagCborCodec, GithubIssue);
+derive_cache!(OffchainClient, constitutions, DagCborCodec, TextBlock);
+
+impl<S: Store> sunshine_client_utils::OffchainClient for OffchainClient<S> {
+    type Store = S;
+
+    fn store(&self) -> &S {
+        &self.store
+    }
+}
 
 impl<S: Store> From<S> for OffchainClient<S> {
     fn from(store: S) -> Self {
@@ -177,13 +197,13 @@ impl NodeConfig for Node {
 
     fn new_light(
         config: Configuration,
-    ) -> Result<(TaskManager, Arc<RpcHandlers>), ScServiceError> {
+    ) -> Result<(TaskManager, RpcHandlers), ScServiceError> {
         Ok(test_node::new_light(config)?)
     }
 
     fn new_full(
         config: Configuration,
-    ) -> Result<(TaskManager, Arc<RpcHandlers>), ScServiceError> {
+    ) -> Result<(TaskManager, RpcHandlers), ScServiceError> {
         Ok(test_node::new_full(config)?)
     }
 }

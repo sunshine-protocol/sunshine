@@ -3,11 +3,11 @@ use crate::traits::{
     AccessProfile,
     VerifyShape,
 };
-use codec::{
+use frame_support::Parameter;
+use parity_scale_codec::{
     Decode,
     Encode,
 };
-use frame_support::Parameter;
 use sp_runtime::{
     traits::Zero,
     RuntimeDebug,
@@ -37,7 +37,8 @@ pub enum ProfileState {
 
 #[derive(new, PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug)]
 /// share profile reserves the total share amount every time but (might) have a limit on total reservations
-pub struct ShareProfile<Shares, State> {
+pub struct ShareProfile<Id, Shares, State> {
+    id: Id,
     /// The total number of shares owned by this participant
     total: Shares,
     /// Tells us if the shares can be used in another vote
@@ -45,6 +46,7 @@ pub struct ShareProfile<Shares, State> {
 }
 
 impl<
+        Id: Clone,
         Shares: Copy
             + Default
             + Parameter
@@ -52,27 +54,11 @@ impl<
             + sp_std::ops::Sub<Output = Shares>
             + Zero
             + From<u32>,
-    > Default for ShareProfile<Shares, ProfileState>
+    > ShareProfile<Id, Shares, ProfileState>
 {
-    /// The default is 1 shares for convenient usage of the vote module for flat votes
-    fn default() -> ShareProfile<Shares, ProfileState> {
-        ShareProfile {
-            total: Shares::zero() + 1u32.into(),
-            state: ProfileState::Unlocked,
-        }
+    pub fn id(&self) -> Id {
+        self.id.clone()
     }
-}
-
-impl<
-        Shares: Copy
-            + Default
-            + Parameter
-            + sp_std::ops::Add<Output = Shares>
-            + sp_std::ops::Sub<Output = Shares>
-            + Zero
-            + From<u32>,
-    > ShareProfile<Shares, ProfileState>
-{
     pub fn total(&self) -> Shares {
         self.total
     }
@@ -81,17 +67,21 @@ impl<
         self.total == Shares::zero()
     }
 
-    pub fn new_shares(total: Shares) -> ShareProfile<Shares, ProfileState> {
+    pub fn new_shares(
+        id: Id,
+        total: Shares,
+    ) -> ShareProfile<Id, Shares, ProfileState> {
         ShareProfile {
+            id,
             total,
-            ..Default::default()
+            state: ProfileState::Unlocked,
         }
     }
 
     pub fn add_shares(
         self,
         amount: Shares,
-    ) -> ShareProfile<Shares, ProfileState> {
+    ) -> ShareProfile<Id, Shares, ProfileState> {
         let total = self.total + amount;
         ShareProfile { total, ..self }
     }
@@ -99,19 +89,19 @@ impl<
     pub fn subtract_shares(
         self,
         amount: Shares,
-    ) -> ShareProfile<Shares, ProfileState> {
+    ) -> ShareProfile<Id, Shares, ProfileState> {
         let total = self.total - amount;
         ShareProfile { total, ..self }
     }
 
-    pub fn lock(self) -> ShareProfile<Shares, ProfileState> {
+    pub fn lock(self) -> ShareProfile<Id, Shares, ProfileState> {
         ShareProfile {
             state: ProfileState::Locked,
             ..self
         }
     }
 
-    pub fn unlock(self) -> ShareProfile<Shares, ProfileState> {
+    pub fn unlock(self) -> ShareProfile<Id, Shares, ProfileState> {
         ShareProfile {
             state: ProfileState::Unlocked,
             ..self
@@ -123,8 +113,8 @@ impl<
     }
 }
 
-impl<Shares: Copy + sp_std::ops::AddAssign + Zero> AccessProfile<Shares>
-    for ShareProfile<Shares, ProfileState>
+impl<Id: Clone, Shares: Copy + sp_std::ops::AddAssign + Zero>
+    AccessProfile<Shares> for ShareProfile<Id, Shares, ProfileState>
 {
     fn total(&self) -> Shares {
         self.total
@@ -160,15 +150,12 @@ impl<
         genesis: Vec<(AccountId, Shares)>,
     ) -> WeightedVector<AccountId, Shares> {
         let mut total: Shares = Shares::zero();
-        let mut dedup_genesis = genesis;
-        dedup_genesis.dedup(); // deduplicated
-        for account_shares in dedup_genesis.clone() {
+        let mut dg = genesis;
+        dg.dedup();
+        for account_shares in dg.clone() {
             total += account_shares.1;
         }
-        WeightedVector {
-            total,
-            vec: dedup_genesis,
-        }
+        WeightedVector { total, vec: dg }
     }
 }
 

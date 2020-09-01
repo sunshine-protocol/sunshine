@@ -22,14 +22,14 @@ use sunshine_client_utils::{
 };
 
 #[derive(Clone, Debug, Clap)]
-pub struct OrgRegisterFlatCommand {
+pub struct NewFlatOrgCommand {
     pub constitution: String,
     pub sudo: Option<String>,
     pub parent_org: Option<u64>,
     pub members: Vec<String>,
 }
 
-impl OrgRegisterFlatCommand {
+impl NewFlatOrgCommand {
     pub async fn exec<R: Runtime + Org, C: OrgClient<R>>(
         &self,
         client: &C,
@@ -62,7 +62,7 @@ impl OrgRegisterFlatCommand {
             })
             .collect::<Result<Vec<R::AccountId>>>()?;
         let event = client
-            .register_flat_org(sudo, parent_org, constitution.into(), &members)
+            .new_flat_org(sudo, parent_org, constitution.into(), &members)
             .await?;
         println!(
             "Account {} created a flat organization with OrgId: {}, constitution: {:?} and {} members of equal ownership weight",
@@ -73,14 +73,14 @@ impl OrgRegisterFlatCommand {
 }
 
 #[derive(Clone, Debug, Clap)]
-pub struct OrgRegisterWeightedCommand {
+pub struct NewWeightedOrgCommand {
     pub constitution: String,
     pub sudo: Option<String>,
     pub parent_org: Option<u64>,
     pub members: Vec<AccountShare>,
 }
 
-impl OrgRegisterWeightedCommand {
+impl NewWeightedOrgCommand {
     pub async fn exec<R: Runtime + Org, C: OrgClient<R>>(
         &self,
         client: &C,
@@ -115,12 +115,7 @@ impl OrgRegisterWeightedCommand {
             })
             .collect::<Result<Vec<(R::AccountId, R::Shares)>>>()?;
         let event = client
-            .register_weighted_org(
-                sudo,
-                parent_org,
-                constitution.into(),
-                &members,
-            )
+            .new_weighted_org(sudo, parent_org, constitution.into(), &members)
             .await?;
         println!(
             "Account {} created a weighted organization with OrgId: {}, constitution: {:?} and {} total shares minted for new members",

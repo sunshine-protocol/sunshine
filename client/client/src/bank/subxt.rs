@@ -12,12 +12,12 @@ use crate::{
         VoteEventsDecoder,
     },
 };
-use codec::{
+use frame_support::Parameter;
+use parity_scale_codec::{
     Codec,
     Decode,
     Encode,
 };
-use frame_support::Parameter;
 use sp_runtime::traits::{
     AtLeast32Bit,
     MaybeSerializeDeserialize,

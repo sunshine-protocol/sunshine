@@ -1,0 +1,7 @@
+
+[book]
+title = "Sunshine Recipes"
+author = "4meta5 (Amar Singh)"
+
+[output.html]
+default-theme = "ayu"

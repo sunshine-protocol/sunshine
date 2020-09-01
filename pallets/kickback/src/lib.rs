@@ -1,13 +1,26 @@
-#![allow(clippy::string_lit_as_bytes)]
-#![allow(clippy::redundant_closure_call)]
-#![allow(clippy::type_complexity)]
+#![recursion_limit = "256"]
+//! # Kickback Module
+//! This module implements the Kickback protocol for event management
+//! via an incentives game.
+//!
+//! - [`grant::Trait`](./trait.Trait.html)
+//! - [`Call`](./enum.Call.html)
+//!
+//! ## Overview
+//!
+//! To reserve a seat at an event, an account must stake the reservation requirement
+//! set for the event. When attendance is logged on-chain by the event supervisor, accounts
+//! logged as present (that reserved a seat) receive their reservation + the capital staked
+//! by the absent accounts that had reserved...It's an attendance game that redistributes
+//! ticket revenue from absent attendees to present attendees.
+//!
+//! [`Call`]: ./enum.Call.html
+//! [`Trait`]: ./trait.Trait.html
 #![cfg_attr(not(feature = "std"), no_std)]
-//! Kickback pallet for event management with incentives
 
 #[cfg(test)]
 mod tests;
 
-use codec::Codec;
 use frame_support::{
     decl_error,
     decl_event,
@@ -22,7 +35,11 @@ use frame_support::{
     },
     Parameter,
 };
-use frame_system::ensure_signed;
+use frame_system::{
+    ensure_signed,
+    Trait as System,
+};
+use parity_scale_codec::Codec;
 use sp_runtime::{
     traits::{
         AccountIdConversion,
@@ -43,18 +60,17 @@ use sp_std::{
 use util::kickback::KickbackEvent;
 
 // type aliases
-type BalanceOf<T> = <<T as Trait>::Currency as Currency<
-    <T as frame_system::Trait>::AccountId,
->>::Balance;
+type BalanceOf<T> =
+    <<T as Trait>::Currency as Currency<<T as System>::AccountId>>::Balance;
 type KickbackEventFor<T> = KickbackEvent<
     <T as Trait>::IpfsReference,
-    <T as frame_system::Trait>::AccountId,
+    <T as System>::AccountId,
     BalanceOf<T>,
 >;
 
-pub trait Trait: frame_system::Trait {
+pub trait Trait: System {
     /// The overarching event type
-    type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
+    type Event: From<Event<Self>> + Into<<Self as System>::Event>;
 
     /// Cid type
     type IpfsReference: Parameter + Member + Default;
@@ -88,7 +104,7 @@ pub trait Trait: frame_system::Trait {
 decl_event!(
     pub enum Event<T>
     where
-        <T as frame_system::Trait>::AccountId,
+        <T as System>::AccountId,
         <T as Trait>::IpfsReference,
         <T as Trait>::KickbackEventId,
         Balance = BalanceOf<T>,

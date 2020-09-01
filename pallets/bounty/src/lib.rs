@@ -1,13 +1,25 @@
-#![allow(clippy::string_lit_as_bytes)]
-#![allow(clippy::redundant_closure_call)]
-#![allow(clippy::type_complexity)]
+#![recursion_limit = "256"]
+//! # Bounty Module
+//! This module expresses minimal logic for posting and
+//! crowdfunding bounties.
+//!
+//! - [`bounty::Trait`](./trait.Trait.html)
+//! - [`Call`](./enum.Call.html)
+//!
+//! ## Overview
+//!
+//! This pallet allows any account to post a bounty and approve submissions. It
+//! also allows contributions to the bounty by other accounts and tracks the
+//! cumulative contribution for each account. Outside contributors do not have
+//! any say in governance.
+//!
+//! [`Call`]: ./enum.Call.html
+//! [`Trait`]: ./trait.Trait.html
 #![cfg_attr(not(feature = "std"), no_std)]
-//! Minimal bounty module
 
 #[cfg(test)]
 mod tests;
 
-use codec::Codec;
 use frame_support::{
     decl_error,
     decl_event,
@@ -26,6 +38,7 @@ use frame_support::{
     Parameter,
 };
 use frame_system::ensure_signed;
+use parity_scale_codec::Codec;
 use sp_runtime::{
     traits::{
         AccountIdConversion,

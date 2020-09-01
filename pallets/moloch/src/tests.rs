@@ -8,7 +8,6 @@ use frame_support::{
     traits::OnFinalize,
     weights::Weight,
 };
-use frame_system::{self as system,};
 use sp_core::H256;
 use sp_runtime::{
     testing::Header,
@@ -49,7 +48,7 @@ mod bank {
 
 impl_outer_event! {
     pub enum TestEvent for Test {
-        system<T>,
+        frame_system<T>,
         pallet_balances<T>,
         org<T>,
         vote<T>,
@@ -133,7 +132,7 @@ impl Trait for Test {
     type MemId = u64;
     type MinDeposit = MinDeposit;
 }
-pub type System = system::Module<Test>;
+pub type System = frame_system::Module<Test>;
 pub type Balances = pallet_balances::Module<Test>;
 pub type Org = org::Module<Test>;
 pub type Vote = vote::Module<Test>;
@@ -180,9 +179,9 @@ fn new_test_ext() -> sp_io::TestExternalities {
     .assimilate_storage(&mut t)
     .unwrap();
     org::GenesisConfig::<Test> {
-        first_organization_supervisor: 1,
-        first_organization_value_constitution: 1738,
-        first_organization_flat_membership: vec![1, 2, 3, 4, 5, 6],
+        sudo: 1,
+        doc: 1738,
+        mems: vec![1, 2, 3, 4, 5, 6],
     }
     .assimilate_storage(&mut t)
     .unwrap();
@@ -200,10 +199,11 @@ fn new_test_ext() -> sp_io::TestExternalities {
 #[test]
 fn genesis_config_works() {
     new_test_ext().execute_with(|| {
-        assert_eq!(Org::organization_counter(), 1);
+        assert_eq!(Org::org_counter(), 1);
         let constitution = 1738;
-        let expected_organization = Organization::new(Some(1), 1, constitution);
-        let org_in_storage = Org::organization_states(1u64).unwrap();
+        let expected_organization =
+            Organization::new(Some(1), 1, 6, constitution);
+        let org_in_storage = Org::orgs(1u64).unwrap();
         assert_eq!(expected_organization, org_in_storage);
         for i in 1u64..7u64 {
             assert!(Org::is_member_of_group(1u64, &i));

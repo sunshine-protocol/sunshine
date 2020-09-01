@@ -1,4 +1,4 @@
-use codec::{
+use parity_scale_codec::{
     Codec,
     Decode,
     Encode,

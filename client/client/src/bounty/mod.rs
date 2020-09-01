@@ -1,7 +1,12 @@
 mod subxt;
 
 use crate::error::Error;
-use codec::Encode;
+use libipld::{
+    cache::Cache,
+    cbor::DagCborCodec,
+    store::ReadonlyStore,
+};
+use parity_scale_codec::Encode;
 use substrate_subxt::{
     Runtime,
     SignedExtension,
@@ -11,6 +16,7 @@ pub use subxt::*;
 use sunshine_client_utils::{
     async_trait,
     Client,
+    OffchainClient,
     Result,
 };
 
@@ -72,13 +78,17 @@ where
         Send + Sync,
     <T as Bounty>::IpfsReference: From<libipld::cid::Cid>,
     C: Client<T>,
-    C::OffchainClient: ipld_block_builder::Cache<
-            ipld_block_builder::Codec,
+    C::OffchainClient: Cache<
+            <C::OffchainClient as OffchainClient>::Store,
+            DagCborCodec,
             <T as Bounty>::BountyPost,
-        > + ipld_block_builder::Cache<
-            ipld_block_builder::Codec,
+        > + Cache<
+            <C::OffchainClient as OffchainClient>::Store,
+            DagCborCodec,
             <T as Bounty>::BountySubmission,
         >,
+    <<C::OffchainClient as OffchainClient>::Store as ReadonlyStore>::Codec:
+        From<DagCborCodec> + Into<DagCborCodec>,
 {
     async fn post_bounty(
         &self,

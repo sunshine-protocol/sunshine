@@ -10,15 +10,15 @@ description = "Submit extrinsics (transactions) to the sunshine node via RPC"
 keywords = ["sunshine", "substrate", "blockchain"]
 
 [dependencies]
-async-std = { version = "1.6.2", features = ["unstable"] }
-codec = { version = "1.3.0", package = "parity-scale-codec" }
-frame-support = "2.0.0-rc5"
-ipld-block-builder = "0.4.1"
-libipld = { version = "0.3.1", features = ["dag-json"] }
+async-std = { version = "1.6.3", features = ["unstable"] }
+parity-scale-codec = { version = "1.3.4" }
+frame-support = "2.0.0-rc6"
+libipld = { version = "0.4.0", features = ["dag-json"] }
 serde = { version = "1.0.115", features = ["derive"] }
 serde_json = "1.0.57"
-substrate-subxt = "0.11.0"
+substrate-subxt = "0.12.0"
 sunshine-bounty-utils = { path = "../../utils" }
+sunshine-codec = { default-features=false, git = "https://github.com/sunshine-protocol/sunshine-core" }
 sunshine-client-utils = { git = "https://github.com/sunshine-protocol/sunshine-core" }
 thiserror = "1.0.20"
 
@@ -27,7 +27,7 @@ sunshine-faucet-client = { git = "https://github.com/sunshine-protocol/sunshine-
 sunshine-identity-client = { git = "https://github.com/sunshine-protocol/sunshine-identity" }
 
 [dev-dependencies]
-async-std = { version = "1.6.2", features = ["attributes"] }
+async-std = { version = "1.6.3", features = ["attributes"] }
 env_logger = "0.7.1"
 rand = "0.7.3"
 test-client = { path = "../../bin/client", features = ["mock"] }

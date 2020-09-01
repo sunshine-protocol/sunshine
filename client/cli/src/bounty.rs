@@ -4,10 +4,13 @@ use core::fmt::{
     Debug,
     Display,
 };
-use ipld_block_builder::{
-    Cache,
-    Codec,
-    ReadonlyCache,
+use libipld::{
+    cache::{
+        Cache,
+        ReadonlyCache,
+    },
+    cbor::DagCborCodec,
+    store::ReadonlyStore,
 };
 use std::convert::TryInto;
 use substrate_subxt::{
@@ -24,7 +27,7 @@ use sunshine_bounty_client::{
     GithubIssue,
 };
 use sunshine_client_utils::{
-    cid::CidBytes,
+    OffchainClient,
     Result,
 };
 
@@ -221,16 +224,22 @@ impl GetOpenBountiesCommand {
         client: &C,
     ) -> Result<()>
     where
-        R: Bounty<IpfsReference = CidBytes>,
-        C::OffchainClient: Cache<Codec, GithubIssue>,
+        R: Bounty<IpfsReference = sunshine_codec::Cid>,
+        C::OffchainClient: Cache<
+            <C::OffchainClient as OffchainClient>::Store,
+            DagCborCodec,
+            GithubIssue,
+        >,
+        <<C::OffchainClient as OffchainClient>::Store as ReadonlyStore>::Codec:
+            From<DagCborCodec> + Into<DagCborCodec>,
         <R as Balances>::Balance: From<u128> + Display,
-        <R as Bounty>::BountyId: Display,
+        <R as Bounty>::BountyId: Display + From<u64>,
         <R as Bounty>::SubmissionId: Display + From<u64>,
     {
         let open_bounties = client.open_bounties(self.min.into()).await?;
         if let Some(b) = open_bounties {
             for (id, bounty) in b.into_iter() {
-                let event_cid = bounty.info().to_cid()?;
+                let event_cid = bounty.info();
                 match client.offchain_client().get(&event_cid).await {
                     Ok(bounty_body) => {
                         println!(
@@ -274,17 +283,23 @@ impl GetOpenSubmissionsCommand {
         client: &C,
     ) -> Result<()>
     where
-        R: Bounty<IpfsReference = CidBytes>,
-        C::OffchainClient: Cache<Codec, GithubIssue>,
+        R: Bounty<IpfsReference = sunshine_codec::Cid>,
+        C::OffchainClient: Cache<
+            <C::OffchainClient as OffchainClient>::Store,
+            DagCborCodec,
+            GithubIssue,
+        >,
+        <<C::OffchainClient as OffchainClient>::Store as ReadonlyStore>::Codec:
+            From<DagCborCodec> + Into<DagCborCodec>,
         <R as Balances>::Balance: Display,
         <R as Bounty>::BountyId: From<u64> + Display,
-        <R as Bounty>::SubmissionId: Display,
+        <R as Bounty>::SubmissionId: Display + From<u64>,
     {
         let open_submissions =
             client.open_submissions(self.bounty_id.into()).await?;
         if let Some(s) = open_submissions {
             for (id, sub) in s.into_iter() {
-                let event_cid = sub.submission().to_cid()?;
+                let event_cid = sub.submission();
                 match client.offchain_client().get(&event_cid).await {
                     Ok(submission_body) => {
                         println!("Live SubmissionID {} requests total balance {} at {} submitted by {}",

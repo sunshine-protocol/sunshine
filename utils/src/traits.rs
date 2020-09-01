@@ -91,7 +91,7 @@ pub trait ShareIssuance<OrgId, AccountId, Shares>:
     fn batch_issue(
         organization: OrgId,
         genesis: Self::Genesis,
-    ) -> DispatchResult;
+    ) -> Result<Shares>;
     fn batch_burn(
         organization: OrgId,
         genesis: Self::Genesis,
@@ -287,6 +287,30 @@ pub trait SpendGovernance<BankId, Currency, AccountId, SProp> {
         spend_id: Self::SpendId,
     ) -> DispatchResult;
     fn poll_spend_proposal(prop: SProp) -> Result<Self::SpendState>;
+}
+
+// TODO: merge functionality with SpendGovernance
+pub trait DocGovernance<CommitteeId, Cid, AccountId, Proposal> {
+    type ProposalId;
+    type VoteId;
+    type PropState;
+    type DocIndex;
+    fn _propose_doc(
+        caller: AccountId,
+        committee_id: CommitteeId,
+        doc_ref: Cid,
+    ) -> Result<Self::ProposalId>;
+    fn _trigger_vote_on_proposal(
+        caller: &AccountId,
+        committee_id: CommitteeId,
+        proposal_id: Self::ProposalId,
+    ) -> Result<(Cid, Self::VoteId)>;
+    fn _sudo_approve_proposal(
+        caller: &AccountId,
+        committee_id: CommitteeId,
+        proposal_id: Self::ProposalId,
+    ) -> Result<(Self::DocIndex, Cid)>;
+    fn poll_proposal(prop: Proposal) -> Result<Self::PropState>;
 }
 
 pub trait MolochMembership<AccountId, BankId, Currency, Shares, MProp> {
