@@ -70,7 +70,6 @@ sp-version = { version = "2.0.0-rc6", default-features = false }
 util = { package = "sunshine-bounty-utils", path = "../../utils", default-features=false}
 org = {package = "sunshine-org", path = "../../pallets/org", default-features=false }
 vote = { package = "sunshine-vote", path = "../../pallets/vote", default-features=false}
-court = { package = "sunshine-court", path = "../../pallets/court", default-features=false}
 drip = { package = "sunshine-drip", path = "../../pallets/drip", default-features=false}
 treasury = { package = "sunshine-treasury", path = "../../pallets/treasury", default-features=false}
 donate = { package = "sunshine-donate", path = "../../pallets/donate", default-features=false}

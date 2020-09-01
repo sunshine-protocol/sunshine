@@ -1,12 +1,12 @@
 [package]
-name = "sunshine-court"
+name = "sunshine-insurance"
 version = "0.0.1"
 authors = ["Amar Singh <asinghchrony@protonmail.com>"]
 edition = "2018"
 
 license = "GPL-3.0"
 repository = "https://github.com/sunshine-protocol/sunshine-bounty"
-description = "hierarchical dispute resolution via sequence of votes"
+description = "dispute resolution for two-party agreements"
 keywords = ["sunshine", "substrate", "blockchain"]
 
 [dependencies]

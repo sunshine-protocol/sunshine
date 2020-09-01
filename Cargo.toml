@@ -18,6 +18,7 @@ members = [
     "pallets/donate",
     "pallets/drip",
     "pallets/grant",
+    "pallets/insurance",
     "pallets/kickback",
     "pallets/moloch",
     "pallets/org",

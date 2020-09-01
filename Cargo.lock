@@ -7545,7 +7545,7 @@ dependencies = [
 
 [[package]]
 name = "sunshine-court"
-version = "0.2.0"
+version = "0.0.1"
 dependencies = [
  "clear_on_drop",
  "frame-support",
@@ -7684,6 +7684,25 @@ dependencies = [
  "sunshine-client-utils",
  "thiserror",
  "ureq",
+]
+
+[[package]]
+name = "sunshine-insurance"
+version = "0.0.1"
+dependencies = [
+ "clear_on_drop",
+ "frame-support",
+ "frame-system",
+ "pallet-balances",
+ "parity-scale-codec",
+ "serde",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+ "sunshine-bounty-utils",
+ "sunshine-org",
+ "sunshine-vote",
 ]
 
 [[package]]
@@ -8015,7 +8034,6 @@ dependencies = [
  "sunshine-bank",
  "sunshine-bounty",
  "sunshine-bounty-utils",
- "sunshine-court",
  "sunshine-donate",
  "sunshine-drip",
  "sunshine-grant",

@@ -312,15 +312,6 @@ impl vote::Trait for Runtime {
     type Signal = u64;
     type ThresholdId = u64;
 }
-parameter_types! {
-    pub const MinimumDisputeAmount: u128 = 10;
-}
-impl court::Trait for Runtime {
-    type Event = Event;
-    type Currency = Balances;
-    type DisputeId = u64;
-    type MinimumDisputeAmount = MinimumDisputeAmount;
-}
 impl drip::Trait for Runtime {
     type Event = Event;
     type DripId = u64;
@@ -398,7 +389,6 @@ construct_runtime!(
         // sunshine-bounty modules
         Org: org::{Module, Call, Config<T>, Storage, Event<T>},
         Vote: vote::{Module, Call, Storage, Event<T>},
-        Court: court::{Module, Call, Storage, Event<T>},
         Drip: drip::{Module, Call, Storage, Event<T>},
         Treasury: treasury::{Module, Call, Config<T>, Storage, Event<T>},
         Donate: donate::{Module, Call, Event<T>},
