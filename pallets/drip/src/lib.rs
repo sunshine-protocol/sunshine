@@ -2,7 +2,7 @@
 //! # Drip Module
 //! This module expresses logic for scheduling a stream of transfers from a sender
 //! to a recipient. It treats the transfer as continuous rather than discrete with
-//! an flow rate of X Balance every N Blocks.
+//! a flow rate of X Balance every N Blocks.
 //!
 //! - [`drip::Trait`](./trait.Trait.html)
 //! - [`Call`](./enum.Call.html)
