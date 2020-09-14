@@ -7375,6 +7375,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "sunshine-bench"
+version = "0.0.1"
+dependencies = [
+ "clear_on_drop",
+ "frame-support",
+ "frame-system",
+ "orml-utilities",
+ "pallet-balances",
+ "parity-scale-codec",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "sunshine-bounty"
 version = "0.2.1"
 dependencies = [
