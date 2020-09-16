@@ -1,4 +1,6 @@
-# Org Pallet
+# Org Pallet (REWRITING)
+
+* rewriting based on changes to `Deleg8`, in-progress
 
 This pallet handles organization membership and governance. Each weighted group of accounts stored in this pallet has a unique `OrgId`. This identifier is often used in inheriting modules to establish ownership of the organization over associated state.
 
