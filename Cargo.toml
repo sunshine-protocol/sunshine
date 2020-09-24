@@ -30,3 +30,57 @@ members = [
     "pallets/vote-direct",
     "utils",
 ]
+
+[patch.crates-io]
+frame-executive = { git = "https://github.com/dvc94ch/substrate", branch = "dvc-bitswap" }
+frame-metadata = { git = "https://github.com/dvc94ch/substrate", branch = "dvc-bitswap" }
+frame-support = { git = "https://github.com/dvc94ch/substrate", branch = "dvc-bitswap" }
+frame-system = { git = "https://github.com/dvc94ch/substrate", branch = "dvc-bitswap" }
+
+pallet-aura = { git = "https://github.com/dvc94ch/substrate", branch = "dvc-bitswap" }
+pallet-balances = { git = "https://github.com/dvc94ch/substrate", branch = "dvc-bitswap" }
+pallet-grandpa = { git = "https://github.com/dvc94ch/substrate", branch = "dvc-bitswap" }
+pallet-im-online = { git = "https://github.com/dvc94ch/substrate", branch = "dvc-bitswap" }
+pallet-indices = { git = "https://github.com/dvc94ch/substrate", branch = "dvc-bitswap" }
+pallet-randomness-collective-flip = { git = "https://github.com/dvc94ch/substrate", branch = "dvc-bitswap" }
+pallet-staking = { git = "https://github.com/dvc94ch/substrate", branch = "dvc-bitswap" }
+pallet-timestamp = { git = "https://github.com/dvc94ch/substrate", branch = "dvc-bitswap" }
+pallet-transaction-payment = { git = "https://github.com/dvc94ch/substrate", branch = "dvc-bitswap" }
+
+sc-basic-authorship = { git = "https://github.com/dvc94ch/substrate", branch = "dvc-bitswap" }
+sc-cli = { git = "https://github.com/dvc94ch/substrate", branch = "dvc-bitswap" }
+sc-client-api = { git = "https://github.com/dvc94ch/substrate", branch = "dvc-bitswap" }
+sc-client-db = { git = "https://github.com/dvc94ch/substrate", branch = "dvc-bitswap" }
+sc-consensus = { git = "https://github.com/dvc94ch/substrate", branch = "dvc-bitswap" }
+sc-consensus-aura = { git = "https://github.com/dvc94ch/substrate", branch = "dvc-bitswap" }
+sc-executor = { git = "https://github.com/dvc94ch/substrate", branch = "dvc-bitswap" }
+sc-finality-grandpa = { git = "https://github.com/dvc94ch/substrate", branch = "dvc-bitswap" }
+sc-informant = { git = "https://github.com/dvc94ch/substrate", branch = "dvc-bitswap" }
+sc-network = { git = "https://github.com/dvc94ch/substrate", branch = "dvc-bitswap" }
+sc-rpc-api = { git = "https://github.com/dvc94ch/substrate", branch = "dvc-bitswap" }
+sc-service = { git = "https://github.com/dvc94ch/substrate", branch = "dvc-bitswap" }
+sc-transaction-pool = { git = "https://github.com/dvc94ch/substrate", branch = "dvc-bitswap" }
+
+sp-api = { git = "https://github.com/dvc94ch/substrate", branch = "dvc-bitswap" }
+sp-application-crypto = { git = "https://github.com/dvc94ch/substrate", branch = "dvc-bitswap" }
+sp-authority-discovery = { git = "https://github.com/dvc94ch/substrate", branch = "dvc-bitswap" }
+sp-block-builder = { git = "https://github.com/dvc94ch/substrate", branch = "dvc-bitswap" }
+sp-consensus = { git = "https://github.com/dvc94ch/substrate", branch = "dvc-bitswap" }
+sp-consensus-aura = { git = "https://github.com/dvc94ch/substrate", branch = "dvc-bitswap" }
+sp-consensus-babe = { git = "https://github.com/dvc94ch/substrate", branch = "dvc-bitswap" }
+sp-core = { git = "https://github.com/dvc94ch/substrate", branch = "dvc-bitswap" }
+sp-database = { git = "https://github.com/dvc94ch/substrate", branch = "dvc-bitswap" }
+sp-finality-grandpa = { git = "https://github.com/dvc94ch/substrate", branch = "dvc-bitswap" }
+sp-inherents = { git = "https://github.com/dvc94ch/substrate", branch = "dvc-bitswap" }
+sp-io = { git = "https://github.com/dvc94ch/substrate", branch = "dvc-bitswap" }
+sp-keyring = { git = "https://github.com/dvc94ch/substrate", branch = "dvc-bitswap" }
+sp-offchain = { git = "https://github.com/dvc94ch/substrate", branch = "dvc-bitswap" }
+sp-rpc = { git = "https://github.com/dvc94ch/substrate", branch = "dvc-bitswap" }
+sp-runtime = { git = "https://github.com/dvc94ch/substrate", branch = "dvc-bitswap" }
+sp-session = { git = "https://github.com/dvc94ch/substrate", branch = "dvc-bitswap" }
+sp-std = { git = "https://github.com/dvc94ch/substrate", branch = "dvc-bitswap" }
+sp-transaction-pool = { git = "https://github.com/dvc94ch/substrate", branch = "dvc-bitswap" }
+sp-trie = { git = "https://github.com/dvc94ch/substrate", branch = "dvc-bitswap" }
+sp-version = { git = "https://github.com/dvc94ch/substrate", branch = "dvc-bitswap" }
+
+substrate-subxt = { git = "https://github.com/paritytech/substrate-subxt" }

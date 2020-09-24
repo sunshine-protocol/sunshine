@@ -5,8 +5,8 @@ authors = ["David Craven <david@craven.ch>, Amar Singh <asinghchrony@protonmail.
 edition = "2018"
 
 [dependencies]
-async-std = { version = "1.6.2", features = ["attributes"] }
-clap = "3.0.0-beta.1"
+async-std = { version = "1.6.4", features = ["attributes"] }
+clap = "3.0.0-beta.2"
 dirs = "3.0.1"
 env_logger = "0.7.1"
 sunshine-bounty-cli = { path = "../../client/cli" }

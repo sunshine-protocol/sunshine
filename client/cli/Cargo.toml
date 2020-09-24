@@ -8,9 +8,9 @@ license = "GPL-3.0"
 repository = "https://github.com/sunshine-protocol/sunshine-bounty"
 
 [dependencies]
-clap = "3.0.0-beta.1"
-parity-scale-codec = { version = "1.3.4" }
-libipld = "0.4.0"
+clap = "3.0.0-beta.2"
+parity-scale-codec = "1.3.5"
+libipld = "0.6.1"
 regex = "1.3.9"
 substrate-subxt = "0.12.0"
 sunshine-codec = { default-features=false, git = "https://github.com/sunshine-protocol/sunshine-core" }
