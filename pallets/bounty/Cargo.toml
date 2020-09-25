@@ -16,7 +16,6 @@ sp-runtime = { version = "2.0.0", default-features = false }
 frame-support = { version = "2.0.0", default-features = false }
 frame-system = { version = "2.0.0", default-features = false }
 util = { package = "sunshine-bounty-utils", path = "../../utils", default-features=false}
-clear_on_drop = { version = "0.2.4", features = ["no_cc"] }	# https://github.com/paritytech/substrate/issues/4179
 
 [dev-dependencies]
 rand = "0.7.3"
@@ -33,5 +32,4 @@ std = [
 	"sp-runtime/std",
 	"frame-support/std",
 	"frame-system/std",
-	"pallet-balances/std",
 ]
