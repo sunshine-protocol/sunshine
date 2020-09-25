@@ -19,7 +19,6 @@ frame-system = { version = "2.0.0", default-features = false }
 pallet-balances = { version = "2.0.0", default-features = false }
 util = { package = "sunshine-bounty-utils", path = "../../utils", default-features=false}
 vote = { package = "sunshine-vote-direct", path = "../../pallets/vote-direct", default-features=false}
-clear_on_drop = { version = "0.2.4", features = ["no_cc"] }	# https://github.com/paritytech/substrate/issues/4179
 
 [dev-dependencies]
 sp-io = { version = "2.0.0", default-features = false }
