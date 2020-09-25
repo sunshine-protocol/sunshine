@@ -7,8 +7,8 @@ use crate::{
     org::Org,
 };
 use libipld::{
+    cache::Cache,
     cbor::DagCborCodec,
-    store::ReadonlyStore,
 };
 use substrate_subxt::{
     system::System,
@@ -23,69 +23,71 @@ use sunshine_bounty_utils::{
 use sunshine_client_utils::{
     async_trait,
     Client,
-    OffchainClient,
+    Node,
+    OffchainConfig,
     Result,
 };
 
 #[async_trait]
-pub trait VoteClient<T: Runtime + Vote>: Client<T> {
-    async fn create_signal_vote(
-        &self,
-        topic: Option<<T as Vote>::VoteTopic>,
-        organization: OrgRep<T::OrgId>,
-        threshold: Threshold<T::Signal>,
-        duration: Option<<T as System>::BlockNumber>,
-    ) -> Result<NewVoteStartedEvent<T>>;
-    async fn create_percent_vote(
-        &self,
-        topic: Option<<T as Vote>::VoteTopic>,
-        organization: OrgRep<T::OrgId>,
-        threshold: Threshold<<T as Vote>::Percent>,
-        duration: Option<<T as System>::BlockNumber>,
-    ) -> Result<NewVoteStartedEvent<T>>;
-    async fn submit_vote(
-        &self,
-        vote_id: <T as Vote>::VoteId,
-        direction: <T as Vote>::VoterView,
-        justification: Option<<T as Vote>::VoteJustification>,
-    ) -> Result<VotedEvent<T>>;
-    async fn vote_threshold(
-        &self,
-        threshold_id: <T as Vote>::ThresholdId,
-    ) -> Result<ThreshConfig<T>>;
-}
-
-#[async_trait]
-impl<T, C> VoteClient<T> for C
+pub trait VoteClient<N: Node>: Client<N>
 where
-    T: Runtime + Vote,
-    <<T::Extra as SignedExtra<T>>::Extra as SignedExtension>::AdditionalSigned:
-        Send + Sync,
-    <T as Org>::Cid: From<libipld::cid::Cid>,
-    C: Client<T>,
-    C::OffchainClient: libipld::cache::Cache<
-            <C::OffchainClient as OffchainClient>::Store,
-            DagCborCodec,
-            <T as Vote>::VoteTopic,
-        > + libipld::cache::Cache<
-            <C::OffchainClient as OffchainClient>::Store,
-            DagCborCodec,
-            <T as Vote>::VoteJustification,
-        >,
-    <<C::OffchainClient as OffchainClient>::Store as ReadonlyStore>::Codec:
-        From<DagCborCodec> + Into<DagCborCodec>,
+    N::Runtime: Vote,
 {
     async fn create_signal_vote(
         &self,
-        topic: Option<<T as Vote>::VoteTopic>,
-        organization: OrgRep<T::OrgId>,
-        threshold: Threshold<T::Signal>,
-        duration: Option<<T as System>::BlockNumber>,
-    ) -> Result<NewVoteStartedEvent<T>> {
+        topic: Option<<N::Runtime as Vote>::VoteTopic>,
+        organization: OrgRep<<N::Runtime as Org>::OrgId>,
+        threshold: Threshold<<N::Runtime as Vote>::Signal>,
+        duration: Option<<N::Runtime as System>::BlockNumber>,
+    ) -> Result<NewVoteStartedEvent<N::Runtime>>;
+    async fn create_percent_vote(
+        &self,
+        topic: Option<<N::Runtime as Vote>::VoteTopic>,
+        organization: OrgRep<<N::Runtime as Org>::OrgId>,
+        threshold: Threshold<<N::Runtime as Vote>::Percent>,
+        duration: Option<<N::Runtime as System>::BlockNumber>,
+    ) -> Result<NewVoteStartedEvent<N::Runtime>>;
+    async fn submit_vote(
+        &self,
+        vote_id: <N::Runtime as Vote>::VoteId,
+        direction: <N::Runtime as Vote>::VoterView,
+        justification: Option<<N::Runtime as Vote>::VoteJustification>,
+    ) -> Result<VotedEvent<N::Runtime>>;
+    async fn vote_threshold(
+        &self,
+        threshold_id: <N::Runtime as Vote>::ThresholdId,
+    ) -> Result<ThreshConfig<N::Runtime>>;
+}
+
+#[async_trait]
+impl<N, C> VoteClient<N> for C
+where
+    N: Node,
+    N::Runtime: Vote,
+    <<<N::Runtime as Runtime>::Extra as SignedExtra<N::Runtime>>::Extra as SignedExtension>::AdditionalSigned:
+        Send + Sync,
+    <N::Runtime as Org>::Cid: From<libipld::cid::Cid>,
+    C: Client<N>,
+    C::OffchainClient: libipld::cache::Cache<
+            OffchainConfig<N>,
+            DagCborCodec,
+            <N::Runtime as Vote>::VoteTopic,
+        > + libipld::cache::Cache<
+            OffchainConfig<N>,
+            DagCborCodec,
+            <N::Runtime as Vote>::VoteJustification,
+        >,
+{
+    async fn create_signal_vote(
+        &self,
+        topic: Option<<N::Runtime as Vote>::VoteTopic>,
+        organization: OrgRep<<N::Runtime as Org>::OrgId>,
+        threshold: Threshold<<N::Runtime as Vote>::Signal>,
+        duration: Option<<N::Runtime as System>::BlockNumber>,
+    ) -> Result<NewVoteStartedEvent<N::Runtime>> {
         let signer = self.chain_signer()?;
         let topic = if let Some(t) = topic {
-            let iref: <T as Org>::Cid = crate::post(self, t).await?.into();
-            Some(iref)
+            Some(self.offchain_client().insert(t).await?.into())
         } else {
             None
         };
@@ -103,15 +105,14 @@ where
     }
     async fn create_percent_vote(
         &self,
-        topic: Option<<T as Vote>::VoteTopic>,
-        organization: OrgRep<T::OrgId>,
-        threshold: Threshold<<T as Vote>::Percent>,
-        duration: Option<<T as System>::BlockNumber>,
-    ) -> Result<NewVoteStartedEvent<T>> {
+        topic: Option<<N::Runtime as Vote>::VoteTopic>,
+        organization: OrgRep<<N::Runtime as Org>::OrgId>,
+        threshold: Threshold<<N::Runtime as Vote>::Percent>,
+        duration: Option<<N::Runtime as System>::BlockNumber>,
+    ) -> Result<NewVoteStartedEvent<N::Runtime>> {
         let signer = self.chain_signer()?;
         let topic = if let Some(t) = topic {
-            let iref: <T as Org>::Cid = crate::post(self, t).await?.into();
-            Some(iref)
+            Some(self.offchain_client().insert(t).await?.into())
         } else {
             None
         };
@@ -129,14 +130,13 @@ where
     }
     async fn submit_vote(
         &self,
-        vote_id: <T as Vote>::VoteId,
-        direction: <T as Vote>::VoterView,
-        justification: Option<<T as Vote>::VoteJustification>,
-    ) -> Result<VotedEvent<T>> {
+        vote_id: <N::Runtime as Vote>::VoteId,
+        direction: <N::Runtime as Vote>::VoterView,
+        justification: Option<<N::Runtime as Vote>::VoteJustification>,
+    ) -> Result<VotedEvent<N::Runtime>> {
         let signer = self.chain_signer()?;
         let justification = if let Some(j) = justification {
-            let iref: <T as Org>::Cid = crate::post(self, j).await?.into();
-            Some(iref)
+            Some(self.offchain_client().insert(j).await?.into())
         } else {
             None
         };
@@ -148,8 +148,8 @@ where
     }
     async fn vote_threshold(
         &self,
-        threshold_id: <T as Vote>::ThresholdId,
-    ) -> Result<ThreshConfig<T>> {
+        threshold_id: <N::Runtime as Vote>::ThresholdId,
+    ) -> Result<ThreshConfig<N::Runtime>> {
         Ok(self
             .chain_client()
             .vote_thresholds(threshold_id, None)

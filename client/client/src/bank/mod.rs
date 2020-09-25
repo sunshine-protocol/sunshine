@@ -15,65 +15,70 @@ use substrate_subxt::{
 use sunshine_client_utils::{
     async_trait,
     Client,
+    Node,
     Result,
 };
 
 #[async_trait]
-pub trait BankClient<T: Runtime + Bank>: Client<T> {
-    async fn open(
-        &self,
-        seed: BalanceOf<T>,
-        hosting_org: <T as Org>::OrgId,
-        bank_operator: Option<<T as System>::AccountId>,
-        threshold: Threshold<T>,
-    ) -> Result<AccountOpenedEvent<T>>;
-    async fn propose_spend(
-        &self,
-        bank_id: <T as Bank>::BankId,
-        amount: BalanceOf<T>,
-        dest: <T as System>::AccountId,
-    ) -> Result<SpendProposedEvent<T>>;
-    async fn trigger_vote(
-        &self,
-        bank_id: <T as Bank>::BankId,
-        spend_id: <T as Bank>::SpendId,
-    ) -> Result<VoteTriggeredEvent<T>>;
-    async fn sudo_approve(
-        &self,
-        bank_id: <T as Bank>::BankId,
-        spend_id: <T as Bank>::SpendId,
-    ) -> Result<SudoApprovedEvent<T>>;
-    async fn close(
-        &self,
-        bank_id: <T as Bank>::BankId,
-    ) -> Result<AccountClosedEvent<T>>;
-    async fn bank(&self, bank_id: <T as Bank>::BankId) -> Result<BankSt<T>>;
-    async fn spend_proposal(
-        &self,
-        bank_id: <T as Bank>::BankId,
-        spend_id: <T as Bank>::SpendId,
-    ) -> Result<SpendProp<T>>;
-    async fn banks_for_org(
-        &self,
-        org: <T as Org>::OrgId,
-    ) -> Result<Option<Vec<(T::BankId, BankSt<T>)>>>;
-}
-
-#[async_trait]
-impl<T, C> BankClient<T> for C
+pub trait BankClient<N: Node>: Client<N>
 where
-    T: Runtime + Bank,
-    <<T::Extra as SignedExtra<T>>::Extra as SignedExtension>::AdditionalSigned:
-        Send + Sync,
-    C: Client<T>,
+    N::Runtime: Bank,
 {
     async fn open(
         &self,
-        seed: BalanceOf<T>,
-        hosting_org: <T as Org>::OrgId,
-        bank_operator: Option<<T as System>::AccountId>,
-        threshold: Threshold<T>,
-    ) -> Result<AccountOpenedEvent<T>> {
+        seed: BalanceOf<N::Runtime>,
+        hosting_org: <N::Runtime as Org>::OrgId,
+        bank_operator: Option<<N::Runtime as System>::AccountId>,
+        threshold: Threshold<N::Runtime>,
+    ) -> Result<AccountOpenedEvent<N::Runtime>>;
+    async fn propose_spend(
+        &self,
+        bank_id: <N::Runtime as Bank>::BankId,
+        amount: BalanceOf<N::Runtime>,
+        dest: <N::Runtime as System>::AccountId,
+    ) -> Result<SpendProposedEvent<N::Runtime>>;
+    async fn trigger_vote(
+        &self,
+        bank_id: <N::Runtime as Bank>::BankId,
+        spend_id: <N::Runtime as Bank>::SpendId,
+    ) -> Result<VoteTriggeredEvent<N::Runtime>>;
+    async fn sudo_approve(
+        &self,
+        bank_id: <N::Runtime as Bank>::BankId,
+        spend_id: <N::Runtime as Bank>::SpendId,
+    ) -> Result<SudoApprovedEvent<N::Runtime>>;
+    async fn close(
+        &self,
+        bank_id: <N::Runtime as Bank>::BankId,
+    ) -> Result<AccountClosedEvent<N::Runtime>>;
+    async fn bank(&self, bank_id: <N::Runtime as Bank>::BankId) -> Result<BankSt<N::Runtime>>;
+    async fn spend_proposal(
+        &self,
+        bank_id: <N::Runtime as Bank>::BankId,
+        spend_id: <N::Runtime as Bank>::SpendId,
+    ) -> Result<SpendProp<N::Runtime>>;
+    async fn banks_for_org(
+        &self,
+        org: <N::Runtime as Org>::OrgId,
+    ) -> Result<Option<Vec<(<N::Runtime as Bank>::BankId, BankSt<N::Runtime>)>>>;
+}
+
+#[async_trait]
+impl<N, C> BankClient<N> for C
+where
+    N: Node,
+    N::Runtime: Bank,
+    <<<N::Runtime as Runtime>::Extra as SignedExtra<N::Runtime>>::Extra as SignedExtension>::AdditionalSigned:
+        Send + Sync,
+    C: Client<N>,
+{
+    async fn open(
+        &self,
+        seed: BalanceOf<N::Runtime>,
+        hosting_org: <N::Runtime as Org>::OrgId,
+        bank_operator: Option<<N::Runtime as System>::AccountId>,
+        threshold: Threshold<N::Runtime>,
+    ) -> Result<AccountOpenedEvent<N::Runtime>> {
         let signer = self.chain_signer()?;
         self.chain_client()
             .open_and_watch(
@@ -89,10 +94,10 @@ where
     }
     async fn propose_spend(
         &self,
-        bank_id: <T as Bank>::BankId,
-        amount: BalanceOf<T>,
-        dest: <T as System>::AccountId,
-    ) -> Result<SpendProposedEvent<T>> {
+        bank_id: <N::Runtime as Bank>::BankId,
+        amount: BalanceOf<N::Runtime>,
+        dest: <N::Runtime as System>::AccountId,
+    ) -> Result<SpendProposedEvent<N::Runtime>> {
         let signer = self.chain_signer()?;
         self.chain_client()
             .propose_spend_and_watch(&signer, bank_id, amount, dest)
@@ -102,9 +107,9 @@ where
     }
     async fn trigger_vote(
         &self,
-        bank_id: <T as Bank>::BankId,
-        spend_id: <T as Bank>::SpendId,
-    ) -> Result<VoteTriggeredEvent<T>> {
+        bank_id: <N::Runtime as Bank>::BankId,
+        spend_id: <N::Runtime as Bank>::SpendId,
+    ) -> Result<VoteTriggeredEvent<N::Runtime>> {
         let signer = self.chain_signer()?;
         self.chain_client()
             .trigger_vote_and_watch(&signer, bank_id, spend_id)
@@ -114,9 +119,9 @@ where
     }
     async fn sudo_approve(
         &self,
-        bank_id: <T as Bank>::BankId,
-        spend_id: <T as Bank>::SpendId,
-    ) -> Result<SudoApprovedEvent<T>> {
+        bank_id: <N::Runtime as Bank>::BankId,
+        spend_id: <N::Runtime as Bank>::SpendId,
+    ) -> Result<SudoApprovedEvent<N::Runtime>> {
         let signer = self.chain_signer()?;
         self.chain_client()
             .sudo_approve_and_watch(&signer, bank_id, spend_id)
@@ -126,8 +131,8 @@ where
     }
     async fn close(
         &self,
-        bank_id: <T as Bank>::BankId,
-    ) -> Result<AccountClosedEvent<T>> {
+        bank_id: <N::Runtime as Bank>::BankId,
+    ) -> Result<AccountClosedEvent<N::Runtime>> {
         let signer = self.chain_signer()?;
         self.chain_client()
             .close_and_watch(&signer, bank_id)
@@ -135,14 +140,14 @@ where
             .account_closed()?
             .ok_or_else(|| Error::EventNotFound.into())
     }
-    async fn bank(&self, bank_id: <T as Bank>::BankId) -> Result<BankSt<T>> {
+    async fn bank(&self, bank_id: <N::Runtime as Bank>::BankId) -> Result<BankSt<N::Runtime>> {
         Ok(self.chain_client().banks(bank_id, None).await?)
     }
     async fn spend_proposal(
         &self,
-        bank_id: <T as Bank>::BankId,
-        spend_id: <T as Bank>::SpendId,
-    ) -> Result<SpendProp<T>> {
+        bank_id: <N::Runtime as Bank>::BankId,
+        spend_id: <N::Runtime as Bank>::SpendId,
+    ) -> Result<SpendProp<N::Runtime>> {
         Ok(self
             .chain_client()
             .spend_proposals(bank_id, spend_id, None)
@@ -150,10 +155,10 @@ where
     }
     async fn banks_for_org(
         &self,
-        org: <T as Org>::OrgId,
-    ) -> Result<Option<Vec<(T::BankId, BankSt<T>)>>> {
+        org: <N::Runtime as Org>::OrgId,
+    ) -> Result<Option<Vec<(<N::Runtime as Bank>::BankId, BankSt<N::Runtime>)>>> {
         let mut banks = self.chain_client().banks_iter(None).await?;
-        let mut banks_for_org = Vec::<(T::BankId, BankSt<T>)>::new();
+        let mut banks_for_org = Vec::new();
         while let Some((_, bank)) = banks.next().await? {
             if bank.org() == org {
                 banks_for_org.push((bank.id(), bank));

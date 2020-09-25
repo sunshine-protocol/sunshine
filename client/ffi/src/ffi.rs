@@ -17,10 +17,8 @@ use anyhow::{
 use libipld::{
     cache::{
         Cache,
-        ReadonlyCache,
     },
     cbor::DagCborCodec,
-    store::ReadonlyStore,
 };
 use std::{
     fmt::{
@@ -65,25 +63,28 @@ use sunshine_client_utils::{
         ss58::Ss58,
     },
     Keystore,
-    OffchainClient,
+    Node,
+    OffchainConfig,
     Result,
 };
 use sunshine_ffi_utils::async_std::sync::RwLock;
 
 #[derive(Clone, Debug)]
-pub struct Bounty<'a, C, R>
+pub struct Bounty<'a, C, N>
 where
-    C: BountyClient<R> + Send + Sync,
-    R: Runtime + BountyTrait,
+    C: BountyClient<N> + Send + Sync,
+    N: Node,
+    N::Runtime: BountyTrait,
 {
     client: &'a RwLock<C>,
-    _runtime: PhantomData<R>,
+    _runtime: PhantomData<N>,
 }
 
-impl<'a, C, R> Bounty<'a, C, R>
+impl<'a, C, N> Bounty<'a, C, N>
 where
-    C: BountyClient<R> + Send + Sync,
-    R: Runtime + BountyTrait,
+    C: BountyClient<N> + Send + Sync,
+    N: Node,
+    N::Runtime: BountyTrait,
 {
     pub fn new(client: &'a RwLock<C>) -> Self {
         Self {
@@ -94,19 +95,21 @@ where
 }
 
 #[derive(Clone, Debug)]
-pub struct Key<'a, C, R>
+pub struct Key<'a, C, N>
 where
-    C: BountyClient<R> + Send + Sync,
-    R: Runtime + BountyTrait,
+    C: BountyClient<N> + Send + Sync,
+    N: Node,
+    N::Runtime: BountyTrait,
 {
     client: &'a RwLock<C>,
-    _runtime: PhantomData<R>,
+    _runtime: PhantomData<N>,
 }
 
-impl<'a, C, R> Key<'a, C, R>
+impl<'a, C, N> Key<'a, C, N>
 where
-    C: BountyClient<R> + Send + Sync,
-    R: Runtime + BountyTrait,
+    C: BountyClient<N> + Send + Sync,
+    N: Node,
+    N::Runtime: BountyTrait,
 {
     pub fn new(client: &'a RwLock<C>) -> Self {
         Self {
@@ -117,19 +120,21 @@ where
 }
 
 #[derive(Clone, Debug)]
-pub struct Wallet<'a, C, R>
+pub struct Wallet<'a, C, N>
 where
-    C: BountyClient<R> + Send + Sync,
-    R: Runtime + BountyTrait,
+    C: BountyClient<N> + Send + Sync,
+    N: Node,
+    N::Runtime: BountyTrait,
 {
     client: &'a RwLock<C>,
-    _runtime: PhantomData<R>,
+    _runtime: PhantomData<N>,
 }
 
-impl<'a, C, R> Wallet<'a, C, R>
+impl<'a, C, N> Wallet<'a, C, N>
 where
-    C: BountyClient<R> + Send + Sync,
-    R: Runtime + BountyTrait,
+    C: BountyClient<N> + Send + Sync,
+    N: Node,
+    N::Runtime: BountyTrait,
 {
     pub fn new(client: &'a RwLock<C>) -> Self {
         Self {
@@ -139,10 +144,11 @@ where
     }
 }
 
-impl<'a, C, R> Key<'a, C, R>
+impl<'a, C, N> Key<'a, C, N>
 where
-    C: BountyClient<R> + Send + Sync,
-    R: Runtime + BountyTrait,
+    C: BountyClient<N> + Send + Sync,
+    N: Node,
+    N::Runtime: BountyTrait,
 {
     pub async fn exists(&self) -> Result<bool> {
         self.client.read().await.keystore().is_initialized().await
@@ -195,24 +201,22 @@ where
     }
 }
 
-impl<'a, C, R> Bounty<'a, C, R>
+impl<'a, C, N> Bounty<'a, C, N>
 where
-    C: BountyClient<R> + Send + Sync,
-    R: Runtime + BountyTrait + Debug,
-    R: BountyTrait<IpfsReference = sunshine_codec::Cid>,
+    C: BountyClient<N> + Send + Sync,
+    N: Node,
+    N::Runtime: BountyTrait<IpfsReference = sunshine_codec::Cid> + Debug,
     C::OffchainClient: Cache<
-        <C::OffchainClient as OffchainClient>::Store,
+        OffchainConfig<N>,
         DagCborCodec,
         GithubIssue,
     >,
-    <<C::OffchainClient as OffchainClient>::Store as ReadonlyStore>::Codec:
-        From<DagCborCodec> + Into<DagCborCodec>,
-    <R as System>::AccountId: Ss58Codec + Into<<R as System>::Address>,
-    <R as BountyTrait>::BountyId: From<u64> + Into<u64> + Display,
-    <R as BountyTrait>::SubmissionId: From<u64> + Into<u64> + Display,
-    <R as BountyTrait>::BountyPost: From<GithubIssue> + Debug,
-    <R as BountyTrait>::BountySubmission: From<GithubIssue> + Debug,
-    <R as Balances>::Balance: Into<u128> + From<u64>,
+    <N::Runtime as System>::AccountId: Ss58Codec + Into<<N::Runtime as System>::Address>,
+    <N::Runtime as BountyTrait>::BountyId: From<u64> + Into<u64> + Display,
+    <N::Runtime as BountyTrait>::SubmissionId: From<u64> + Into<u64> + Display,
+    <N::Runtime as BountyTrait>::BountyPost: From<GithubIssue> + Debug,
+    <N::Runtime as BountyTrait>::BountySubmission: From<GithubIssue> + Debug,
+    <N::Runtime as Balances>::Balance: Into<u128> + From<u64>,
 {
     pub async fn get(&self, bounty_id: &str) -> Result<String> {
         info!("Getting Bounty with id: {}", bounty_id);
@@ -338,7 +342,7 @@ where
         acc: &str,
         bounty_id: &str,
     ) -> Result<String> {
-        let account = acc.parse::<Ss58<R>>()?;
+        let account = acc.parse::<Ss58<N::Runtime>>()?;
         info!(
             "Getting the contribution for Account {} in Bounty {}",
             account.0, bounty_id
@@ -473,7 +477,7 @@ where
             .client
             .read()
             .await
-            .account_contributions(account_id.parse::<Ss58<R>>()?.0)
+            .account_contributions(account_id.parse::<Ss58<N::Runtime>>()?.0)
             .await?;
         info!(
             "is there any Open Contributions? {}",
@@ -500,8 +504,8 @@ where
 
     async fn get_bounty_info(
         &self,
-        id: <R as BountyTrait>::BountyId,
-        state: BountyState<R>,
+        id: <N::Runtime as BountyTrait>::BountyId,
+        state: BountyState<N::Runtime>,
     ) -> Result<BountyInformation> {
         info!("Get bounty info of id: {}", id);
         let event_cid = state.info();
@@ -526,8 +530,8 @@ where
 
     async fn get_submission_info(
         &self,
-        id: <R as BountyTrait>::SubmissionId,
-        state: SubState<R>,
+        id: <N::Runtime as BountyTrait>::SubmissionId,
+        state: SubState<N::Runtime>,
     ) -> Result<BountySubmissionInformation> {
         info!("Get submission info of id: {}", id);
         let event_cid = state.submission();
@@ -555,20 +559,21 @@ where
     }
 }
 
-impl<'a, C, R> Wallet<'a, C, R>
+impl<'a, C, N> Wallet<'a, C, N>
 where
-    C: BountyClient<R> + Send + Sync,
-    R: Runtime + Balances + BountyTrait,
-    R: System<AccountData = AccountData<<R as Balances>::Balance>>,
-    <R as Balances>::Balance: Into<u128> + From<u64>,
-    <R as System>::AccountId: Ss58Codec + Into<<R as System>::Address>,
-    <<<R as Runtime>::Extra as SignedExtra<R>>::Extra as SignedExtension>::AdditionalSigned: Send + Sync,
+    C: BountyClient<N> + Send + Sync,
+    N: Node,
+    N::Runtime: Balances + BountyTrait,
+    N::Runtime: System<AccountData = AccountData<<N::Runtime as Balances>::Balance>>,
+    <N::Runtime as Balances>::Balance: Into<u128> + From<u64>,
+    <N::Runtime as System>::AccountId: Ss58Codec + Into<<N::Runtime as System>::Address>,
+    <<<N::Runtime as Runtime>::Extra as SignedExtra<N::Runtime>>::Extra as SignedExtension>::AdditionalSigned: Send + Sync,
 
 
 {
-    pub async fn balance(&self, identifier: Option<&str>) -> Result<R::Balance> {
+    pub async fn balance(&self, identifier: Option<&str>) -> Result<<N::Runtime as Balances>::Balance> {
         let client = self.client.read().await;
-        let account_id: Ss58<R> = if let Some(identifier) = identifier {
+        let account_id: Ss58<N::Runtime> = if let Some(identifier) = identifier {
             identifier.parse()?
         } else {
             Ss58(client.signer()?.account_id().clone())
@@ -581,9 +586,9 @@ where
         &self,
         to: &str,
         amount: u64,
-    ) -> Result<R::Balance> {
+    ) -> Result<<N::Runtime as Balances>::Balance> {
         let client = self.client.read().await;
-        let account_id: Ss58<R> = to.parse()?;
+        let account_id: Ss58<N::Runtime> = to.parse()?;
         let signer = client.chain_signer()?;
         client
             .chain_client()

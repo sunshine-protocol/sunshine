@@ -13,7 +13,6 @@ use substrate_subxt::{
     sp_core::crypto::Ss58Codec,
     sp_runtime::Permill,
     system::System,
-    Runtime,
 };
 use sunshine_bounty_client::{
     bank::{
@@ -33,6 +32,7 @@ use sunshine_bounty_utils::{
 };
 use sunshine_client_utils::{
     crypto::ss58::Ss58,
+    Node,
     Result,
 };
 
@@ -45,31 +45,32 @@ pub struct OpenCommand {
 }
 
 impl OpenCommand {
-    pub async fn exec<R: Runtime + Bank, C: BankClient<R>>(
+    pub async fn exec<N: Node, C: BankClient<N>>(
         &self,
         client: &C,
     ) -> Result<()>
     where
-        <R as System>::AccountId: Ss58Codec,
-        <R as Org>::OrgId: From<u64> + Display,
-        <R as Vote>::Percent: From<Permill>,
-        <R as Balances>::Balance: From<u128> + Display,
+        N::Runtime: Bank,
+        <N::Runtime as System>::AccountId: Ss58Codec,
+        <N::Runtime as Org>::OrgId: From<u64> + Display,
+        <N::Runtime as Vote>::Percent: From<Permill>,
+        <N::Runtime as Balances>::Balance: From<u128> + Display,
     {
         let bank_operator = if let Some(acc) = &self.bank_operator {
-            let new_acc: Ss58<R> = acc.parse()?;
+            let new_acc: Ss58<N::Runtime> = acc.parse()?;
             Some(new_acc.0)
         } else {
             None
         };
-        let support: <R as Vote>::Percent =
+        let support: <N::Runtime as Vote>::Percent =
             u8_to_permill(self.percent_threshold)
                 .map_err(|_| VotePercentThresholdInputBoundError)?
                 .into();
-        let threshold: Threshold<<R as Vote>::Percent> =
+        let threshold: Threshold<<N::Runtime as Vote>::Percent> =
             Threshold::new(support, None);
         let threshold_config: ThresholdInput<
-            OrgRep<<R as Org>::OrgId>,
-            XorThreshold<<R as Vote>::Signal, <R as Vote>::Percent>,
+            OrgRep<<N::Runtime as Org>::OrgId>,
+            XorThreshold<<N::Runtime as Vote>::Signal, <N::Runtime as Vote>::Percent>,
         > = ThresholdInput::new(
             OrgRep::Equal(self.hosting_org.into()),
             XorThreshold::Percent(threshold),
@@ -98,16 +99,17 @@ pub struct ProposeSpendCommand {
 }
 
 impl ProposeSpendCommand {
-    pub async fn exec<R: Runtime + Bank, C: BankClient<R>>(
+    pub async fn exec<N: Node, C: BankClient<N>>(
         &self,
         client: &C,
     ) -> Result<()>
     where
-        <R as System>::AccountId: Ss58Codec,
-        <R as Bank>::BankId: From<u64> + Display,
-        <R as Balances>::Balance: From<u128> + Display,
+        N::Runtime: Bank,
+        <N::Runtime as System>::AccountId: Ss58Codec,
+        <N::Runtime as Bank>::BankId: From<u64> + Display,
+        <N::Runtime as Balances>::Balance: From<u128> + Display,
     {
-        let raw_dest: Ss58<R> = self.dest.parse()?;
+        let raw_dest: Ss58<N::Runtime> = self.dest.parse()?;
         let event = client
             .propose_spend(self.bank_id.into(), self.amount.into(), raw_dest.0)
             .await?;
@@ -126,15 +128,16 @@ pub struct TriggerVoteCommand {
 }
 
 impl TriggerVoteCommand {
-    pub async fn exec<R: Runtime + Bank, C: BankClient<R>>(
+    pub async fn exec<N: Node, C: BankClient<N>>(
         &self,
         client: &C,
     ) -> Result<()>
     where
-        <R as System>::AccountId: Ss58Codec,
-        <R as Bank>::BankId: From<u64> + Display,
-        <R as Bank>::SpendId: From<u64> + Display,
-        <R as Vote>::VoteId: Display,
+        N::Runtime: Bank,
+        <N::Runtime as System>::AccountId: Ss58Codec,
+        <N::Runtime as Bank>::BankId: From<u64> + Display,
+        <N::Runtime as Bank>::SpendId: From<u64> + Display,
+        <N::Runtime as Vote>::VoteId: Display,
     {
         let event = client
             .trigger_vote(self.bank_id.into(), self.spend_id.into())
@@ -154,15 +157,16 @@ pub struct SudoApproveCommand {
 }
 
 impl SudoApproveCommand {
-    pub async fn exec<R: Runtime + Bank, C: BankClient<R>>(
+    pub async fn exec<N: Node, C: BankClient<N>>(
         &self,
         client: &C,
     ) -> Result<()>
     where
-        <R as System>::AccountId: Ss58Codec,
-        <R as Bank>::BankId: From<u64> + Display,
-        <R as Bank>::SpendId: From<u64> + Display,
-        <R as Vote>::VoteId: Display,
+        N::Runtime: Bank,
+        <N::Runtime as System>::AccountId: Ss58Codec,
+        <N::Runtime as Bank>::BankId: From<u64> + Display,
+        <N::Runtime as Bank>::SpendId: From<u64> + Display,
+        <N::Runtime as Vote>::VoteId: Display,
     {
         let event = client
             .sudo_approve(self.bank_id.into(), self.spend_id.into())
@@ -181,14 +185,15 @@ pub struct CloseCommand {
 }
 
 impl CloseCommand {
-    pub async fn exec<R: Runtime + Bank, C: BankClient<R>>(
+    pub async fn exec<N: Node, C: BankClient<N>>(
         &self,
         client: &C,
     ) -> Result<()>
     where
-        <R as System>::AccountId: Ss58Codec,
-        <R as Bank>::BankId: From<u64> + Display,
-        <R as Bank>::SpendId: From<u64> + Display,
+        N::Runtime: Bank,
+        <N::Runtime as System>::AccountId: Ss58Codec,
+        <N::Runtime as Bank>::BankId: From<u64> + Display,
+        <N::Runtime as Bank>::SpendId: From<u64> + Display,
     {
         let event = client.close(self.bank_id.into()).await?;
         println!(

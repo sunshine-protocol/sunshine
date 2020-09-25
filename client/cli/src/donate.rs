@@ -7,7 +7,6 @@ use substrate_subxt::{
     balances::Balances,
     sp_core::crypto::Ss58Codec,
     system::System,
-    Runtime,
 };
 use sunshine_bounty_client::{
     donate::{
@@ -18,6 +17,7 @@ use sunshine_bounty_client::{
 };
 use sunshine_client_utils::{
     crypto::ss58::Ss58,
+    Node,
     Result,
 };
 
@@ -29,16 +29,17 @@ pub struct PropDonateCommand {
 }
 
 impl PropDonateCommand {
-    pub async fn exec<R: Runtime + Donate, C: DonateClient<R>>(
+    pub async fn exec<N: Node, C: DonateClient<N>>(
         &self,
         client: &C,
     ) -> Result<()>
     where
-        <R as System>::AccountId: Ss58Codec,
-        <R as Org>::OrgId: From<u64> + Display,
-        <R as Balances>::Balance: From<u128> + Display,
+        N::Runtime: Donate,
+        <N::Runtime as System>::AccountId: Ss58Codec,
+        <N::Runtime as Org>::OrgId: From<u64> + Display,
+        <N::Runtime as Balances>::Balance: From<u128> + Display,
     {
-        let remainder_recipient: Ss58<R> = self.rem_recipient.parse()?;
+        let remainder_recipient: Ss58<N::Runtime> = self.rem_recipient.parse()?;
         let event = client
             .make_prop_donation(
                 self.org.into(),
@@ -62,16 +63,17 @@ pub struct EqualDonateCommand {
 }
 
 impl EqualDonateCommand {
-    pub async fn exec<R: Runtime + Donate, C: DonateClient<R>>(
+    pub async fn exec<N: Node, C: DonateClient<N>>(
         &self,
         client: &C,
     ) -> Result<()>
     where
-        <R as System>::AccountId: Ss58Codec,
-        <R as Org>::OrgId: From<u64> + Display,
-        <R as Balances>::Balance: From<u128> + Display,
+        N::Runtime: Donate,
+        <N::Runtime as System>::AccountId: Ss58Codec,
+        <N::Runtime as Org>::OrgId: From<u64> + Display,
+        <N::Runtime as Balances>::Balance: From<u128> + Display,
     {
-        let remainder_recipient: Ss58<R> = self.rem_recipient.parse()?;
+        let remainder_recipient: Ss58<N::Runtime> = self.rem_recipient.parse()?;
         let event = client
             .make_equal_donation(
                 self.org.into(),

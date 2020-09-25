@@ -9,12 +9,14 @@ publish = false
 sc-executor = "0.8.0"
 sp-core = "2.0.0"
 sp-runtime = "2.0.0"
+sunshine-codec = { git = "https://github.com/sunshine-protocol/sunshine-core" }
 sunshine-node-utils = { git = "https://github.com/sunshine-protocol/sunshine-core" }
 test-runtime = { path = "../runtime" }
 # cli deps
 sc-cli = "0.8.0"
 sc-service = { version = "0.8.0", default-features = false }
 structopt = "0.3.18"
+tiny-multihash = "0.4.7"
 
 [build-dependencies]
 substrate-build-script-utils = "2.0.0"

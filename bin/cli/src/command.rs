@@ -17,9 +17,9 @@ use sunshine_cli_utils::{
 pub struct Opts {
     #[clap(subcommand)]
     pub cmd: SubCommand,
-    #[clap(short = "p", long = "path")]
+    #[clap(short = 'p', long = "path")]
     pub path: Option<PathBuf>,
-    #[clap(short = "c", long = "chain-spec-path")]
+    #[clap(short = 'c', long = "chain-spec-path")]
     pub chain_spec_path: Option<PathBuf>,
 }
 

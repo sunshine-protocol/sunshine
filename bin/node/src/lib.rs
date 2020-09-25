@@ -25,6 +25,7 @@ use test_runtime::{
     TreasuryConfig,
     WASM_BINARY,
 };
+pub use test_runtime::opaque::Block as OpaqueBlock;
 
 pub const IMPL_NAME: &str = "Sunshine Node";
 pub const IMPL_VERSION: &str = env!("CARGO_PKG_VERSION");

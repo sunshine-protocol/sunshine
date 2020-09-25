@@ -6,7 +6,6 @@ use core::fmt::{
 use substrate_subxt::{
     sp_core::crypto::Ss58Codec,
     system::System,
-    Runtime,
 };
 use sunshine_bounty_client::org::{
     AccountShare,
@@ -16,6 +15,7 @@ use sunshine_bounty_client::org::{
 };
 use sunshine_client_utils::{
     crypto::ss58::Ss58,
+    Node,
     Result,
 };
 
@@ -27,16 +27,17 @@ pub struct SharesIssueCommand {
 }
 
 impl SharesIssueCommand {
-    pub async fn exec<R: Runtime + Shares, C: SharesClient<R>>(
+    pub async fn exec<N: Node, C: SharesClient<N>>(
         &self,
         client: &C,
     ) -> Result<()>
     where
-        <R as System>::AccountId: Ss58Codec,
-        <R as Org>::OrgId: From<u64> + Display,
-        <R as Org>::Shares: From<u64> + Display,
+        N::Runtime: Shares,
+        <N::Runtime as System>::AccountId: Ss58Codec,
+        <N::Runtime as Org>::OrgId: From<u64> + Display,
+        <N::Runtime as Org>::Shares: From<u64> + Display,
     {
-        let account: Ss58<R> = self.dest.parse()?;
+        let account: Ss58<N::Runtime> = self.dest.parse()?;
         let event = client
             .issue_shares(
                 self.organization.into(),
@@ -59,21 +60,22 @@ pub struct SharesBatchIssueCommand {
 }
 
 impl SharesBatchIssueCommand {
-    pub async fn exec<R: Runtime + Shares, C: SharesClient<R>>(
+    pub async fn exec<N: Node, C: SharesClient<N>>(
         &self,
         client: &C,
     ) -> Result<()>
     where
-        <R as System>::AccountId: Ss58Codec,
-        <R as Org>::OrgId: From<u64> + Display,
-        <R as Org>::Shares: From<u64> + Display,
+        N::Runtime: Shares,
+        <N::Runtime as System>::AccountId: Ss58Codec,
+        <N::Runtime as Org>::OrgId: From<u64> + Display,
+        <N::Runtime as Org>::Shares: From<u64> + Display,
     {
         let accounts = self
             .new_accounts
             .iter()
             .map(|acc_share| -> Result<_> {
-                let account: Ss58<R> = acc_share.0.parse()?;
-                let amount_issued: R::Shares = (acc_share.1).into();
+                let account: Ss58<N::Runtime> = acc_share.0.parse()?;
+                let amount_issued: <N::Runtime as Shares>::Shares = (acc_share.1).into();
                 Ok((account.0, amount_issued))
             })
             .collect::<Result<Vec<_>>>()?;
@@ -95,21 +97,22 @@ pub struct SharesBatchBurnCommand {
 }
 
 impl SharesBatchBurnCommand {
-    pub async fn exec<R: Runtime + Shares, C: SharesClient<R>>(
+    pub async fn exec<N: Node, C: SharesClient<N>>(
         &self,
         client: &C,
     ) -> Result<()>
     where
-        <R as System>::AccountId: Ss58Codec,
-        <R as Org>::OrgId: From<u64> + Display,
-        <R as Org>::Shares: From<u64> + Display,
+        N::Runtime: Shares,
+        <N::Runtime as System>::AccountId: Ss58Codec,
+        <N::Runtime as Org>::OrgId: From<u64> + Display,
+        <N::Runtime as Org>::Shares: From<u64> + Display,
     {
         let accounts = self
             .old_accounts
             .iter()
             .map(|acc_share| -> Result<_> {
-                let account: Ss58<R> = acc_share.0.parse()?;
-                let amount_burned: R::Shares = (acc_share.1).into();
+                let account: Ss58<N::Runtime> = acc_share.0.parse()?;
+                let amount_burned: <N::Runtime as Shares>::Shares = (acc_share.1).into();
                 Ok((account.0, amount_burned))
             })
             .collect::<Result<Vec<_>>>()?;
@@ -132,16 +135,17 @@ pub struct SharesBurnCommand {
 }
 
 impl SharesBurnCommand {
-    pub async fn exec<R: Runtime + Shares, C: SharesClient<R>>(
+    pub async fn exec<N: Node, C: SharesClient<N>>(
         &self,
         client: &C,
     ) -> Result<()>
     where
-        <R as System>::AccountId: Ss58Codec,
-        <R as Org>::OrgId: From<u64> + Display,
-        <R as Org>::Shares: From<u64> + Display,
+        N::Runtime: Shares,
+        <N::Runtime as System>::AccountId: Ss58Codec,
+        <N::Runtime as Org>::OrgId: From<u64> + Display,
+        <N::Runtime as Org>::Shares: From<u64> + Display,
     {
-        let account: Ss58<R> = self.burner.parse()?;
+        let account: Ss58<N::Runtime> = self.burner.parse()?;
         let event = client
             .burn_shares(
                 self.organization.into(),

@@ -2,16 +2,15 @@ use sc_cli::{
     RunCmd,
     Runner,
     RuntimeVersion,
-    Subcommand,
     SubstrateCli,
 };
 use sc_service::{
     ChainSpec,
     DatabaseConfig,
-    PartialComponents,
     Role,
 };
 use structopt::StructOpt;
+use tiny_multihash::Multihash;
 
 #[derive(Debug, StructOpt)]
 pub struct Cli {
@@ -20,6 +19,11 @@ pub struct Cli {
 
     #[structopt(flatten)]
     pub run: RunCmd,
+}
+
+#[derive(Debug, StructOpt)]
+pub enum Subcommand {
+    PurgeChain(sc_cli::PurgeChainCmd),
 }
 
 impl SubstrateCli for Cli {
@@ -74,27 +78,18 @@ impl SubstrateCli for Cli {
 fn main() -> sc_cli::Result<()> {
     let cli = <Cli as SubstrateCli>::from_args();
     match &cli.subcommand {
-        Some(subcommand) => {
-            let mut runner = cli.create_runner(subcommand)?;
+        Some(Subcommand::PurgeChain(cmd)) => {
+            let mut runner = cli.create_runner(cmd)?;
             force_parity_db(&mut runner);
-            runner.run_subcommand(subcommand, |config| {
-                let PartialComponents {
-                    client,
-                    backend,
-                    task_manager,
-                    import_queue,
-                    ..
-                } = test_node::new_partial(&config)?;
-                Ok((client, backend, import_queue, task_manager))
-            })
+            runner.sync_run(|config| cmd.run(config.database))
         }
         None => {
             let mut runner = cli.create_runner(&cli.run)?;
             force_parity_db(&mut runner);
             runner.run_node_until_exit(|config| {
                 match config.role {
-                    Role::Light => test_node::new_light(config),
-                    _ => test_node::new_full(config),
+                    Role::Light => test_node::new_light::<Multihash>(config),
+                    _ => test_node::new_full::<Multihash>(config),
                 }
                 .map(|service| service.0)
             })

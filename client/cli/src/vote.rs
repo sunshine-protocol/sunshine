@@ -8,7 +8,6 @@ use substrate_subxt::{
     sp_core::crypto::Ss58Codec,
     sp_runtime::Permill,
     system::System,
-    Runtime,
 };
 use sunshine_bounty_client::{
     org::Org,
@@ -25,7 +24,7 @@ use sunshine_bounty_utils::{
         VoterView,
     },
 };
-use sunshine_client_utils::Result;
+use sunshine_client_utils::{Node, Result};
 
 #[derive(Clone, Debug, Clap)]
 pub struct VoteCreateSignalThresholdCommand {
@@ -38,19 +37,20 @@ pub struct VoteCreateSignalThresholdCommand {
 }
 
 impl VoteCreateSignalThresholdCommand {
-    pub async fn exec<R: Runtime + Vote, C: VoteClient<R>>(
+    pub async fn exec<N: Node, C: VoteClient<N>>(
         &self,
         client: &C,
     ) -> Result<()>
     where
-        <R as System>::AccountId: Ss58Codec,
-        <R as System>::BlockNumber: From<u32>,
-        <R as Org>::OrgId: From<u64> + Display,
-        <R as Vote>::Signal: From<u64> + Display,
-        <R as Vote>::VoteId: Display,
-        <R as Vote>::VoteTopic: From<TextBlock>,
+        N::Runtime: Vote,
+        <N::Runtime as System>::AccountId: Ss58Codec,
+        <N::Runtime as System>::BlockNumber: From<u32>,
+        <N::Runtime as Org>::OrgId: From<u64> + Display,
+        <N::Runtime as Vote>::Signal: From<u64> + Display,
+        <N::Runtime as Vote>::VoteId: Display,
+        <N::Runtime as Vote>::VoteTopic: From<TextBlock>,
     {
-        let topic: Option<<R as Vote>::VoteTopic> = if let Some(t) = &self.topic
+        let topic: Option<<N::Runtime as Vote>::VoteTopic> = if let Some(t) = &self.topic
         {
             Some(
                 TextBlock {
@@ -61,15 +61,15 @@ impl VoteCreateSignalThresholdCommand {
         } else {
             None
         };
-        let rt: Option<R::Signal> = if let Some(r) = self.rejection_requirement
+        let rt: Option<<N::Runtime as Vote>::Signal> = if let Some(r) = self.rejection_requirement
         {
             Some(r.into())
         } else {
             None
         };
-        let threshold: Threshold<R::Signal> =
+        let threshold: Threshold<<N::Runtime as Vote>::Signal> =
             Threshold::new(self.support_requirement.into(), rt);
-        let duration: Option<<R as System>::BlockNumber> =
+        let duration: Option<<N::Runtime as System>::BlockNumber> =
             if let Some(req) = self.duration {
                 Some(req.into())
             } else {
@@ -122,19 +122,20 @@ pub fn u8_to_permill(u: u8) -> Result<Permill> {
 }
 
 impl VoteCreatePercentThresholdCommand {
-    pub async fn exec<R: Runtime + Vote, C: VoteClient<R>>(
+    pub async fn exec<N: Node, C: VoteClient<N>>(
         &self,
         client: &C,
     ) -> Result<()>
     where
-        <R as System>::AccountId: Ss58Codec,
-        <R as System>::BlockNumber: From<u32>,
-        <R as Org>::OrgId: From<u64> + Display,
-        <R as Vote>::VoteId: Display,
-        <R as Vote>::VoteTopic: From<TextBlock>,
-        <R as Vote>::Percent: From<Permill>,
+        N::Runtime: Vote,
+        <N::Runtime as System>::AccountId: Ss58Codec,
+        <N::Runtime as System>::BlockNumber: From<u32>,
+        <N::Runtime as Org>::OrgId: From<u64> + Display,
+        <N::Runtime as Vote>::VoteId: Display,
+        <N::Runtime as Vote>::VoteTopic: From<TextBlock>,
+        <N::Runtime as Vote>::Percent: From<Permill>,
     {
-        let topic: Option<<R as Vote>::VoteTopic> = if let Some(t) = &self.topic
+        let topic: Option<<N::Runtime as Vote>::VoteTopic> = if let Some(t) = &self.topic
         {
             Some(
                 TextBlock {
@@ -145,13 +146,13 @@ impl VoteCreatePercentThresholdCommand {
         } else {
             None
         };
-        let duration: Option<<R as System>::BlockNumber> =
+        let duration: Option<<N::Runtime as System>::BlockNumber> =
             if let Some(req) = self.duration {
                 Some(req.into())
             } else {
                 None
             };
-        let rt: Option<<R as Vote>::Percent> =
+        let rt: Option<<N::Runtime as Vote>::Percent> =
             if let Some(r) = self.rejection_threshold {
                 let ret = u8_to_permill(r)
                     .map_err(|_| VotePercentThresholdInputBoundError)?;
@@ -159,11 +160,11 @@ impl VoteCreatePercentThresholdCommand {
             } else {
                 None
             };
-        let support_t: <R as Vote>::Percent =
+        let support_t: <N::Runtime as Vote>::Percent =
             u8_to_permill(self.support_threshold)
                 .map_err(|_| VotePercentThresholdInputBoundError)?
                 .into();
-        let threshold: Threshold<<R as Vote>::Percent> =
+        let threshold: Threshold<<N::Runtime as Vote>::Percent> =
             Threshold::new(support_t, rt);
         // 0 is false and everything else is true
         let event = if self.weighted != 0 {
@@ -201,24 +202,25 @@ pub struct VoteSubmitCommand {
 }
 
 impl VoteSubmitCommand {
-    pub async fn exec<R: Runtime + Vote, C: VoteClient<R>>(
+    pub async fn exec<N: Node, C: VoteClient<N>>(
         &self,
         client: &C,
     ) -> Result<()>
     where
-        <R as System>::AccountId: Ss58Codec,
-        <R as Org>::OrgId: From<u64> + Display,
-        <R as Vote>::VoteId: From<u64> + Display,
-        <R as Vote>::VoterView: From<VoterView>,
-        <R as Vote>::VoteJustification: From<TextBlock>,
+        N::Runtime: Vote,
+        <N::Runtime as System>::AccountId: Ss58Codec,
+        <N::Runtime as Org>::OrgId: From<u64> + Display,
+        <N::Runtime as Vote>::VoteId: From<u64> + Display,
+        <N::Runtime as Vote>::VoterView: From<VoterView>,
+        <N::Runtime as Vote>::VoteJustification: From<TextBlock>,
     {
-        let voter_view: <R as Vote>::VoterView = match self.direction {
+        let voter_view: <N::Runtime as Vote>::VoterView = match self.direction {
             0u8 => VoterView::Against, // 0 == false
             1u8 => VoterView::InFavor, // 1 == true
             _ => VoterView::Abstain,
         }
         .into();
-        let justification: Option<<R as Vote>::VoteJustification> =
+        let justification: Option<<N::Runtime as Vote>::VoteJustification> =
             if let Some(j) = &self.justification {
                 Some(
                     TextBlock {

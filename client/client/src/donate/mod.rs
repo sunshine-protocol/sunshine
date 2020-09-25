@@ -15,39 +15,44 @@ use substrate_subxt::{
 use sunshine_client_utils::{
     async_trait,
     Client,
+    Node,
     Result,
 };
 
 #[async_trait]
-pub trait DonateClient<T: Runtime + Donate>: Client<T> {
-    async fn make_prop_donation(
-        &self,
-        org: <T as Org>::OrgId,
-        rem_recipient: <T as System>::AccountId,
-        amt: BalanceOf<T>,
-    ) -> Result<PropDonationExecutedEvent<T>>;
-    async fn make_equal_donation(
-        &self,
-        org: <T as Org>::OrgId,
-        rem_recipient: <T as System>::AccountId,
-        amt: BalanceOf<T>,
-    ) -> Result<EqualDonationExecutedEvent<T>>;
-}
-
-#[async_trait]
-impl<T, C> DonateClient<T> for C
+pub trait DonateClient<N: Node>: Client<N>
 where
-    T: Runtime + Donate,
-    <<T::Extra as SignedExtra<T>>::Extra as SignedExtension>::AdditionalSigned:
-        Send + Sync,
-    C: Client<T>,
+    N::Runtime: Donate,
 {
     async fn make_prop_donation(
         &self,
-        org: <T as Org>::OrgId,
-        rem_recipient: <T as System>::AccountId,
-        amt: BalanceOf<T>,
-    ) -> Result<PropDonationExecutedEvent<T>> {
+        org: <N::Runtime as Org>::OrgId,
+        rem_recipient: <N::Runtime as System>::AccountId,
+        amt: BalanceOf<N::Runtime>,
+    ) -> Result<PropDonationExecutedEvent<N::Runtime>>;
+    async fn make_equal_donation(
+        &self,
+        org: <N::Runtime as Org>::OrgId,
+        rem_recipient: <N::Runtime as System>::AccountId,
+        amt: BalanceOf<N::Runtime>,
+    ) -> Result<EqualDonationExecutedEvent<N::Runtime>>;
+}
+
+#[async_trait]
+impl<N, C> DonateClient<N> for C
+where
+    N: Node,
+    N::Runtime: Donate,
+    <<<N::Runtime as Runtime>::Extra as SignedExtra<N::Runtime>>::Extra as SignedExtension>::AdditionalSigned:
+        Send + Sync,
+    C: Client<N>,
+{
+    async fn make_prop_donation(
+        &self,
+        org: <N::Runtime as Org>::OrgId,
+        rem_recipient: <N::Runtime as System>::AccountId,
+        amt: BalanceOf<N::Runtime>,
+    ) -> Result<PropDonationExecutedEvent<N::Runtime>> {
         let signer = self.chain_signer()?;
         self.chain_client()
             .make_prop_donation_and_watch(&signer, org, rem_recipient, amt)
@@ -57,10 +62,10 @@ where
     }
     async fn make_equal_donation(
         &self,
-        org: <T as Org>::OrgId,
-        rem_recipient: <T as System>::AccountId,
-        amt: BalanceOf<T>,
-    ) -> Result<EqualDonationExecutedEvent<T>> {
+        org: <N::Runtime as Org>::OrgId,
+        rem_recipient: <N::Runtime as System>::AccountId,
+        amt: BalanceOf<N::Runtime>,
+    ) -> Result<EqualDonationExecutedEvent<N::Runtime>> {
         let signer = self.chain_signer()?;
         self.chain_client()
             .make_equal_donation_and_watch(&signer, org, rem_recipient, amt)
