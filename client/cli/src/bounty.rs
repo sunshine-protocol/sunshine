@@ -227,11 +227,7 @@ impl GetOpenBountiesCommand {
     ) -> Result<()>
     where
         N::Runtime: Bounty<IpfsReference = sunshine_codec::Cid>,
-        C::OffchainClient: Cache<
-            OffchainConfig<N>,
-            DagCborCodec,
-            GithubIssue,
-        >,
+        C::OffchainClient: Cache<OffchainConfig<N>, DagCborCodec, GithubIssue>,
         <N::Runtime as Balances>::Balance: From<u128> + Display,
         <N::Runtime as Bounty>::BountyId: Display + From<u64>,
         <N::Runtime as Bounty>::SubmissionId: Display + From<u64>,
@@ -284,11 +280,7 @@ impl GetOpenSubmissionsCommand {
     ) -> Result<()>
     where
         N::Runtime: Bounty<IpfsReference = sunshine_codec::Cid>,
-        C::OffchainClient: Cache<
-            OffchainConfig<N>,
-            DagCborCodec,
-            GithubIssue,
-        >,
+        C::OffchainClient: Cache<OffchainConfig<N>, DagCborCodec, GithubIssue>,
         <N::Runtime as Balances>::Balance: Display,
         <N::Runtime as Bounty>::BountyId: From<u64> + Display,
         <N::Runtime as Bounty>::SubmissionId: Display + From<u64>,

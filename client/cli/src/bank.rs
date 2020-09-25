@@ -70,7 +70,10 @@ impl OpenCommand {
             Threshold::new(support, None);
         let threshold_config: ThresholdInput<
             OrgRep<<N::Runtime as Org>::OrgId>,
-            XorThreshold<<N::Runtime as Vote>::Signal, <N::Runtime as Vote>::Percent>,
+            XorThreshold<
+                <N::Runtime as Vote>::Signal,
+                <N::Runtime as Vote>::Percent,
+            >,
         > = ThresholdInput::new(
             OrgRep::Equal(self.hosting_org.into()),
             XorThreshold::Percent(threshold),

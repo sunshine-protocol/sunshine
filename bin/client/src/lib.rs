@@ -1,11 +1,10 @@
 use libipld::{
-    cache::{
-        IpldCache,
-    },
+    cache::IpldCache,
     cbor::DagCborCodec,
     derive_cache,
     store::Store,
 };
+use std::ops::Deref;
 use substrate_subxt::{
     balances::{
         AccountData,
@@ -28,24 +27,23 @@ use sunshine_bounty_client::{
     vote::Vote,
 };
 use sunshine_client_utils::{
-    GenericClient,
-    OffchainStore,
-    ChainSpecError,
-    Node as NodeT,
-    Network,
+    codec::hasher::BLAKE2B_256,
+    crypto::{
+        keychain::KeyType,
+        sr25519,
+    },
     sc_service::{
         self,
         Configuration,
         RpcHandlers,
         TaskManager,
     },
-    codec::hasher::BLAKE2B_256,
-    crypto::{
-        keychain::KeyType,
-        sr25519,
-    },
+    ChainSpecError,
+    GenericClient,
+    Network,
+    Node as NodeT,
+    OffchainStore,
 };
-use std::ops::Deref;
 
 pub use sunshine_bounty_client::*;
 pub use sunshine_bounty_utils as utils;
@@ -129,8 +127,18 @@ pub struct OffchainClient<S> {
 impl<S: Store> OffchainClient<S> {
     pub fn new(store: S) -> Self {
         Self {
-            bounties: IpldCache::new(store.clone(), DagCborCodec, BLAKE2B_256, 64),
-            constitutions: IpldCache::new(store.clone(), DagCborCodec, BLAKE2B_256, 64),
+            bounties: IpldCache::new(
+                store.clone(),
+                DagCborCodec,
+                BLAKE2B_256,
+                64,
+            ),
+            constitutions: IpldCache::new(
+                store.clone(),
+                DagCborCodec,
+                BLAKE2B_256,
+                64,
+            ),
             store,
         }
     }
@@ -191,13 +199,15 @@ impl NodeT for Node {
 
     fn new_light(
         config: Configuration,
-    ) -> Result<(TaskManager, RpcHandlers, Network<Self>), sc_service::Error> {
+    ) -> Result<(TaskManager, RpcHandlers, Network<Self>), sc_service::Error>
+    {
         test_node::new_light(config)
     }
 
     fn new_full(
         config: Configuration,
-    ) -> Result<(TaskManager, RpcHandlers, Network<Self>), sc_service::Error> {
+    ) -> Result<(TaskManager, RpcHandlers, Network<Self>), sc_service::Error>
+    {
         test_node::new_full(config)
     }
 }
@@ -209,8 +219,5 @@ impl KeyType for UserDevice {
     type Pair = sr25519::Pair;
 }
 
-pub type Client = GenericClient<
-    Node,
-    UserDevice,
-    OffchainClient<OffchainStore<Node>>,
->;
+pub type Client =
+    GenericClient<Node, UserDevice, OffchainClient<OffchainStore<Node>>>;

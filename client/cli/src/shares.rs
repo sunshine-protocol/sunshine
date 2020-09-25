@@ -75,7 +75,8 @@ impl SharesBatchIssueCommand {
             .iter()
             .map(|acc_share| -> Result<_> {
                 let account: Ss58<N::Runtime> = acc_share.0.parse()?;
-                let amount_issued: <N::Runtime as Shares>::Shares = (acc_share.1).into();
+                let amount_issued: <N::Runtime as Shares>::Shares =
+                    (acc_share.1).into();
                 Ok((account.0, amount_issued))
             })
             .collect::<Result<Vec<_>>>()?;
@@ -112,7 +113,8 @@ impl SharesBatchBurnCommand {
             .iter()
             .map(|acc_share| -> Result<_> {
                 let account: Ss58<N::Runtime> = acc_share.0.parse()?;
-                let amount_burned: <N::Runtime as Shares>::Shares = (acc_share.1).into();
+                let amount_burned: <N::Runtime as Shares>::Shares =
+                    (acc_share.1).into();
                 Ok((account.0, amount_burned))
             })
             .collect::<Result<Vec<_>>>()?;

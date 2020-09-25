@@ -24,7 +24,10 @@ use sunshine_bounty_utils::{
         VoterView,
     },
 };
-use sunshine_client_utils::{Node, Result};
+use sunshine_client_utils::{
+    Node,
+    Result,
+};
 
 #[derive(Clone, Debug, Clap)]
 pub struct VoteCreateSignalThresholdCommand {
@@ -50,23 +53,23 @@ impl VoteCreateSignalThresholdCommand {
         <N::Runtime as Vote>::VoteId: Display,
         <N::Runtime as Vote>::VoteTopic: From<TextBlock>,
     {
-        let topic: Option<<N::Runtime as Vote>::VoteTopic> = if let Some(t) = &self.topic
-        {
-            Some(
-                TextBlock {
-                    text: (*t).to_string(),
-                }
-                .into(),
-            )
-        } else {
-            None
-        };
-        let rt: Option<<N::Runtime as Vote>::Signal> = if let Some(r) = self.rejection_requirement
-        {
-            Some(r.into())
-        } else {
-            None
-        };
+        let topic: Option<<N::Runtime as Vote>::VoteTopic> =
+            if let Some(t) = &self.topic {
+                Some(
+                    TextBlock {
+                        text: (*t).to_string(),
+                    }
+                    .into(),
+                )
+            } else {
+                None
+            };
+        let rt: Option<<N::Runtime as Vote>::Signal> =
+            if let Some(r) = self.rejection_requirement {
+                Some(r.into())
+            } else {
+                None
+            };
         let threshold: Threshold<<N::Runtime as Vote>::Signal> =
             Threshold::new(self.support_requirement.into(), rt);
         let duration: Option<<N::Runtime as System>::BlockNumber> =
@@ -135,17 +138,17 @@ impl VoteCreatePercentThresholdCommand {
         <N::Runtime as Vote>::VoteTopic: From<TextBlock>,
         <N::Runtime as Vote>::Percent: From<Permill>,
     {
-        let topic: Option<<N::Runtime as Vote>::VoteTopic> = if let Some(t) = &self.topic
-        {
-            Some(
-                TextBlock {
-                    text: (*t).to_string(),
-                }
-                .into(),
-            )
-        } else {
-            None
-        };
+        let topic: Option<<N::Runtime as Vote>::VoteTopic> =
+            if let Some(t) = &self.topic {
+                Some(
+                    TextBlock {
+                        text: (*t).to_string(),
+                    }
+                    .into(),
+                )
+            } else {
+                None
+            };
         let duration: Option<<N::Runtime as System>::BlockNumber> =
             if let Some(req) = self.duration {
                 Some(req.into())
@@ -214,12 +217,13 @@ impl VoteSubmitCommand {
         <N::Runtime as Vote>::VoterView: From<VoterView>,
         <N::Runtime as Vote>::VoteJustification: From<TextBlock>,
     {
-        let voter_view: <N::Runtime as Vote>::VoterView = match self.direction {
-            0u8 => VoterView::Against, // 0 == false
-            1u8 => VoterView::InFavor, // 1 == true
-            _ => VoterView::Abstain,
-        }
-        .into();
+        let voter_view: <N::Runtime as Vote>::VoterView =
+            match self.direction {
+                0u8 => VoterView::Against, // 0 == false
+                1u8 => VoterView::InFavor, // 1 == true
+                _ => VoterView::Abstain,
+            }
+            .into();
         let justification: Option<<N::Runtime as Vote>::VoteJustification> =
             if let Some(j) = &self.justification {
                 Some(

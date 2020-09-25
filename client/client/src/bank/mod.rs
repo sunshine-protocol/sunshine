@@ -51,7 +51,10 @@ where
         &self,
         bank_id: <N::Runtime as Bank>::BankId,
     ) -> Result<AccountClosedEvent<N::Runtime>>;
-    async fn bank(&self, bank_id: <N::Runtime as Bank>::BankId) -> Result<BankSt<N::Runtime>>;
+    async fn bank(
+        &self,
+        bank_id: <N::Runtime as Bank>::BankId,
+    ) -> Result<BankSt<N::Runtime>>;
     async fn spend_proposal(
         &self,
         bank_id: <N::Runtime as Bank>::BankId,

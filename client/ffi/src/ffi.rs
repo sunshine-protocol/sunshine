@@ -15,9 +15,7 @@ use anyhow::{
     bail,
 };
 use libipld::{
-    cache::{
-        Cache,
-    },
+    cache::Cache,
     cbor::DagCborCodec,
 };
 use std::{
@@ -206,12 +204,9 @@ where
     C: BountyClient<N> + Send + Sync,
     N: Node,
     N::Runtime: BountyTrait<IpfsReference = sunshine_codec::Cid> + Debug,
-    C::OffchainClient: Cache<
-        OffchainConfig<N>,
-        DagCborCodec,
-        GithubIssue,
-    >,
-    <N::Runtime as System>::AccountId: Ss58Codec + Into<<N::Runtime as System>::Address>,
+    C::OffchainClient: Cache<OffchainConfig<N>, DagCborCodec, GithubIssue>,
+    <N::Runtime as System>::AccountId:
+        Ss58Codec + Into<<N::Runtime as System>::Address>,
     <N::Runtime as BountyTrait>::BountyId: From<u64> + Into<u64> + Display,
     <N::Runtime as BountyTrait>::SubmissionId: From<u64> + Into<u64> + Display,
     <N::Runtime as BountyTrait>::BountyPost: From<GithubIssue> + Debug,

@@ -40,7 +40,10 @@ where
         sudo: Option<<N::Runtime as System>::AccountId>,
         parent_org: Option<<N::Runtime as Org>::OrgId>,
         constitution: <N::Runtime as Org>::Constitution,
-        weighted_members: &[(<N::Runtime as System>::AccountId, <N::Runtime as Org>::Shares)],
+        weighted_members: &[(
+            <N::Runtime as System>::AccountId,
+            <N::Runtime as Org>::Shares,
+        )],
     ) -> Result<NewWeightedOrgEvent<N::Runtime>>;
     async fn issue_shares(
         &self,
@@ -57,19 +60,28 @@ where
     async fn batch_issue_shares(
         &self,
         org: <N::Runtime as Org>::OrgId,
-        new_accounts: &[(<N::Runtime as System>::AccountId, <N::Runtime as Org>::Shares)],
+        new_accounts: &[(
+            <N::Runtime as System>::AccountId,
+            <N::Runtime as Org>::Shares,
+        )],
     ) -> Result<SharesBatchIssuedEvent<N::Runtime>>;
     async fn batch_burn_shares(
         &self,
         org: <N::Runtime as Org>::OrgId,
-        old_accounts: &[(<N::Runtime as System>::AccountId, <N::Runtime as Org>::Shares)],
+        old_accounts: &[(
+            <N::Runtime as System>::AccountId,
+            <N::Runtime as Org>::Shares,
+        )],
     ) -> Result<SharesBatchBurnedEvent<N::Runtime>>;
     async fn org_parent_child(
         &self,
         parent: <N::Runtime as Org>::OrgId,
         child: <N::Runtime as Org>::OrgId,
     ) -> bool;
-    async fn org(&self, org: <N::Runtime as Org>::OrgId) -> Result<OrgState<N::Runtime>>;
+    async fn org(
+        &self,
+        org: <N::Runtime as Org>::OrgId,
+    ) -> Result<OrgState<N::Runtime>>;
     async fn share_profile(
         &self,
         org: <N::Runtime as Org>::OrgId,
@@ -79,11 +91,21 @@ where
     async fn org_members(
         &self,
         org: <N::Runtime as Org>::OrgId,
-    ) -> Result<Option<Vec<(<N::Runtime as System>::AccountId, Prof<N::Runtime>)>>>;
+    ) -> Result<
+        Option<Vec<(<N::Runtime as System>::AccountId, Prof<N::Runtime>)>>,
+    >;
     async fn share_profiles(
         &self,
         account: <N::Runtime as System>::AccountId,
-    ) -> Result<Option<Vec<(<N::Runtime as Org>::OrgId, Prof<N::Runtime>, OrgState<N::Runtime>)>>>;
+    ) -> Result<
+        Option<
+            Vec<(
+                <N::Runtime as Org>::OrgId,
+                Prof<N::Runtime>,
+                OrgState<N::Runtime>,
+            )>,
+        >,
+    >;
 }
 
 #[async_trait]
@@ -266,16 +288,17 @@ mod tests {
         RngCore,
     };
     use test_client::{
-        client::Client as _,
-        mock::{
-            test_node,
+        client::{
             AccountKeyring,
-            Client,
+            Client as _,
+            Node as _,
         },
         org::{
             NewFlatOrgEvent,
             OrgClient,
         },
+        Client,
+        Node,
         TextBlock,
     };
 
@@ -289,8 +312,8 @@ mod tests {
     #[async_std::test]
     async fn simple_test() {
         use substrate_subxt::balances::TransferCallExt;
-        let (node, _node_tmp) = test_node();
-        let client = Client::mock(&node, AccountKeyring::Alice).await;
+        let node = Node::new_mock();
+        let (client, _tmp) = Client::mock(&node, AccountKeyring::Alice).await;
         let alice_account_id = AccountKeyring::Alice.to_account_id();
         client
             .chain_client()
@@ -305,8 +328,8 @@ mod tests {
 
     #[async_std::test]
     async fn new_flat_org_test() {
-        let (node, _node_tmp) = test_node();
-        let client = Client::mock(&node, AccountKeyring::Alice).await;
+        let node = Node::new_mock();
+        let (client, _tmp) = Client::mock(&node, AccountKeyring::Alice).await;
         let alice_account_id = AccountKeyring::Alice.to_account_id();
         // insert constitution into
         let raw_const = TextBlock {

@@ -7,10 +7,10 @@ use libipld::{
 };
 use parity_scale_codec::Encode;
 use substrate_subxt::{
+    system::System,
     Runtime,
     SignedExtension,
     SignedExtra,
-    system::System,
 };
 pub use subxt::*;
 use sunshine_client_utils::{
@@ -46,7 +46,10 @@ where
         &self,
         submission_id: <N::Runtime as Bounty>::SubmissionId,
     ) -> Result<BountyPaymentExecutedEvent<N::Runtime>>;
-    async fn bounty(&self, bounty_id: <N::Runtime as Bounty>::BountyId) -> Result<BountyState<N::Runtime>>;
+    async fn bounty(
+        &self,
+        bounty_id: <N::Runtime as Bounty>::BountyId,
+    ) -> Result<BountyState<N::Runtime>>;
     async fn submission(
         &self,
         submission_id: <N::Runtime as Bounty>::SubmissionId,
@@ -59,11 +62,19 @@ where
     async fn open_bounties(
         &self,
         min: BalanceOf<N::Runtime>,
-    ) -> Result<Option<Vec<(<N::Runtime as Bounty>::BountyId, BountyState<N::Runtime>)>>>;
+    ) -> Result<
+        Option<
+            Vec<(<N::Runtime as Bounty>::BountyId, BountyState<N::Runtime>)>,
+        >,
+    >;
     async fn open_submissions(
         &self,
         bounty_id: <N::Runtime as Bounty>::BountyId,
-    ) -> Result<Option<Vec<(<N::Runtime as Bounty>::SubmissionId, SubState<N::Runtime>)>>>;
+    ) -> Result<
+        Option<
+            Vec<(<N::Runtime as Bounty>::SubmissionId, SubState<N::Runtime>)>,
+        >,
+    >;
     async fn bounty_contributions(
         &self,
         bounty_id: <N::Runtime as Bounty>::BountyId,
@@ -258,14 +269,15 @@ mod tests {
             BountyPostedEvent,
             BountyRaiseContributionEvent,
         },
-        client::Client as _,
-        mock::{
-            test_node,
+        client::{
             AccountKeyring,
-            Client,
+            Client as _,
+            Node as _,
         },
         utils::bounty::BountyInformation,
+        Client,
         GithubIssue,
+        Node,
     };
 
     // For testing purposes only, NEVER use this to generate AccountIds in practice because it's random
@@ -278,8 +290,8 @@ mod tests {
     #[async_std::test]
     async fn simple_test() {
         use substrate_subxt::balances::TransferCallExt;
-        let (node, _node_tmp) = test_node();
-        let client = Client::mock(&node, AccountKeyring::Alice).await;
+        let node = Node::new_mock();
+        let (client, _tmp) = Client::mock(&node, AccountKeyring::Alice).await;
         let alice_account_id = AccountKeyring::Alice.to_account_id();
         client
             .chain_client()
@@ -294,8 +306,8 @@ mod tests {
 
     #[async_std::test]
     async fn post_bounty_test() {
-        let (node, _node_tmp) = test_node();
-        let client = Client::mock(&node, AccountKeyring::Alice).await;
+        let node = Node::new_mock();
+        let (client, _tmp) = Client::mock(&node, AccountKeyring::Alice).await;
         let alice_account_id = AccountKeyring::Alice.to_account_id();
         let bounty = GithubIssue {
             repo_owner: "sunshine-protocol".to_string(),
@@ -314,8 +326,8 @@ mod tests {
 
     #[async_std::test]
     async fn get_bounties_test() {
-        let (node, _node_tmp) = test_node();
-        let client = Client::mock(&node, AccountKeyring::Alice).await;
+        let node = Node::new_mock();
+        let (client, _tmp) = Client::mock(&node, AccountKeyring::Alice).await;
         let alice_account_id = AccountKeyring::Alice.to_account_id();
         let bounty1 = GithubIssue {
             repo_owner: "sunshine-protocol".to_string(),
@@ -353,8 +365,8 @@ mod tests {
     async fn contribute_to_bounty_test() {
         use substrate_subxt::system::AccountStoreExt;
         env_logger::try_init().ok();
-        let (node, _node_tmp) = test_node();
-        let client = Client::mock(&node, AccountKeyring::Alice).await;
+        let node = Node::new_mock();
+        let (client, _tmp) = Client::mock(&node, AccountKeyring::Alice).await;
         let alice_account_id = AccountKeyring::Alice.to_account_id();
         let bounty = GithubIssue {
             repo_owner: "sunshine-protocol".to_string(),

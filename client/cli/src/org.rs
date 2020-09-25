@@ -30,10 +30,7 @@ pub struct NewFlatOrgCommand {
 }
 
 impl NewFlatOrgCommand {
-    pub async fn exec<N: Node, C: OrgClient<N>>(
-        &self,
-        client: &C,
-    ) -> Result<()>
+    pub async fn exec<N: Node, C: OrgClient<N>>(&self, client: &C) -> Result<()>
     where
         N::Runtime: Org,
         <N::Runtime as System>::AccountId: Ss58Codec,
@@ -46,18 +43,19 @@ impl NewFlatOrgCommand {
         } else {
             None
         };
-        let parent_org: Option<<N::Runtime as Org>::OrgId> = if let Some(org) = self.parent_org {
-            Some(org.into())
-        } else {
-            None
-        };
+        let parent_org: Option<<N::Runtime as Org>::OrgId> =
+            if let Some(org) = self.parent_org {
+                Some(org.into())
+            } else {
+                None
+            };
         let constitution = TextBlock {
             text: (*self.constitution).to_string(),
         };
         let members = self
             .members
             .iter()
-            .map(|acc|{
+            .map(|acc| {
                 let mem: Ss58<N::Runtime> = acc.parse()?;
                 Ok(mem.0)
             })
@@ -82,10 +80,7 @@ pub struct NewWeightedOrgCommand {
 }
 
 impl NewWeightedOrgCommand {
-    pub async fn exec<N: Node, C: OrgClient<N>>(
-        &self,
-        client: &C,
-    ) -> Result<()>
+    pub async fn exec<N: Node, C: OrgClient<N>>(&self, client: &C) -> Result<()>
     where
         N::Runtime: Org,
         <N::Runtime as System>::AccountId: Ss58Codec,
@@ -93,17 +88,19 @@ impl NewWeightedOrgCommand {
         <N::Runtime as Org>::Shares: From<u64> + Display,
         <N::Runtime as Org>::Constitution: From<TextBlock>,
     {
-        let sudo: Option<<N::Runtime as System>::AccountId> = if let Some(acc) = &self.sudo {
-            let new_acc: Ss58<N::Runtime> = acc.parse()?;
-            Some(new_acc.0)
-        } else {
-            None
-        };
-        let parent_org: Option<<N::Runtime as Org>::OrgId> = if let Some(org) = self.parent_org {
-            Some(org.into())
-        } else {
-            None
-        };
+        let sudo: Option<<N::Runtime as System>::AccountId> =
+            if let Some(acc) = &self.sudo {
+                let new_acc: Ss58<N::Runtime> = acc.parse()?;
+                Some(new_acc.0)
+            } else {
+                None
+            };
+        let parent_org: Option<<N::Runtime as Org>::OrgId> =
+            if let Some(org) = self.parent_org {
+                Some(org.into())
+            } else {
+                None
+            };
         let constitution = TextBlock {
             text: (*self.constitution).to_string(),
         };
@@ -112,7 +109,8 @@ impl NewWeightedOrgCommand {
             .iter()
             .map(|acc_share| {
                 let mem: Ss58<N::Runtime> = acc_share.0.parse()?;
-                let amt_issued: <N::Runtime as Org>::Shares = (acc_share.1).into();
+                let amt_issued: <N::Runtime as Org>::Shares =
+                    (acc_share.1).into();
                 Ok((mem.0, amt_issued))
             })
             .collect::<Result<Vec<_>>>()?;

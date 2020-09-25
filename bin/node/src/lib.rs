@@ -10,6 +10,7 @@ use sp_runtime::traits::{
     Verify,
 };
 use sunshine_node_utils::node_service;
+pub use test_runtime::opaque::Block as OpaqueBlock;
 use test_runtime::{
     AccountId,
     AuraConfig,
@@ -25,7 +26,6 @@ use test_runtime::{
     TreasuryConfig,
     WASM_BINARY,
 };
-pub use test_runtime::opaque::Block as OpaqueBlock;
 
 pub const IMPL_NAME: &str = "Sunshine Node";
 pub const IMPL_VERSION: &str = env!("CARGO_PKG_VERSION");

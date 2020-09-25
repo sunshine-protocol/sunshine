@@ -39,7 +39,8 @@ impl PropDonateCommand {
         <N::Runtime as Org>::OrgId: From<u64> + Display,
         <N::Runtime as Balances>::Balance: From<u128> + Display,
     {
-        let remainder_recipient: Ss58<N::Runtime> = self.rem_recipient.parse()?;
+        let remainder_recipient: Ss58<N::Runtime> =
+            self.rem_recipient.parse()?;
         let event = client
             .make_prop_donation(
                 self.org.into(),
@@ -73,7 +74,8 @@ impl EqualDonateCommand {
         <N::Runtime as Org>::OrgId: From<u64> + Display,
         <N::Runtime as Balances>::Balance: From<u128> + Display,
     {
-        let remainder_recipient: Ss58<N::Runtime> = self.rem_recipient.parse()?;
+        let remainder_recipient: Ss58<N::Runtime> =
+            self.rem_recipient.parse()?;
         let event = client
             .make_equal_donation(
                 self.org.into(),
