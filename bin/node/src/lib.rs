@@ -10,6 +10,7 @@ use sp_runtime::traits::{
     Verify,
 };
 use sunshine_node_utils::node_service;
+pub use test_runtime::opaque::Block as OpaqueBlock;
 use test_runtime::{
     AccountId,
     AuraConfig,

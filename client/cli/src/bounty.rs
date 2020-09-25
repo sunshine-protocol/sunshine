@@ -5,19 +5,14 @@ use core::fmt::{
     Display,
 };
 use libipld::{
-    cache::{
-        Cache,
-        ReadonlyCache,
-    },
+    cache::Cache,
     cbor::DagCborCodec,
-    store::ReadonlyStore,
 };
 use std::convert::TryInto;
 use substrate_subxt::{
     balances::Balances,
     sp_core::crypto::Ss58Codec,
     system::System,
-    Runtime,
 };
 use sunshine_bounty_client::{
     bounty::{
@@ -27,7 +22,8 @@ use sunshine_bounty_client::{
     GithubIssue,
 };
 use sunshine_client_utils::{
-    OffchainClient,
+    Node,
+    OffchainConfig,
     Result,
 };
 
@@ -38,19 +34,20 @@ pub struct BountyPostCommand {
 }
 
 impl BountyPostCommand {
-    pub async fn exec<R: Runtime + Bounty, C: BountyClient<R>>(
+    pub async fn exec<N: Node, C: BountyClient<N>>(
         &self,
         client: &C,
     ) -> Result<()>
     where
-        <R as System>::AccountId: Ss58Codec,
-        <R as Balances>::Balance: From<u128> + Display,
-        <R as Bounty>::BountyId: Display,
-        <R as Bounty>::BountyPost: From<GithubIssue>,
+        N::Runtime: Bounty,
+        <N::Runtime as System>::AccountId: Ss58Codec,
+        <N::Runtime as Balances>::Balance: From<u128> + Display,
+        <N::Runtime as Bounty>::BountyId: Display,
+        <N::Runtime as Bounty>::BountyPost: From<GithubIssue>,
     {
         let metadata: GithubIssueMetadata =
             self.issue_url.as_str().try_into()?;
-        let bounty: <R as Bounty>::BountyPost = GithubIssue {
+        let bounty: <N::Runtime as Bounty>::BountyPost = GithubIssue {
             repo_owner: metadata.owner,
             repo_name: metadata.repo,
             issue_number: metadata.issue,
@@ -72,14 +69,15 @@ pub struct BountyContributeCommand {
 }
 
 impl BountyContributeCommand {
-    pub async fn exec<R: Runtime + Bounty, C: BountyClient<R>>(
+    pub async fn exec<N: Node, C: BountyClient<N>>(
         &self,
         client: &C,
     ) -> Result<()>
     where
-        <R as System>::AccountId: Ss58Codec,
-        <R as Balances>::Balance: From<u128> + Display,
-        <R as Bounty>::BountyId: From<u64> + Display,
+        N::Runtime: Bounty,
+        <N::Runtime as System>::AccountId: Ss58Codec,
+        <N::Runtime as Balances>::Balance: From<u128> + Display,
+        <N::Runtime as Bounty>::BountyId: From<u64> + Display,
     {
         let event = client
             .contribute_to_bounty(self.bounty_id.into(), self.amount.into())
@@ -100,20 +98,21 @@ pub struct BountySubmitCommand {
 }
 
 impl BountySubmitCommand {
-    pub async fn exec<R: Runtime + Bounty, C: BountyClient<R>>(
+    pub async fn exec<N: Node, C: BountyClient<N>>(
         &self,
         client: &C,
     ) -> Result<()>
     where
-        <R as System>::AccountId: Ss58Codec,
-        <R as Balances>::Balance: From<u128> + Display,
-        <R as Bounty>::BountyId: From<u64> + Display,
-        <R as Bounty>::SubmissionId: Display,
-        <R as Bounty>::BountySubmission: From<GithubIssue>,
+        N::Runtime: Bounty,
+        <N::Runtime as System>::AccountId: Ss58Codec,
+        <N::Runtime as Balances>::Balance: From<u128> + Display,
+        <N::Runtime as Bounty>::BountyId: From<u64> + Display,
+        <N::Runtime as Bounty>::SubmissionId: Display,
+        <N::Runtime as Bounty>::BountySubmission: From<GithubIssue>,
     {
         let metadata: GithubIssueMetadata =
             self.issue_url.as_str().try_into()?;
-        let bounty: <R as Bounty>::BountySubmission = GithubIssue {
+        let bounty: <N::Runtime as Bounty>::BountySubmission = GithubIssue {
             repo_owner: metadata.owner,
             repo_name: metadata.repo,
             issue_number: metadata.issue,
@@ -140,15 +139,16 @@ pub struct BountyApproveCommand {
 }
 
 impl BountyApproveCommand {
-    pub async fn exec<R: Runtime + Bounty, C: BountyClient<R>>(
+    pub async fn exec<N: Node, C: BountyClient<N>>(
         &self,
         client: &C,
     ) -> Result<()>
     where
-        <R as System>::AccountId: Ss58Codec,
-        <R as Balances>::Balance: From<u128> + Display,
-        <R as Bounty>::SubmissionId: From<u64> + Display,
-        <R as Bounty>::BountyId: Display,
+        N::Runtime: Bounty,
+        <N::Runtime as System>::AccountId: Ss58Codec,
+        <N::Runtime as Balances>::Balance: From<u128> + Display,
+        <N::Runtime as Bounty>::SubmissionId: From<u64> + Display,
+        <N::Runtime as Bounty>::BountyId: Display,
     {
         let event = client
             .approve_bounty_submission(self.submission_id.into())
@@ -167,15 +167,16 @@ pub struct GetBountyCommand {
 }
 
 impl GetBountyCommand {
-    pub async fn exec<R: Runtime + Bounty, C: BountyClient<R>>(
+    pub async fn exec<N: Node, C: BountyClient<N>>(
         &self,
         client: &C,
     ) -> Result<()>
     where
-        <R as System>::AccountId: Ss58Codec,
-        <R as Balances>::Balance: Display,
-        <R as Bounty>::BountyId: Display + From<u64>,
-        <R as Bounty>::IpfsReference: Debug,
+        N::Runtime: Bounty,
+        <N::Runtime as System>::AccountId: Ss58Codec,
+        <N::Runtime as Balances>::Balance: Display,
+        <N::Runtime as Bounty>::BountyId: Display + From<u64>,
+        <N::Runtime as Bounty>::IpfsReference: Debug,
     {
         let bounty_state = client.bounty(self.bounty_id.into()).await?;
         println!(
@@ -192,16 +193,17 @@ pub struct GetSubmissionCommand {
 }
 
 impl GetSubmissionCommand {
-    pub async fn exec<R: Runtime + Bounty, C: BountyClient<R>>(
+    pub async fn exec<N: Node, C: BountyClient<N>>(
         &self,
         client: &C,
     ) -> Result<()>
     where
-        <R as System>::AccountId: Ss58Codec,
-        <R as Balances>::Balance: Display,
-        <R as Bounty>::BountyId: Display,
-        <R as Bounty>::SubmissionId: Display + From<u64>,
-        <R as Bounty>::IpfsReference: Debug,
+        N::Runtime: Bounty,
+        <N::Runtime as System>::AccountId: Ss58Codec,
+        <N::Runtime as Balances>::Balance: Display,
+        <N::Runtime as Bounty>::BountyId: Display,
+        <N::Runtime as Bounty>::SubmissionId: Display + From<u64>,
+        <N::Runtime as Bounty>::IpfsReference: Debug,
     {
         let submission_state =
             client.submission(self.submission_id.into()).await?;
@@ -219,22 +221,16 @@ pub struct GetOpenBountiesCommand {
 }
 
 impl GetOpenBountiesCommand {
-    pub async fn exec<R: Runtime + Bounty, C: BountyClient<R>>(
+    pub async fn exec<N: Node, C: BountyClient<N>>(
         &self,
         client: &C,
     ) -> Result<()>
     where
-        R: Bounty<IpfsReference = sunshine_codec::Cid>,
-        C::OffchainClient: Cache<
-            <C::OffchainClient as OffchainClient>::Store,
-            DagCborCodec,
-            GithubIssue,
-        >,
-        <<C::OffchainClient as OffchainClient>::Store as ReadonlyStore>::Codec:
-            From<DagCborCodec> + Into<DagCborCodec>,
-        <R as Balances>::Balance: From<u128> + Display,
-        <R as Bounty>::BountyId: Display + From<u64>,
-        <R as Bounty>::SubmissionId: Display + From<u64>,
+        N::Runtime: Bounty<IpfsReference = sunshine_codec::Cid>,
+        C::OffchainClient: Cache<OffchainConfig<N>, DagCborCodec, GithubIssue>,
+        <N::Runtime as Balances>::Balance: From<u128> + Display,
+        <N::Runtime as Bounty>::BountyId: Display + From<u64>,
+        <N::Runtime as Bounty>::SubmissionId: Display + From<u64>,
     {
         let open_bounties = client.open_bounties(self.min.into()).await?;
         if let Some(b) = open_bounties {
@@ -278,22 +274,16 @@ pub struct GetOpenSubmissionsCommand {
 }
 
 impl GetOpenSubmissionsCommand {
-    pub async fn exec<R: Runtime + Bounty, C: BountyClient<R>>(
+    pub async fn exec<N: Node, C: BountyClient<N>>(
         &self,
         client: &C,
     ) -> Result<()>
     where
-        R: Bounty<IpfsReference = sunshine_codec::Cid>,
-        C::OffchainClient: Cache<
-            <C::OffchainClient as OffchainClient>::Store,
-            DagCborCodec,
-            GithubIssue,
-        >,
-        <<C::OffchainClient as OffchainClient>::Store as ReadonlyStore>::Codec:
-            From<DagCborCodec> + Into<DagCborCodec>,
-        <R as Balances>::Balance: Display,
-        <R as Bounty>::BountyId: From<u64> + Display,
-        <R as Bounty>::SubmissionId: Display + From<u64>,
+        N::Runtime: Bounty<IpfsReference = sunshine_codec::Cid>,
+        C::OffchainClient: Cache<OffchainConfig<N>, DagCborCodec, GithubIssue>,
+        <N::Runtime as Balances>::Balance: Display,
+        <N::Runtime as Bounty>::BountyId: From<u64> + Display,
+        <N::Runtime as Bounty>::SubmissionId: Display + From<u64>,
     {
         let open_submissions =
             client.open_submissions(self.bounty_id.into()).await?;

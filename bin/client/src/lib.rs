@@ -1,12 +1,10 @@
 use libipld::{
-    cache::{
-        CacheConfig,
-        IpldCache,
-    },
+    cache::IpldCache,
     cbor::DagCborCodec,
     derive_cache,
     store::Store,
 };
+use std::ops::Deref;
 use substrate_subxt::{
     balances::{
         AccountData,
@@ -29,24 +27,22 @@ use sunshine_bounty_client::{
     vote::Vote,
 };
 use sunshine_client_utils::{
-    client::{
-        GenericClient,
-        KeystoreImpl,
-        OffchainStoreImpl,
-    },
     codec::hasher::BLAKE2B_256,
     crypto::{
         keychain::KeyType,
         sr25519,
     },
-    node::{
-        ChainSpecError,
+    sc_service::{
+        self,
         Configuration,
-        NodeConfig,
         RpcHandlers,
-        ScServiceError,
         TaskManager,
     },
+    ChainSpecError,
+    GenericClient,
+    Network,
+    Node as NodeT,
+    OffchainStore,
 };
 
 pub use sunshine_bounty_client::*;
@@ -130,18 +126,20 @@ pub struct OffchainClient<S> {
 
 impl<S: Store> OffchainClient<S> {
     pub fn new(store: S) -> Self {
-        let (mut config, mut config2) = (
-            CacheConfig::new(store.clone(), DagCborCodec),
-            CacheConfig::new(store.clone(), DagCborCodec),
-        );
-        config.size = 64;
-        config2.size = 64;
-        config.hash = BLAKE2B_256;
-        config2.hash = BLAKE2B_256;
         Self {
+            bounties: IpldCache::new(
+                store.clone(),
+                DagCborCodec,
+                BLAKE2B_256,
+                64,
+            ),
+            constitutions: IpldCache::new(
+                store.clone(),
+                DagCborCodec,
+                BLAKE2B_256,
+                64,
+            ),
             store,
-            bounties: IpldCache::new(config),
-            constitutions: IpldCache::new(config2),
         }
     }
 }
@@ -149,25 +147,29 @@ impl<S: Store> OffchainClient<S> {
 derive_cache!(OffchainClient, bounties, DagCborCodec, GithubIssue);
 derive_cache!(OffchainClient, constitutions, DagCborCodec, TextBlock);
 
-impl<S: Store> sunshine_client_utils::OffchainClient for OffchainClient<S> {
-    type Store = S;
-
-    fn store(&self) -> &S {
-        &self.store
-    }
-}
-
 impl<S: Store> From<S> for OffchainClient<S> {
     fn from(store: S) -> Self {
         Self::new(store)
     }
 }
 
+impl<S: Store> Deref for OffchainClient<S> {
+    type Target = S;
+
+    fn deref(&self) -> &Self::Target {
+        &self.store
+    }
+}
+
+impl<S: Store> sunshine_client_utils::OffchainClient<S> for OffchainClient<S> {}
+
+#[derive(Clone, Copy)]
 pub struct Node;
 
-impl NodeConfig for Node {
+impl NodeT for Node {
     type ChainSpec = test_node::ChainSpec;
     type Runtime = Runtime;
+    type Block = test_node::OpaqueBlock;
 
     fn impl_name() -> &'static str {
         test_node::IMPL_NAME
@@ -197,14 +199,16 @@ impl NodeConfig for Node {
 
     fn new_light(
         config: Configuration,
-    ) -> Result<(TaskManager, RpcHandlers), ScServiceError> {
-        Ok(test_node::new_light(config)?)
+    ) -> Result<(TaskManager, RpcHandlers, Network<Self>), sc_service::Error>
+    {
+        test_node::new_light(config)
     }
 
     fn new_full(
         config: Configuration,
-    ) -> Result<(TaskManager, RpcHandlers), ScServiceError> {
-        Ok(test_node::new_full(config)?)
+    ) -> Result<(TaskManager, RpcHandlers, Network<Self>), sc_service::Error>
+    {
+        test_node::new_full(config)
     }
 }
 
@@ -215,42 +219,5 @@ impl KeyType for UserDevice {
     type Pair = sr25519::Pair;
 }
 
-pub type Client = GenericClient<
-    Node,
-    UserDevice,
-    KeystoreImpl<UserDevice>,
-    OffchainClient<OffchainStoreImpl>,
->;
-
-#[cfg(feature = "mock")]
-pub mod mock {
-    use super::*;
-    use sunshine_client_utils::mock::{
-        self,
-        build_test_node,
-        OffchainStoreImpl,
-    };
-    pub use sunshine_client_utils::mock::{
-        AccountKeyring,
-        TempDir,
-        TestNode,
-    };
-
-    pub type Client = GenericClient<
-        Node,
-        UserDevice,
-        mock::KeystoreImpl<UserDevice>,
-        OffchainClient<OffchainStoreImpl>,
-    >;
-
-    pub type ClientWithKeystore = GenericClient<
-        Node,
-        UserDevice,
-        KeystoreImpl<UserDevice>,
-        OffchainClient<OffchainStoreImpl>,
-    >;
-
-    pub fn test_node() -> (TestNode, TempDir) {
-        build_test_node::<Node>()
-    }
-}
+pub type Client =
+    GenericClient<Node, UserDevice, OffchainClient<OffchainStore<Node>>>;

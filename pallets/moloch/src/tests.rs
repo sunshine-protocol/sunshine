@@ -85,7 +85,7 @@ impl frame_system::Trait for Test {
     type AvailableBlockRatio = AvailableBlockRatio;
     type MaximumBlockLength = MaximumBlockLength;
     type Version = ();
-    type ModuleToIndex = ();
+    type PalletInfo = ();
     type AccountData = pallet_balances::AccountData<u64>;
     type OnNewAccount = ();
     type OnKilledAccount = ();
@@ -94,12 +94,14 @@ impl frame_system::Trait for Test {
 }
 parameter_types! {
     pub const ExistentialDeposit: u64 = 1;
+    pub const MaxLocks: u32 = 50;
 }
 impl pallet_balances::Trait for Test {
     type Balance = u64;
     type Event = TestEvent;
     type DustRemoval = ();
     type ExistentialDeposit = ExistentialDeposit;
+    type MaxLocks = MaxLocks;
     type AccountStore = System;
     type WeightInfo = ();
 }
@@ -395,13 +397,7 @@ fn member_governance_works() {
             OrgRep::Equal(1),
             XorThreshold::Percent(Threshold::new(Permill::one(), None)),
         );
-        assert_ok!(Bank::summon(
-            Origin::signed(1),
-            1,
-            20,
-            Some(1),
-            threshold.clone()
-        ),);
+        assert_ok!(Bank::summon(Origin::signed(1), 1, 20, Some(1), threshold),);
         assert_ok!(Bank::propose_member(Origin::signed(2), 1, 10, 1, 7),);
         assert_ok!(Bank::member_trigger_vote(Origin::signed(5), 1, 1));
         System::set_block_number(22);

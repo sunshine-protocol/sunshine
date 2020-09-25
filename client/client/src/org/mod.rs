@@ -6,8 +6,8 @@ pub use utils::AccountShare;
 
 use crate::error::Error;
 use libipld::{
+    cache::Cache,
     cbor::DagCborCodec,
-    store::ReadonlyStore,
 };
 use substrate_subxt::{
     system::System,
@@ -18,95 +18,120 @@ use substrate_subxt::{
 use sunshine_client_utils::{
     async_trait,
     Client,
-    OffchainClient,
+    Node,
+    OffchainConfig,
     Result,
 };
 
 #[async_trait]
-pub trait OrgClient<T: Runtime + Org>: Client<T> {
-    async fn new_flat_org(
-        &self,
-        sudo: Option<<T as System>::AccountId>,
-        parent_org: Option<<T as Org>::OrgId>,
-        constitution: <T as Org>::Constitution,
-        members: &[<T as System>::AccountId],
-    ) -> Result<NewFlatOrgEvent<T>>;
-    async fn new_weighted_org(
-        &self,
-        sudo: Option<<T as System>::AccountId>,
-        parent_org: Option<<T as Org>::OrgId>,
-        constitution: <T as Org>::Constitution,
-        weighted_members: &[(<T as System>::AccountId, <T as Org>::Shares)],
-    ) -> Result<NewWeightedOrgEvent<T>>;
-    async fn issue_shares(
-        &self,
-        org: <T as Org>::OrgId,
-        who: <T as System>::AccountId,
-        shares: <T as Org>::Shares,
-    ) -> Result<SharesIssuedEvent<T>>;
-    async fn burn_shares(
-        &self,
-        org: <T as Org>::OrgId,
-        who: <T as System>::AccountId,
-        shares: <T as Org>::Shares,
-    ) -> Result<SharesBurnedEvent<T>>;
-    async fn batch_issue_shares(
-        &self,
-        org: <T as Org>::OrgId,
-        new_accounts: &[(<T as System>::AccountId, <T as Org>::Shares)],
-    ) -> Result<SharesBatchIssuedEvent<T>>;
-    async fn batch_burn_shares(
-        &self,
-        org: <T as Org>::OrgId,
-        old_accounts: &[(<T as System>::AccountId, <T as Org>::Shares)],
-    ) -> Result<SharesBatchBurnedEvent<T>>;
-    async fn org_parent_child(
-        &self,
-        parent: <T as Org>::OrgId,
-        child: <T as Org>::OrgId,
-    ) -> bool;
-    async fn org(&self, org: <T as Org>::OrgId) -> Result<OrgState<T>>;
-    async fn share_profile(
-        &self,
-        org: <T as Org>::OrgId,
-        account: <T as System>::AccountId,
-    ) -> Result<Prof<T>>;
-    async fn org_relations(&self) -> Result<Vec<Relacion<T>>>;
-    async fn org_members(
-        &self,
-        org: <T as Org>::OrgId,
-    ) -> Result<Option<Vec<(T::AccountId, Prof<T>)>>>;
-    async fn share_profiles(
-        &self,
-        account: <T as System>::AccountId,
-    ) -> Result<Option<Vec<(T::OrgId, Prof<T>, OrgState<T>)>>>;
-}
-
-#[async_trait]
-impl<T, C> OrgClient<T> for C
+pub trait OrgClient<N: Node>: Client<N>
 where
-    T: Runtime + Org,
-    <<T::Extra as SignedExtra<T>>::Extra as SignedExtension>::AdditionalSigned:
-        Send + Sync,
-    <T as Org>::Cid: From<libipld::cid::Cid>,
-    C: Client<T>,
-    C::OffchainClient: libipld::cache::Cache<
-        <C::OffchainClient as OffchainClient>::Store,
-        DagCborCodec,
-        <T as Org>::Constitution,
-    >,
-    <<C::OffchainClient as OffchainClient>::Store as ReadonlyStore>::Codec:
-        From<DagCborCodec> + Into<DagCborCodec>,
+    N::Runtime: Org,
 {
     async fn new_flat_org(
         &self,
-        sudo: Option<<T as System>::AccountId>,
-        parent_org: Option<<T as Org>::OrgId>,
-        constitution: <T as Org>::Constitution,
-        members: &[<T as System>::AccountId],
-    ) -> Result<NewFlatOrgEvent<T>> {
+        sudo: Option<<N::Runtime as System>::AccountId>,
+        parent_org: Option<<N::Runtime as Org>::OrgId>,
+        constitution: <N::Runtime as Org>::Constitution,
+        members: &[<N::Runtime as System>::AccountId],
+    ) -> Result<NewFlatOrgEvent<N::Runtime>>;
+    async fn new_weighted_org(
+        &self,
+        sudo: Option<<N::Runtime as System>::AccountId>,
+        parent_org: Option<<N::Runtime as Org>::OrgId>,
+        constitution: <N::Runtime as Org>::Constitution,
+        weighted_members: &[(
+            <N::Runtime as System>::AccountId,
+            <N::Runtime as Org>::Shares,
+        )],
+    ) -> Result<NewWeightedOrgEvent<N::Runtime>>;
+    async fn issue_shares(
+        &self,
+        org: <N::Runtime as Org>::OrgId,
+        who: <N::Runtime as System>::AccountId,
+        shares: <N::Runtime as Org>::Shares,
+    ) -> Result<SharesIssuedEvent<N::Runtime>>;
+    async fn burn_shares(
+        &self,
+        org: <N::Runtime as Org>::OrgId,
+        who: <N::Runtime as System>::AccountId,
+        shares: <N::Runtime as Org>::Shares,
+    ) -> Result<SharesBurnedEvent<N::Runtime>>;
+    async fn batch_issue_shares(
+        &self,
+        org: <N::Runtime as Org>::OrgId,
+        new_accounts: &[(
+            <N::Runtime as System>::AccountId,
+            <N::Runtime as Org>::Shares,
+        )],
+    ) -> Result<SharesBatchIssuedEvent<N::Runtime>>;
+    async fn batch_burn_shares(
+        &self,
+        org: <N::Runtime as Org>::OrgId,
+        old_accounts: &[(
+            <N::Runtime as System>::AccountId,
+            <N::Runtime as Org>::Shares,
+        )],
+    ) -> Result<SharesBatchBurnedEvent<N::Runtime>>;
+    async fn org_parent_child(
+        &self,
+        parent: <N::Runtime as Org>::OrgId,
+        child: <N::Runtime as Org>::OrgId,
+    ) -> bool;
+    async fn org(
+        &self,
+        org: <N::Runtime as Org>::OrgId,
+    ) -> Result<OrgState<N::Runtime>>;
+    async fn share_profile(
+        &self,
+        org: <N::Runtime as Org>::OrgId,
+        account: <N::Runtime as System>::AccountId,
+    ) -> Result<Prof<N::Runtime>>;
+    async fn org_relations(&self) -> Result<Vec<Relacion<N::Runtime>>>;
+    async fn org_members(
+        &self,
+        org: <N::Runtime as Org>::OrgId,
+    ) -> Result<
+        Option<Vec<(<N::Runtime as System>::AccountId, Prof<N::Runtime>)>>,
+    >;
+    async fn share_profiles(
+        &self,
+        account: <N::Runtime as System>::AccountId,
+    ) -> Result<
+        Option<
+            Vec<(
+                <N::Runtime as Org>::OrgId,
+                Prof<N::Runtime>,
+                OrgState<N::Runtime>,
+            )>,
+        >,
+    >;
+}
+
+#[async_trait]
+impl<N, C> OrgClient<N> for C
+where
+    N: Node,
+    N::Runtime: Org,
+    <<<N::Runtime as Runtime>::Extra as SignedExtra<N::Runtime>>::Extra as SignedExtension>::AdditionalSigned:
+        Send + Sync,
+    <N::Runtime as Org>::Cid: From<libipld::cid::Cid>,
+    C: Client<N>,
+    C::OffchainClient: libipld::cache::Cache<
+        OffchainConfig<N>,
+        DagCborCodec,
+        <N::Runtime as Org>::Constitution,
+    >,
+{
+    async fn new_flat_org(
+        &self,
+        sudo: Option<<N::Runtime as System>::AccountId>,
+        parent_org: Option<<N::Runtime as Org>::OrgId>,
+        constitution: <N::Runtime as Org>::Constitution,
+        members: &[<N::Runtime as System>::AccountId],
+    ) -> Result<NewFlatOrgEvent<N::Runtime>> {
         let signer = self.chain_signer()?;
-        let constitution = crate::post(self, constitution).await?;
+        let constitution = self.offchain_client().insert(constitution).await?;
         self.chain_client()
             .new_flat_org_and_watch(
                 &signer,
@@ -121,13 +146,13 @@ where
     }
     async fn new_weighted_org(
         &self,
-        sudo: Option<<T as System>::AccountId>,
-        parent_org: Option<<T as Org>::OrgId>,
-        constitution: <T as Org>::Constitution,
-        weighted_members: &[(<T as System>::AccountId, <T as Org>::Shares)],
-    ) -> Result<NewWeightedOrgEvent<T>> {
+        sudo: Option<<N::Runtime as System>::AccountId>,
+        parent_org: Option<<N::Runtime as Org>::OrgId>,
+        constitution: <N::Runtime as Org>::Constitution,
+        weighted_members: &[(<N::Runtime as System>::AccountId, <N::Runtime as Org>::Shares)],
+    ) -> Result<NewWeightedOrgEvent<N::Runtime>> {
         let signer = self.chain_signer()?;
-        let constitution = crate::post(self, constitution).await?;
+        let constitution = self.offchain_client().insert(constitution).await?;
         self.chain_client()
             .new_weighted_org_and_watch(
                 &signer,
@@ -142,10 +167,10 @@ where
     }
     async fn issue_shares(
         &self,
-        org: <T as Org>::OrgId,
-        who: <T as System>::AccountId,
-        shares: <T as Org>::Shares,
-    ) -> Result<SharesIssuedEvent<T>> {
+        org: <N::Runtime as Org>::OrgId,
+        who: <N::Runtime as System>::AccountId,
+        shares: <N::Runtime as Org>::Shares,
+    ) -> Result<SharesIssuedEvent<N::Runtime>> {
         let signer = self.chain_signer()?;
         self.chain_client()
             .issue_shares_and_watch(&signer, org, &who, shares)
@@ -155,10 +180,10 @@ where
     }
     async fn burn_shares(
         &self,
-        org: <T as Org>::OrgId,
-        who: <T as System>::AccountId,
-        shares: <T as Org>::Shares,
-    ) -> Result<SharesBurnedEvent<T>> {
+        org: <N::Runtime as Org>::OrgId,
+        who: <N::Runtime as System>::AccountId,
+        shares: <N::Runtime as Org>::Shares,
+    ) -> Result<SharesBurnedEvent<N::Runtime>> {
         let signer = self.chain_signer()?;
         self.chain_client()
             .burn_shares_and_watch(&signer, org, &who, shares)
@@ -168,9 +193,9 @@ where
     }
     async fn batch_issue_shares(
         &self,
-        org: <T as Org>::OrgId,
-        new_accounts: &[(<T as System>::AccountId, <T as Org>::Shares)],
-    ) -> Result<SharesBatchIssuedEvent<T>> {
+        org: <N::Runtime as Org>::OrgId,
+        new_accounts: &[(<N::Runtime as System>::AccountId, <N::Runtime as Org>::Shares)],
+    ) -> Result<SharesBatchIssuedEvent<N::Runtime>> {
         let signer = self.chain_signer()?;
         self.chain_client()
             .batch_issue_shares_and_watch(&signer, org, new_accounts)
@@ -180,9 +205,9 @@ where
     }
     async fn batch_burn_shares(
         &self,
-        org: <T as Org>::OrgId,
-        old_accounts: &[(<T as System>::AccountId, <T as Org>::Shares)],
-    ) -> Result<SharesBatchBurnedEvent<T>> {
+        org: <N::Runtime as Org>::OrgId,
+        old_accounts: &[(<N::Runtime as System>::AccountId, <N::Runtime as Org>::Shares)],
+    ) -> Result<SharesBatchBurnedEvent<N::Runtime>> {
         let signer = self.chain_signer()?;
         self.chain_client()
             .batch_burn_shares_and_watch(&signer, org, old_accounts)
@@ -192,27 +217,27 @@ where
     }
     async fn org_parent_child(
         &self,
-        parent: <T as Org>::OrgId,
-        child: <T as Org>::OrgId,
+        parent: <N::Runtime as Org>::OrgId,
+        child: <N::Runtime as Org>::OrgId,
     ) -> bool {
         self.chain_client()
             .org_tree(parent, child, None)
             .await
             .is_ok()
     }
-    async fn org(&self, org: <T as Org>::OrgId) -> Result<OrgState<T>> {
+    async fn org(&self, org: <N::Runtime as Org>::OrgId) -> Result<OrgState<N::Runtime>> {
         Ok(self.chain_client().orgs(org, None).await?)
     }
     async fn share_profile(
         &self,
-        org: <T as Org>::OrgId,
-        account: <T as System>::AccountId,
-    ) -> Result<Prof<T>> {
+        org: <N::Runtime as Org>::OrgId,
+        account: <N::Runtime as System>::AccountId,
+    ) -> Result<Prof<N::Runtime>> {
         Ok(self.chain_client().members(org, &account, None).await?)
     }
-    async fn org_relations(&self) -> Result<Vec<Relacion<T>>> {
+    async fn org_relations(&self) -> Result<Vec<Relacion<N::Runtime>>> {
         let mut relations = self.chain_client().org_tree_iter(None).await?;
-        let mut org_relations = Vec::<Relacion<T>>::new();
+        let mut org_relations = Vec::<Relacion<N::Runtime>>::new();
         while let Some((_, r)) = relations.next().await? {
             org_relations.push(r)
         }
@@ -220,10 +245,10 @@ where
     }
     async fn org_members(
         &self,
-        org: <T as Org>::OrgId,
-    ) -> Result<Option<Vec<(T::AccountId, Prof<T>)>>> {
+        org: <N::Runtime as Org>::OrgId,
+    ) -> Result<Option<Vec<(<N::Runtime as System>::AccountId, Prof<N::Runtime>)>>> {
         let mut members = self.chain_client().members_iter(None).await?;
-        let mut members_for_org = Vec::<(T::AccountId, Prof<T>)>::new();
+        let mut members_for_org = Vec::new();
         while let Some((_, profile)) = members.next().await? {
             if profile.id().0 == org {
                 members_for_org.push((profile.id().1, profile));
@@ -237,11 +262,10 @@ where
     }
     async fn share_profiles(
         &self,
-        account: <T as System>::AccountId,
-    ) -> Result<Option<Vec<(T::OrgId, Prof<T>, OrgState<T>)>>> {
+        account: <N::Runtime as System>::AccountId,
+    ) -> Result<Option<Vec<(<N::Runtime as Org>::OrgId, Prof<N::Runtime>, OrgState<N::Runtime>)>>> {
         let mut members = self.chain_client().members_iter(None).await?;
-        let mut orgs_for_account =
-            Vec::<(T::OrgId, Prof<T>, OrgState<T>)>::new();
+        let mut orgs_for_account = Vec::new();
         while let Some((_, profile)) = members.next().await? {
             if profile.id().1 == account {
                 let org_state =
@@ -264,16 +288,17 @@ mod tests {
         RngCore,
     };
     use test_client::{
-        client::Client as _,
-        mock::{
-            test_node,
+        client::{
             AccountKeyring,
-            Client,
+            Client as _,
+            Node as _,
         },
         org::{
             NewFlatOrgEvent,
             OrgClient,
         },
+        Client,
+        Node,
         TextBlock,
     };
 
@@ -287,8 +312,8 @@ mod tests {
     #[async_std::test]
     async fn simple_test() {
         use substrate_subxt::balances::TransferCallExt;
-        let (node, _node_tmp) = test_node();
-        let client = Client::mock(&node, AccountKeyring::Alice).await;
+        let node = Node::new_mock();
+        let (client, _tmp) = Client::mock(&node, AccountKeyring::Alice).await;
         let alice_account_id = AccountKeyring::Alice.to_account_id();
         client
             .chain_client()
@@ -303,8 +328,8 @@ mod tests {
 
     #[async_std::test]
     async fn new_flat_org_test() {
-        let (node, _node_tmp) = test_node();
-        let client = Client::mock(&node, AccountKeyring::Alice).await;
+        let node = Node::new_mock();
+        let (client, _tmp) = Client::mock(&node, AccountKeyring::Alice).await;
         let alice_account_id = AccountKeyring::Alice.to_account_id();
         // insert constitution into
         let raw_const = TextBlock {
@@ -332,7 +357,7 @@ mod tests {
         let expected_event = NewFlatOrgEvent {
             caller: alice_account_id,
             new_id: 2,
-            constitution: event.constitution.clone(),
+            constitution: event.constitution,
             total: 7,
         };
         assert_eq!(event, expected_event);

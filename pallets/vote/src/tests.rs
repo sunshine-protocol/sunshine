@@ -49,7 +49,7 @@ impl frame_system::Trait for Test {
     type AvailableBlockRatio = AvailableBlockRatio;
     type MaximumBlockLength = MaximumBlockLength;
     type Version = ();
-    type ModuleToIndex = ();
+    type PalletInfo = ();
     type AccountData = pallet_balances::AccountData<u64>;
     type OnNewAccount = ();
     type OnKilledAccount = ();
@@ -130,7 +130,7 @@ fn vote_creation_works() {
             Error::<Test>::NotAuthorizedToCreateVoteForOrganization
         );
         assert_ok!(Vote::create_signal_vote(
-            one.clone(),
+            one,
             None,
             OrgRep::Equal(1),
             Threshold::new(4, None),
@@ -146,7 +146,7 @@ fn vote_signal_threshold_works() {
         let one = Origin::signed(1);
         // unanimous consent
         assert_ok!(Vote::create_signal_vote(
-            one.clone(),
+            one,
             None,
             OrgRep::Equal(1),
             Threshold::new(6, None),
@@ -187,20 +187,15 @@ fn vote_pct_threshold_works() {
         // check that the vote has not passed
         let outcome_almost_passed = Vote::get_vote_outcome(1).unwrap();
         assert_eq!(outcome_almost_passed, VoteOutcome::Voting);
-        assert_ok!(Vote::submit_vote(one.clone(), 1, VoterView::InFavor, None));
+        assert_ok!(Vote::submit_vote(one, 1, VoterView::InFavor, None));
         let outcome_almost_passed = Vote::get_vote_outcome(1).unwrap();
         assert_eq!(outcome_almost_passed, VoteOutcome::Voting);
         let two = Origin::signed(2);
-        assert_ok!(Vote::submit_vote(two.clone(), 1, VoterView::InFavor, None));
+        assert_ok!(Vote::submit_vote(two, 1, VoterView::InFavor, None));
         let outcome_almost_passed = Vote::get_vote_outcome(1).unwrap();
         assert_eq!(outcome_almost_passed, VoteOutcome::Voting);
         let three = Origin::signed(3);
-        assert_ok!(Vote::submit_vote(
-            three.clone(),
-            1,
-            VoterView::InFavor,
-            None
-        ));
+        assert_ok!(Vote::submit_vote(three, 1, VoterView::InFavor, None));
         // check that the vote has passed
         let outcome_has_passed = Vote::get_vote_outcome(1).unwrap();
         assert_eq!(outcome_has_passed, VoteOutcome::Approved);
@@ -217,7 +212,7 @@ fn changing_votes_upholds_invariants() {
         );
         // unanimous consent
         assert_ok!(Vote::create_signal_vote(
-            one.clone(),
+            one,
             None,
             OrgRep::Equal(1),
             Threshold::new(6, None),

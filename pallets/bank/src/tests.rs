@@ -81,7 +81,7 @@ impl frame_system::Trait for Test {
     type AvailableBlockRatio = AvailableBlockRatio;
     type MaximumBlockLength = MaximumBlockLength;
     type Version = ();
-    type ModuleToIndex = ();
+    type PalletInfo = ();
     type AccountData = pallet_balances::AccountData<u64>;
     type OnNewAccount = ();
     type OnKilledAccount = ();
@@ -90,12 +90,14 @@ impl frame_system::Trait for Test {
 }
 parameter_types! {
     pub const ExistentialDeposit: u64 = 1;
+    pub const MaxLocks: u32 = 50;
 }
 impl pallet_balances::Trait for Test {
     type Balance = u64;
     type Event = TestEvent;
     type DustRemoval = ();
     type ExistentialDeposit = ExistentialDeposit;
+    type MaxLocks = MaxLocks;
     type AccountStore = System;
     type WeightInfo = ();
 }
@@ -227,7 +229,7 @@ fn opening_bank_account_works() {
         );
         let total_bank_count = Bank::total_bank_count();
         assert_eq!(total_bank_count, 0u32);
-        assert_ok!(Bank::open(one.clone(), 1, 20, None, threshold));
+        assert_ok!(Bank::open(one, 1, 20, None, threshold));
         assert_eq!(
             get_last_event(),
             RawEvent::AccountOpened(1, 1, 20, 1, None),

@@ -61,7 +61,7 @@ impl frame_system::Trait for TestRuntime {
     type AvailableBlockRatio = AvailableBlockRatio;
     type MaximumBlockLength = MaximumBlockLength;
     type Version = ();
-    type ModuleToIndex = ();
+    type PalletInfo = ();
     type AccountData = pallet_balances::AccountData<u64>;
     type OnNewAccount = ();
     type OnKilledAccount = ();
@@ -146,7 +146,7 @@ fn organization_registration() {
             vec![(1, 10), (2, 10), (3, 10), (9, 10), (10, 10)];
         let third_org_constitution = 9669;
         assert_ok!(Org::new_weighted_org(
-            one.clone(),
+            one,
             Some(1),
             None,
             third_org_constitution,
@@ -167,7 +167,7 @@ fn share_lock() {
         let profile = Org::members(1, 1).unwrap();
         let unlocked = profile.is_unlocked();
         assert_eq!(unlocked, true);
-        assert_ok!(Org::lock_shares(one.clone(), 1, 1));
+        assert_ok!(Org::lock_shares(one, 1, 1));
         let locked_profile = Org::members(1, 1).unwrap();
         let locked = !locked_profile.is_unlocked();
         assert_eq!(locked, true);
@@ -185,7 +185,7 @@ fn share_unlock() {
         let locked_profile = Org::members(1, 1).unwrap();
         let locked = !locked_profile.is_unlocked();
         assert_eq!(locked, true);
-        assert_ok!(Org::unlock_shares(one.clone(), 1, 1));
+        assert_ok!(Org::unlock_shares(one, 1, 1));
         let unlocked_profile = Org::members(1, 1).unwrap();
         let is_unlocked = unlocked_profile.is_unlocked();
         assert_eq!(is_unlocked, true);
@@ -201,7 +201,7 @@ fn share_issuance() {
 
         assert_eq!(pre_shares, 1);
         // issue 10 new shares to member 1
-        assert_ok!(Org::issue_shares(one.clone(), 1, 1, 10));
+        assert_ok!(Org::issue_shares(one, 1, 1, 10));
 
         let post_profile = Org::members(1, 1).unwrap();
         let post_shares = post_profile.total();
@@ -226,7 +226,7 @@ fn share_burn() {
 
         assert_eq!(pre_pre_shares, 11);
         // burn 10 new shares for 10
-        assert_ok!(Org::burn_shares(one.clone(), 1, 1, 5));
+        assert_ok!(Org::burn_shares(one, 1, 1, 5));
         let post_profile = Org::members(1, 1).unwrap();
         let post_shares = post_profile.total();
 

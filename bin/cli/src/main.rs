@@ -14,10 +14,13 @@ async fn main() -> Result<()> {
     } else {
         dirs::config_dir().unwrap().join("sunshine-bounty")
     };
-    let mut client = match opts.chain_spec_path {
-        Some(spec) => Client::new(&root, spec.as_path()).await?,
-        None => Client::new(&root, "ws://127.0.0.1:9944").await?,
+    let chain_spec = if let Some(chain_spec) = opts.chain_spec_path {
+        chain_spec
+    } else {
+        unimplemented!()
     };
+
+    let mut client = Client::new(&root, &chain_spec).await?;
 
     match opts.cmd {
         SubCommand::Key(KeyCommand { cmd }) => {

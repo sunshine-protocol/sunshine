@@ -1,6 +1,5 @@
 use super::*;
 use frame_support::{
-    assert_noop,
     assert_ok,
     impl_outer_event,
     impl_outer_origin,
@@ -67,7 +66,7 @@ impl frame_system::Trait for Test {
     type AvailableBlockRatio = AvailableBlockRatio;
     type MaximumBlockLength = MaximumBlockLength;
     type Version = ();
-    type ModuleToIndex = ();
+    type PalletInfo = ();
     type AccountData = pallet_balances::AccountData<u64>;
     type OnNewAccount = ();
     type OnKilledAccount = ();
@@ -76,12 +75,14 @@ impl frame_system::Trait for Test {
 }
 parameter_types! {
     pub const ExistentialDeposit: u64 = 1;
+    pub const MaxLocks: u32 = 50;
 }
 impl pallet_balances::Trait for Test {
     type Balance = u64;
     type Event = TestEvent;
     type DustRemoval = ();
     type ExistentialDeposit = ExistentialDeposit;
+    type MaxLocks = MaxLocks;
     type AccountStore = System;
     type WeightInfo = ();
 }
@@ -99,21 +100,6 @@ pub type System = system::Module<Test>;
 pub type Balances = pallet_balances::Module<Test>;
 pub type Org = org::Module<Test>;
 pub type Donate = Module<Test>;
-
-fn get_last_event() -> RawEvent<u64, u64, u64> {
-    System::events()
-        .into_iter()
-        .map(|r| r.event)
-        .filter_map(|e| {
-            if let TestEvent::donate(inner) = e {
-                Some(inner)
-            } else {
-                None
-            }
-        })
-        .last()
-        .unwrap()
-}
 
 fn new_test_ext() -> sp_io::TestExternalities {
     let mut t = frame_system::GenesisConfig::default()
