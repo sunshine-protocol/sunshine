@@ -208,7 +208,7 @@ fn dispute_registration_works() {
             }
         );
         assert_ok!(Court::register_dispute_type_with_resolution_path(
-            one.clone(),
+            one,
             10,
             2,
             new_resolution_metadata,
@@ -250,10 +250,10 @@ fn dispute_raised_works() {
             None,
         ));
         assert_noop!(
-            Court::raise_dispute_to_trigger_vote(one.clone(), 1),
+            Court::raise_dispute_to_trigger_vote(one, 1),
             Error::<Test>::SignerNotAuthorizedToRaiseThisDispute
         );
-        assert_ok!(Court::raise_dispute_to_trigger_vote(two.clone(), 1));
+        assert_ok!(Court::raise_dispute_to_trigger_vote(two, 1));
         assert_eq!(
             get_last_event(),
             RawEvent::DisputeRaisedAndVoteTriggered(
@@ -290,7 +290,7 @@ fn poll_dispute_to_execute_outcome_works() {
             Court::poll_dispute_to_execute_outcome(one.clone(), 1),
             Error::<Test>::ActiveDisputeCannotBePolledFromCurrentState
         );
-        assert_ok!(Court::raise_dispute_to_trigger_vote(two.clone(), 1));
+        assert_ok!(Court::raise_dispute_to_trigger_vote(two, 1));
         assert_noop!(
             Court::poll_dispute_to_execute_outcome(one.clone(), 1),
             Error::<Test>::VoteOutcomeInconclusiveSoPollCannotExecuteOutcome
@@ -298,6 +298,6 @@ fn poll_dispute_to_execute_outcome_works() {
         // use vote to pass the proposal
         assert_ok!(Vote::submit_vote(one.clone(), 1, VoterView::InFavor, None));
         // then poll again to execute
-        assert_ok!(Court::poll_dispute_to_execute_outcome(one.clone(), 1));
+        assert_ok!(Court::poll_dispute_to_execute_outcome(one, 1));
     });
 }

@@ -357,7 +357,7 @@ mod tests {
         let expected_event = NewFlatOrgEvent {
             caller: alice_account_id,
             new_id: 2,
-            constitution: event.constitution.clone(),
+            constitution: event.constitution,
             total: 7,
         };
         assert_eq!(event, expected_event);

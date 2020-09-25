@@ -1,3 +1,4 @@
+#![allow(clippy::type_complexity)]
 mod error;
 // export client error type for ../cli
 pub use error::Error;

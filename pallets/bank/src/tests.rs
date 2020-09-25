@@ -229,7 +229,7 @@ fn opening_bank_account_works() {
         );
         let total_bank_count = Bank::total_bank_count();
         assert_eq!(total_bank_count, 0u32);
-        assert_ok!(Bank::open(one.clone(), 1, 20, None, threshold));
+        assert_ok!(Bank::open(one, 1, 20, None, threshold));
         assert_eq!(
             get_last_event(),
             RawEvent::AccountOpened(1, 1, 20, 1, None),

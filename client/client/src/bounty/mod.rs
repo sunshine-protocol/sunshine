@@ -319,7 +319,7 @@ mod tests {
             depositer: alice_account_id,
             amount: 10,
             id: 1,
-            description: event.description.clone(),
+            description: event.description,
         };
         assert_eq!(event, expected_event);
     }
@@ -388,7 +388,7 @@ mod tests {
             depositer: alice_account_id.clone(),
             amount: 1000,
             id: 1,
-            description: event1.description.clone(),
+            description: event1.description,
         };
         assert_eq!(event1, expected_event1);
 
@@ -413,7 +413,7 @@ mod tests {
             amount: 1000,
             bounty_id: 1,
             total: 2000,
-            bounty_ref: event2.bounty_ref.clone(),
+            bounty_ref: event2.bounty_ref,
         };
         assert_eq!(event2, expected_event2);
 

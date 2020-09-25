@@ -134,6 +134,7 @@ pub type Balances = pallet_balances::Module<Test>;
 pub type Org = org::Module<Test>;
 pub type Grant = Module<Test>;
 
+#[allow(clippy::type_complexity)]
 fn get_last_event(
 ) -> RawEvent<u64, u32, u64, u64, u64, u64, u64, Recipient<u64, OrgRep<u64>>> {
     System::events()

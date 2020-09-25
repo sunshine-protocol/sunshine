@@ -397,13 +397,7 @@ fn member_governance_works() {
             OrgRep::Equal(1),
             XorThreshold::Percent(Threshold::new(Permill::one(), None)),
         );
-        assert_ok!(Bank::summon(
-            Origin::signed(1),
-            1,
-            20,
-            Some(1),
-            threshold.clone()
-        ),);
+        assert_ok!(Bank::summon(Origin::signed(1), 1, 20, Some(1), threshold),);
         assert_ok!(Bank::propose_member(Origin::signed(2), 1, 10, 1, 7),);
         assert_ok!(Bank::member_trigger_vote(Origin::signed(5), 1, 1));
         System::set_block_number(22);

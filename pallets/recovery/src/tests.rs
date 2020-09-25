@@ -198,7 +198,7 @@ fn commit_reveal_works() {
             Recovery::reveal_preimage(
                 Origin::signed(1),
                 1,
-                "good code never dies".as_bytes().to_vec()
+                b"good code never dies".to_vec()
             ),
             Error::<TestRuntime>::SecretDNE
         );
@@ -212,17 +212,17 @@ fn commit_reveal_works() {
             Recovery::reveal_preimage(
                 Origin::signed(2),
                 1,
-                "good code never dies".as_bytes().to_vec()
+                b"good code never dies".to_vec()
             ),
             Error::<TestRuntime>::OnlyRevealPreimageIfRecoveryRequested
         );
-        let hash: H256 = BlakeTwo256::hash("good code never dies".as_bytes());
+        let hash: H256 = BlakeTwo256::hash(&b"good code never dies"[..]);
         assert_noop!(
             Recovery::commit_hash(Origin::signed(7), 1, H256::random()),
             Error::<TestRuntime>::NotAuthorizedForSecret
         );
         assert_eq!(Balances::free_balance(&2), 98);
-        assert_ok!(Recovery::commit_hash(Origin::signed(2), 1, hash.clone()),);
+        assert_ok!(Recovery::commit_hash(Origin::signed(2), 1, hash));
         assert_eq!(Balances::free_balance(&2), 93);
         let expected_event = RawEvent::CommittedSecretHash(2, 1, 0, hash);
         assert_eq!(get_last_event(), expected_event);
@@ -231,7 +231,7 @@ fn commit_reveal_works() {
             Recovery::reveal_preimage(
                 Origin::signed(10),
                 1,
-                "good code never dies".as_bytes().to_vec()
+                b"good code never dies".to_vec()
             ),
             Error::<TestRuntime>::NotAuthorizedForSecret
         );
@@ -239,20 +239,20 @@ fn commit_reveal_works() {
             Recovery::reveal_preimage(
                 Origin::signed(2),
                 1,
-                "expect the unexpected".as_bytes().to_vec()
+                b"expect the unexpected".to_vec()
             ),
             Error::<TestRuntime>::PreimageHashDNEHash
         );
         assert_ok!(Recovery::reveal_preimage(
             Origin::signed(2),
             1,
-            "good code never dies".as_bytes().to_vec()
+            b"good code never dies".to_vec()
         ),);
         let expected_event = RawEvent::RevealedPreimage(
             2,
             1,
             0,
-            "good code never dies".as_bytes().to_vec(),
+            b"good code never dies".to_vec(),
         );
         assert_eq!(get_last_event(), expected_event);
     });
