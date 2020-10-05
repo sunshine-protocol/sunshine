@@ -1,7 +1,7 @@
 
 [book]
 title = "Sunshine Recipes"
-author = "4meta5 (Amar Singh)"
+author = "sunshine devs"
 
 [output.html]
 default-theme = "ayu"

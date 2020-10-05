@@ -1,8 +1,6 @@
-# Shared Open Infrastructure Problems
+# Shared Open Problems
 
-The following open problems are shared by the Web3 space. Our ability to collaboratively fund development on critical infrastructure decides the direction of this technology. 
-
-*Will blockchain forever remain a meme? A confusing outcome of incredible wealth redistribution at a confusing time in human history. Will its effects fails to reach outside the limited purview of gambling and alt trading? Or, is this our chance to empower humanity with the tools to express collective opinions and unequivocally enforce outcomes?!*
+The following open problems are shared by the Web3 space. Our ability to collaboratively fund development on critical infrastructure decides the direction of this technology.
 
 ## Substrate Warp Sync
 
@@ -25,7 +23,10 @@ Transports are assumed by libp2p to have distinct listening and dialing ports. T
 
 Implement the libp2p relay protocol including tests and examples, showing how to use a third party to establish a connection between two peers that cannot communicate because of a local nat or firewall. Deliverables will be a working libp2p-relay crate. The netsim-embed network simulator we developed will help writing automated tests to verify that it functions correctly.
 
-## Rust Substrate Client (TODO)
+## Rust Substrate Client
 
-* motivate
-* substrate-subxt
+Substrate is written in Rust for a reason; the requirements for blockchain technology align with Rust's dual promise of speed and safety. These requirements extend to the client and make Rust the most practical language for building high-performance, secure clients.
+
+An efficient Rust Substrate client would be able to subscribe to updates only relevant to the client's authorized account(s). Moreover, a well-designed Substrate Rust client would be able to use type metadata to dynamically decode relevant storage data for user display. Although we're not quite there yet, that's the intended direction of [`substrate-subxt`](https://github.com/paritytech/substrate-subxt).
+
+As users of `substrate-subxt`, Sunshine developers contribute upstream often. The `sunshine-bounty` and `sunshine-keybase` repos demonstrate integration of substrate-subxt for Rust client implementations. The [`client/subxt` recipe](./client/subxt.md) contains more details with code examples.
