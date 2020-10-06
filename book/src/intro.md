@@ -5,7 +5,7 @@
 
 ## Sunshine Recipes
 
-Welcome! We're building governance infrastructure for FOSS (and humanity in general).
+Welcome! We're building governance infrastructure.
 
 The software stack was carefully chosen to ensure resilience to capture and aspire towards censorship resistance. The blockchain is implemented with [Substrate](https://github.com/paritytech/substrate) to take advantage of the cutting edge in distributed network infrastructure. 
 
