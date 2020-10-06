@@ -12,7 +12,6 @@ members = [
     "client/ffi",
     "client/gbot",
     "pallets/bank",
-    "pallets/bench",
     "pallets/bounty",
     "pallets/bounty2",
     "pallets/court",
