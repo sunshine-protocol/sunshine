@@ -19,3 +19,30 @@ Password changes are stored encrypted in the user chain. When a device receives 
 Social media accounts are linked to a chain account, by submitting a proof in the social media profile and on the user's chain. Other users can find the on chain account on the social media page and verify that they are both controlled by the same cryptographic identity. This allows us to use github usernames as aliases without compromising the decentralized nature or security that blockchains provide. While resolving the social media account to an on chain identity requires the service to be online, already resolved identities are stored locally. This means that even if github is offline, transfers to already verified github accounts can be performed.
 
 Finally the user and team keys will be used in other modules to send encrypted messages, share encrypted files and vote to make decisions.
+
+### Demo Instructions
+
+To run `sunshine-identity` locally,
+
+1. clone `sunshine-keybase` and build the `node` in release mode
+
+```bash
+$ git clone https://github.com/sunshine-protocol/sunshine-keybase
+$ cd bin/node
+$ cargo build --release
+```
+
+Once it compiles, return to root and run the node in dev mode
+
+```bash
+$ cd ../../
+$ ./target/release/test-node --dev
+```
+
+Use the `purge-chain` command to purge the database if you need to kill the local chain and restart.
+
+```bash
+$ ./target/release/node-identity purge-chain --dev
+```
+
+2. Follow directions on [`sunshine-keybase-ui`](https://github.com/sunshine-protocol/sunshine-keybase-ui) README to see the Flutter UI work alongside the local test node. The interface demonstrates functionality for identity registration, password reset, and github authentication (account ownership proofs). Here is a [demo video](https://www.youtube.com/watch?v=yZsXW4UlqCg) by [@shekohex](https://github.com/shekohex).

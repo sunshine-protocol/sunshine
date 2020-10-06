@@ -8,4 +8,4 @@
     - [Ipfs-Embed](./client/embed.md)
     - [Keybase](./client/keybase.md)
     - [Substrate-Subxt](./client/subxt.md)
-- [Substrate Open Problems](./open.md)
+- [Shared Open Problems](./open.md)
