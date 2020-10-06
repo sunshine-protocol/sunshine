@@ -800,6 +800,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "clear_on_drop"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c9cc5db465b294c3fa986d5bbb0f3017cd850bff6dd6c52f9ccff8b4d21b7b08"
+dependencies = [
+ "cc",
+]
+
+[[package]]
 name = "cloudabi"
 version = "0.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1429,7 +1438,7 @@ dependencies = [
  "paste",
  "serde",
  "smallvec 1.4.2",
- "sp-arithmetic",
+ "sp-arithmetic 2.0.0 (git+https://github.com/dvc94ch/substrate?branch=dvc-bitswap)",
  "sp-core",
  "sp-inherents",
  "sp-io",
@@ -3714,6 +3723,23 @@ dependencies = [
 
 [[package]]
 name = "orml-utilities"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "804b8d09bdc6eec1789bb8c6143ed334d74d5f71627b24ee7749e318533d79bf"
+dependencies = [
+ "frame-support",
+ "frame-system",
+ "parity-scale-codec",
+ "serde",
+ "sp-arithmetic 2.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
+name = "orml-utilities"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "75b796ae8f5ac84f0b6fc8779fb525a7ea8bdfe0f9111e5f4c1eebf30c755ab9"
@@ -5175,7 +5201,7 @@ dependencies = [
  "sc-client-api",
  "sc-executor",
  "sc-state-db",
- "sp-arithmetic",
+ "sp-arithmetic 2.0.0 (git+https://github.com/dvc94ch/substrate?branch=dvc-bitswap)",
  "sp-blockchain",
  "sp-consensus",
  "sp-core",
@@ -5335,7 +5361,7 @@ dependencies = [
  "serde_json",
  "sp-api",
  "sp-application-crypto",
- "sp-arithmetic",
+ "sp-arithmetic 2.0.0 (git+https://github.com/dvc94ch/substrate?branch=dvc-bitswap)",
  "sp-blockchain",
  "sp-consensus",
  "sp-core",
@@ -5441,7 +5467,7 @@ dependencies = [
  "slog",
  "slog_derive",
  "smallvec 0.6.13",
- "sp-arithmetic",
+ "sp-arithmetic 2.0.0 (git+https://github.com/dvc94ch/substrate?branch=dvc-bitswap)",
  "sp-blockchain",
  "sp-consensus",
  "sp-core",
@@ -6274,7 +6300,20 @@ dependencies = [
  "num-traits",
  "parity-scale-codec",
  "serde",
- "sp-debug-derive",
+ "sp-debug-derive 2.0.0 (git+https://github.com/dvc94ch/substrate?branch=dvc-bitswap)",
+ "sp-std",
+]
+
+[[package]]
+name = "sp-arithmetic"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "667775bc50eb214225df18c92e4ec57acc7e2dc78d7d210eb4dd930db1a73995"
+dependencies = [
+ "integer-sqrt",
+ "num-traits",
+ "parity-scale-codec",
+ "sp-debug-derive 2.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-std",
 ]
 
@@ -6450,7 +6489,7 @@ dependencies = [
  "secrecy 0.6.0",
  "serde",
  "sha2 0.8.2",
- "sp-debug-derive",
+ "sp-debug-derive 2.0.0 (git+https://github.com/dvc94ch/substrate?branch=dvc-bitswap)",
  "sp-externalities",
  "sp-runtime-interface",
  "sp-std",
@@ -6476,6 +6515,17 @@ dependencies = [
 name = "sp-debug-derive"
 version = "2.0.0"
 source = "git+https://github.com/dvc94ch/substrate?branch=dvc-bitswap#de30ac0729452807730ea2fdc9761b7521cac038"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "sp-debug-derive"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8a3750b084e0f4677f6e834a974f30b1ba97fc2fe00185c9d03611a2228446dc"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -6572,7 +6622,7 @@ source = "git+https://github.com/dvc94ch/substrate?branch=dvc-bitswap#de30ac0729
 dependencies = [
  "parity-scale-codec",
  "serde",
- "sp-arithmetic",
+ "sp-arithmetic 2.0.0 (git+https://github.com/dvc94ch/substrate?branch=dvc-bitswap)",
  "sp-npos-elections-compact",
  "sp-std",
 ]
@@ -6631,7 +6681,7 @@ dependencies = [
  "rand 0.7.3",
  "serde",
  "sp-application-crypto",
- "sp-arithmetic",
+ "sp-arithmetic 2.0.0 (git+https://github.com/dvc94ch/substrate?branch=dvc-bitswap)",
  "sp-core",
  "sp-inherents",
  "sp-io",
@@ -6733,7 +6783,7 @@ dependencies = [
  "parity-scale-codec",
  "ref-cast",
  "serde",
- "sp-debug-derive",
+ "sp-debug-derive 2.0.0 (git+https://github.com/dvc94ch/substrate?branch=dvc-bitswap)",
  "sp-std",
 ]
 
@@ -7085,6 +7135,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "sunshine-bench"
+version = "0.0.1"
+dependencies = [
+ "clear_on_drop",
+ "frame-support",
+ "frame-system",
+ "orml-utilities 0.1.1",
+ "pallet-balances",
+ "parity-scale-codec",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "sunshine-bounty"
 version = "0.2.1"
 dependencies = [
@@ -7173,7 +7239,7 @@ version = "0.2.0"
 dependencies = [
  "derive-new",
  "frame-support",
- "orml-utilities",
+ "orml-utilities 0.2.0",
  "parity-scale-codec",
  "sp-core",
  "sp-io",
@@ -7501,7 +7567,7 @@ version = "0.2.0"
 dependencies = [
  "frame-support",
  "frame-system",
- "orml-utilities",
+ "orml-utilities 0.2.0",
  "pallet-balances",
  "parity-scale-codec",
  "serde",
@@ -7518,7 +7584,7 @@ version = "0.0.1"
 dependencies = [
  "frame-support",
  "frame-system",
- "orml-utilities",
+ "orml-utilities 0.2.0",
  "pallet-balances",
  "parity-scale-codec",
  "serde",
@@ -7535,7 +7601,7 @@ version = "0.0.1"
 dependencies = [
  "frame-support",
  "frame-system",
- "orml-utilities",
+ "orml-utilities 0.2.0",
  "pallet-balances",
  "parity-scale-codec",
  "sp-core",
@@ -7552,7 +7618,7 @@ version = "0.0.1"
 dependencies = [
  "frame-support",
  "frame-system",
- "orml-utilities",
+ "orml-utilities 0.2.0",
  "pallet-balances",
  "parity-scale-codec",
  "serde",

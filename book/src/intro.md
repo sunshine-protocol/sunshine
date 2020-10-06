@@ -5,17 +5,12 @@
 
 ## Sunshine Recipes
 
-Welcome! We're building voting infrastructure for FOSS ecosystem governance. More broadly, we're using cryptography to express governance and enforce capital allocation decisions for individuals and groups. 
+Welcome! We're building governance infrastructure.
 
-Sunshine's first product is a bounty platform for developers to form teams, request/apply for opportunities, and receive payment from on-chain foundations.
+The software stack was carefully chosen to ensure resilience to capture and aspire towards censorship resistance. The blockchain is implemented with [Substrate](https://github.com/paritytech/substrate) to take advantage of the cutting edge in distributed network infrastructure. 
 
-This [mdbook](https://github.com/rust-lang/mdBook) serves to make our code more accessible to users and developers by providing high-level docs with clear examples.
+The network design minimizes on-chain state by storing sensitive data off-chain in [`ipfs-embed`](https://github.com/ipfs-rust/ipfs-embed) and only storing content identifiers on-chain. Efficient client-side networks enable the secure sharing of off-chain data among the relevant subscribers.
 
-**Sunshine Stack**
-* [`substrate`](https://github.com/paritytech/substrate) is used to coordinate linearizable consensus on necessarily global state
-* [`ipfs-embed`](https://github.com/rust-ipfs/ipfs-embed) is used to store sensitive data off chain, encrypted on local hardware
-* QUIC and Noise are used for client-side communication networks
+In a world increasingly fraught by data mismanagement (*the Cloud*), Sunshine stores all sensitive data on local hardware in an encrypted form. This architecture is conducive to modern key rotation mechanisms and client-side computation. It is inspired by [Local First](https://martin.kleppmann.com/papers/local-first.pdf) design principles.
 
-## Contribute
-
-## Support Us
+Go to the *[splash](https://sunshine.foundation)* for high-level details. Now, onwards, [to the code](https://github.com/sunshine-protocol) 🚀

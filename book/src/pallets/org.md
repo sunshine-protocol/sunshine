@@ -1,8 +1,8 @@
-# Org Pallet
+## Org Pallet
 
 This pallet handles organization membership and governance. Each weighted group of accounts stored in this pallet has a unique `OrgId`. This identifier is often used in inheriting modules to establish ownership of the organization over associated state.
 
-## Share Ownership
+### Share Ownership
 
 Each member (`AccountId`) in an org has some quantity of `Shares` in proportion to their relative ownership and voting power. This ownership metadata is stored in runtime storage like
 
@@ -17,7 +17,7 @@ let auth = <org::Module<T>>::is_member_of_group(org, &who);
 ensure!(auth, Error::<T>::NotAuthorized);
 ```
 
-## Default Governance
+### Default Governance
 
 Every group has a sudo `Option<AccountId>`. This position is set in the organization state upon initialization.
 
