@@ -1,1 +1,3 @@
-# Substrate-Subxt Client
+## subxt
+
+[`substrate-subxt`](https://github.com/paritytech/substrate-subxt) is a rust substrate client built to interface with the substrate chain. It provides light client support, making it possible to work with untrusted substrate nodes. It is unique in it's support for writing integration tests, by replacing the light client with a full node. This functionality is demonstrated in [`sunshine-keybase`](https://github.com/sunshine-protocol/sunshine-keybase).

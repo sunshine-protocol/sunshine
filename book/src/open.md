@@ -29,4 +29,4 @@ Substrate is written in Rust for a reason; the requirements for blockchain techn
 
 An efficient Rust Substrate client would be able to subscribe to updates only relevant to the client's authorized account(s). Moreover, a well-designed Substrate Rust client would be able to use type metadata to dynamically decode relevant storage data for user display. Although we're not quite there yet, that's the intended direction of [`substrate-subxt`](https://github.com/paritytech/substrate-subxt).
 
-As users of `substrate-subxt`, Sunshine developers contribute upstream often. The `sunshine-bounty` and `sunshine-keybase` repos demonstrate integration of substrate-subxt for Rust client implementations. The [`client/subxt` recipe](./client/subxt.md) contains more details with code examples.
+As users of `substrate-subxt`, Sunshine developers contribute upstream often. The `sunshine-keybase` repo demonstrates integration of substrate-subxt for the Rust client implementation.

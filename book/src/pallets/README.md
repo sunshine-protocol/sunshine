@@ -2,31 +2,8 @@
 
 All objects and relationships are in [`./utils`](https://github.com/sunshine-protocol/sunshine-bounty/tree/master/utils). Module implementations that conform to the Substrate pallet rules are in [`./pallets/*`](https://github.com/sunshine-protocol/sunshine-bounty/tree/master/pallets).
 
-To learn more about substrate, [check out the recipes](https://github.com/substrate-developer-hub/recipes)
-
-### Pallet Dashboard
-
-#### Refactor Forthcoming
-
-These modules will be rewritten after benchmarks are written (soon!)
+To learn more about `sunshine-bounty` design, check out the high-level overviews for core pallets:
 * [Org](org.md)
-* Rank
-* Vote
-* Bank
-* Grant
-* Decision
-
-#### Stable
-
-These modules do not expect any radical changes, at least wrt how objects and relationships are expressed
 * [Bounty](bounty.md)
-* Drip
-* Kickback
-* Moloch
 
-#### Tabled
-
-Work on the following modules has been indefinitely paused
-* Bounty2
-* Court
-* Insurance
+To see more substrate pallet patterns in action, [check out the substrate recipes](https://github.com/substrate-developer-hub/recipes)

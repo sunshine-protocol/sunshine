@@ -230,8 +230,8 @@ decl_module! {
             bounty_id: T::BountyId,
             amount: BalanceOf<T>,
         ) -> DispatchResult {
-            let contributor = ensure_signed(origin)?;
             ensure!(amount >= T::MinContribution::get(), Error::<T>::ContributionMustExceedModuleMin);
+            let contributor = ensure_signed(origin)?;
             let bounty = <Bounties<T>>::get(bounty_id).ok_or(Error::<T>::BountyDNE)?;
             T::Currency::transfer(
                 &contributor,
@@ -260,8 +260,8 @@ decl_module! {
             amount: BalanceOf<T>,
         ) -> DispatchResult {
             ensure!(<IssueHashSet>::get(issue.clone()).is_none(), Error::<T>::IssueAlreadyClaimedForBountyOrSubmission);
-            let submitter = ensure_signed(origin)?;
             let bounty = <Bounties<T>>::get(bounty_id).ok_or(Error::<T>::BountyDNE)?;
+            let submitter = ensure_signed(origin)?;
             ensure!(submitter != bounty.depositer(), Error::<T>::DepositerCannotSubmitForBounty);
             ensure!(amount <= bounty.total(), Error::<T>::BountySubmissionExceedsTotalAvailableFunding);
             let id = Self::submission_generate_uid();
