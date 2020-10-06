@@ -1,0 +1,239 @@
+<!DOCTYPE HTML>
+<html lang="en" class="sidebar-visible no-js ayu">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Shared Open Problems - Sunshine Recipes</title>
+        
+        
+
+
+        <!-- Custom HTML head -->
+        
+
+
+        <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff" />
+
+        
+        <link rel="icon" href="favicon.svg">
+        
+        
+        <link rel="shortcut icon" href="favicon.png">
+        
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        
+        <link rel="stylesheet" href="fonts/fonts.css">
+        
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+        
+
+        
+    </head>
+    <body>
+        <!-- Provide site root to javascript -->
+        <script type="text/javascript">
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "ayu";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script type="text/javascript">
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script type="text/javascript">
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('no-js')
+            html.classList.remove('ayu')
+            html.classList.add(theme);
+            html.classList.add('js');
+        </script>
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script type="text/javascript">
+            var html = document.querySelector('html');
+            var sidebar = 'hidden';
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            }
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="intro.html"><strong aria-hidden="true">1.</strong> Overview</a></li><li class="chapter-item expanded "><a href="pallets/index.html"><strong aria-hidden="true">2.</strong> Pallets</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="pallets/bounty.html"><strong aria-hidden="true">2.1.</strong> Bounty</a></li><li class="chapter-item expanded "><a href="pallets/org.html"><strong aria-hidden="true">2.2.</strong> Org</a></li></ol></li><li class="chapter-item expanded "><a href="client/index.html"><strong aria-hidden="true">3.</strong> Client</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="client/embed.html"><strong aria-hidden="true">3.1.</strong> Ipfs-Embed</a></li><li class="chapter-item expanded "><a href="client/keybase.html"><strong aria-hidden="true">3.2.</strong> Keybase</a></li><li class="chapter-item expanded "><a href="client/subxt.html"><strong aria-hidden="true">3.3.</strong> Substrate-Subxt</a></li></ol></li><li class="chapter-item expanded "><a href="open.html" class="active"><strong aria-hidden="true">4.</strong> Shared Open Problems</a></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky bordered">
+                    <div class="left-buttons">
+                        <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </button>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu (default)</button></li>
+                        </ul>
+                        
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                        
+                    </div>
+
+                    <h1 class="menu-title">Sunshine Recipes</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        
+                    </div>
+                </div>
+
+                
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" name="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+                
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script type="text/javascript">
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1><a class="header" href="#shared-open-problems" id="shared-open-problems">Shared Open Problems</a></h1>
+<p>The following open problems are shared by the Web3 space. Our ability to collaboratively fund development on critical infrastructure decides the direction of this technology.</p>
+<h2><a class="header" href="#substrate-warp-sync" id="substrate-warp-sync">Substrate Warp Sync</a></h2>
+<p>Without warp sync, light clients lack functionality until they are fully synced. Sometimes this can take a really long time (we've experienced anywhere from a few hours to over a day for short-living, low throughput test networks).</p>
+<p>OpenEthereum clients receive a snapshot over the network to get the full state at the latest block, and then fill in the blocks between the genesis and the snapshot in the background. The code is <a href="https://github.com/openethereum/openethereum/blob/master/ethcore/sync/src/snapshot_sync.rs">here</a>.</p>
+<p>Discussion of Substrate Warp Sync <a href="https://github.com/paritytech/substrate/issues/1208">in this issue</a>.</p>
+<h2><a class="header" href="#rust-libp2p-nat-traversal" id="rust-libp2p-nat-traversal">Rust-Libp2p Nat Traversal</a></h2>
+<p><strong><a href="https://github.com/w3f/General-Grants-Program/pull/327/files#diff-76eb553547b516da2ea065acc5633ca3R50">src</a></strong></p>
+<p>Nat traversal and firewall traversal is required when peers want to establish a connection to each other. In a traditional server architecture the server gets a public ip like a phone number. Mobile networks or home networks share an ip address, so you can't directly connect to a device that is on a different network. This is done for multiple reasons. Since the ipv4 address space is a 4 byte number, only ~4 million devices can have a unique ip address. Today's number of devices connected to the internet vastly exceeds that amount. But even in ipv6 with a 16 byte address space that allows every device to have a unique ip, the problem of nat traversal will persist. In most cases you don't want arbitrary connections to be opened to arbitrary devices. So in ipv6 firewalls are configured to only allow outgoing connections and reject incoming connections. Techniques used for nat traversal and firewall traversal are and will remain an important part of p2p networks.</p>
+<h3><a class="header" href="#transport-port-reusability" id="transport-port-reusability">Transport Port Reusability</a></h3>
+<p>Transports are assumed by libp2p to have distinct listening and dialing ports. This is an issue when trying to add the quic transport or when using tcp ports with SO_PORTREUSE. Without port reuse, nat traversal becomes impossible without a relay. For the first task, changes to libp2p-core and libp2p-swarm will be made as discussed <a href="https://github.com/libp2p/rust-libp2p/issues/1722">here</a>. The new api will be validated by adding a tcp transport that supports reusing ports and a prototype libp2p-quic crate will be released using this new api. The libp2p-quic crate will live in it's own repo until the rust-libp2p team has the time to review and merge the new transport. Extensive work on the quic transport has already been done by parity employees, but without these api changes it will remain a second class citizen.</p>
+<h3><a class="header" href="#libp2p-relay" id="libp2p-relay">Libp2p Relay</a></h3>
+<p>Implement the libp2p relay protocol including tests and examples, showing how to use a third party to establish a connection between two peers that cannot communicate because of a local nat or firewall. Deliverables will be a working libp2p-relay crate. The netsim-embed network simulator we developed will help writing automated tests to verify that it functions correctly.</p>
+<h2><a class="header" href="#rust-substrate-client" id="rust-substrate-client">Rust Substrate Client</a></h2>
+<p>Substrate is written in Rust for a reason; the requirements for blockchain technology align with Rust's dual promise of speed and safety. These requirements extend to the client and make Rust the most practical language for building high-performance, secure clients.</p>
+<p>An efficient Rust Substrate client would be able to subscribe to updates only relevant to the client's authorized account(s). Moreover, a well-designed Substrate Rust client would be able to use type metadata to dynamically decode relevant storage data for user display. Although we're not quite there yet, that's the intended direction of <a href="https://github.com/paritytech/substrate-subxt"><code>substrate-subxt</code></a>.</p>
+<p>As users of <code>substrate-subxt</code>, Sunshine developers contribute upstream often. The <code>sunshine-keybase</code> repo demonstrates integration of substrate-subxt for the Rust client implementation.</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                        
+                            <a rel="prev" href="client/subxt.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+                        
+
+                        
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                
+                    <a rel="prev" href="client/subxt.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+                
+
+                
+            </nav>
+
+        </div>
+
+        
+
+        
+
+        
+
+        
+        <script type="text/javascript">
+            window.playground_copyable = true;
+        </script>
+        
+
+        
+
+        
+        <script src="elasticlunr.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="mark.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="searcher.js" type="text/javascript" charset="utf-8"></script>
+        
+
+        <script src="clipboard.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="highlight.js" type="text/javascript" charset="utf-8"></script>
+        <script src="book.js" type="text/javascript" charset="utf-8"></script>
+
+        <!-- Custom JS scripts -->
+        
+
+        
+
+    </body>
+</html>
