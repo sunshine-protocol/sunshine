@@ -26,7 +26,9 @@
         <link rel="stylesheet" href="../css/variables.css">
         <link rel="stylesheet" href="../css/general.css">
         <link rel="stylesheet" href="../css/chrome.css">
+        
         <link rel="stylesheet" href="../css/print.css" media="print">
+        
 
         <!-- Fonts -->
         <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
@@ -128,17 +130,21 @@
                     <h1 class="menu-title">Sunshine Recipes</h1>
 
                     <div class="right-buttons">
+                        
                         <a href="../print.html" title="Print this book" aria-label="Print this book">
                             <i id="print-button" class="fa fa-print"></i>
                         </a>
                         
+                        
+                        
+
                     </div>
                 </div>
 
                 
                 <div id="search-wrapper" class="hidden">
                     <form id="searchbar-outer" class="searchbar-outer">
-                        <input type="search" name="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
                     </form>
                     <div id="searchresults-outer" class="searchresults-outer hidden">
                         <div id="searchresults-header" class="searchresults-header"></div>
@@ -159,18 +165,18 @@
 
                 <div id="content" class="content">
                     <main>
-                        <h1><a class="header" href="#keybase" id="keybase">Keybase</a></h1>
+                        <h1 id="keybase"><a class="header" href="#keybase">Keybase</a></h1>
 <p><strong><a href="https://github.com/sunshine-protocol/sunshine-keybase"><code>sunshine-keybase</code></a></strong></p>
-<h2><a class="header" href="#chain" id="chain">Chain</a></h2>
+<h2 id="chain"><a class="header" href="#chain">Chain</a></h2>
 <p>The chain module is a reusable abstraction for building private proof of authority chains using ipfs and using substrate to provide authorization and consensus on the current head of the chain. When authoring a block on ipfs a race condition can occur. Due to substrate providing a total order of transactions only one transaction will succeed in updating the head of the chain, the other client will create a new block on the head of the chain and retry the failed operation.</p>
 <p><img src="https://draftin.com:443/images/75511?token=ptiW5ycSDqtNQbpH3I24_9YXQQgh2YmbFtDSIT16ZBVaHVtRgQJBeMGmk94Yo3sVGjqJKj86iTmj9y9k6AF2Ujo" alt="chain_module.svg" /> </p>
-<h2><a class="header" href="#identity" id="identity">Identity</a></h2>
+<h2 id="identity"><a class="header" href="#identity">Identity</a></h2>
 <p>The keybase identity module manages the user's chain that stores the user key, device keys, password and social media accounts using the sunshine chain module. Private data shared between devices is encrypted with the user private key. When a new device is provisioned a key is generated locally on the device, and a provisioning protocol is used to communicate between the new device and the provisioning device.</p>
 <p><img src="https://draftin.com:443/images/75515?token=ZVIuml8B13k3idkoLujuomRsDbSbgUGtzweL7qwj_HNDX8TYlq1iegqpvEnjVjddVdDdle57KVdD7MI7OJES5c8" alt="keybase-module.svg" /> </p>
 <p>Password changes are stored encrypted in the user chain. When a device receives a block with a password change it reencrypts it's local device key using the new password. This ensures that the user only needs to remember one password.</p>
 <p>Social media accounts are linked to a chain account, by submitting a proof in the social media profile and on the user's chain. Other users can find the on chain account on the social media page and verify that they are both controlled by the same cryptographic identity. This allows us to use github usernames as aliases without compromising the decentralized nature or security that blockchains provide. While resolving the social media account to an on chain identity requires the service to be online, already resolved identities are stored locally. This means that even if github is offline, transfers to already verified github accounts can be performed.</p>
 <p>Finally the user and team keys will be used in other modules to send encrypted messages, share encrypted files and vote to make decisions.</p>
-<h3><a class="header" href="#demo-instructions" id="demo-instructions">Demo Instructions</a></h3>
+<h3 id="demo-instructions"><a class="header" href="#demo-instructions">Demo Instructions</a></h3>
 <p>To run <code>sunshine-identity</code> locally,</p>
 <ol>
 <li>clone <code>sunshine-keybase</code> and build the <code>node</code> in release mode</li>

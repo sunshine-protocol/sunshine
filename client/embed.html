@@ -26,7 +26,9 @@
         <link rel="stylesheet" href="../css/variables.css">
         <link rel="stylesheet" href="../css/general.css">
         <link rel="stylesheet" href="../css/chrome.css">
+        
         <link rel="stylesheet" href="../css/print.css" media="print">
+        
 
         <!-- Fonts -->
         <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
@@ -128,17 +130,21 @@
                     <h1 class="menu-title">Sunshine Recipes</h1>
 
                     <div class="right-buttons">
+                        
                         <a href="../print.html" title="Print this book" aria-label="Print this book">
                             <i id="print-button" class="fa fa-print"></i>
                         </a>
                         
+                        
+                        
+
                     </div>
                 </div>
 
                 
                 <div id="search-wrapper" class="hidden">
                     <form id="searchbar-outer" class="searchbar-outer">
-                        <input type="search" name="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
                     </form>
                     <div id="searchresults-outer" class="searchresults-outer hidden">
                         <div id="searchresults-header" class="searchresults-header"></div>
@@ -159,7 +165,7 @@
 
                 <div id="content" class="content">
                     <main>
-                        <h2><a class="header" href="#offchain-data" id="offchain-data">Offchain data</a></h2>
+                        <h2 id="offchain-data"><a class="header" href="#offchain-data">Offchain data</a></h2>
 <p>Offchain data like user and team chains, chat messages and shared files are stored in <a href="https://github.com/ipfs-rust/ipfs-embed"><code>ipfs-embed</code></a>. Ipfs embed is a performant rust ipfs implementation focusing on providing atomic and durable transactions. It is the first implementation to take a database centric design approach. Blocks are reference counted and insertions only succeed if all the referenced blocks are in the store. Blocks are pinned to mark them as used making sure that the block and any of it's references are not garbage collected.</p>
 <p>Ipfs transactions are composed of <code>insert</code>, <code>pin</code> and <code>unpin</code> operations. In a first step when executing the transaction, these operations are expanded into <code>insert</code>, <code>insert_reference</code>, <code>remove_reference</code>, <code>set_pin</code> and <code>remove</code> operations. These operations are written to a write-ahead log ensuring that they are atomic and durable. The <code>insert</code> operations are committed atomically to paritydb where the blocks are stored. Then the metadata operations <code>insert_reference</code>, <code>remove_reference</code> and <code>set_pin</code> are applied to sled which is a key/value store used for maintaining and querying the block metadata. Finally the <code>remove</code> operations are commited to paritydb and the transaction is marked as complete in the write-ahead log.
 When a crash occurs and the log needs to be replayed, the following algorithm is used: If the <code>insert</code> operations didn't succeed, the transaction is aborted by removing the inserted blocks from the db. If the operations succeeded then the metadata and <code>remove</code> operations can be reapplied without adverse effects.</p>
