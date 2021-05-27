@@ -8,4 +8,4 @@
 
 `sunshine-bounty` is a governance chain written in [Substrate](https://github.com/paritytech/substrate). It is experimental software. The design targets short-term developer contracts -- it may become something similar to Gitcoin or Aragon with organizations using the platform to post bounties and teams using the platform to pursue bounties.
 
-To read more about the design, see the [Sunshine Recipes](https://sunshine-protocol.github.io/sunshine-bounty/)
+To read more about the design, see the [Sunshine Recipes](https://sunshine-protocol.github.io/sunshine/)
